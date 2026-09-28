@@ -470,6 +470,7 @@ from talking to the internet.
 | know why it was built this way | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | know what is verified, and what is still missing | [docs/STATUS.md](docs/STATUS.md) |
 | build, test and change oillamp | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| chat with agents that each live in a lamp, in a desktop app (`./gradlew genies`) | [docs/GENIES.md](docs/GENIES.md) |
 | let the agent reach the host, judged by a model against your own requirements (planned) | [docs/HOST-ACCESS.md](docs/HOST-ACCESS.md) |
 
 ## ⚖️ License
