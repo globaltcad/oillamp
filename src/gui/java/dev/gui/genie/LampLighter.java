@@ -63,6 +63,27 @@ public final class LampLighter implements Lighter {
                     ? "The genie's lamp did not start" + lamp.exitStatus().map(status -> " (" + status + ")").orElse(" in time")
                     : why);
         }
+        return lit(lamp);
+    }
+
+    /// How long joining may take. The session answers at once; this allows for a busy machine.
+    static final Duration JOINING_TIME = Duration.ofSeconds(30);
+
+    @Override
+    public Optional<Lit> join(Path directory, Consumer<LampEvent> events) throws IOException, InterruptedException {
+        LampDirectory starting = unlit(directory);
+        if (!starting.isRunning()) return Optional.empty();
+        Lamp lamp = starting.onEvent(events).join();
+        if (!lamp.awaitRunning(JOINING_TIME)) {
+            lamp.close();
+            return Optional.empty();
+        }
+        return Optional.of(lit(lamp));
+    }
+
+    /// A lamp this app started or joined. Putting out one it joined ends its session, as for one
+    /// it started.
+    private static Lit lit(Lamp lamp) {
         return new Lit() {
             @Override public Process exec(String... command) throws IOException { return lamp.exec(command); }
             @Override public Path desktop() { return lamp.desktop(); }
@@ -70,7 +91,22 @@ public final class LampLighter implements Lighter {
                     throws IOException, InterruptedException, LampFailedException { return lamp.send(question); }
             @Override public void cancel(String run)
                     throws IOException, InterruptedException, LampFailedException { lamp.cancel(run); }
-            @Override public void close() { lamp.close(); }
+            @Override public void close() {
+                if (lamp.holds()) {
+                    lamp.close();
+                    return;
+                }
+                try {
+                    lamp.stop();
+                } catch (IOException | LampFailedException alreadyOut) {
+                    // Nothing is running that could be stopped; following ends below all the same.
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lamp.close();
+                }
+            }
+            @Override public void leaveRunning() { lamp.leaveRunning(); }
         };
     }
 
