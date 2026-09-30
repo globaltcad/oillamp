@@ -21,6 +21,8 @@ import dev.lamp.LampRun;
 ///
 /// The model service and key from the settings go to the lamp's engine, which keeps the key on
 /// the host. The sandbox gets only its fixed relay address and a placeholder.
+///
+/// Every lamp is lit with its schedule on, so the jobs on it wake the genie while it is awake.
 public final class LampLighter implements Lighter {
 
     private final Optional<LampLauncher> launcher;
@@ -43,9 +45,8 @@ public final class LampLighter implements Lighter {
     public Lit light(Path directory, Settings settings, String key, Consumer<String> progress,
                      Consumer<LampEvent> events) throws IOException, InterruptedException {
         AtomicReference<String> problem = new AtomicReference<>("");
-        LampDirectory starting = Lamp.at(directory);
-        if (launcher.isPresent()) starting = starting.launchedBy(launcher.get());
-        Lamp lamp = starting
+        Lamp lamp = unlit(directory)
+                .enableScheduling()
                 .modelService(URI.create(settings.service().strip()))
                 .modelKey(key)
                 .onEvent(event -> {
@@ -71,6 +72,12 @@ public final class LampLighter implements Lighter {
                     throws IOException, InterruptedException, LampFailedException { lamp.cancel(run); }
             @Override public void close() { lamp.close(); }
         };
+    }
+
+    @Override
+    public LampDirectory unlit(Path directory) {
+        LampDirectory lamp = Lamp.at(directory);
+        return launcher.isPresent() ? lamp.launchedBy(launcher.get()) : lamp;
     }
 
     /// What the lamp is doing, in the few words the genie's status has room for.
