@@ -5,10 +5,12 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 
 import dev.gui.model.Settings;
+import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampFailedException;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
+import dev.lamp.LampDirectory;
 
 /// Lights a genie's lamp: starts its sandbox and waits until it runs.
 ///
@@ -25,6 +27,12 @@ public interface Lighter {
     /// @throws IOException when the lamp did not start; the message says why, for the user
     Lit light(Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events)
             throws IOException, InterruptedException;
+
+    /// The lamp in `directory`, not lit, for what works without its sandbox: its schedule and
+    /// its history.
+    default LampDirectory unlit(Path directory) {
+        return Lamp.at(directory);
+    }
 
     /// A lamp whose sandbox runs.
     interface Lit extends AutoCloseable {
