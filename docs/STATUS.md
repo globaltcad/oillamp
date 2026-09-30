@@ -462,6 +462,8 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   `restore`.
 - Genies now goes through the Lamp API only; that is tested against the engine on a simulated
   machine, with a stand-in pi. Not yet tried in the real app with a real lamp.
+- Genies' schedule page was checked by drawing it offscreen at several window widths, and its
+  reading and changing against the engine on a simulated machine; not yet used in the real app.
 - The scheduling tools are pi's only. Another harness in the sandbox, such as opencode, has none.
 - The session writes its model and instructions into pi's files without following links, through
   Java's `SecureDirectoryStream`. That is tested on Linux, the only system oillamp runs on; a
