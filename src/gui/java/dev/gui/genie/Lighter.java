@@ -5,11 +5,14 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 
 import dev.gui.model.Settings;
+import dev.lamp.LampEvent;
+import dev.lamp.LampFailedException;
+import dev.lamp.LampPrompt;
+import dev.lamp.LampRun;
 
 /// Lights a genie's lamp: starts its sandbox and waits until it runs.
 ///
-/// [LampLighter] does this with oillamp's [dev.lamp.Lamp]. The scenarios give a [GenieRunner] a
-/// stand-in instead, so a genie's life can be followed without podman.
+/// [LampLighter] does this with oillamp's [dev.lamp.Lamp].
 @FunctionalInterface
 public interface Lighter {
 
@@ -17,8 +20,10 @@ public interface Lighter {
     ///
     /// @param key      the model key, which the lamp's engine keeps on the host
     /// @param progress receives what the lamp is doing, in a few words, while it starts
+    /// @param events   receives every event of the lamp's session, from any thread, including
+    ///                 the progress of the agent's runs
     /// @throws IOException when the lamp did not start; the message says why, for the user
-    Lit light(Path directory, Settings settings, String key, Consumer<String> progress)
+    Lit light(Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events)
             throws IOException, InterruptedException;
 
     /// A lamp whose sandbox runs.
@@ -29,6 +34,12 @@ public interface Lighter {
 
         /// The sandbox desktop's VNC socket.
         Path desktop();
+
+        /// See [Lamp#send].
+        LampRun send(LampPrompt question) throws IOException, InterruptedException, LampFailedException;
+
+        /// See [Lamp#cancel(String)].
+        void cancel(String run) throws IOException, InterruptedException, LampFailedException;
 
         /// Ends the sandbox, and returns once it is gone.
         @Override void close();
