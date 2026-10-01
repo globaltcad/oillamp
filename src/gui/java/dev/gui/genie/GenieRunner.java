@@ -110,7 +110,7 @@ public final class GenieRunner {
             changes.accept(Genie::waking);
             try {
                 Lighter.Lit lit = lighter.light(directory, settings, key,
-                        what -> changes.accept(genie -> genie.lampSays(what)), this::heard);
+                        what -> changes.accept(genie -> genie.lampSays(what)), this::onLampEvent);
                 lamp = Optional.of(lit);
                 changes.accept(genie -> genie.lampSays("waking the genie"));
                 Handouts.makeDirectories(lit);
@@ -118,15 +118,15 @@ public final class GenieRunner {
                         name, settings.model());
                 List<LampConversation> all = Lamp.conversations(directory);
                 String file = !conversation.isEmpty() ? conversation : all.isEmpty() ? "" : all.getFirst().file();
-                show(file, leaf);
+                showConversation(file, leaf);
                 var files = Handouts.list(lit);
                 changes.accept(genie -> genie.withHandouts(files).awake());
-                lookAtConversations();
+                reloadConversations();
             } catch (IOException | RuntimeException failed) {
-                putOut();
-                changes.accept(genie -> genie.broken(reason(failed)));
+                putOutLamp();
+                changes.accept(genie -> genie.broken(reasonOf(failed)));
             } catch (InterruptedException interrupted) {
-                putOut();
+                putOutLamp();
                 changes.accept(Genie::asleep);
                 Thread.currentThread().interrupt();
             }
@@ -135,24 +135,24 @@ public final class GenieRunner {
 
     /// Sends the user's message, to where the chat is. While the genie still works on another
     /// run, it waits its turn.
-    public void say(String text) {
-        send(question(text));
+    public void sendMessage(String text) {
+        sendQuestion(questionWhereTheChatIs(text));
     }
 
     /// Stops the run that answers this chat. What the genie did until then stays, and is saved.
-    public void stop() {
-        runInProgress.ifPresent(this::stop);
+    public void stopAnswering() {
+        runInProgress.ifPresent(this::stopRun);
     }
 
     /// Stops `run`, such as a job's. What the genie did until then stays, and is saved.
-    public void stop(String run) {
+    public void stopRun(String run) {
         Optional<Lighter.Lit> lit = lamp;
         if (lit.isEmpty()) return;
         Thread.ofVirtual().name("stop").start(() -> {
             try {
                 lit.get().cancel(run);
             } catch (IOException | LampFailedException failed) {
-                showProblem("The genie could not be stopped: " + reason(failed));
+                showProblem("The genie could not be stopped: " + reasonOf(failed));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -166,19 +166,19 @@ public final class GenieRunner {
     ///
     /// @param conversation its file relative to the genie's home
     /// @param leaf         the entry to continue after, or empty for where the conversation stands
-    public void goTo(String conversation, String leaf) {
-        work.execute(() -> show(conversation, leaf));
+    public void goToConversation(String conversation, String leaf) {
+        work.execute(() -> showConversation(conversation, leaf));
     }
 
     /// Shows the conversation pi knows by `id`, where it stands, such as the one a job's run had.
-    public void open(String id) {
-        work.execute(() -> Lamp.conversation(directory, id).ifPresentOrElse(conversation -> show(conversation.file(), ""),
+    public void openConversation(String id) {
+        work.execute(() -> Lamp.conversation(directory, id).ifPresentOrElse(conversation -> showConversation(conversation.file(), ""),
                 () -> showProblem("That conversation is not there any more.")));
     }
 
     /// Starts a new conversation: the chat empties, and the next message begins it. The others stay.
     public void startAfresh() {
-        work.execute(() -> show("", ""));
+        work.execute(() -> showConversation("", ""));
     }
 
     /// Asks `text` instead of the user's question `id`. The question and what followed it stay
@@ -189,28 +189,28 @@ public final class GenieRunner {
             showProblem("The conversation of that question is not there any more.");
             return;
         }
-        send(LampPrompt.insteadOf(conversation.get().id(), id, text));
+        sendQuestion(LampPrompt.insteadOf(conversation.get().id(), id, text));
     }
 
     /// Deletes a conversation for good. Deleting the one the chat shows starts a new one.
     ///
     /// @param conversation its file relative to the genie's home
-    public void forget(String conversation) {
+    public void forgetConversation(String conversation) {
         work.execute(() -> {
             try {
                 Optional<LampConversation> doomed = conversationIn(conversation);
                 if (doomed.isEmpty()) throw new IOException("it is not there any more");
-                if (where.file().equals(conversation)) show("", "");
+                if (where.file().equals(conversation)) showConversation("", "");
                 Lamp.forget(directory, doomed.get().id());
             } catch (IOException failed) {
-                showProblem("The conversation could not be deleted: " + reason(failed));
+                showProblem("The conversation could not be deleted: " + reasonOf(failed));
             }
-            lookAtConversations();
+            reloadConversations();
         });
     }
 
     /// Reads the genie's conversations from its lamp again, awake or asleep.
-    public void lookAtConversations() {
+    public void reloadConversations() {
         conversationReader.execute(() -> {
             Tuple<Conversation> all = Tuple.of(Conversation.class);
             for (LampConversation conversation : Lamp.conversations(directory)) all = all.add(LampTalk.conversation(conversation));
@@ -221,7 +221,7 @@ public final class GenieRunner {
 
     /// Makes the chat show `file` up to `leaf`, and the next message go there. Empty `file` for a
     /// new conversation.
-    private void show(String file, String leaf) {
+    private void showConversation(String file, String leaf) {
         Optional<LampConversation> conversation = conversationIn(file);
         if (conversation.isEmpty()) {
             where = Conversations.Here.UNKNOWN;
@@ -241,7 +241,7 @@ public final class GenieRunner {
     }
 
     /// The next message's place: after the entry the chat shows, in the conversation it shows.
-    private LampPrompt question(String text) {
+    private LampPrompt questionWhereTheChatIs(String text) {
         Conversations.Here here = where;
         Optional<LampConversation> conversation = conversationIn(here.file());
         if (conversation.isEmpty()) return LampPrompt.fresh(text);
@@ -270,7 +270,7 @@ public final class GenieRunner {
             heldWhileCatchingUp = Optional.of(new ArrayList<>());
             changes.accept(genie -> genie.waking().withActivity("joining its lamp, which was left running"));
             try {
-                Optional<Lighter.Lit> lit = lighter.join(directory, this::heard);
+                Optional<Lighter.Lit> lit = lighter.join(directory, this::onLampEvent);
                 if (lit.isEmpty()) {
                     heldWhileCatchingUp = Optional.empty();
                     changes.accept(Genie::asleep);
@@ -279,11 +279,11 @@ public final class GenieRunner {
                 lamp = lit;
                 var files = Handouts.list(lit.get());
                 changes.accept(genie -> genie.withHandouts(files).awake());
-                lookAtConversations();
+                reloadConversations();
             } catch (IOException | RuntimeException failed) {
                 heldWhileCatchingUp = Optional.empty();
-                putOut();
-                changes.accept(genie -> genie.broken(reason(failed)));
+                putOutLamp();
+                changes.accept(genie -> genie.broken(reasonOf(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -299,9 +299,9 @@ public final class GenieRunner {
             runsOfThisChat.add(answering.get().id());
             showAnswering(answering.get());
         } else {
-            show(fileOrMostRecent(rejoinAt.file()), rejoinAt.leaf());
+            showConversation(fileOrMostRecent(rejoinAt.file()), rejoinAt.leaf());
         }
-        held.forEach(this::heard);
+        held.forEach(this::onLampEvent);
     }
 
     private String fileOrMostRecent(String file) {
@@ -314,7 +314,7 @@ public final class GenieRunner {
     private void showAnswering(LampRun run) {
         Optional<LampConversation> conversation = run.conversation().flatMap(id -> Lamp.conversation(directory, id));
         String file = conversation.map(LampConversation::file).orElse("");
-        String before = conversation.map(it -> before(it, run.prompt())).orElse("");
+        String before = conversation.map(it -> entryBefore(it, run.prompt())).orElse("");
         where = conversation.isPresent() ? new Conversations.Here(file, before) : Conversations.Here.UNKNOWN;
         conversationOfRuns = where.file();
         PiEvent.History history = conversation.map(it -> LampTalk.history(it, before))
@@ -325,7 +325,7 @@ public final class GenieRunner {
     /// The entry the question `prompt` follows in `conversation`: the one before it, once pi has
     /// written the question down, otherwise where the conversation stands. What pi wrote after
     /// the question is the run's, which is heard again.
-    private static String before(LampConversation conversation, String prompt) {
+    private static String entryBefore(LampConversation conversation, String prompt) {
         Tuple<LampConversation.Entry> line = conversation.line();
         for (int i = line.size() - 1; i >= 0; i--) {
             LampConversation.Entry entry = line.get(i);
@@ -350,7 +350,7 @@ public final class GenieRunner {
 
     /// Hands a question to the lamp's session, on a thread of its own: it starts a short-lived
     /// engine process, which takes a moment.
-    private void send(LampPrompt question) {
+    private void sendQuestion(LampPrompt question) {
         Optional<Lighter.Lit> lit = lamp;
         if (lit.isEmpty()) {
             showProblem("The genie is asleep; wake it first.");
@@ -362,7 +362,7 @@ public final class GenieRunner {
             try {
                 runsOfThisChat.add(lit.get().send(question).id());
             } catch (IOException | LampFailedException failed) {
-                changes.accept(genie -> genie.hear(new PiEvent.Refused("prompt", reason(failed))));
+                changes.accept(genie -> genie.hear(new PiEvent.Refused("prompt", reasonOf(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } finally {
@@ -374,7 +374,7 @@ public final class GenieRunner {
     // ─── what the lamp reports ─────────────────────────────────────────────────────────────
 
     /// Every event of the lamp's session, on the thread that reads them.
-    private void heard(LampEvent event) {
+    private void onLampEvent(LampEvent event) {
         if (leftRunning) return;
         Optional<List<LampEvent>> held = heldWhileCatchingUp;
         if (held.isPresent()) {
@@ -397,9 +397,9 @@ public final class GenieRunner {
                 if (progress.progress() instanceof LampAgentProgress.Answered) runsThatAnswered.add(progress.run());
                 LampTalk.heard(progress.progress()).ifPresent(heard -> changes.accept(genie -> genie.hear(heard)));
             }
-            case LampEvent.RunFinished finished when runsOfThisChat.contains(finished.run().id()) -> finished(finished);
+            case LampEvent.RunFinished finished when runsOfThisChat.contains(finished.run().id()) -> chatRunFinished(finished);
             // Another run, such as a scheduled job's, may have added to the conversations.
-            case LampEvent.RunFinished ignored -> lookAtConversations();
+            case LampEvent.RunFinished ignored -> reloadConversations();
             case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
                 lamp = Optional.empty();
                 schedule.wentOut();
@@ -411,7 +411,7 @@ public final class GenieRunner {
 
     /// A run of this chat ended: the chat learns where the conversation now stands, and pi's ids
     /// for what was said, and the genie is ready.
-    private void finished(LampEvent.RunFinished finished) {
+    private void chatRunFinished(LampEvent.RunFinished finished) {
         String run = finished.run().id();
         runInProgress = Optional.empty();
         runsOfThisChat.remove(run);
@@ -430,7 +430,7 @@ public final class GenieRunner {
             changes.accept(genie -> genie.withConversations(genie.conversations().withAside(Optional.empty())));
         }
         checkOutbox();
-        lookAtConversations();
+        reloadConversations();
     }
 
     private void showProblem(String problem) {
@@ -442,9 +442,9 @@ public final class GenieRunner {
     /// Puts the lamp out. The genie's home, and with it the conversations, stays.
     public void sleep() {
         work.execute(() -> {
-            putOut();
+            putOutLamp();
             changes.accept(Genie::asleep);
-            lookAtConversations();
+            reloadConversations();
         });
     }
 
@@ -462,7 +462,7 @@ public final class GenieRunner {
     /// The desktop's VNC socket, while the lamp is lit.
     public Optional<Path> desktop() { return lamp.map(Lighter.Lit::desktop); }
 
-    private void putOut() {
+    private void putOutLamp() {
         schedule.wentOut();
         sleeping = true;
         lamp.ifPresent(Lighter.Lit::close);
@@ -484,12 +484,12 @@ public final class GenieRunner {
     }
 
     /// Copies the outbox file `name` to `target`, which the user chose.
-    public void save(String name, Path target) {
+    public void saveOutboxFile(String name, Path target) {
         transfer("Saved " + name + " to " + target + ".", lit -> Handouts.fetch(lit, name, target));
     }
 
     /// Puts `file` into the genie's inbox, and tells the genie.
-    public void give(Path file) {
+    public void giveFile(Path file) {
         String name = file.getFileName().toString();
         transfer("", lit -> {
             Handouts.give(lit, file);
@@ -510,7 +510,7 @@ public final class GenieRunner {
                 transfer.run(lit.get());
                 if (!done.isEmpty()) changes.accept(genie -> genie.withTranscript(genie.transcript().notice(done)));
             } catch (IOException | InterruptedException failed) {
-                showProblem(reason(failed));
+                showProblem(reasonOf(failed));
             }
         });
     }
@@ -518,7 +518,7 @@ public final class GenieRunner {
     /// The genie's home in its lamp, once the lamp was first lit.
     private Optional<Path> home() { return Lamp.agentHome(directory); }
 
-    private static String reason(Exception failed) {
+    private static String reasonOf(Exception failed) {
         return Optional.ofNullable(failed.getMessage()).filter(message -> !message.isBlank()).orElse(failed.toString());
     }
 }
