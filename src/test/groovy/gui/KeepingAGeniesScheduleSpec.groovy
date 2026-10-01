@@ -240,7 +240,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
                         builder.directory(home.toFile())
                         builder.start()
                     }
-                    Path desktop() { lit.desktop() }
+                    dev.gui.desktop.Desktop desktop() { lit.desktop() }
                     LampRun send(LampPrompt question) { lit.send(question) }
                     void cancel(String run) { lit.cancel(run) }
                     void close() { lit.close() }
