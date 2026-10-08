@@ -45,6 +45,7 @@ sealed interface Command {
     record Status(Path lamp, Context.Options options) implements Command {}
     record Follow(Path lamp, Context.Options options) implements Command {}
     record List(Context.Options options) implements Command {}
+    record Genies(Context.Options options) implements Command {}
     /// `confirmed` is `--yes`: the answer to the one question `remove` asks before it deletes
     /// the agent's home, not a general "assume yes".
     record Remove(Tuple<Path> lamps, boolean confirmed, Context.Options options) implements Command {}
@@ -297,6 +298,7 @@ sealed interface Command {
             case "status" -> Result.ok(new Status(Path.of(rest.first()), options));
             case "follow" -> Result.ok(new Follow(Path.of(rest.first()), options));
             case "list"   -> Result.ok(new List(options));
+            case "genies" -> Result.ok(new Genies(options));
             // The one command that takes several lamps, since a pattern like `test*` is the
             // natural way to clean up after experiments.
             case "remove" -> Result.ok(new Remove(rest.mapTo(Path.class, Path::of), confirmed, options));
@@ -446,6 +448,7 @@ sealed interface Command {
                 .put("status",     ValueSet.of("--embedded"))
                 .put("follow",     ValueSet.of("--embedded"))
                 .put("list",       ValueSet.of(String.class))
+                .put("genies",     ValueSet.of(String.class))
                 .put("completion", ValueSet.of(String.class))
                 .put("version",    ValueSet.of(String.class))
                 .put("help",       ValueSet.of(String.class))
@@ -477,7 +480,7 @@ sealed interface Command {
                 .put("config", 2).put("completion", 1).put("restore", 2).put("schedule", 3).put("ask", 2)
                 .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
                 .put("autosave", 1 + 2 * AUTOSAVE_MOMENTS.size())
-                .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
+                .put("list", 0).put("genies", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
     /// The line of [#usage] that describes `command`, such as `oillamp stop <dir>`.
     static String usageOf(String command) {
@@ -556,6 +559,9 @@ sealed interface Command {
                     following, not the session.
               list
                     Every oillamp sandbox running on this host.
+              genies
+                    Open Genies, the desktop app for chatting with agents that each live in a
+                    lamp of their own. It stays in the foreground until its window is closed.
               remove <dir>... --yes
                     Delete one or more lamps: the agent's home, the state, the config. Without
                     --yes it only says what would go. Every lamp is checked first; if any cannot
