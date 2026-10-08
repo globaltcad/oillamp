@@ -4,6 +4,7 @@ import dev.lamp.LampExitStatus
 import dev.lamp.LampProblem
 import dev.oillamp.OilLamp
 import spock.lang.Narrative
+import dev.lamp.LampProblem
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -115,6 +116,8 @@ class Using_The_Command_Line_Spec extends Specification {
             'help extra'                       | "`oillamp help` takes no arguments"      | 'oillamp help'
             'about extra'                      | "`oillamp about` takes no arguments"     | 'oillamp about'
             'guide extra'                      | "`oillamp guide` takes no arguments"     | 'oillamp guide'
+            'genies extra'                     | "`oillamp genies` takes no arguments"    | 'oillamp genies'
+            'genies --yes'                     | "`oillamp genies` does not take --yes"   | 'oillamp genies'
             'config LAMP path extra'           | "'extra'"                                | 'oillamp config <dir> (check | show-effective | path)'
             'completion bash zsh'              | "'zsh'"                                  | 'oillamp completion bash'
             'history LAMP restore a1b2c3d4 extra' | "'extra'"                             | 'oillamp history <dir> restore <snapshot>'
@@ -215,7 +218,7 @@ class Using_The_Command_Line_Spec extends Specification {
 
         then: 'it prints oillamp\'s version'
             outcome.status() == LampExitStatus.SUCCESS
-            outcome.console().contains('oillamp 0.2.0')
+            outcome.console().contains('oillamp 0.3.0')
 
         and: 'it also prints the version of Java it runs on'
             outcome.console().contains('java ' + Runtime.version())
@@ -236,7 +239,7 @@ class Using_The_Command_Line_Spec extends Specification {
             about.status() == LampExitStatus.SUCCESS
             about.console().contains('WHY IT EXISTS')
             about.console().contains('podman')
-            about.console().contains('oillamp 0.2.0')
+            about.console().contains('oillamp 0.3.0')
 
         when: '`oillamp guide` runs'
             var guide = host.oillamp.run('guide')
@@ -450,6 +453,8 @@ class Using_The_Command_Line_Spec extends Specification {
             !complete(script, 'oillamp', 'at', '/x', '--').contains('--yes')
             complete(script, 'oillamp', 'completion', '') == ['bash']
             complete(script, 'oillamp', 'list', '').isEmpty()
+            complete(script, 'oillamp', 'gen') == ['genies']
+            complete(script, 'oillamp', 'genies', '').isEmpty()
     }
 
     def 'An option\'s value can follow it, or be joined to it with `=`: oillamp #line'() {
@@ -653,11 +658,11 @@ class Using_The_Command_Line_Spec extends Specification {
             var lamp = host.lampPath().toString()
 
         expect: 'the first line of `doctor`, `at --dry-run`, `history save` and `history restore` names the lamp, and that of `remove` the number of lamps'
-            firstLine(host.oillamp.run('doctor', lamp)).endsWith("oillamp 0.2.0 — ${lamp}")
-            firstLine(host.oillamp.run('at', lamp, '--dry-run')).endsWith("oillamp 0.2.0 — ${lamp}")
-            firstLine(host.oillamp.run('history', lamp, 'save')).endsWith("oillamp 0.2.0 — ${lamp}")
-            firstLine(host.oillamp.run('history', lamp, 'restore', 'a1b2c3d4')).endsWith("oillamp 0.2.0 — ${lamp}")
-            firstLine(host.oillamp.run('remove', lamp, host.lampPath('other').toString())).endsWith('oillamp 0.2.0 — 2 lamps')
+            firstLine(host.oillamp.run('doctor', lamp)).endsWith("oillamp 0.3.0 — ${lamp}")
+            firstLine(host.oillamp.run('at', lamp, '--dry-run')).endsWith("oillamp 0.3.0 — ${lamp}")
+            firstLine(host.oillamp.run('history', lamp, 'save')).endsWith("oillamp 0.3.0 — ${lamp}")
+            firstLine(host.oillamp.run('history', lamp, 'restore', 'a1b2c3d4')).endsWith("oillamp 0.3.0 — ${lamp}")
+            firstLine(host.oillamp.run('remove', lamp, host.lampPath('other').toString())).endsWith('oillamp 0.3.0 — 2 lamps')
     }
 
     /** The first line of a command's output that is not blank. */
@@ -730,6 +735,27 @@ class Using_The_Command_Line_Spec extends Specification {
             outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('at <dir>')
             outcome.console().contains('doctor [<dir>]')
+            outcome.console().contains('genies')
+    }
+
+    def '`oillamp genies` opens Genies on the Java oillamp runs on, and says so when it cannot'() {
+        reportInfo """
+            Genies, the desktop app for chatting with agents, is built on oillamp and comes in
+            the same file. `oillamp genies` starts it as a program of its own, on the Java runtime
+            and classpath oillamp itself runs on, and waits in the terminal until its window is
+            closed. If that program cannot be started, oillamp says what it tried to start. Here
+            it cannot: a simulated machine has only the programs it was given.
+        """
+        when:
+            var outcome = host.oillamp.run('genies')
+
+        then:
+            outcome.status() == LampExitStatus.ERROR
+            var problem = outcome.errors().first()
+            problem.code().value() == 'OIL-GENIES-001'
+            var tried = (problem.evidence().first() as LampProblem.Evidence.Command).argv()
+            tried.toList() == [Path.of(System.getProperty('java.home'), 'bin', 'java').toString(),
+                               '-cp', System.getProperty('java.class.path'), 'dev.gui.Genies']
     }
 
     def '`oillamp image` says why there is no such command, and what to use instead'() {
