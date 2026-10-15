@@ -32,7 +32,10 @@ final class SandboxPhase {
     public Result<Running> start(LampPhase.Prepared prepared, HostFacts host) {
         LampLayout layout = prepared.layout();
         ContainerName container = ContainerName.of(layout.agentId());
-        SortedMap<String, String> buildArguments = buildArgumentsFor(prepared.config());
+        // With the revision of the lamp's last `oillamp update`, so this start finds the image
+        // that update built.
+        SortedMap<String, String> buildArguments = buildArgumentsFor(prepared.config(),
+                FilesystemUtil.readString(layout.toolRevision()).orElse("").strip());
         ImageTag image = ImageTag.ofHash(SandboxImageFilesUtil.hashOf(buildArguments));
 
         Tuple<Step> steps = Tuple.of(Step.class);
@@ -161,7 +164,13 @@ final class SandboxPhase {
         return imageWasAlreadyPresent ? configured : configured.multipliedBy(2);
     }
 
-    private SortedMap<String, String> buildArgumentsFor(LampConfig config) {
+    /// The Containerfile's build arguments. They are all part of the image's hash.
+    ///
+    /// `revision` is the lamp's last `oillamp update`, or empty if it was never updated.
+    /// `AGENT_TOOLS_STRICT` is not here: `update` adds it to its own build only, outside the
+    /// hash, so that later starts find the image it built and still forgive failed downloads
+    /// when they build one themselves.
+    static SortedMap<String, String> buildArgumentsFor(LampConfig config, String revision) {
         SortedMap<String, String> arguments = new TreeMap<>();
         arguments.put("BASE_IMAGE", config.image().base());
         arguments.put("JDK_PACKAGE", config.image().jdkPackage());
@@ -169,11 +178,16 @@ final class SandboxPhase {
         arguments.put("EXTRA_APT_PACKAGES", String.join(" ", config.image().extraAptPackages()));
         // Passing the harness list as a build argument also makes it part of the image hash, so
         // changing `agent_tools.install` rebuilds the image with the new list.
-        arguments.put("AGENT_TOOLS", String.join(" ", config.agentTools().install()));
+        arguments.put("AGENT_TOOLS", config.agentTools().install().mapTo(String.class, tool -> switch (tool) {
+            case "opencode" -> "opencode-ai@" + config.agentTools().versions().get(tool).orElse("latest");
+            case "pi" -> "@earendil-works/pi-coding-agent@" + config.agentTools().versions().get(tool).orElse("latest");
+            default -> tool;
+        }).join(" "));
+        if (!revision.isEmpty()) arguments.put("AGENT_TOOLS_REVISION", revision);
         return arguments;
     }
 
-    private static Association<String, String> asAssociation(SortedMap<String, String> map) {
+    static Association<String, String> asAssociation(SortedMap<String, String> map) {
         Association<String, String> out = Association.betweenSorted(String.class, String.class);
         for (var entry : map.entrySet()) out = out.put(entry.getKey(), entry.getValue());
         return out;

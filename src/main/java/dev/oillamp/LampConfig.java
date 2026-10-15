@@ -137,7 +137,7 @@ record LampConfig(
         }
     }
 
-    /// `[agent_tools]`. `versions` is not used yet; the newest versions are installed.
+    /// `[agent_tools]`. Versions of the friendly names `opencode` and `pi`, latest by default.
     public record AgentTools(Tuple<String> install, Association<String, String> versions) {}
 
     public record Image(String base, String nodeVersion, String jdkPackage, Tuple<String> extraAptPackages) {}

@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # The agent harnesses, installed into the image so the agent has them the moment it logs in.
 #
-# Nothing here may fail the build. A sandbox without an agent harness is still a working sandbox
-# with a desktop, a shell and a recording, and the user can install a harness themselves or name
-# a different one in oillamp.toml. A build that failed because npm was briefly unreachable would
-# take all of that away, so every step reports its failure and carries on.
+# Two modes. In an ordinary build every step reports its failure and carries on, and the script
+# exits 0: a sandbox without a harness still has a desktop, a shell and a recording, and a build
+# that failed because npm was briefly unreachable would take all of that away.
+#
+# `oillamp update` sets AGENT_TOOLS_STRICT=true. Then any failure, including a harness that
+# reports a different version from the one asked for, makes the script exit 1 and fails the
+# build, so the lamp keeps its previous image.
 #
 # Takes friendly names ("pi", "opencode") or raw npm specifiers. The friendly names are what a
 # user writes in oillamp.toml; the mapping to a published package lives here because that is what
 # changes when a project renames or moves.
 set -Eeuo pipefail
+failed=0
 
 # Where pi looks for extensions when PI_CODING_AGENT_DIR points at it (pi's own convention).
 PI_DIR=/usr/local/share/oillamp/pi
@@ -38,6 +42,7 @@ install_tools() {
             echo "installed $tool ($specifier)"
         else
             echo "WARNING: could not install $tool ($specifier) — the sandbox works without it" >&2
+            failed=1
         fi
     done
 }
@@ -54,6 +59,7 @@ install_pi_extensions() {
             echo "installed pi extension $extension"
         else
             echo "WARNING: could not install pi extension $extension — pi works without it" >&2
+            failed=1
         fi
     done
     chmod -R a+rX "$PI_DIR" 2>/dev/null || true
@@ -67,6 +73,7 @@ write_opencode_config() {
         chmod -R a+rX "$(dirname "$OPENCODE_CONFIG_FILE")" 2>/dev/null || true
     else
         echo "WARNING: could not configure opencode for Eden AI's EU endpoint — opencode works without it" >&2
+        failed=1
     fi
 }
 
@@ -76,8 +83,47 @@ main() {
     # shellcheck disable=SC2086
     install_pi_extensions ${PI_EXTENSIONS:-$PI_EXTENSIONS_DEFAULT}
     write_opencode_config
+    check_versions "$@"
+    [ "$failed" = 0 ]
 }
 
-# Never fatal: `|| true` at the top level, so the layer that runs this always succeeds.
-main "$@" || echo "WARNING: agent tooling did not fully install — the sandbox is unaffected" >&2
+# Prints each harness's version, so the build log says what was installed. When an exact
+# version was asked for, it must be the one installed.
+check_versions() {
+    for tool in "$@"; do
+        case "$tool" in
+            opencode|opencode-ai|opencode-ai@*) binary=opencode ;;
+            pi|@earendil-works/pi-coding-agent|@earendil-works/pi-coding-agent@*) binary=pi ;;
+            *) continue ;;
+        esac
+        if ! command -v "$binary" >/dev/null 2>&1; then
+            echo "WARNING: $binary is not installed" >&2
+            failed=1
+            continue
+        fi
+        if ! output=$("$binary" --version 2>&1); then
+            echo "WARNING: $binary --version failed: $output" >&2
+            failed=1
+            continue
+        fi
+        # What --version prints is the tool's choice, such as "1.2.0" or "pi 1.2.0", so only
+        # the first version number in it is compared.
+        version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' <<<"$output" | head -n 1 || true)
+        echo "$binary version: ${version:-unknown ($output)}"
+        requested=${tool##*@}
+        if [[ "$tool" == *@* && "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+ && "$version" != "$requested" ]]; then
+            echo "ERROR: $binary is version ${version:-unknown}, but $requested was asked for" >&2
+            failed=1
+        fi
+    done
+}
+
+# Ordinary builds are tolerant; explicit updates fail rather than selecting incomplete tools.
+if ! main "$@"; then
+    if [ "${AGENT_TOOLS_STRICT:-false}" = true ]; then
+        echo "ERROR: agent tools did not fully install; the lamp keeps the image it had" >&2
+        exit 1
+    fi
+    echo "WARNING: agent tooling did not fully install — the sandbox is unaffected" >&2
+fi
 exit 0

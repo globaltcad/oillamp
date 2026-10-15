@@ -36,6 +36,7 @@ sealed interface Command {
         enum Action { CHECK, SHOW_EFFECTIVE, PATH }
     }
     record At(Path lamp, Context.Options options) implements Command {}
+    record Update(Path lamp, Context.Options options) implements Command {}
     record View(Path lamp, boolean viewOnly, Context.Options options) implements Command {}
     record Shell(Path lamp, Context.Options options) implements Command {}
     record Stop(Path lamp, Context.Options options) implements Command {}
@@ -239,6 +240,7 @@ sealed interface Command {
                 };
             }
             case "at"     -> Result.ok(new At(Path.of(rest.first()), options));
+            case "update" -> Result.ok(new Update(Path.of(rest.first()), options));
             case "view"   -> Result.ok(new View(Path.of(rest.first()), viewOnly, options));
             case "shell"  -> Result.ok(new Shell(Path.of(rest.first()), options));
             case "stop"   -> Result.ok(new Stop(Path.of(rest.first()), options));
@@ -326,6 +328,7 @@ sealed interface Command {
                                                "--embedded", "--model-service", "--model-key-env",
                                                "--enable-scheduling"))
                 .put("view",       ValueSet.of("--view-only"))
+                .put("update",     ValueSet.of("--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
                 .put("recordings", ValueSet.of("--open", "--prune", "--dry-run"))
                 .put("doctor",     ValueSet.of("--dry-run", "--no-install"))
@@ -356,11 +359,11 @@ sealed interface Command {
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
-            "save", "history", "restore", "schedule", "ask", "conversations", "cancel");
+            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "update");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
-            "at", "view", "shell", "stop", "status", "follow", "recordings", "doctor", "save", "history");
+            "at", "view", "shell", "stop", "status", "follow", "recordings", "doctor", "save", "history", "update");
 
     /// How many arguments may follow the other commands.
     Association<String, Integer> MOST_ARGUMENTS =
@@ -409,6 +412,11 @@ sealed interface Command {
               view <dir> [--view-only]
                     Open another viewer onto a running session's desktop. Needs a display.
                     --view-only lets you watch without typing.
+              update <dir> [--dry-run] [--no-install]
+                    Install opencode and pi again, and download opencode's model list again,
+                    into a new image for this lamp. The lamp must be stopped. The home is not
+                    touched, and the lamp switches to the new image only if the build succeeds.
+                    Versions come from agent_tools.versions (latest by default).
               shell <dir>
                     Open an extra shell in this terminal. Needs no display. Closing it does
                     not end the session.

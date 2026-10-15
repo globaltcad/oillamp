@@ -535,7 +535,7 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `Containerfile` | build recipe | Debian 13 "trixie", everyday shell tools, the desktop stack, developer tools (JDK, Node.js, Python, Firefox), the two users, then the files from `rootfs/`. |
 | `build/install-node.sh` | bash | Installs Node.js from NodeSource (Debian's is too old for the harnesses). |
 | `build/install-sdkman.sh` | bash | Installs SDKMAN into `/usr/local/share/oillamp/sdkman`, with its questions turned off. |
-| `build/install-agent-tools.sh` | bash | Installs `opencode` and `pi` with npm, and pi's Eden AI extension into `/usr/local/share/oillamp/pi`. Never fails the build. |
+| `build/install-agent-tools.sh` | bash | Installs bundled harnesses with npm and pi's initial extension into `/usr/local/share/oillamp/pi`. Ordinary builds tolerate failures; explicit updates require success. |
 | `build/write-opencode-config.mjs` | Node.js | Writes `/usr/local/share/oillamp/opencode/opencode.json`: Eden AI through its EU endpoint, with the models that endpoint lists. |
 | `rootfs/usr/local/lib/oillamp/entrypoint` | bash | The container's first process. |
 | `rootfs/usr/local/lib/oillamp/lamp-pointer` | Python | Mouse input through VNC, for `lamp`. |
@@ -554,9 +554,31 @@ entrypoint extracted without its executable bit would make the container die at 
 
 **The image tag is a hash of its inputs.** `SandboxImageFilesUtil.hashOf` computes SHA-256 over every
 image file (path, mode and contents) and every build argument (`BASE_IMAGE`, `JDK_PACKAGE`,
-`NODE_MAJOR`, `EXTRA_APT_PACKAGES`, `AGENT_TOOLS`). The tag is
-`localhost/oillamp/sandbox:<first 16 hex digits>`. Lamps with identical inputs share an image.
-Old images are never removed; see STATUS.md.
+`NODE_MAJOR`, `EXTRA_APT_PACKAGES`, `AGENT_TOOLS`, and after an update `AGENT_TOOLS_REVISION`). The tag is `localhost/oillamp/sandbox:<first 16 hex digits>`. Lamps with
+identical inputs share an image. Old images are never removed; see STATUS.md.
+
+**Updating the agent tools.** `oillamp update <lamp>` (`CommandExecutionUtil.update`) builds an
+image and starts nothing. In order:
+
+1. It reads the lamp's configuration, and takes the lamp's lock, so it cannot run beside a
+   session. A dry run takes no lock.
+2. It makes a new revision: the lamp's id and the time in milliseconds, such as
+   `k3v7x2ab-1790000000000`. The revision becomes the build argument `AGENT_TOOLS_REVISION`.
+   That argument is declared just before the harness layer in the Containerfile, so podman runs
+   that layer again and reuses the ones before it.
+3. It also passes `AGENT_TOOLS_STRICT=true`, to this build only. In this mode
+   `install-agent-tools.sh` and `write-opencode-config.mjs` fail the build when an install, a
+   version check or the model list download fails. Without it they only warn. Strict mode is not
+   part of the hash, so a later start computes the same tag without it. A start that must build
+   the image again (because `image.extra_apt_packages` changed, say) therefore still only warns.
+4. Only after the build succeeds does it write the revision to `.oillamp/image/tools-revision`.
+   `SandboxPhase` reads that file at every start and passes it as the same build argument, so
+   the start computes the updated image's tag and finds it.
+5. It removes the image of the lamp's previous update. That image contains the lamp's id, so no
+   other lamp uses it. The image of a lamp that was never updated may be shared, so it is kept.
+
+The agent's home is not read or changed, apart from a check for `~/.local/bin/opencode` and
+`~/.local/bin/pi`. Copies there come first on `PATH`, so update warns about them.
 
 The Containerfile has a `WITH_TOOLCHAIN` argument (default `true`). When `false`, the JDK, browser,
 Node.js and agent tools are skipped. oillamp always builds with the default; the spikes use `false`
@@ -1259,7 +1281,7 @@ line** by the entrypoint or the supervisor.
 | Tool | Configured by | Written when, by whom |
 |---|---|---|
 | podman | the `podman run` arguments | every start, `SandboxPhase.containerArgv`, from `oillamp.toml` (`limits.*`, GPU decision) |
-| the image contents | Containerfile build arguments | every build, `SandboxPhase`, from `image.*` and `agent_tools.install` |
+| the image contents | Containerfile build arguments | every build, `SandboxPhase`, from `image.*`, `agent_tools.*` and `.oillamp/image/tools-revision` |
 | the entrypoint | `/oillamp/session/runtime.env` | every start, `RuntimeEnvFileUtil.render` |
 | sway | `/etc/oillamp/sway/config`, which includes `/run/lamp/output.conf` and `/run/lamp/windows.conf` | the config is in the image; the two includes are written by the entrypoint from `runtime.env` |
 | wayvnc | command-line flags, `--config=/dev/null` | every start, the entrypoint (`OILLAMP_VNC_MAX_FPS`) |
@@ -1485,7 +1507,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `llm.provider_name` | `"company"` | put into `OILLAMP_LLM_PROVIDER` | yes |
 | `llm.api_key_env`, `llm.api_key_file` | | where to read an API key on the host | **no** |
 | `agent_tools.install` | `["opencode","pi"]` | harnesses installed into the image (part of the image hash) | yes |
-| `agent_tools.versions` | `latest` for both | versions to install | **no** (always latest) |
+| `agent_tools.versions` | `latest` for both | `latest` or an exact release for `opencode` and `pi`; becomes the npm package version, and part of the image hash | yes |
 | `image.base` | `"docker.io/library/debian:trixie"` | base image | yes |
 | `image.node_version` | `"24"` | Node.js major version | yes |
 | `image.jdk_package` | `"temurin-25-jdk"` | JDK apt package | yes |

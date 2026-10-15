@@ -12,13 +12,6 @@ FROM ${BASE_IMAGE}
 
 ARG JDK_PACKAGE=temurin-25-jdk
 ARG NODE_MAJOR=24
-# The harnesses the agent finds already installed. Named the way a user writes them in
-# oillamp.toml; install-agent-tools.sh maps them to packages. Defaulted here as well as passed
-# in, so an image built straight from this file is still usable out of the box.
-ARG AGENT_TOOLS="opencode pi"
-# pi extensions, installed at build time so they are there from the first session. The default
-# adds Eden AI as a provider.
-ARG PI_EXTENSIONS="git:github.com/edenai/pi-edenai"
 ARG EXTRA_APT_PACKAGES=""
 # When false, the JDK, Node and the agent tools are skipped. The desktop, SSH and the lamp
 # tooling are all still there, and it builds much faster. The spike tests use this; oillamp itself
@@ -79,17 +72,32 @@ RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
     fi
 
 COPY build/ /tmp/oillamp-build/
-# The agent tooling and SDKMAN never fail the build (both scripts exit 0 whatever happens): a
-# sandbox with no harness still has a desktop, a shell, a recording and a working ssh, and losing
-# all of that because a registry was briefly unreachable would be a poor trade. Both install into
-# /usr/local/share/oillamp, not into /home/agent, which is a bind mount that would hide them; the
-# entrypoint seeds each into the home at session start.
+# Node.js goes into the sandbox's system directories. SDKMAN's seed goes into
+# /usr/local/share/oillamp, outside the bind-mounted home, and is copied there at session start.
+# SDKMAN failures do not prevent a usable desktop and shell.
 RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
       /tmp/oillamp-build/install-node.sh "${NODE_MAJOR}" \
-      && /tmp/oillamp-build/install-sdkman.sh \
-      && PI_EXTENSIONS="${PI_EXTENSIONS}" /tmp/oillamp-build/install-agent-tools.sh ${AGENT_TOOLS} ; \
+      && /tmp/oillamp-build/install-sdkman.sh ; \
+    fi
+
+# The agent harnesses. These arguments are declared here, not at the top, because a changed
+# argument makes podman run again only the layers after its declaration. `oillamp update` passes a
+# new AGENT_TOOLS_REVISION, so this layer runs again and everything above stays cached.
+#
+# The harness list, as friendly names or npm packages. oillamp passes versioned packages; the
+# default makes an image built straight from this file usable.
+ARG AGENT_TOOLS="opencode pi"
+# pi extensions, installed at build time so they are there from the first session. The entrypoint
+# copies them into the home only where the home does not have them already.
+ARG PI_EXTENSIONS="git:github.com/edenai/pi-edenai"
+ARG AGENT_TOOLS_REVISION=""
+# true during `oillamp update`: any failure in this layer fails the build.
+ARG AGENT_TOOLS_STRICT=false
+RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
+      AGENT_TOOLS_REVISION="${AGENT_TOOLS_REVISION}" AGENT_TOOLS_STRICT="${AGENT_TOOLS_STRICT}" \
+      PI_EXTENSIONS="${PI_EXTENSIONS}" /tmp/oillamp-build/install-agent-tools.sh ${AGENT_TOOLS} ; \
     fi \
- && rm -rf /tmp/oillamp-build
+  && rm -rf /tmp/oillamp-build
 
 # ── the two users that separate the agent from the infrastructure ────────────────────────────
 # agent (1000) is who the human's agent runs as. lamp (1001) runs the compositor, the VNC server

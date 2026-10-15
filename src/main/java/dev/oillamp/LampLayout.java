@@ -84,6 +84,8 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
 
     public Path imageDir()      { return stateDir().resolve("image"); }
     public Path imageContext()  { return imageDir().resolve("context"); }
+    /// Successful tool refresh revision; host-only, committed after the new image is built.
+    public Path toolRevision()  { return imageDir().resolve("tools-revision"); }
 
     /// `host/` and `agent/` belong to the user, `infra/` to the infra user. Each of the three is
     /// mounted on its own under `/oillamp/sockets`; this parent is never mounted, because the

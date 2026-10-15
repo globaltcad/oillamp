@@ -174,6 +174,12 @@ it already has.
 opencode's model list is Eden AI's, written when the image was built, so it does not offer a
 local model's name.
 
+`oillamp update <lamp>` installs opencode and pi again, at `latest` or the release pinned in
+`agent_tools.versions`, and downloads opencode's model list again. The lamp switches to the new
+image only if the build succeeds. `UpdatingTheAgentToolsSpec` checks this with podman simulated,
+and runs the installer script with stand-in npm, node and pi. No update has been run against a
+real registry yet.
+
 ### An application holding a lamp
 
 `RunningALampForAnApplicationSpec` (a spike) runs one lamp through `dev.lamp.Lamp`, with the engine
@@ -279,8 +285,16 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - No `OPENAI_BASE_URL` or `OPENAI_API_KEY` is set, and no configuration files are written for
   opencode or pi. Only `OILLAMP_LLM_BASE_URL`, `OILLAMP_LLM_MODELS` and `OILLAMP_LLM_PROVIDER` are
   set when `llm.forward` names a forward.
-- `agent_tools.versions` is ignored; the newest versions are always installed.
 - `--debug` does nothing beyond `--verbose`.
+
+### Open questions
+
+- `oillamp restore` brings back the home and `oillamp.toml`, but not the image an update chose:
+  `.oillamp/image/tools-revision` is not in the snapshots. After a restore the lamp keeps its
+  newest tools. Saving the revision in snapshots would not be enough, because the update after it
+  removes the old image, so restoring would have to build that image again. That build installs
+  whatever is `latest` on that day, not the tools the snapshot ran with, unless the versions were
+  pinned. Undecided.
 
 ### Things that are described but do not exist
 
@@ -390,4 +404,3 @@ the code that would otherwise look unnecessary.
 | `oillamp remove` deleted a lamp whose container was still running, when `lamp.json` was already gone. | It looked for the container by a name derived from `lamp.json`. | It asks podman for a container labelled with the lamp's path. |
 | The first real run failed with a 403: "Model(s) 'vertex/claude-sonnet-5-5' not allowed by your guardrail policy". | pi's default model, in a lamp whose pi had no model set, was one the account's Eden AI policy refuses. | Not a bug in oillamp: the run reported it, with the service's message. Set `defaultProvider` and `defaultModel` in the agent's `~/.pi/agent/settings.json`. |
 | `pi` and `opencode` seemed to be missing. | Not a bug: the locally installed oillamp was older than the change. | Remember to run `./gradlew installDist` (or `singleFile`) after changing the image. |
-

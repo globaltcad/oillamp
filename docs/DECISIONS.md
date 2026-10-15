@@ -460,14 +460,24 @@ implementation)*
 *Why:* an agent that cannot inspect its own environment wastes its turns guessing. *(added during
 implementation)*
 
-### Agent harnesses and SDKMAN are installed at build time and never fail the build
+### Agent harnesses are built into the image; an update must succeed or change nothing
 
-`opencode` and `pi` (with pi's Eden AI extension) and SDKMAN are installed while the image is built,
-into `/usr/local/share/oillamp/`, and copied into the agent's home at session start.
+`opencode`, `pi` (with pi's Eden AI extension) and SDKMAN are installed while the image is built.
+The harnesses go into `/usr/bin`. SDKMAN and pi's settings go into `/usr/local/share/oillamp/`,
+and the entrypoint copies them into the agent's home at session start.
 
-*Why:* `/home/agent` is a bind mount, so anything the image puts there is hidden at run time, and
-SDKMAN must be writable. A failure to install one of them only prints a warning: the desktop, shell
-and SSH are the product, the harnesses are a convenience. *(added during implementation)*
+*Why:* `/home/agent` is a bind mount, so anything the image put there would be hidden at run time,
+and SDKMAN must be writable. In an ordinary build a failed install is only a warning: the desktop,
+shell and SSH are the product, the harnesses are a convenience. *(added during implementation)*
+
+`oillamp update <lamp>` is the one exception. It builds a new image for one lamp, with the tool
+layer forced to run again, and every install, version check and model list download must succeed.
+Only then does the lamp switch to the new image. A failure leaves the lamp on its old image.
+
+*Why:* the user asked for new tools, so a build that quietly kept old or missing ones would be
+lying. Updating the image, rather than the home, keeps the harness in the read-only image, where
+the agent cannot change it. All requested tools are refreshed together, and the choice is one
+revision file, rather than a lock file or a version resolver. *(added 2026-10-15)*
 
 ### The model key stays on the host; the sandbox reaches Eden AI through oillamp
 

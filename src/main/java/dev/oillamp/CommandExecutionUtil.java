@@ -113,6 +113,10 @@ final class CommandExecutionUtil {
                 console.banner(version, at.lamp().toString());
                 yield at(machine, context, at.lamp());
             }
+            case Command.Update update -> {
+                console.banner(version, update.lamp().toString());
+                yield update(machine, context, update.lamp());
+            }
             // These five talk to a running session through its control socket. None of them
             // sets anything up.
             case Command.View view     -> view(machine, context, view.lamp(), view.viewOnly());
@@ -293,6 +297,130 @@ final class CommandExecutionUtil {
                         ProblemCatalogUtil.internal("lock release", ProblemCatalogUtil.reason(e))));
             }
         }
+    }
+
+    /// `oillamp update <dir>`: build a new image for this lamp, with opencode, pi and opencode's
+    /// model list installed again, and start nothing.
+    ///
+    /// The lamp switches to the new image only after the build succeeded: only then is the new
+    /// revision written to `.oillamp/image/tools-revision`, which every later start passes as a
+    /// build argument. A failed update therefore leaves the lamp on the image it had. The agent's
+    /// home is not touched.
+    private static ExitStatus update(Machine machine, Context context, Path lampPath) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<LampConfig> loaded = loadConfig(machine, layout.root());
+        if (loaded instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampConfig config = ((Result.Ok<LampConfig>) loaded).value();
+        context.sinkAcceptProblems(loaded.warnings());
+        Installing installing = !context.options().autoInstall() ? Installing.DECLINED
+                : config.host().autoInstall() ? Installing.ALLOWED : Installing.DECLINED_IN_CONFIG;
+        HostPhase.Outcome host = new HostPhase(machine, context).prepare(layout.root(), false, installing);
+        if (!host.succeeded()) {
+            context.sinkAcceptProblems(host.result().problems());
+            return HostPhase.exitStatusFor(host.result().problems());
+        }
+        context.sinkAcceptProblems(host.result().warnings());
+
+        // The same lock a session holds, so an update cannot build underneath a running sandbox.
+        // A dry run takes no lock, as with `at`.
+        Optional<LampLock> lock = Optional.empty();
+        try {
+            if (!context.options().dryRun()) {
+                lock = LampLock.tryAcquire(layout.lockFile());
+                if (lock.isEmpty()) {
+                    context.sinkAcceptProblems(Tuple.of(Problem.class, busyProblem(layout)));
+                    return ExitStatus.LAMP_BUSY;
+                }
+            }
+            String previous = FilesystemUtil.readString(layout.toolRevision()).orElse("").strip();
+            ImageTag previousImage = ImageTag.ofHash(SandboxImageFilesUtil.hashOf(
+                    SandboxPhase.buildArgumentsFor(config, previous)));
+            String revision = nextToolRevision(layout.agentId(), previous, machine.now());
+            var arguments = SandboxPhase.buildArgumentsFor(config, revision);
+            // The tag is computed before strict mode is added, so it is exactly the tag a later
+            // start computes, and that start finds this image.
+            ImageTag image = ImageTag.ofHash(SandboxImageFilesUtil.hashOf(arguments));
+            arguments.put("AGENT_TOOLS_STRICT", "true");
+
+            context.sink().accept(new LampEvent.Info("tools",
+                    "installing opencode and pi again, and fetching opencode's model list; "
+                  + "the agent's home is not touched"));
+            for (String tool : Tuple.of("opencode", "pi")) {
+                Path executable = layout.agentDir().resolve(".local").resolve("bin").resolve(tool);
+                if (FilesystemUtil.exists(executable))
+                    context.sink().accept(new LampEvent.Info("tools", "⚠️ " + executable
+                            + " takes precedence over /usr/bin/" + tool
+                            + " inside the sandbox; update does not change that copy"));
+            }
+            Result<Plan> built = new StepRunner(machine, context).run(Plan.of(LampEvent.Phase.IMAGE,
+                    Tuple.of(Step.class, new Step.ExtractImageContext(layout.imageContext()),
+                            new Step.BuildImage(image, layout.imageContext(),
+                                    SandboxPhase.asAssociation(arguments), false))));
+            if (built instanceof Result.Err<Plan> failure) {
+                context.sinkAcceptProblems(failure.problems());
+                context.sink().accept(new LampEvent.Info("tools",
+                        "update failed — the lamp keeps the image it had"));
+                return ExitStatus.ERROR;
+            }
+            if (context.options().dryRun()) {
+                context.sink().accept(new LampEvent.Info("tools", "dry run — no image built, the lamp is unchanged"));
+                return ExitStatus.SUCCESS;
+            }
+            FilesystemUtil.writeFile(layout.toolRevision(), revision + "\n", PosixMode.PRIVATE_FILE);
+            context.sink().accept(new LampEvent.Ok("tools", "updated image " + image
+                    + " — used from the next `oillamp at " + layout.root() + "`"));
+            // The image this lamp used before. Only an earlier update's image belongs to this lamp
+            // alone; the image of a lamp that was never updated may be shared with other lamps.
+            if (!previous.isEmpty()) removeImage(machine, context, previousImage);
+            return ExitStatus.SUCCESS;
+        } catch (IOException e) {
+            context.sinkAcceptProblems(Tuple.of(Problem.class,
+                    ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
+            return ExitStatus.ERROR;
+        } finally {
+            lock.ifPresent(CommandExecutionUtil::release);
+        }
+    }
+
+    /// The revision for the next update: the lamp's id and the time in milliseconds, such as
+    /// `k3v7x2ab-1790000000000`.
+    ///
+    /// The lamp's id makes the updated image this lamp's alone, so the update after it may remove
+    /// it. The time makes each update a new image. If the clock has not moved since the last
+    /// update, the time is moved on by one, so the revision still changes.
+    static String nextToolRevision(AgentId lamp, String previous, Instant now) {
+        long millis = now.toEpochMilli();
+        String prefix = lamp.value() + "-";
+        if (previous.startsWith(prefix)) {
+            try {
+                millis = Math.max(millis, Long.parseLong(previous.substring(prefix.length())) + 1);
+            } catch (NumberFormatException ignored) {
+                // Not written by this version of oillamp. Any new revision differs from it.
+            }
+        }
+        return prefix + millis;
+    }
+
+    /// Removes an image this lamp no longer uses. Failing to is only a warning: the update
+    /// itself succeeded, and the image costs nothing but disk space. Podman refuses to remove an
+    /// image a container still uses, which is what should happen.
+    private static void removeImage(Machine machine, Context context, ImageTag image) {
+        Machine.Outcome removed = machine.run(Machine.Command
+                .of("podman", "image", "rm", image.value())
+                .withTimeout(Duration.ofMinutes(1)).labelled("podman image rm"));
+        if (removed.succeeded())
+            context.sink().accept(new LampEvent.Info("tools", "removed the image the lamp used before, " + image));
+        else
+            context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.asWarning(ProblemCatalogUtil.podmanFailed(
+                    "podman image rm " + image, removed.exitCode(), removed.errorOutput().strip()))));
     }
 
     /// Removes the container a start left behind, if there is one. Called when the start failed,
@@ -1239,9 +1367,13 @@ final class CommandExecutionUtil {
 
     /// Says who holds the lamp, from the `session.json` the running session wrote.
     private static Problem busyProblem(LampPhase.Prepared prepared) {
+        return busyProblem(prepared.layout());
+    }
+
+    private static Problem busyProblem(LampLayout layout) {
         Optional<com.fasterxml.jackson.databind.JsonNode> session =
-                FilesystemUtil.readString(prepared.layout().sessionMeta()).flatMap(JsonUtil::parse);
-        return ProblemCatalogUtil.lockBusy(prepared.layout().root(),
+                FilesystemUtil.readString(layout.sessionMeta()).flatMap(JsonUtil::parse);
+        return ProblemCatalogUtil.lockBusy(layout.root(),
                 session.map(json -> json.path("supervisorPid").asLong(0)).orElse(0L),
                 session.map(json -> JsonUtil.text(json, "startedAt")).filter(when -> !when.isEmpty())
                        .orElse("an earlier time"));

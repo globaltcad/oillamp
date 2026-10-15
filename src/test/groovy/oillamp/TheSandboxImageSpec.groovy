@@ -272,21 +272,22 @@ class TheSandboxImageSpec extends Specification {
             Files.readString(IMAGE.resolve('Containerfile')).contains('ARG AGENT_TOOLS="opencode pi"')
     }
 
-    def 'nothing about the agent tooling can fail the image build'() {
+    def 'ordinary builds tolerate agent tool failures but explicit updates require success'() {
         reportInfo """
             The user was explicit about this, and they are right: a harness is a convenience, while
             the desktop, the shell, the recording and ssh are the product. Losing all of them
             because a registry was briefly unreachable would be a bad trade made automatically.
 
-            So the installer reports failures and exits 0 regardless, and the Containerfile layer
-            that runs it cannot fail either.
+            Ordinary builds report failures and continue. An explicit update is different: it
+            must fail rather than claiming that incomplete tools or a stale catalog were updated.
         """
         when:
             var script = Files.readString(IMAGE.resolve('build/install-agent-tools.sh'))
 
-        then: 'the script ends by succeeding whatever happened inside it'
+        then: 'the script succeeds by default but has a strict mode for updates'
             script.contains('exit 0')
-            script.readLines().any { it.startsWith('main "$@" ||') }
+            script.contains('${AGENT_TOOLS_STRICT:-false}')
+            script.contains('exit 1')
 
         and: 'and each individual tool is attempted independently, not as one all-or-nothing step'
             script.contains('WARNING: could not install')

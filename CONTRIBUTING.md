@@ -132,6 +132,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `ThePointerSpec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
 | `TheLauncherSpec` | the single-file launcher script |
 | `TheSandboxImageSpec` | static checks of the image files |
+| `UpdatingTheAgentToolsSpec` | `update`: a new image for one lamp, kept only when its build succeeds |
 | `TheShapeOfTheCodeSpec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
 | `KeepingTheModelKeyOnTheHostSpec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
 | `ShowingTheUserTheDesktopSpec` | `lamp show` telling the host there is something to look at |

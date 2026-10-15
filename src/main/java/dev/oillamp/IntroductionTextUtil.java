@@ -137,6 +137,25 @@ final class IntroductionTextUtil {
                Use this rather than rm -rf: parts of a lamp belong to the sandbox's own users,
                and rm cannot remove them.
 
+            UPDATING THE AGENT TOOLS
+
+              opencode, pi and opencode's list of Eden AI models are downloaded once, when the
+              image is built. Starting a lamp never looks for newer ones. To get them, run this
+              on the host:
+
+                 oillamp stop   ~/lamps/first
+                 oillamp update ~/lamps/first      (--dry-run shows the plan first)
+                 oillamp at     ~/lamps/first
+
+              update builds a new image for this lamp only. The agent's home is not touched.
+              If the build fails, the lamp keeps its old image. To pin a release instead of
+              latest, set agent_tools.versions in oillamp.toml.
+
+              A copy installed into the agent's home (~/.local/bin) runs instead of the
+              image's, and update does not change it. Inside the sandbox, `command -v pi`
+              shows which one runs. A home copy is quicker to install, but the agent can
+              change it, and it does not refresh opencode's model list.
+
             ON THE DESKTOP
 
               The bar at the bottom starts a terminal, or Firefox, and holds the buttons the

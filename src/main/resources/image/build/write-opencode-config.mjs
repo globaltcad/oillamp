@@ -70,6 +70,10 @@ try {
     provider.whitelist = Object.keys(models).sort();
     console.log(`opencode: ${provider.whitelist.length} Eden AI models from the EU endpoint`);
 } catch (error) {
+    if (process.env.AGENT_TOOLS_STRICT === "true") {
+        console.error(`ERROR: could not refresh Eden AI's EU model list (${error.message})`);
+        process.exit(1);
+    }
     console.error(`WARNING: could not read Eden AI's EU model list (${error.message}); `
         + "opencode still uses the relay, with its own model list");
 }

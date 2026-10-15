@@ -84,7 +84,9 @@ sandbox inside it. oillamp calls such a directory a **lamp**.
 
 ⏳ The first start builds the sandbox image (about 3.5 GB: Debian, a JDK, Node.js, Python,
 Firefox, a desktop and two agent harnesses) and takes several minutes. After that, starting takes
-a few seconds.
+a few seconds, because the image is reused: by later sessions, and by any lamp with the same
+settings. Its agent tools do not update by themselves; see
+[Updating the agent tools](#-updating-the-agent-tools).
 
 Then the two windows open. The terminal you typed in stays where it is and shows the sandbox's
 health until the session ends:
@@ -226,6 +228,7 @@ your account is not allowed to delete them directly. `oillamp remove` knows how.
 
 ```sh
 oillamp at <dir>                 # start (or resume) a sandbox in <dir>
+oillamp update <dir>             # refresh bundled agent tools and the Eden AI model catalog
 oillamp at <dir> --dry-run       # print every step it would take, and do nothing
 oillamp doctor [<dir>]           # check this machine (and a lamp's config), change nothing
 oillamp view <dir>               # open another desktop viewer
@@ -253,6 +256,82 @@ Add `--verbose` to any command to see every step as it happens. For tab completi
 eval "$(oillamp completion bash)"                        # this shell only
 echo 'eval "$(oillamp completion bash)"' >> ~/.bashrc    # every future shell
 ```
+
+---
+
+## 🔄 Updating the agent tools
+
+The image comes with opencode, pi, and opencode's list of Eden AI models. All three are
+downloaded once, when the image is built. After that the image is reused, by later sessions and
+by every lamp with the same settings, even a new one. Starting a lamp never checks for newer
+releases.
+
+To get newer tools, run this **on the host**:
+
+```sh
+oillamp stop ~/lamps/first        # update refuses a lamp that is running
+oillamp update ~/lamps/first      # add --dry-run to see the plan first
+oillamp at ~/lamps/first
+```
+
+`update` builds a new image for this lamp only. It installs the latest opencode and pi (or the
+versions you pinned, see below) and downloads opencode's model list again. The next session
+starts from that image. Other lamps keep the image they have. On the second and later updates,
+the image of the previous update is removed, as no other lamp uses it.
+
+- **The agent's home is not touched.** The workspace, settings, extensions and everything else
+  in `/home/agent` stay as they are.
+- **A failed update changes nothing.** If an install or the model list download fails, the lamp
+  keeps its previous image.
+- **Only the agent tools are refreshed.** Debian packages, the JDK and Node.js come from the
+  earlier, cached part of the image.
+- **`restore` does not undo an update.** Snapshots hold the home and `oillamp.toml`, not the
+  image. After a restore, the lamp still runs the updated tools.
+
+To pin a version, edit the lamp's `oillamp.toml`. Each value is `latest` or an exact release:
+
+```toml
+[agent_tools]
+versions = { opencode = "latest", pi = "1.2.0" }
+```
+
+### A copy in the agent's home wins
+
+Inside the sandbox, `~/.local/bin` comes before `/usr/bin` on `PATH`. If you or the agent
+installed opencode or pi into the home, that copy runs, and `update` does not change it. `update`
+warns when it finds one. To see which copy runs, **inside the sandbox**:
+
+```sh
+command -v opencode pi           # /usr/bin/... is the image's copy
+/usr/bin/pi --version            # the image's copy, whatever PATH says
+```
+
+To go back to the image's copy, remove the one in the home:
+
+```sh
+npm uninstall -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent   # or opencode-ai
+hash -r                          # make bash forget the old location
+```
+
+### Updating from inside the sandbox instead
+
+You can also install a newer version into the home, from inside the sandbox, without stopping the
+lamp:
+
+```sh
+npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@latest   # or opencode-ai@latest
+hash -r
+```
+
+This is quicker, but it has two drawbacks:
+
+- ⚠️ **The agent can change that copy.** The agent runs as `agent`, the user that owns the home.
+  The copy in the image is read-only.
+- **opencode's model list stays the same.** The list is part of the image
+  (`/usr/local/share/oillamp/opencode/opencode.json`), so only `update` refreshes it.
+
+pi's extensions live in the home, and `pi update --extensions` updates them from inside the
+sandbox.
 
 ---
 

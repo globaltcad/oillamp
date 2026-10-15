@@ -407,9 +407,13 @@ run code. **Eden AI** is a service that gives access to many language models thr
 
 ### How oillamp uses them
 
-All of them are installed while the image is built, into `/usr/local/share/oillamp/`, and SDKMAN
-and pi's settings are copied into the agent's home when a session starts. A failure to install any
-of them never fails the image build; the sandbox is still useful without them.
+Everything here is installed inside the image while it is built, never on the host. npm puts
+opencode and pi in `/usr/bin`. SDKMAN, pi's settings and extensions, and opencode's configuration
+go into `/usr/local/share/oillamp/`. They cannot go straight into `/home/agent`, because the
+lamp's home is mounted over that directory when the sandbox starts and would hide them. So at each
+start the entrypoint copies SDKMAN, and whichever pi entries are missing, into the home. It never
+overwrites what is already there. In an ordinary build a failed install is only a warning: the
+sandbox is still useful without a harness.
 
 Both harnesses send their model requests to oillamp's relay inside the sandbox,
 `http://127.0.0.1:3129/v3`. oillamp adds your `EDENAI_API_KEY` on the host and sends them on to
@@ -417,6 +421,38 @@ Eden AI's EU endpoint, `https://api.eu.edenai.run`. The key never enters the san
 hold a placeholder. The sandbox's shell environment sets the relay for pi, a configuration file
 written during the build sets it for opencode, and a network rule refuses Eden AI's global
 endpoint for anything that tries it directly.
+
+### opencode's model list
+
+opencode knows Eden AI, but only its global endpoint and its own list of models, and the EU
+endpoint does not serve most of them. So during the build, `build/write-opencode-config.mjs` asks
+`https://api.eu.edenai.run/v3/models` (no key needed) for the models served in the EU with text
+output, and writes them into `/usr/local/share/oillamp/opencode/opencode.json`. `OPENCODE_CONFIG`
+points opencode at that file.
+
+The list is a snapshot from the day the image was built. Updating opencode with npm does not
+change it, and neither does starting a session.
+
+### Getting newer versions
+
+The image's tag is a hash of its inputs: its files and its build arguments. A new npm release, or
+a new model at Eden AI, does not change those inputs, so oillamp keeps using the image it has.
+Podman's layer cache has the same effect: even if the image is deleted, the cached layer with the
+old tools may be reused.
+
+`oillamp update <lamp>` adds a new build argument, `AGENT_TOOLS_REVISION`. It is declared just
+before the layer that installs the harnesses, so podman reuses every layer before it (Debian, the
+desktop, the JDK, Node.js, SDKMAN) and runs the harness layer, and everything after it, again. That
+layer reinstalls opencode and pi and fetches the model list again.
+
+`agent_tools.versions` picks `latest` or an exact release for each tool. `latest` is resolved by
+npm at build time. Pin exact versions if an image that is built again must contain the same
+releases.
+
+The other way to update is from inside the sandbox, with
+`npm install -g --prefix "$HOME/.local" <package>@latest`. That puts a second copy into
+`~/.local/bin`, which comes before `/usr/bin` on `PATH`. It survives sessions, but the agent can
+change it, because the agent owns its home. The copy in `/usr/bin` is in the read-only image.
 
 ---
 

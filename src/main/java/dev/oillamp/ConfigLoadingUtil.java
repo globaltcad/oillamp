@@ -384,6 +384,12 @@ final class ConfigLoadingUtil {
         s.allowOnly("install", "versions");
         Tuple<String> install = s.strings("install", fallback.install());
         var versions = s.has("versions") ? s.stringTable("versions") : fallback.versions();
+        for (var entry : versions) {
+            if (!entry.first().equals("opencode") && !entry.first().equals("pi"))
+                s.invalid("versions." + entry.first(), entry.second(), "expected opencode or pi");
+            if (!entry.second().equals("latest") && !entry.second().matches("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?"))
+                s.invalid("versions." + entry.first(), entry.second(), "expected latest or an exact version such as 1.2.0");
+        }
         return new LampConfig.AgentTools(install, versions);
     }
 
