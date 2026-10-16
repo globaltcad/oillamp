@@ -56,17 +56,32 @@ class TravellingBackInTimeSpec extends Specification {
             with a save, taken before the sandbox runs, and whatever the agent does in that
             session can be undone by going back to it. The snapshot says it is a startup save,
             and which session it began, so a person reading the history knows what it is.
+            Saving a large home can take time, so the CLI explains what is happening before
+            reading the files and starts its activity line rather than appearing stuck.
         """
         given: 'a new lamp'
             var lamp = host.lampPath()
+            boolean announcedBeforeSaving = false
+            var oillamp = host.oillamp.observedBy { event ->
+                if (event instanceof LampEvent.StepStarted && event.step().kind() == 'SaveLamp'
+                        && !announcedBeforeSaving) {
+                    announcedBeforeSaving = !Files.exists(lamp.resolve('.oillamp/history/HEAD'))
+                }
+            }
 
         when: 'a session runs on it and ends, having changed nothing'
-            var ran = host.oillamp.run('at', lamp.toString())
+            var ran = oillamp.run('at', lamp.toString())
 
         then:
             ran.succeeded()
 
         and: 'the lamp was saved as the session started'
+            announcedBeforeSaving
+            ran.console().contains('saving lamp state now — this may take a while (startup save)')
+            var startingSave = ran.events().findIndexOf {
+                it instanceof LampEvent.StepStarted && it.step().kind() == 'SaveLamp'
+            }
+            startingSave < ran.events().findIndexOf { it instanceof LampEvent.Saved }
             var saved = ran.events().findAll { it instanceof LampEvent.Saved }*.snapshot()
             saved*.kind() == [SaveKind.STARTUP]
             saved[0].session().isPresent()
@@ -123,11 +138,13 @@ class TravellingBackInTimeSpec extends Specification {
             made.kind() == SaveKind.IDLE
             made.message() == 'before the upgrade'
             first.console().contains('saved ' + made.shortId())
+            first.console().contains('saving lamp state now — this may take a while (idle save)')
 
         and: 'the second found nothing to save'
             second.succeeded()
             !second.events().any { it instanceof LampEvent.Saved }
             second.console().contains('nothing changed since ' + made.shortId())
+            second.events().any { it instanceof LampEvent.StepStarted && it.step().kind() == 'SaveLamp' }
 
         and: 'the history lists it by what the person wrote'
             var listed = host.oillamp.run('history', lamp.toString())

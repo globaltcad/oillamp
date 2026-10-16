@@ -1418,6 +1418,12 @@ from `$COLUMNS` or `stty size`, long lines are shortened with "…", automatic w
 while drawing (`ESC[?7l`, back on with `ESC[?7h`), and control characters in the step's output are
 removed.
 
+Startup, shutdown and manual saves report `StepStarted` with kind `SaveLamp` before reading the
+lamp's files, so the activity line also runs while saving state. On a terminal, the saving message
+and elapsed time are temporary: the resulting `Saved`, unchanged-state `Info`, or save problem
+clears the activity line. When output is redirected, the renderer prints a plain saving message
+instead, explaining that it may take a while.
+
 ### Class map
 
 | Area | Classes |

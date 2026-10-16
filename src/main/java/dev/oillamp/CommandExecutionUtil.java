@@ -868,6 +868,11 @@ final class CommandExecutionUtil {
     /// report. Also used by `at` as a session starts and by the supervisor as it ends.
     static Tuple<Problem> saveLamp(Context context, LampLayout layout, SaveKind kind, String message,
                                    Optional<SessionId> session, Instant now) {
+        String activity = "saving lamp state now — this may take a while";
+        context.sink().accept(new LampEvent.StepStarted(new LampEvent.StepInfo(
+                "SaveLamp", activity + " (" + kind.label() + ")",
+                "save " + layout.root() + " (" + kind.label() + ")")));
+        // Saved, Info (nothing changed), or the caller's Warning/Failure ends the activity line.
         Result<History.Saving> saved = new History(layout).save(kind, message, session, now);
         if (saved instanceof Result.Err<History.Saving> failure) return failure.problems();
         History.Saving saving = ((Result.Ok<History.Saving>) saved).value();

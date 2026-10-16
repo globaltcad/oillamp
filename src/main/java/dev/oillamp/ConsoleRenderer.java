@@ -190,8 +190,11 @@ final class ConsoleRenderer {
                     for (String detailLine : planned.step().detail().lines().toList())
                         printLine(dim(" ".repeat(10) + "  " + detailLine));
             }
-            case LampEvent.StepStarted started ->
-                    { if (verbose) printLine(area("step") + dim("→ " + started.step().describe())); }
+            case LampEvent.StepStarted started -> {
+                if (started.step().kind().equals("SaveLamp")) {
+                    if (!live) printLine(area("history") + dim("· " + started.step().describe()));
+                } else if (verbose) printLine(area("step") + dim("→ " + started.step().describe()));
+            }
             case LampEvent.StepSucceeded succeeded ->
                     { if (verbose) printLine(area("step") + colour(GREEN, "✓ ") + succeeded.step().describe()); }
             case LampEvent.StepSkipped skipped ->

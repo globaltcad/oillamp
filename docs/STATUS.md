@@ -392,6 +392,7 @@ the code that would otherwise look unnecessary.
 
 | What happened | Cause | Change |
 |---|---|---|
+| Starting a lamp appeared stuck while saving a large agent home. | Saving only reported its result, and did not start the CLI's activity line. | Startup, shutdown and manual saves show a temporary spinner with elapsed time on a terminal, replaced by the result when done. Redirected output gets a plain saving message. |
 | The GPU was never used on a stock Ubuntu 24.04. | Ubuntu installs podman with runc, which cannot pass the render group into the container. | `crun` is a required package. |
 | Building the image failed on a fresh machine. | Rootless podman on Ubuntu 24.04 has no network backend without `slirp4netns`. | `slirp4netns` is a required package. |
 | `doctor` told users to "drop `--no-install`", a flag they never passed. | One boolean meant both "the user declined" and "this command never installs". | The `Installing` enum separates the two. |
