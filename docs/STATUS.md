@@ -300,6 +300,12 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   whatever is `latest` on that day, not the tools the snapshot ran with, unless the versions were
   pinned. Undecided.
 
+- The warning about an old image (`OIL-IMAGE-002`) goes by when the image was built. A plain
+  `oillamp update` builds a new image, so the warning stops, although only the agent tools in
+  it are new and Debian's packages are as old as before. Telling the two apart would mean
+  reading the age of the cached apt layers (`podman history`), or remembering the last
+  `--system` build per lamp. Undecided.
+
 ### Things that are described but do not exist
 
 - No session log (`oillamp-<session>.log`) or container log (`container-<session>.log`) is
