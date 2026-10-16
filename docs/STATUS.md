@@ -392,6 +392,8 @@ the code that would otherwise look unnecessary.
 
 | What happened | Cause | Change |
 |---|---|---|
+| Adding an icon-only command could overwrite a labelled dock button with the same text. | Labels and icon-only commands shared one replacement and removal key. | Replacement distinguishes labels from commands; removal prefers a matching label and otherwise removes an icon-only command. Regression scenarios cover both insertion orders. |
+| The dock's default buttons took too much horizontal space. | Every button rendered a label beside its icon, and custom items required a label. | Terminal and Firefox are icon-only with command tooltips. Custom buttons can omit the label with `lamp dock add COMMAND --icon ICON`, and are replaced or removed by command. |
 | Starting a lamp appeared stuck while saving a large agent home. | Saving only reported its result, and did not start the CLI's activity line. | Startup, shutdown and manual saves show a temporary spinner with elapsed time on a terminal, replaced by the result when done. Redirected output gets a plain saving message. |
 | The GPU was never used on a stock Ubuntu 24.04. | Ubuntu installs podman with runc, which cannot pass the render group into the container. | `crun` is a required package. |
 | Building the image failed on a fresh machine. | Rootless podman on Ubuntu 24.04 has no network backend without `slirp4netns`. | `slirp4netns` is a required package. |

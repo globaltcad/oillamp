@@ -1196,7 +1196,7 @@ The agent's environment points at the display with `WAYLAND_DISPLAY=/run/lamp/wa
 | `lamp wait-stable [SECONDS]` | a screenshot every 0.5 s until two are identical (default limit 10 s) |
 | `lamp info` | the size now (and the desktop's own size, when it differs), renderer, output name and screenshot directory |
 | `lamp show "text"` | asks the user to look at the desktop, through the session (see Desktop, above) |
-| `lamp dock [list]`, `lamp dock add LABEL COMMAND [--icon ICON]`, `lamp dock remove LABEL` | reads and writes `~/.config/lamp/dock.json` (see The dock, below); says when the dock is not running |
+| `lamp dock [list]`, `lamp dock add [LABEL] COMMAND [--icon ICON]`, `lamp dock remove LABEL_OR_COMMAND` | reads and writes `~/.config/lamp/dock.json` (see The dock, below); says when the dock is not running |
 
 There is no window list: that would need sway's control socket, which the agent must not reach.
 
@@ -1224,9 +1224,9 @@ it, and it never covers one. It never takes the keyboard.
 
 | | |
 |---|---|
-| its own buttons | Terminal (`foot`), and Firefox (`firefox`) when it is installed |
-| the agent's buttons | `~/.config/lamp/dock.json`, a list of `{"label", "command", "icon"}`; `icon` is optional: a name from the icon themes or an image file. The file is in the agent's home, so it outlives the session |
-| reading the file | checked every second; a change of time, size or inode reads it again. A broken file shows a warning on the dock, with the error on hover; an item without a label or a command is left out, and the warning says how many |
+| its own buttons | Icon-only Terminal (`foot`), and Firefox (`firefox`) when it is installed |
+| the agent's buttons | `~/.config/lamp/dock.json`, a list of `{"label", "command", "icon"}`; `label` and `icon` are optional, but at least one is needed. An icon is a name from the icon themes or an image file. Omit the label for an icon-only button; unavailable icons fall back to a generic application icon. The file is in the agent's home, so it outlives the session |
+| reading the file | checked every second; a change of time, size or inode reads it again. A broken file shows a warning on the dock, with the error on hover; items missing a command, or having neither a label nor an icon, are left out, and the warning says how many |
 | a click | `bash -lc COMMAND` in the agent's home, in its own session, so the command finds the same environment as the agent's terminal |
 | hovering | shows the command |
 | a command that exits with a status other than 0 | its button gets an orange border; hovering shows the exit status and the last line it printed, until the next click |
@@ -1234,6 +1234,10 @@ it, and it never covers one. It never takes the keyboard.
 
 `lamp dock` writes the file to a temporary file in the same directory and renames it, so the dock
 never reads half of it. It does not write over a file it cannot read.
+An icon-only button is added with `lamp dock add COMMAND --icon ICON`, replaced by adding the
+same command again, and removed with `lamp dock remove COMMAND`. Labelled buttons are named by
+their label as before. Labels and icon-only commands identify separate buttons even when their
+text is the same; removal takes the labelled button first in that case.
 
 **Pointer input goes through VNC.** `lamp-pointer` connects to the desktop's VNC socket and sends
 absolute pointer positions and button presses, the same way your viewer does. It remembers the last

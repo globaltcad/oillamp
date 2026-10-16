@@ -161,7 +161,7 @@ cmd_dock() {
 import json, os, sys, tempfile
 path, pid_file, args = sys.argv[1], sys.argv[2], sys.argv[3:]
 action = args.pop(0) if args else "list"
-usage = "usage: lamp dock [list] | lamp dock add LABEL COMMAND [--icon ICON] | lamp dock remove LABEL"
+usage = "usage: lamp dock [list] | lamp dock add [LABEL] COMMAND [--icon ICON] | lamp dock remove LABEL_OR_COMMAND"
 
 def fail(message):
     sys.exit("lamp: " + message)
@@ -191,6 +191,12 @@ def write():
         file.write("\n")
     os.replace(file.name, path)
 
+def name(item):
+    return item.get("label") or item.get("command")
+
+def key(item):
+    return ("label", item["label"]) if item.get("label") else ("command", item.get("command"))
+
 if action == "add":
     icon = None
     if "--icon" in args:
@@ -199,23 +205,31 @@ if action == "add":
             fail("--icon takes an icon name or an image file")
         icon = args[at + 1]
         del args[at:at + 2]
-    if len(args) != 2 or not args[0].strip() or not args[1].strip():
+    if len(args) not in (1, 2) or not all(arg.strip() for arg in args):
         fail(usage)
-    item = {"label": args[0], "command": args[1]}
+    if len(args) == 1 and (not icon or not icon.strip()):
+        fail("an icon-only button needs --icon ICON")
+    item = {"command": args[-1]}
+    if len(args) == 2:
+        item["label"] = args[0]
     if icon:
         item["icon"] = icon
-    replaced = any(old.get("label") == item["label"] for old in items)
-    items = [item if old.get("label") == item["label"] else old for old in items]
+    replaced = any(key(old) == key(item) for old in items)
+    items = [item if key(old) == key(item) else old for old in items]
     if not replaced:
         items.append(item)
     write()
-    print(("replaced" if replaced else "added") + f" '{item['label']}' on the dock")
+    print(("replaced" if replaced else "added") + f" '{name(item)}' on the dock")
 elif action == "remove":
     if len(args) != 1:
         fail(usage)
-    if not any(old.get("label") == args[0] for old in items):
+    # Preserve removal by label when an icon-only command has the same text.
+    target = ("label", args[0])
+    if not any(key(old) == target for old in items):
+        target = ("command", args[0])
+    if not any(key(old) == target for old in items):
         fail(f"there is no '{args[0]}' on the dock. `lamp dock` lists what is there.")
-    items = [old for old in items if old.get("label") != args[0]]
+    items = [old for old in items if key(old) != target]
     write()
     print(f"removed '{args[0]}' from the dock")
 elif action == "list":
@@ -225,7 +239,8 @@ elif action == "list":
         print("You have no buttons on the dock. The dock's own buttons are always there.")
     for item in items:
         icon = f"  (icon {item['icon']})" if item.get("icon") else ""
-        print(f"{item.get('label')}: {item.get('command')}{icon}")
+        label = f"{item['label']}: " if item.get("label") else ""
+        print(f"{label}{item.get('command')}{icon}")
 else:
     fail(usage)
 if not dock_running():
@@ -265,12 +280,14 @@ lamp — drive this sandbox's desktop.
   lamp info                                         size, renderer, screenshot directory
   lamp show "what you show"                         ask the user to look at this desktop
   lamp dock                                         list your buttons on the dock
-  lamp dock add LABEL COMMAND [--icon ICON]         add a button, or replace the one with that label
-  lamp dock remove LABEL                            remove a button
+  lamp dock add [LABEL] COMMAND [--icon ICON]       add a button; omit LABEL for an icon-only button
+  lamp dock remove LABEL_OR_COMMAND                 remove a button by label, or command if unlabelled
 
 The dock is the bar at the bottom of the desktop. A click on a button runs its command as you, in
 a login shell; hovering over it shows the command. ICON is an icon name, such as firefox-esr, or
-an image file. Your buttons are kept in ~/.config/lamp/dock.json and stay until you remove them.
+an image file. Icon-only buttons need --icon. Adding the same label (or command for an icon-only
+button) replaces it. Your buttons are kept in ~/.config/lamp/dock.json and stay until you remove them.
+If a label and an icon-only command have the same text, removal takes the labelled button first.
 
 Coordinates are screen pixels, as in a screenshot; 0,0 is the top-left corner. This works for
 Wayland and X11 applications (including Java Swing) alike. A click reports no result: take a

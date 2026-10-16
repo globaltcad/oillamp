@@ -186,7 +186,8 @@ class TheLampCommandSpec extends Specification {
         """
         when: 'wtype is not on the PATH'
             Files.delete(stubs.resolve('wtype'))
-            var result = runLamp('type', 'hello')
+            Files.createSymbolicLink(stubs.resolve('bash'), Path.of('/bin/bash'))
+            var result = runLamp([PATH: stubs.toString()], 'type', 'hello')
 
         then: 'lamp names the tool and stays out of the way'
             result.status != 0
@@ -255,6 +256,86 @@ class TheLampCommandSpec extends Specification {
             new JsonSlurper().parse(file.toFile()) == [
                     [label: 'Report', command: 'firefox ~/new.html'],
                     [label: 'Notes', command: 'foot']]
+    }
+
+    def 'an icon-only button can be added, replaced and removed by its command'() {
+        reportInfo """
+            An icon can be enough to identify a tool. The agent can omit the label to keep its
+            button compact, and still list, replace and remove the button by its command.
+        """
+        when:
+            var added = runLamp('dock', 'add', 'firefox ~/report.html', '--icon', 'firefox-esr')
+            var replaced = runLamp('dock', 'add', 'firefox ~/report.html', '--icon', 'web-browser')
+            var listed = runLamp('dock')
+
+        then:
+            added.status == 0
+            replaced.status == 0
+            replaced.output.contains("replaced 'firefox ~/report.html' on the dock")
+            new JsonSlurper().parse(temporary.resolve('home/.config/lamp/dock.json').toFile()) == [
+                    [command: 'firefox ~/report.html', icon: 'web-browser']]
+            listed.output.contains('firefox ~/report.html  (icon web-browser)')
+            !listed.output.contains('None:')
+
+        when:
+            var removed = runLamp('dock', 'remove', 'firefox ~/report.html')
+
+        then:
+            removed.status == 0
+            Files.readString(temporary.resolve('home/.config/lamp/dock.json')).trim() == '[]'
+    }
+
+    def 'a button without a label needs an icon'() {
+        when:
+            var result = runLamp('dock', 'add', 'foot')
+
+        then:
+            result.status != 0
+            result.output.contains('an icon-only button needs --icon ICON')
+            !Files.exists(temporary.resolve('home/.config/lamp/dock.json'))
+    }
+
+    def 'a label and an icon-only command with the same text identify separate buttons'() {
+        reportInfo """
+            An existing labelled launcher must not be overwritten when an icon-only command
+            happens to have the same text as its label, or the other way around. Removal prefers
+            the label, preserving the existing way to remove labelled buttons.
+        """
+        given:
+            var labelled = ['dock', 'add', 'foot', 'foot -e nano']
+            var iconOnly = ['dock', 'add', 'foot', '--icon', 'utilities-terminal']
+            runLamp(*(iconFirst ? iconOnly : labelled))
+            runLamp(*(iconFirst ? labelled : iconOnly))
+
+        when:
+            var replacedLabel = runLamp('dock', 'add', 'foot', 'foot -e bash')
+            var replacedIcon = runLamp('dock', 'add', 'foot', '--icon', 'foot')
+
+        then:
+            replacedLabel.status == 0
+            replacedIcon.status == 0
+            var file = temporary.resolve('home/.config/lamp/dock.json')
+            var expectedLabel = [label: 'foot', command: 'foot -e bash']
+            var expectedIcon = [command: 'foot', icon: 'foot']
+            new JsonSlurper().parse(file.toFile()) == (iconFirst
+                    ? [expectedIcon, expectedLabel] : [expectedLabel, expectedIcon])
+
+        when:
+            var removedLabel = runLamp('dock', 'remove', 'foot')
+
+        then:
+            removedLabel.status == 0
+            new JsonSlurper().parse(file.toFile()) == [expectedIcon]
+
+        when:
+            var removedIcon = runLamp('dock', 'remove', 'foot')
+
+        then:
+            removedIcon.status == 0
+            new JsonSlurper().parse(file.toFile()) == []
+
+        where:
+            iconFirst << [false, true]
     }
 
     def 'lamp dock remove takes a button away, and says so when there is none by that name'() {

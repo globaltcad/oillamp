@@ -6,7 +6,8 @@ are the agent's, read from ~/.config/lamp/dock.json, a list such as
 
     [{"label": "Report", "command": "firefox ~/report.html", "icon": "firefox-esr"}]
 
-`icon` is optional: an icon name from the desktop's icon themes, or the path of an image file.
+`label` is optional: leave it out for an icon-only button. `icon` is optional: an icon name
+from the desktop's icon themes, or the path of an image file. A button needs a label or an icon.
 `lamp dock add` and `lamp dock remove` write this file; editing it by hand works as well. The file
 is read again within a second of changing, and lives in the agent's home, so it outlives the
 session.
@@ -60,9 +61,9 @@ except (ImportError, ValueError) as missing:
 
 
 def built_in_items():
-    items = [{"label": "Terminal", "command": "foot", "icon": "foot"}]
+    items = [{"command": "foot", "icon": "foot"}]
     if shutil.which("firefox"):
-        items.append({"label": "Firefox", "command": "firefox", "icon": "firefox-esr"})
+        items.append({"command": "firefox", "icon": "firefox-esr"})
     return items
 
 
@@ -79,13 +80,14 @@ def read_items():
         return [], f"{ITEMS} must hold a list of items"
     items, skipped = [], 0
     for item in listed:
-        if (isinstance(item, dict) and isinstance(item.get("label"), str) and item["label"].strip()
+        if (isinstance(item, dict) and isinstance(item.get("label", ""), str)
                 and isinstance(item.get("command"), str) and item["command"].strip()
-                and isinstance(item.get("icon", ""), str)):
+                and isinstance(item.get("icon", ""), str)
+                and (item.get("label", "").strip() or item.get("icon", "").strip())):
             items.append(item)
         else:
             skipped += 1
-    return items, (f"{skipped} item(s) in {ITEMS} need a label and a command" if skipped else None)
+    return items, (f"{skipped} item(s) in {ITEMS} need a command and a label or icon" if skipped else None)
 
 
 def icon_image(icon):
@@ -139,9 +141,13 @@ def item_button(item):
     button = Gtk.Button()
     content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
     image = icon_image(item.get("icon"))
+    label = item.get("label", "").strip()
+    if not image and not label:
+        image = Gtk.Image.new_from_icon_name("application-x-executable", Gtk.IconSize.LARGE_TOOLBAR)
     if image:
         content.pack_start(image, False, False, 0)
-    content.pack_start(Gtk.Label(label=item["label"]), False, False, 0)
+    if label:
+        content.pack_start(Gtk.Label(label=label), False, False, 0)
     button.add(content)
     button.set_tooltip_text(item["command"])
     button.set_can_focus(False)

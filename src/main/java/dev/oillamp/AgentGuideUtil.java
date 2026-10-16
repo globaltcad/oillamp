@@ -138,13 +138,17 @@ final class AgentGuideUtil {
 
             ```
             lamp dock add "Report" "firefox ~/report.html" --icon firefox-esr
+            lamp dock add "firefox ~/report.html" --icon firefox-esr  # icon only
             lamp dock remove "Report"
             lamp dock                       # list your buttons
             ```
 
             A click runs the command as you, in a login shell, from your home directory.
             Hovering over a button shows its command, and a command that ends with an error
-            marks its button. Adding a label that is already there replaces that button. Your
+            marks its button. Leave out the label and supply `--icon` for an icon-only button,
+            like the dock's own buttons. Remove it by its command. Adding a label (or an icon-only
+            command) that is already there replaces that button. If a label and an icon-only command
+            have the same text, removal takes the labelled button first. Your
             buttons are kept in `~/.config/lamp/dock.json` and stay there across sessions until
             you remove them. Windows cover the dock; it never covers them.
 
