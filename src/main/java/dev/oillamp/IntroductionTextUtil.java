@@ -156,6 +156,10 @@ final class IntroductionTextUtil {
               again, with all their updates. It takes as long as a first build. A session
               started from an image older than 30 days reminds you.
 
+              Old images stay on disk, about 3.5 GB each. After each build, oillamp lists the
+              podman commands that remove them: podman images localhost/oillamp/sandbox,
+              podman rmi <image>, podman image prune.
+
               A copy installed into the agent's home (~/.local/bin) runs instead of the
               image's, and update does not change it. Inside the sandbox, `command -v pi`
               shows which one runs. A home copy is quicker to install, but the agent can

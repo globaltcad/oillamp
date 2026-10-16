@@ -84,6 +84,7 @@ final class ProblemCatalogUtil {
     public static final Code SESSION_REFUSED       = new Code("OIL-SESSION-003");
     public static final Code IMAGE_BUILD_FAILED    = new Code("OIL-IMAGE-001");
     public static final Code IMAGE_OLD             = new Code("OIL-IMAGE-002");
+    public static final Code IMAGE_LEFTOVERS       = new Code("OIL-IMAGE-003");
     public static final Code SANDBOX_START_FAILED  = new Code("OIL-SANDBOX-001");
     public static final Code SANDBOX_DIED          = new Code("OIL-SANDBOX-002");
     public static final Code SANDBOX_NOT_READY     = new Code("OIL-SANDBOX-003");
@@ -750,6 +751,23 @@ final class ProblemCatalogUtil {
               + "only when its image is built again")
             .withFix(Fix.run("build it again, from the newest Debian (takes as long as a first build)",
                     "oillamp update " + lamp + " --system"));
+    }
+
+    /// A new image was built, and the ones before it are still on disk. A warning after every
+    /// build: oillamp removes only the image an update replaces, and cleaning up the rest is
+    /// left to the user, who alone knows which lamps they still need.
+    public static Problem imageLeftovers(String image) {
+        return warning(IMAGE_LEFTOVERS, "Old sandbox images stay on disk",
+                "oillamp built " + image + "; the images built before it are not removed",
+                "each image takes about 3.5 GB, and a new one is made by every update and by every "
+              + "change to the image's settings or to oillamp, so old ones can fill the disk")
+            .withFix(Fix.run("see how much space images take", "podman system df"))
+            .withFix(Fix.run("list oillamp's images, newest first",
+                    "podman images localhost/oillamp/sandbox"))
+            .withFix(Fix.run("remove the ones no lamp you still use needs (podman refuses an image "
+                    + "a container still uses)", "podman rmi <image>"))
+            .withFix(Fix.run("remove the untagged layers left over from earlier builds",
+                    "podman image prune"));
     }
 
     /// The container exited while oillamp was waiting for it to become ready.

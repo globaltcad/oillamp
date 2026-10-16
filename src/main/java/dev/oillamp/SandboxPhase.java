@@ -64,6 +64,8 @@ final class SandboxPhase {
         if (!steps.isEmpty()) {
             Result<Plan> image_ = runner.run(Plan.of(LampEvent.Phase.IMAGE, steps));
             if (image_ instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
+            if (!imagePresent && !context.options().dryRun())
+                context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.imageLeftovers(image.value())));
         }
         if (imagePresent) {
             context.sink().accept(new LampEvent.Ok("image", "sandbox image ready — " + image));

@@ -325,7 +325,9 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - The history keeps every version of every file ever saved, and nothing removes old snapshots.
   There is no way yet to leave parts of the agent's home out of a snapshot, such as `~/.cache`.
 
-- oillamp removes only the image an `oillamp update` replaces, and no other. Every change to anything that goes into the image (a
+- oillamp removes only the image an `oillamp update` replaces, and no other. Cleaning up the rest
+  is out of scope; instead every build that makes a new image warns (`OIL-IMAGE-003`) and lists
+  the podman commands below. Every change to anything that goes into the image (a
   new oillamp build, `image.extra_apt_packages`, `agent_tools.install`) creates a new image of
   about 3.5 GB, and the old one stays. On the development machine this reached about 25 GB in two
   days and filled the disk, so a build failed. Until this is fixed, remove old images by hand:

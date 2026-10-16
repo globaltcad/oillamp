@@ -490,6 +490,16 @@ it at every start would make starting slow; doing it never would leave Firefox a
 without security fixes, with nobody told. A warning leaves the timing to the user. *(added
 2026-10-15)*
 
+### Old images are the user's to remove; every build says so
+
+oillamp removes only the image an `oillamp update` replaces. Every other build leaves the images
+before it on disk, and warns (`OIL-IMAGE-003`) with the podman commands that list and remove them.
+
+*Why:* which old images are still needed depends on which lamps the user still means to use, and
+an image may be shared by several lamps. Guessing wrong would cost a 3.5 GB rebuild, or remove an
+image another lamp needs. Saying nothing let the disk fill up on the development machine in two
+days. *(added 2026-10-15)*
+
 ### The model key stays on the host; the sandbox reaches Eden AI through oillamp
 
 The Eden AI key is never put into the sandbox: not into its environment, not into

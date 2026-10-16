@@ -584,6 +584,10 @@ At every start from an existing image, `SandboxPhase` asks `podman image inspect
 was built. Older than 30 days (`SandboxPhase.OLD_IMAGE`), it warns with `OIL-IMAGE-002` and names
 `oillamp update <lamp> --system`. The session starts anyway.
 
+After every build that makes a new image, by `update` or by a start, oillamp warns with
+`OIL-IMAGE-003` that old images stay on disk, and lists the podman commands that find and remove
+them. A dry run builds nothing and does not warn.
+
 The agent's home is not read or changed, apart from a check for `~/.local/bin/opencode` and
 `~/.local/bin/pi`. Copies there come first on `PATH`, so update warns about them.
 
@@ -1613,6 +1617,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-SESSION-003` | The running session refused the request (for example, it is shutting down). |
 | `OIL-IMAGE-001` | `podman build` failed. |
 | `OIL-IMAGE-002` | Warning: the sandbox image is more than 30 days old. |
+| `OIL-IMAGE-003` | Warning: a new image was built, and old ones stay on disk; lists the podman commands to remove them. |
 | `OIL-SANDBOX-001` | `podman run` failed. |
 | `OIL-SANDBOX-002` | The container exited while starting. |
 | `OIL-SANDBOX-003` | The container did not report ready in time. |

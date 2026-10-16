@@ -314,6 +314,20 @@ When a session starts from an image built more than 30 days ago, oillamp warns a
 command. Run it every few weeks, and after a security fix you care about, such as one for Firefox
 or openssh.
 
+### Old images fill the disk
+
+Each image takes about 3.5 GB. A new one is made by every update, and by every start after a
+change to the image's settings or to oillamp itself. oillamp removes only the image an update
+replaces. The others stay, and every build that makes a new image warns about them. Removing
+them is up to you, because only you know which lamps you still need:
+
+```sh
+podman system df                              # how much space images take
+podman images localhost/oillamp/sandbox       # oillamp's images, newest first
+podman rmi <image>                            # remove one; refused while a container uses it
+podman image prune                            # remove untagged layers from earlier builds
+```
+
 ### A copy in the agent's home wins
 
 Inside the sandbox, `~/.local/bin` comes before `/usr/bin` on `PATH`. If you or the agent

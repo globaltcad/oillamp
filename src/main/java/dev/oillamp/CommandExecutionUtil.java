@@ -388,6 +388,8 @@ final class CommandExecutionUtil {
             // The image this lamp used before. Only an earlier update's image belongs to this lamp
             // alone; the image of a lamp that was never updated may be shared with other lamps.
             if (!previous.isEmpty()) removeImage(machine, context, previousImage);
+            // The other old images stay, and the user is told how to find and remove them.
+            context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.imageLeftovers(image.value())));
             return ExitStatus.SUCCESS;
         } catch (IOException e) {
             context.sinkAcceptProblems(Tuple.of(Problem.class,

@@ -436,6 +436,63 @@ class UpdatingTheAgentToolsSpec extends Specification {
             !started.reported('OIL-IMAGE-002')
     }
 
+    def 'Every build that makes a new image says that old images pile up, and how to remove them'() {
+        reportInfo """
+            Each sandbox image is about 3.5 GB. A new one is made by every update, and by every
+            start after a change to the image's settings or to oillamp itself. The old images
+            stay on disk: oillamp removes only the image an update replaces. On the development
+            machine this filled the disk within two days.
+
+            Cleaning up all of them safely is outside what oillamp does, because only the user
+            knows which lamps they still need. So every build that makes a new image tells the
+            user about the problem, and names the podman commands that find and remove old images.
+            A start that reuses an existing image builds nothing, and says nothing about it.
+        """
+        when: 'an update builds a new image'
+            var update = host.oillamp.run('update', lamp.toString())
+
+        then: 'the user is told, with the commands that help'
+            update.status() == ExitStatus.SUCCESS
+            update.reported('OIL-IMAGE-003')
+            update.console().contains('podman images localhost/oillamp/sandbox')
+            update.console().contains('podman rmi')
+            update.console().contains('podman image prune')
+            update.console().contains('podman system df')
+
+        when: 'the user adds a package, so the next start builds an image too'
+            var config = lamp.resolve('oillamp.toml')
+            Files.writeString(config, Files.readString(config)
+                    .replace('extra_apt_packages = []', 'extra_apt_packages = ["jq"]'))
+            var rebuilt = host.oillamp.run('at', lamp.toString())
+
+        then: 'that start says the same'
+            rebuilt.status() == ExitStatus.SUCCESS
+            rebuilt.stepKinds().contains('BuildImage')
+            rebuilt.reported('OIL-IMAGE-003')
+
+        when: 'a start finds its image already there'
+            host.machine { it.commandSucceeding('podman image exists', '') }
+            var reused = host.oillamp.run('at', lamp.toString())
+
+        then: 'it builds nothing, and does not mention it'
+            reused.status() == ExitStatus.SUCCESS
+            !reused.stepKinds().contains('BuildImage')
+            !reused.reported('OIL-IMAGE-003')
+    }
+
+    def 'A dry run does not warn about old images, since it builds none'() {
+        reportInfo """
+            `--dry-run` shows what would happen and does nothing. No image is made, so there is
+            nothing new on the disk to warn about.
+        """
+        when:
+            var dry = host.oillamp.run('update', lamp.toString(), '--dry-run')
+
+        then:
+            dry.status() == ExitStatus.SUCCESS
+            !dry.reported('OIL-IMAGE-003')
+    }
+
     private void pinPiTo(String version) {
         var config = lamp.resolve('oillamp.toml')
         Files.writeString(config, Files.readString(config).replace('pi = "latest"', "pi = \"$version\""))
