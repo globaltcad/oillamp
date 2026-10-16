@@ -7,6 +7,9 @@ import sprouts.Tuple;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -62,8 +65,12 @@ final class SandboxPhase {
             Result<Plan> image_ = runner.run(Plan.of(LampEvent.Phase.IMAGE, steps));
             if (image_ instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
         }
-        if (imagePresent)
+        if (imagePresent) {
             context.sink().accept(new LampEvent.Ok("image", "sandbox image ready — " + image));
+            imageAge(image).filter(age -> age.compareTo(OLD_IMAGE) > 0).ifPresent(age ->
+                    context.sink().accept(new LampEvent.Warning(
+                            ProblemCatalogUtil.imageOld(layout.root(), image.value(), age.toDays()))));
+        }
 
         Tuple<Step> session = Tuple.of(Step.class,
                 new Step.DeleteContainerOwnedFiles(staleSessionFiles(layout),
@@ -195,6 +202,32 @@ final class SandboxPhase {
 
     private boolean imageExists(ImageTag tag) {
         return succeeded("podman image exists", "podman", "image", "exists", tag.value());
+    }
+
+    /// How old an image may be before a start warns about it. Debian publishes security fixes
+    /// every few weeks, and none of them reaches an image that is not built again.
+    static final Duration OLD_IMAGE = Duration.ofDays(30);
+
+    /// How long ago the image was built, or empty if podman does not say.
+    ///
+    /// Asks for podman's JSON rather than a `--format` template: the JSON's `Created` is an
+    /// RFC 3339 time in every podman version, while the template's output depends on Go's
+    /// default time format.
+    private Optional<Duration> imageAge(ImageTag tag) {
+        Machine.Outcome outcome = machine.run(Machine.Command
+                .of("podman", "image", "inspect", tag.value())
+                .withTimeout(Duration.ofSeconds(20)).labelled("podman image inspect"));
+        if (!outcome.succeeded()) return Optional.empty();
+        return JsonUtil.parse(outcome.output())
+                .map(json -> json.isArray() ? json.path(0) : json)
+                .map(image -> image.path("Created").asText(""))
+                .flatMap(created -> {
+                    try {
+                        return Optional.of(Duration.between(OffsetDateTime.parse(created).toInstant(), machine.now()));
+                    } catch (DateTimeParseException e) {
+                        return Optional.empty();
+                    }
+                });
     }
 
     private boolean containerExists(ContainerName name) {

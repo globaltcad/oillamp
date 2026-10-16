@@ -55,8 +55,10 @@ sealed interface Step {
 
     record ExtractImageContext(Path targetDir) implements Step {}
 
+    /// `podman build`. `fromScratch` adds `--pull=always --no-cache`: the newest base image, and
+    /// every layer run again, so that `apt-get` fetches the packages' updates.
     record BuildImage(ImageTag tag, Path context,
-                      Association<String, String> buildArgs, boolean noCache) implements Step {}
+                      Association<String, String> buildArgs, boolean fromScratch) implements Step {}
 
     record RemoveContainer(ContainerName name, String reason) implements Step {}
 
@@ -114,7 +116,7 @@ sealed interface Step {
                                       + " (mode " + s.mode() + ")";
             case GenerateSshKey s  -> "generate ed25519 key " + s.privateKey();
             case ExtractImageContext s -> "extract the image build context into " + s.targetDir();
-            case BuildImage s      -> (s.noCache() ? "rebuild " : "build ") + "sandbox image " + s.tag();
+            case BuildImage s      -> (s.fromScratch() ? "build from scratch " : "build ") + "sandbox image " + s.tag();
             case RemoveContainer s -> "remove leftover container " + s.name() + " (" + s.reason() + ")";
             case RunContainer s    -> "start sandbox container " + s.name() + " from " + s.image();
             case AwaitReady s      -> "wait for the sandbox to report itself ready (up to "
@@ -143,7 +145,8 @@ sealed interface Step {
                               + " --add-subgids " + s.range().asUsermodArgument() + " " + s.user()
                               + "\n  rootless podman maps the container's users onto these host ids";
             case BuildImage s -> {
-                StringBuilder out = new StringBuilder("podman build --tag " + s.tag() + " " + s.context());
+                StringBuilder out = new StringBuilder("podman build --tag " + s.tag()
+                        + (s.fromScratch() ? " --pull=always --no-cache" : "") + " " + s.context());
                 for (var arg : s.buildArgs())
                     out.append("\n  --build-arg ").append(arg.first()).append('=').append(arg.second());
                 yield out.toString();

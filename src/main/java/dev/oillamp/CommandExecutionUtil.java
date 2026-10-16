@@ -92,8 +92,10 @@ final class CommandExecutionUtil {
             // Explain that there is no such command, instead of answering "unknown command".
             case Command.Image _ -> {
                 sink.accept(new LampEvent.Failure(ProblemCatalogUtil.usage(
-                        "there is no 'image' command: oillamp rebuilds the sandbox image by itself "
-                      + "whenever anything that goes into it changes",
+                        "there is no 'image' command: oillamp builds the sandbox image again by itself "
+                      + "when its settings or oillamp's own image files change. To get newer agent "
+                      + "tools, or newer Debian packages, use `oillamp update <dir>` or "
+                      + "`oillamp update <dir> --system`",
                         Command.usage())));
                 yield ExitStatus.USAGE;
             }
@@ -115,7 +117,7 @@ final class CommandExecutionUtil {
             }
             case Command.Update update -> {
                 console.banner(version, update.lamp().toString());
-                yield update(machine, context, update.lamp());
+                yield update(machine, context, update.lamp(), update.system());
             }
             // These five talk to a running session through its control socket. None of them
             // sets anything up.
@@ -299,14 +301,18 @@ final class CommandExecutionUtil {
         }
     }
 
-    /// `oillamp update <dir>`: build a new image for this lamp, with opencode, pi and opencode's
-    /// model list installed again, and start nothing.
+    /// `oillamp update <dir> [--system]`: build a new image for this lamp, with opencode, pi and
+    /// opencode's model list installed again, and start nothing.
+    ///
+    /// Without `system`, podman's cache keeps every layer before the harness layer, and the base
+    /// image is the one podman already has. With it, the base image is pulled again and every
+    /// layer runs again, so Debian's packages are updated too.
     ///
     /// The lamp switches to the new image only after the build succeeded: only then is the new
     /// revision written to `.oillamp/image/tools-revision`, which every later start passes as a
     /// build argument. A failed update therefore leaves the lamp on the image it had. The agent's
     /// home is not touched.
-    private static ExitStatus update(Machine machine, Context context, Path lampPath) {
+    private static ExitStatus update(Machine machine, Context context, Path lampPath, boolean system) {
         Result<LampLayout> found = layoutOf(machine, lampPath);
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
@@ -350,9 +356,11 @@ final class CommandExecutionUtil {
             ImageTag image = ImageTag.ofHash(SandboxImageFilesUtil.hashOf(arguments));
             arguments.put("AGENT_TOOLS_STRICT", "true");
 
-            context.sink().accept(new LampEvent.Info("tools",
-                    "installing opencode and pi again, and fetching opencode's model list; "
-                  + "the agent's home is not touched"));
+            context.sink().accept(new LampEvent.Info("tools", (system
+                    ? "building the whole image again, from the newest " + config.image().base()
+                      + "; this takes as long as a first build"
+                    : "installing opencode and pi again, and fetching opencode's model list")
+                  + "; the agent's home is not touched"));
             for (String tool : Tuple.of("opencode", "pi")) {
                 Path executable = layout.agentDir().resolve(".local").resolve("bin").resolve(tool);
                 if (FilesystemUtil.exists(executable))
@@ -363,7 +371,7 @@ final class CommandExecutionUtil {
             Result<Plan> built = new StepRunner(machine, context).run(Plan.of(LampEvent.Phase.IMAGE,
                     Tuple.of(Step.class, new Step.ExtractImageContext(layout.imageContext()),
                             new Step.BuildImage(image, layout.imageContext(),
-                                    SandboxPhase.asAssociation(arguments), false))));
+                                    SandboxPhase.asAssociation(arguments), system))));
             if (built instanceof Result.Err<Plan> failure) {
                 context.sinkAcceptProblems(failure.problems());
                 context.sink().accept(new LampEvent.Info("tools",

@@ -149,7 +149,10 @@ final class StepRunner {
     private Result<Step> buildImage(Step.BuildImage step) {
         List<String> argv = new ArrayList<>(
                 List.of("podman", "build", "--tag", step.tag().value()));
-        if (step.noCache()) argv.add("--no-cache");
+        if (step.fromScratch()) {
+            argv.add("--pull=always");
+            argv.add("--no-cache");
+        }
         for (var argument : step.buildArgs()) {
             argv.add("--build-arg");
             argv.add(argument.first() + "=" + argument.second());

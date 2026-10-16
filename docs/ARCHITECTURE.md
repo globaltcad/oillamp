@@ -555,7 +555,7 @@ entrypoint extracted without its executable bit would make the container die at 
 **The image tag is a hash of its inputs.** `SandboxImageFilesUtil.hashOf` computes SHA-256 over every
 image file (path, mode and contents) and every build argument (`BASE_IMAGE`, `JDK_PACKAGE`,
 `NODE_MAJOR`, `EXTRA_APT_PACKAGES`, `AGENT_TOOLS`, and after an update `AGENT_TOOLS_REVISION`). The tag is `localhost/oillamp/sandbox:<first 16 hex digits>`. Lamps with
-identical inputs share an image. Old images are never removed; see STATUS.md.
+identical inputs share an image. Old images are not removed, except the one an update replaces; see STATUS.md.
 
 **Updating the agent tools.** `oillamp update <lamp>` (`CommandExecutionUtil.update`) builds an
 image and starts nothing. In order:
@@ -576,6 +576,13 @@ image and starts nothing. In order:
    the start computes the updated image's tag and finds it.
 5. It removes the image of the lamp's previous update. That image contains the lamp's id, so no
    other lamp uses it. The image of a lamp that was never updated may be shared, so it is kept.
+
+With `--system`, the build also gets `--pull=always --no-cache` (`Step.BuildImage.fromScratch`),
+so podman fetches the newest base image and runs every layer again.
+
+At every start from an existing image, `SandboxPhase` asks `podman image inspect` when the image
+was built. Older than 30 days (`SandboxPhase.OLD_IMAGE`), it warns with `OIL-IMAGE-002` and names
+`oillamp update <lamp> --system`. The session starts anyway.
 
 The agent's home is not read or changed, apart from a check for `~/.local/bin/opencode` and
 `~/.local/bin/pi`. Copies there come first on `PATH`, so update warns about them.
@@ -1605,6 +1612,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-SESSION-002` | The session's control socket does not answer. |
 | `OIL-SESSION-003` | The running session refused the request (for example, it is shutting down). |
 | `OIL-IMAGE-001` | `podman build` failed. |
+| `OIL-IMAGE-002` | Warning: the sandbox image is more than 30 days old. |
 | `OIL-SANDBOX-001` | `podman run` failed. |
 | `OIL-SANDBOX-002` | The container exited while starting. |
 | `OIL-SANDBOX-003` | The container did not report ready in time. |

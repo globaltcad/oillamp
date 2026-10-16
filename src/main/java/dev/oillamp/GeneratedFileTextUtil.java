@@ -205,7 +205,8 @@ final class GeneratedFileTextUtil {
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
                             recordings)    options="$options --open --prune --dry-run" ;;
-                            doctor|config|update) options="$options --dry-run --no-install" ;;
+                            doctor|config) options="$options --dry-run --no-install" ;;
+                            update)        options="$options --system --dry-run --no-install" ;;
                         esac
                         COMPREPLY=($(compgen -W "$options" -- "$current"))
                         return ;;

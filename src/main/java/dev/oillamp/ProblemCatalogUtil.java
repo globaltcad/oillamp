@@ -83,6 +83,7 @@ final class ProblemCatalogUtil {
     public static final Code SESSION_UNREACHABLE   = new Code("OIL-SESSION-002");
     public static final Code SESSION_REFUSED       = new Code("OIL-SESSION-003");
     public static final Code IMAGE_BUILD_FAILED    = new Code("OIL-IMAGE-001");
+    public static final Code IMAGE_OLD             = new Code("OIL-IMAGE-002");
     public static final Code SANDBOX_START_FAILED  = new Code("OIL-SANDBOX-001");
     public static final Code SANDBOX_DIED          = new Code("OIL-SANDBOX-002");
     public static final Code SANDBOX_NOT_READY     = new Code("OIL-SANDBOX-003");
@@ -738,6 +739,17 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.Value("last lines of its output", output))
             .withFix(Fix.of("the output above is podman's own — it usually names the cause exactly"))
             .withFix(Fix.run("check the machine is still able to run containers", "oillamp doctor"));
+    }
+
+    /// The image a session starts from was built long ago. A warning: the image still works,
+    /// but nothing in it, Firefox and openssh included, has had an update since.
+    public static Problem imageOld(Path lamp, String image, long days) {
+        return warning(IMAGE_OLD, "The sandbox image is " + days + " days old",
+                image + " was built " + days + " days ago, and nothing in it has been updated since",
+                "Debian's security fixes, for Firefox and openssh among others, reach the sandbox "
+              + "only when its image is built again")
+            .withFix(Fix.run("build it again, from the newest Debian (takes as long as a first build)",
+                    "oillamp update " + lamp + " --system"));
     }
 
     /// The container exited while oillamp was waiting for it to become ready.

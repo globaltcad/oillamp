@@ -228,7 +228,8 @@ your account is not allowed to delete them directly. `oillamp remove` knows how.
 
 ```sh
 oillamp at <dir>                 # start (or resume) a sandbox in <dir>
-oillamp update <dir>             # refresh bundled agent tools and the Eden AI model catalog
+oillamp update <dir>             # newer opencode and pi, and a fresh model list
+oillamp update <dir> --system    # the whole image again, with Debian's updates
 oillamp at <dir> --dry-run       # print every step it would take, and do nothing
 oillamp doctor [<dir>]           # check this machine (and a lamp's config), change nothing
 oillamp view <dir>               # open another desktop viewer
@@ -284,7 +285,7 @@ the image of the previous update is removed, as no other lamp uses it.
 - **A failed update changes nothing.** If an install or the model list download fails, the lamp
   keeps its previous image.
 - **Only the agent tools are refreshed.** Debian packages, the JDK and Node.js come from the
-  earlier, cached part of the image.
+  earlier, cached part of the image. For those, see the next section.
 - **`restore` does not undo an update.** Snapshots hold the home and `oillamp.toml`, not the
   image. After a restore, the lamp still runs the updated tools.
 
@@ -294,6 +295,24 @@ To pin a version, edit the lamp's `oillamp.toml`. Each value is `latest` or an e
 [agent_tools]
 versions = { opencode = "latest", pi = "1.2.0" }
 ```
+
+### Updating Debian and everything else in the image
+
+Debian, Firefox, openssh, the graphics libraries (Mesa), the JDK and Node.js are also fixed on
+the day the image was built. A plain `update` keeps them, so it is quick. To update them as well:
+
+```sh
+oillamp update ~/lamps/first --system
+```
+
+This builds the whole image again: podman fetches the newest `debian:trixie` and runs every step
+of the build, so `apt-get` installs each package's latest updates. It takes as long as a first
+build. The same rules apply as for a plain update: the lamp must be stopped, the home is not
+touched, and a failed build changes nothing.
+
+When a session starts from an image built more than 30 days ago, oillamp warns and names this
+command. Run it every few weeks, and after a security fix you care about, such as one for Firefox
+or openssh.
 
 ### A copy in the agent's home wins
 

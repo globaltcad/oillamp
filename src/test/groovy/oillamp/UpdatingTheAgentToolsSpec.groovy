@@ -29,6 +29,10 @@ safe to run:
   own copy of a harness.
 - **A lamp in use is refused.** Update takes the same lock as a session.
 
+`update --system` goes further: it builds the whole image again, from the newest Debian, so
+Firefox, openssh, Mesa and every other package get their updates too. And because nothing in the
+image updates by itself, a session started from an image older than 30 days warns about it.
+
 A successful update writes a revision into `.oillamp/image/tools-revision`. The revision is a
 build argument, so it is part of the image's hash. Every later start reads the file, computes the
 same tag, and finds the updated image.
@@ -340,6 +344,96 @@ class UpdatingTheAgentToolsSpec extends Specification {
 
         and: 'one that asked for 1.3.0 still fails'
             installer(bin, true, '@earendil-works/pi-coding-agent@1.3.0').exit == 1
+    }
+
+    def 'update --system builds the whole image again, from a freshly pulled Debian'() {
+        reportInfo """
+            A plain update renews only the agent tools. Everything else in the image, Debian
+            itself, Firefox, openssh, Mesa's graphics libraries and the JDK, stays as it was on
+            the day the image was first built. Two things keep it that way:
+
+            - Podman downloads the base image only when it has none. A newer
+              `debian:trixie` is never fetched.
+            - Podman reuses each cached layer of the image, so `apt-get` never runs again
+              and never sees a security fix.
+
+            `--system` turns both off: `--pull=always` fetches the newest base image, and
+            `--no-cache` runs every layer again. It takes as long as a first build. Otherwise it
+            follows the same rules as a plain update: the lamp switches only if the build
+            succeeds, and the agent's home is not touched.
+        """
+        when:
+            var update = host.oillamp.run('update', lamp.toString(), '--system', '--verbose')
+
+        then: 'the image is built from scratch, with the newest base image'
+            update.status() == ExitStatus.SUCCESS
+            update.stepDetails().any { it.contains('--pull=always') && it.contains('--no-cache') }
+
+        and: 'it is as strict as any update'
+            update.console().contains('AGENT_TOOLS_STRICT=true')
+
+        and: 'and the lamp starts from the new image next time'
+            Files.exists(revisionFile())
+            var built = (update.console() =~ /localhost\/oillamp\/sandbox:[0-9a-f]{16}/)[0]
+            host.oillamp.run('at', lamp.toString(), '--dry-run', '--verbose').console().contains(built)
+    }
+
+    def 'A plain update leaves the cache and the base image alone'() {
+        reportInfo """
+            A plain update should take a minute or two, not the full time of a first build. So it
+            uses podman's cache for everything before the harness layer, and does not ask
+            podman for a newer base image.
+        """
+        when:
+            var update = host.oillamp.run('update', lamp.toString(), '--verbose')
+
+        then:
+            update.status() == ExitStatus.SUCCESS
+            update.stepDetails().every { !it.contains('--pull=always') && !it.contains('--no-cache') }
+    }
+
+    def 'A session started from an old image says so'() {
+        reportInfo """
+            Nothing in the image ever gets newer by itself, and nothing would tell the user. A
+            sandbox can run for months with an unpatched Firefox and openssh without anyone
+            noticing.
+
+            So when a session starts from an image that was built more than 30 days ago, oillamp
+            warns, and names the command that renews it. The session starts anyway: an old
+            image still works, and only the user can decide when to spend the minutes a full
+            rebuild takes.
+        """
+        given: "the lamp's image was built 45 days before today"
+            host.machine { it.commandSucceeding('podman image exists', '')
+                              .commandSucceeding('podman image inspect', '[{"Created": "2026-08-08T16:15:03+02:00"}]') }
+
+        when:
+            var started = host.oillamp.run('at', lamp.toString())
+
+        then: 'the session starts'
+            started.status() == ExitStatus.SUCCESS
+
+        and: 'with a warning that says how old the image is, and how to renew it'
+            started.reported('OIL-IMAGE-002')
+            started.console().contains('45 days')
+            started.console().contains('oillamp update ' + lamp + ' --system')
+    }
+
+    def 'A session started from a recent image does not warn'() {
+        reportInfo """
+            A warning shown at every start would soon be ignored. So it appears only once the
+            image is more than 30 days old.
+        """
+        given: "the lamp's image was built 10 days before today"
+            host.machine { it.commandSucceeding('podman image exists', '')
+                              .commandSucceeding('podman image inspect', '[{"Created": "2026-09-12T14:15:03Z"}]') }
+
+        when:
+            var started = host.oillamp.run('at', lamp.toString())
+
+        then:
+            started.status() == ExitStatus.SUCCESS
+            !started.reported('OIL-IMAGE-002')
     }
 
     private void pinPiTo(String version) {

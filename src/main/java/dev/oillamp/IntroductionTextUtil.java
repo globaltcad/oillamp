@@ -151,6 +151,11 @@ final class IntroductionTextUtil {
               If the build fails, the lamp keeps its old image. To pin a release instead of
               latest, set agent_tools.versions in oillamp.toml.
 
+              Debian, Firefox, openssh and the other system packages stay as they were on the
+              first build. `oillamp update ~/lamps/first --system` builds the whole image
+              again, with all their updates. It takes as long as a first build. A session
+              started from an image older than 30 days reminds you.
+
               A copy installed into the agent's home (~/.local/bin) runs instead of the
               image's, and update does not change it. Inside the sandbox, `command -v pi`
               shows which one runs. A home copy is quicker to install, but the agent can

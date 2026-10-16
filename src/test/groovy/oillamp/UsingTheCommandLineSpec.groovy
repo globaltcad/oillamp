@@ -331,6 +331,7 @@ class UsingTheCommandLineSpec extends Specification {
         and: 'it offers each command only the options that command takes'
             complete(script, 'oillamp', 'stop', '/x', '--d') == ['--debug']
             complete(script, 'oillamp', 'view', '/x', '--v').containsAll(['--view-only', '--verbose'])
+            complete(script, 'oillamp', 'update', '/x', '--s') == ['--system']
             !complete(script, 'oillamp', 'at', '/x', '--').contains('--yes')
             complete(script, 'oillamp', 'completion', '') == ['bash']
             complete(script, 'oillamp', 'list', '').isEmpty()
@@ -597,16 +598,18 @@ class UsingTheCommandLineSpec extends Specification {
 
     def 'Asking for the image command says why there is none'() {
         reportInfo """
-            An `image` command was planned and then dropped, since oillamp rebuilds the sandbox
-            image by itself whenever anything in it changes. Someone who read about it, or
-            expects one from other container tools, is told that, not just "unknown command".
+            An `image` command was planned and then dropped. oillamp builds the sandbox image
+            again by itself when its settings change, and `oillamp update` renews what is in it.
+            Someone who read about an `image` command, or expects one from other container tools,
+            is told that, not just "unknown command".
         """
         when:
             var outcome = host.oillamp.run('image')
 
         then:
             outcome.status() == ExitStatus.USAGE
-            outcome.errors().first().whatHappened().contains("there is no 'image' command: oillamp rebuilds the sandbox image by itself")
+            outcome.errors().first().whatHappened().contains("there is no 'image' command")
+            outcome.errors().first().whatHappened().contains('oillamp update <dir> --system')
     }
 
     def 'ask needs a prompt, and schedule needs what its action acts on: oillamp #line'() {

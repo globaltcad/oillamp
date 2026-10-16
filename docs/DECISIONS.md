@@ -479,6 +479,17 @@ lying. Updating the image, rather than the home, keeps the harness in the read-o
 the agent cannot change it. All requested tools are refreshed together, and the choice is one
 revision file, rather than a lock file or a version resolver. *(added 2026-10-15)*
 
+### Debian's updates arrive through `update --system`, not by themselves
+
+Podman keeps an image's base and its cached layers, so without help nothing in the image ever
+gets newer. `oillamp update <lamp> --system` builds the whole image again with `--pull=always
+--no-cache`. A session started from an image older than 30 days warns and names that command.
+
+*Why:* a full build takes many minutes, so oillamp never starts one without being asked. Doing
+it at every start would make starting slow; doing it never would leave Firefox and openssh
+without security fixes, with nobody told. A warning leaves the timing to the user. *(added
+2026-10-15)*
+
 ### The model key stays on the host; the sandbox reaches Eden AI through oillamp
 
 The Eden AI key is never put into the sandbox: not into its environment, not into

@@ -449,7 +449,19 @@ layer reinstalls opencode and pi and fetches the model list again.
 npm at build time. Pin exact versions if an image that is built again must contain the same
 releases.
 
-The other way to update is from inside the sandbox, with
+Debian's packages need more than that. Two things keep them as they were on the first build:
+
+- **The base image.** Podman downloads `debian:trixie` only when it has no copy. A newer one
+  is never fetched.
+- **The layer cache.** Podman reuses a layer while its instruction and the layers before it
+  are unchanged. The `apt-get update && apt-get install` lines never change, so they never
+  run again.
+
+`oillamp update <lamp> --system` passes `--pull=always` and `--no-cache` to `podman build`.
+The first fetches the newest base image, the second runs every layer again. The result has
+every Debian package at its latest version, at the price of a full build.
+
+The other way to update the agent tools is from inside the sandbox, with
 `npm install -g --prefix "$HOME/.local" <package>@latest`. That puts a second copy into
 `~/.local/bin`, which comes before `/usr/bin` on `PATH`. It survives sessions, but the agent can
 change it, because the agent owns its home. The copy in `/usr/bin` is in the read-only image.

@@ -44,6 +44,8 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp status <dir>` | Works. |
 | `oillamp follow <dir> [--embedded]` | Works in the simulated scenarios: catches up on the run in progress and the runs waiting, then reports every event until the session ends. Embedded, it stops when standard input closes, and the session goes on. |
 | `oillamp list` | Works. |
+| `oillamp genies` | Works. Opens Genies from the single file, and waits until its window is closed. |
+| `oillamp update <dir> [--system]` | Works in the simulated scenarios. Not yet run against real npm, Eden AI and Debian mirrors. |
 | `oillamp remove <dir> [--yes]` | Works. Without `--yes`, lists what would be deleted and exits 2. |
 | `oillamp recordings <dir> [--open <session>] [--prune]` | Works. |
 | `oillamp save <dir> [--message <text>]` | Works in the scenarios and on a lamp made by hand (see below). |
@@ -176,7 +178,9 @@ local model's name.
 
 `oillamp update <lamp>` installs opencode and pi again, at `latest` or the release pinned in
 `agent_tools.versions`, and downloads opencode's model list again. The lamp switches to the new
-image only if the build succeeds. `UpdatingTheAgentToolsSpec` checks this with podman simulated,
+image only if the build succeeds. `--system` builds the whole image again, from the newest base
+image, and a start from an image older than 30 days warns. `UpdatingTheAgentToolsSpec` checks
+this with podman simulated,
 and runs the installer script with stand-in npm, node and pi. No update has been run against a
 real registry yet.
 
@@ -315,7 +319,7 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - The history keeps every version of every file ever saved, and nothing removes old snapshots.
   There is no way yet to leave parts of the agent's home out of a snapshot, such as `~/.cache`.
 
-- oillamp never removes old sandbox images. Every change to anything that goes into the image (a
+- oillamp removes only the image an `oillamp update` replaces, and no other. Every change to anything that goes into the image (a
   new oillamp build, `image.extra_apt_packages`, `agent_tools.install`) creates a new image of
   about 3.5 GB, and the old one stays. On the development machine this reached about 25 GB in two
   days and filled the disk, so a build failed. Until this is fixed, remove old images by hand:

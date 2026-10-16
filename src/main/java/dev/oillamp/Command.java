@@ -36,7 +36,9 @@ sealed interface Command {
         enum Action { CHECK, SHOW_EFFECTIVE, PATH }
     }
     record At(Path lamp, Context.Options options) implements Command {}
-    record Update(Path lamp, Context.Options options) implements Command {}
+    /// `system`: build the whole image again, from a freshly pulled base image, not only the
+    /// agent tools.
+    record Update(Path lamp, boolean system, Context.Options options) implements Command {}
     record View(Path lamp, boolean viewOnly, Context.Options options) implements Command {}
     record Shell(Path lamp, Context.Options options) implements Command {}
     record Stop(Path lamp, Context.Options options) implements Command {}
@@ -81,6 +83,7 @@ sealed interface Command {
         boolean confirmed = false;
         boolean prune = false;
         boolean wait = true;
+        boolean system = false;
         // The value of each option in VALUE_OPTIONS that was given, given either as `--open=x` or
         // as the argument after it; pending is the option still waiting for its value.
         Association<String, String> values = Association.between(String.class, String.class);
@@ -129,6 +132,7 @@ sealed interface Command {
                 case "--yes"           -> confirmed = true;
                 case "--prune"         -> prune = true;
                 case "--no-wait"       -> wait = false;
+                case "--system"        -> system = true;
                 default -> {
                     if (VALUE_OPTIONS.contains(option))
                         pending = Optional.of(option);
@@ -240,7 +244,7 @@ sealed interface Command {
                 };
             }
             case "at"     -> Result.ok(new At(Path.of(rest.first()), options));
-            case "update" -> Result.ok(new Update(Path.of(rest.first()), options));
+            case "update" -> Result.ok(new Update(Path.of(rest.first()), system, options));
             case "view"   -> Result.ok(new View(Path.of(rest.first()), viewOnly, options));
             case "shell"  -> Result.ok(new Shell(Path.of(rest.first()), options));
             case "stop"   -> Result.ok(new Stop(Path.of(rest.first()), options));
@@ -328,7 +332,7 @@ sealed interface Command {
                                                "--embedded", "--model-service", "--model-key-env",
                                                "--enable-scheduling"))
                 .put("view",       ValueSet.of("--view-only"))
-                .put("update",     ValueSet.of("--dry-run", "--no-install"))
+                .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
                 .put("recordings", ValueSet.of("--open", "--prune", "--dry-run"))
                 .put("doctor",     ValueSet.of("--dry-run", "--no-install"))
@@ -412,11 +416,13 @@ sealed interface Command {
               view <dir> [--view-only]
                     Open another viewer onto a running session's desktop. Needs a display.
                     --view-only lets you watch without typing.
-              update <dir> [--dry-run] [--no-install]
+              update <dir> [--system] [--dry-run] [--no-install]
                     Install opencode and pi again, and download opencode's model list again,
                     into a new image for this lamp. The lamp must be stopped. The home is not
                     touched, and the lamp switches to the new image only if the build succeeds.
                     Versions come from agent_tools.versions (latest by default).
+                      --system  build the whole image again, from the newest Debian, with
+                                every package's updates. Takes as long as a first build.
               shell <dir>
                     Open an extra shell in this terminal. Needs no display. Closing it does
                     not end the session.
