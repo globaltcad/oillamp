@@ -104,33 +104,7 @@ final class ChatRows {
             panel("fill, ins 0", "[grow, center]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
             .add("growx, wmin 0, wmax " + COLUMN, body(entry))
-            .peek(ChatRows::measureTextOnEveryNewWidth)
             .get(JPanel.class)));
-    }
-
-    /// Workaround for a SwingTree issue: SwingTree measures the height of a component's text
-    /// (`autoPreferredHeight`) only when it computes the component's style, and it computes the
-    /// style when the component is painted. Swing paints only the rows in the visible part of
-    /// the chat. Without this, a new row outside it keeps the height of an empty row until the
-    /// user scrolls to it: the scroll bar's length is wrong, and the row grows under the user.
-    ///
-    /// So each time Swing's layout gives `row` a new width, the style of every component in it
-    /// is computed again, which measures its text at that width.
-    private static void measureTextOnEveryNewWidth(JPanel row) {
-        row.addComponentListener(new ComponentAdapter() {
-            private int measuredAt = -1;
-
-            @Override public void componentResized(ComponentEvent event) {
-                if (row.getWidth() == measuredAt) return;
-                measuredAt = row.getWidth();
-                Deque<Component> open = new ArrayDeque<>(List.of(row));
-                while (!open.isEmpty()) {
-                    Component next = open.pop();
-                    if (next instanceof JComponent styled) ComponentBackend.powering(styled).gatherApplyAndInstallStyle(false);
-                    if (next instanceof Container inside) open.addAll(List.of(inside.getComponents()));
-                }
-            }
-        });
     }
 
     private UIForAnySwing<?, ?> body(Var<Entry> entry) {
@@ -213,6 +187,9 @@ final class ChatRows {
     private UIForAnySwing<?, ?> answer(Var<Entry> entry) {
         Val<Boolean> copyable = entry.viewAs(Boolean.class, it -> !it.isWriting());
         UUID id = entry.get().id();
+        var entryMarkdown = entry
+                            .viewAsString(Entry::text)
+                            .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
         return
             panel("fill, ins 10 0 10 0, gap 12, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
@@ -223,10 +200,11 @@ final class ChatRows {
                 .add("growx, wmin 0",
                     box().withMinSize(0, 0)
                     // Restarts on every change: each new piece fades in from its arrival.
-                    .withStyle(entry, FADE, (it, animation, style) -> style
+                    .withStyle(entryMarkdown, FADE,
+                        (it, animation, style) -> style
                         .padding(3, 0, 3, 0)
                         .text(t -> t
-                            .content(MarkdownStylingUtil.of(MarkdownParsingUtil.parse(it.text()), animation.progress()))
+                            .content(MarkdownStylingUtil.of(it, animation.progress()))
                             .placement(UI.Placement.TOP_LEFT)
                             .wrapLines(true)
                             .autoPreferredHeight(true)
