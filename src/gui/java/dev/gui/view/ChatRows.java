@@ -127,6 +127,7 @@ final class ChatRows {
     private UIForAnySwing<?, ?> yours(Var<Entry> entry) {
         String text = entry.get().text();
         Val<Boolean> editable = Viewable.of(Boolean.class, waits, entry, (waiting, it) -> waiting && !it.ref().isEmpty());
+        var markdown = MarkdownStylingUtil.of(MarkdownParsingUtil.parse(text), 1);
         return
             panel("fill, wrap 1, ins 8 60 8 0, gap 2, hidemode 3", "[grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
@@ -137,8 +138,12 @@ final class ChatRows {
                     .borderRadius(16)
                     .padding(9, 14, 9, 14)
                     .prefWidth(Math.min(YOURS_WIDTH, widthOf(text) * 1.08 + 36))
-                    .text(t -> t.content(MarkdownStylingUtil.of(MarkdownParsingUtil.parse(text), 1))
-                                .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
+                    .text(t -> t
+                        .content(markdown)
+                        .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
+                    )
+                )
+            )
             .add("align right",
                 box("ins 0, gap 0, hidemode 3")
                 .add(versions(entry))
@@ -146,7 +151,9 @@ final class ChatRows {
                     button("✎  Edit").group(Skin.ICON_BUTTON).isVisibleIf(editable)
                     .withTooltip("Ask this differently. What followed is kept, as a branch in the genie's conversations.")
                     .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT)))
-                    .onClick(it -> askInstead.accept(entry.get()))));
+                    .onClick(it -> askInstead.accept(entry.get()))
+                )
+            );
     }
 
     /// "‹ 2 / 3 ›" under an edited user message: the chat shows conversation version 2 of 3.
