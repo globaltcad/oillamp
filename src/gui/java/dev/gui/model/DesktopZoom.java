@@ -14,16 +14,16 @@ import java.util.Locale;
 ///              0 the size of the panel
 public record DesktopZoom(double scale) {
 
-    public static final DesktopZoom PANEL = new DesktopZoom(-1);
-    public static final DesktopZoom FIT = new DesktopZoom(0);
+    public static final DesktopZoom FIT = new DesktopZoom(-1);
+    public static final DesktopZoom FIXED = new DesktopZoom(0);
 
     /// The scales the zoom steps through.
     static final double[] STEPS = {0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0};
 
-    public boolean isFit() { return scale == 0; }
+    public boolean isFixed() { return scale == 0; }
 
     /// Whether the desktop takes the size of the panel it is shown in.
-    public boolean isPanel() { return scale < 0; }
+    public boolean isFit() { return scale < 0; }
 
     /// One step larger. From fit or panel, the step above the scale the desktop shows at.
     ///
@@ -41,8 +41,8 @@ public record DesktopZoom(double scale) {
         return new DesktopZoom(STEPS[0]);
     }
 
-    /// What the zoom buttons say: "Panel", "Fit", or the scale as a percentage.
+    /// What the zoom buttons say: "Fit", "Fixed", or the scale as a percentage.
     public String label() {
-        return isPanel() ? "Panel" : isFit() ? "Fit" : String.format(Locale.ROOT, "%d%%", Math.round(scale * 100));
+        return isFit() ? "Fit" : isFixed() ? "Fixed" : String.format(Locale.ROOT, "%d%%", Math.round(scale * 100));
     }
 }

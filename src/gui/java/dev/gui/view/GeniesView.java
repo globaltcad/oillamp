@@ -118,7 +118,7 @@ public final class GeniesView extends JPanel {
             desktop.show(id.equals(GeniesState.NONE) ? Optional.empty() : actions.desktopOf(id));
         });
         zoom = state.zoomTo(GeniesState::zoom, GeniesState::withZoom);
-        Viewable.cast(zoom).onChange(From.ALL, it -> desktop.zoom(it.currentValue().orElse(DesktopZoom.FIT).scale()));
+        Viewable.cast(zoom).onChange(From.ALL, it -> desktop.zoom(it.currentValue().orElse(DesktopZoom.FIXED).scale()));
         desktop.zoom(zoom.get().scale());
         desktop.onZoomSteps(steps -> zoom.update(From.VIEW, it -> steps > 0 ? it.in(desktop.fitScale()) : it.out(desktop.fitScale())));
         Viewable.cast(genies).onChange(From.ALL, it -> {
@@ -869,11 +869,11 @@ public final class GeniesView extends JPanel {
         Val<Boolean> showing = genie.viewAs(Boolean.class, it -> !it.showing().isEmpty());
         // A recorded desktop keeps its size; at the panel's size, that needs saying, and it is
         // drawn fitted, as with Fit.
-        Val<Boolean> keeps = Viewable.of(Boolean.class, zoom, desktop.keepsItsSize(), (it, kept) -> it.isPanel() && kept);
-        Val<Boolean> zooms = Viewable.of(Boolean.class, zoom, keeps, (it, kept) -> !it.isPanel() || kept);
+        Val<Boolean> keeps = Viewable.of(Boolean.class, zoom, desktop.keepsItsSize(), (it, kept) -> it.isFit() && kept);
+        Val<Boolean> zooms = Viewable.of(Boolean.class, zoom, keeps, (it, kept) -> !it.isFit() || kept);
         Val<String> panelSize = Viewable.of(String.class, keeps, desktop.desktopSize(), (kept, size) -> kept ? "fitted" : size);
         Val<String> scale = Viewable.of(String.class, zoom, panelSize,
-                (it, size) -> it.isPanel() ? size : it.isFit() ? "fitted" : it.label());
+                (it, size) -> it.isFit() ? size : it.isFixed() ? "fitted" : it.label());
         Val<String> hint = Viewable.of(String.class, keeps, state.viewAs(Boolean.class, GeniesState::narrow),
                 (kept, narrow) -> kept ? "Recorded, so it keeps its own size" : narrow ? "" : "Click the desktop to use it");
         return
@@ -890,12 +890,21 @@ public final class GeniesView extends JPanel {
                 .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(FLAME))))
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 2, hidemode 3")
-                .add(modeButton("⤢  Panel", "Give the desktop the size of this panel, so what the genie shows fills it."
-                                + " It gets its own size back when you close it.", zoom.viewAs(Boolean.class, DesktopZoom::isPanel))
-                     .onClick(it -> zoom.set(From.VIEW, DesktopZoom.PANEL)))
-                .add(modeButton("⊡  Fit", "Show the whole desktop at its own size, shrunk into this panel",
-                                zoom.viewAs(Boolean.class, DesktopZoom::isFit))
-                     .onClick(it -> zoom.set(From.VIEW, DesktopZoom.FIT)))
+                .add(
+                    modeButton(
+                        "⤢  Fit", "Give the desktop the size of this panel, so what the genie shows fills it." +
+                        " It gets its own size back when you close it.",
+                        zoom.viewAs(Boolean.class, DesktopZoom::isFit)
+                    )
+                    .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIT)))
+                .add(
+                    modeButton(
+                        "⊡  Fixed",
+                        "Show the whole desktop at its own size, shrunk into this panel",
+                         zoom.viewAs(Boolean.class, DesktopZoom::isFixed)
+                    )
+                    .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIXED))
+                )
                 // At the panel's size, the desktop is drawn pixel for pixel: there is nothing to
                 // zoom, and between these the desktop's size could pass for something they change.
                 // A desktop that keeps its own size is drawn fitted, and zooms as from Fit.
