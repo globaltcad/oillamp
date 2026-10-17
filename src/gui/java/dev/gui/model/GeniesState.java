@@ -69,7 +69,7 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     public static GeniesState of(Tuple<Genie> genies, Settings settings, Optional<String> environmentKey) {
         return new GeniesState(genies, genies.isEmpty() ? NONE : genies.first().id(), settings,
                                genies.isEmpty() ? Page.SETTINGS : Page.CHAT, environmentKey, new Fold(true, Fold.CLOSED.height()), false,
-                               ModelLookUp.NOT_YET, DesktopZoom.PANEL, Split.PICKED, new Area(1030, 760), Instant.now(), Tuple.of(Trouble.class),
+                               ModelLookUp.NOT_YET, DesktopZoom.FIT, Split.PICKED, new Area(1030, 760), Instant.now(), Tuple.of(Trouble.class),
                                OllamaSetup.NOT_YET, !settings.usesOllama());
     }
 
