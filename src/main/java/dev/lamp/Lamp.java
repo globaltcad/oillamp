@@ -61,13 +61,23 @@ public final class Lamp implements AutoCloseable {
 
     /// The engine's main class. Named as text, because this package must not depend on the engine.
     static final String ENGINE = "dev.oillamp.OilLamp";
-
     /// What [#leaveRunning()] writes on the engine's standard input. Named as text for the same
     /// reason as [#ENGINE].
     static final String LEAVE_RUNNING = "leave-running";
-
     /// The variable in the engine's environment that holds a key given with [Starting#modelKey].
     static final String MODEL_KEY_VARIABLE = "OILLAMP_MODEL_KEY";
+    /// Where pi keeps conversations, relative to the agent's home.
+    static final String SESSIONS = ".pi/agent/sessions";
+    /// Session files larger than this are left out. A long conversation with much tool output is
+    /// a few megabytes.
+    static final long LARGEST_CONVERSATION = 64L * 1024 * 1024;
+    /// How the engine names a job run's conversation. Written out, because this package must
+    /// not depend on the engine.
+    private static final Pattern JOB_RUN_NAME = Pattern.compile("run-\\d+ \\((job-\\d+)\\)");
+    /// The prefix of the agent directory's name in a lamp. Written out, because this package must
+    /// not depend on the engine, whose layout says the same.
+    static final String AGENT_DIR_PREFIX = "agent-lamp-";
+
 
     private final Path directory;
     private final Launcher launcher;
@@ -82,8 +92,13 @@ public final class Lamp implements AutoCloseable {
     /// started, until it is left running; false for one it joined.
     private volatile boolean holding;
 
-    private Lamp(Path directory, Launcher launcher, Process engine, List<Consumer<LampEvent>> listeners,
-                 boolean holding) {
+    private Lamp(
+        final Path directory,
+        final Launcher launcher,
+        final Process engine,
+        final List<Consumer<LampEvent>> listeners,
+        final boolean holding
+    ) {
         this.directory = directory;
         this.launcher = launcher;
         this.engine = engine;
@@ -117,8 +132,14 @@ public final class Lamp implements AutoCloseable {
         private final Optional<String> modelKey;
         private final boolean scheduling;
 
-        private Starting(Path directory, List<Consumer<LampEvent>> listeners, Launcher launcher,
-                         Optional<URI> modelService, Optional<String> modelKey, boolean scheduling) {
+        private Starting(
+            final Path directory,
+            final List<Consumer<LampEvent>> listeners,
+            final Launcher launcher,
+            final Optional<URI> modelService,
+            final Optional<String> modelKey,
+            final boolean scheduling
+        ) {
             this.directory = directory;
             this.listeners = listeners;
             this.launcher = launcher;
@@ -417,8 +438,11 @@ public final class Lamp implements AutoCloseable {
 
     /// Runs the engine for one command that ends by itself, passes each event to the listeners,
     /// and waits for it to exit.
-    private static Ran runToEnd(Launcher launcher, List<Consumer<LampEvent>> listeners, String... command)
-            throws IOException, InterruptedException {
+    private static Ran runToEnd(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final String... command
+    ) throws IOException, InterruptedException {
         List<String> arguments = new ArrayList<>(List.of(command));
         // Before `--`, after which the engine takes every argument as text, such as a prompt.
         int literal = arguments.indexOf("--");
@@ -426,8 +450,9 @@ public final class Lamp implements AutoCloseable {
         Process engine = launcher.launch(List.copyOf(arguments), Map.of());
         engine.getOutputStream().close();
         List<LampEvent> events = new ArrayList<>();
-        try (BufferedReader output = new BufferedReader(
-                new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))) {
+        try (
+            var output = new BufferedReader(new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))
+        ) {
             String line;
             while ((line = output.readLine()) != null)
                 LampEvent.fromJson(line).ifPresent(event -> {
@@ -438,20 +463,27 @@ public final class Lamp implements AutoCloseable {
         return new Ran(ExitStatus.ofCode(engine.waitFor()).orElse(ExitStatus.ERROR), List.copyOf(events));
     }
 
-    private static Optional<LampEvent.Snapshot> save(Launcher launcher, List<Consumer<LampEvent>> listeners,
-                                                     Path directory, String message)
-            throws IOException, InterruptedException, Failed {
+    private static Optional<LampEvent.Snapshot> save(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final Path directory,
+        final String message
+    ) throws IOException, InterruptedException, Failed {
         Ran ran = message.isBlank()
                 ? runToEnd(launcher, listeners, "save", directory.toString())
                 : runToEnd(launcher, listeners, "save", directory.toString(), "--message", message);
         ran.orThrow();
-        for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.Saved saved) return Optional.of(saved.snapshot());
+        for ( LampEvent event : ran.events() )
+            if (event instanceof LampEvent.Saved saved)
+                return Optional.of(saved.snapshot());
         return Optional.empty();
     }
 
-    private static LampEvent.Schedule schedule(Launcher launcher, List<Consumer<LampEvent>> listeners, Path directory)
-            throws IOException, InterruptedException, Failed {
+    private static LampEvent.Schedule schedule(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final Path directory
+    ) throws IOException, InterruptedException, Failed {
         Ran ran = runToEnd(launcher, listeners, "schedule", directory.toString());
         ran.orThrow();
         for (LampEvent event : ran.events())
@@ -459,9 +491,16 @@ public final class Lamp implements AutoCloseable {
         throw new Failed(ran.status(), internal("the engine reported no schedule"));
     }
 
-    private static LampEvent.Job addJob(Launcher launcher, List<Consumer<LampEvent>> listeners, Path directory,
-                                        String option, String when, String prompt, String... more)
-            throws IOException, InterruptedException, Failed {
+    private static LampEvent.Job addJob(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final Path directory,
+        final String option,
+        final String when,
+        final String prompt,
+        final String... more
+    ) throws IOException, InterruptedException, Failed
+    {
         List<String> command = new ArrayList<>(List.of("schedule", directory.toString(), "add", option, when));
         command.addAll(List.of(more));
         command.addAll(List.of("--", prompt));
@@ -482,9 +521,12 @@ public final class Lamp implements AutoCloseable {
     ///                     answer, which starts a branch there if the conversation went on since
     /// @param insteadOf    a question of that conversation to ask this instead of. The old question
     ///                     and what followed stay, as a branch of their own
-    public record Question(String prompt, Optional<String> conversation, Optional<String> after,
-                           Optional<String> insteadOf) {
-
+    public record Question(
+        String prompt,
+        Optional<String> conversation,
+        Optional<String> after,
+        Optional<String> insteadOf
+    ) {
         public Question {
             if (prompt.isBlank()) throw new IllegalArgumentException("a question needs something to ask");
             if ((after.isPresent() || insteadOf.isPresent()) && conversation.isEmpty())
@@ -526,9 +568,14 @@ public final class Lamp implements AutoCloseable {
     /// @param file     where pi keeps it, relative to the agent's home
     /// @param modified when its last entry was written
     /// @param entries  every entry, in the order pi wrote them
-    public record Conversation(String id, String name, String file, Instant started,
-                               Instant modified, Tuple<Entry> entries) {
-
+    public record Conversation(
+        String id,
+        String name,
+        String file,
+        Instant started,
+        Instant modified,
+        Tuple<Entry> entries
+    ) {
         /// One line of pi's session file.
         ///
         /// @param id       unique within the conversation; what [Question#after] and
@@ -581,10 +628,6 @@ public final class Lamp implements AutoCloseable {
             return named.matches() ? Optional.of(named.group(1)) : Optional.empty();
         }
 
-        /// How the engine names a job run's conversation. Written out, because this package must
-        /// not depend on the engine.
-        private static final Pattern JOB_RUN_NAME = Pattern.compile("run-\\d+ \\((job-\\d+)\\)");
-
         /// The entry it stands at: the last one written. Empty for a conversation with none.
         public Optional<String> leaf() {
             return entries.isEmpty() ? Optional.empty() : Optional.of(entries.last().id());
@@ -624,13 +667,6 @@ public final class Lamp implements AutoCloseable {
             return line.length() <= 60 ? line : line.substring(0, 59) + "…";
         }
     }
-
-    /// Where pi keeps conversations, relative to the agent's home.
-    static final String SESSIONS = ".pi/agent/sessions";
-
-    /// Session files larger than this are left out. A long conversation with much tool output is
-    /// a few megabytes.
-    static final long LARGEST_CONVERSATION = 64L * 1024 * 1024;
 
     /// Every conversation the agent had in the lamp at `directory`, the most recent first. Works
     /// whether or not the lamp is running, and reads the files directly, so it is quick enough
@@ -677,7 +713,7 @@ public final class Lamp implements AutoCloseable {
     /// @throws IOException when there is no such conversation, or it could not be deleted
     public static void forget(Path directory, String id) throws IOException {
         Conversation doomed = conversation(directory, id)
-                .orElseThrow(() -> new IOException("the lamp has no conversation called '" + id + "'"));
+                                .orElseThrow(() -> new IOException("the lamp has no conversation called '" + id + "'"));
         Path home = agentHome(directory).orElseThrow(() -> new IOException("the lamp has no agent home"));
         Path file = home.resolve(doomed.file());
         // Found by listing without following links, so it is a plain file where it should be.
@@ -701,10 +737,6 @@ public final class Lamp implements AutoCloseable {
         }
     }
 
-    /// The prefix of the agent directory's name in a lamp. Written out, because this package must
-    /// not depend on the engine, whose layout says the same.
-    static final String AGENT_DIR_PREFIX = "agent-lamp-";
-
     /// The agent's home in the lamp at `directory`: the directory the sandbox sees as
     /// `/home/agent`. Nothing, before the lamp was first started.
     ///
@@ -714,8 +746,8 @@ public final class Lamp implements AutoCloseable {
     public static Optional<Path> agentHome(Path directory) {
         try (var entries = Files.list(directory)) {
             List<Path> homes = entries.filter(entry -> entry.getFileName().toString().startsWith(AGENT_DIR_PREFIX))
-                    .filter(entry -> Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS))
-                    .toList();
+                                .filter(entry -> Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS))
+                                .toList();
             return homes.size() == 1 ? Optional.of(homes.getFirst()) : Optional.empty();
         } catch (IOException notThere) {
             return Optional.empty();
@@ -825,8 +857,9 @@ public final class Lamp implements AutoCloseable {
     /// @throws Failed when the conversation or the entry is not there, or the session is ending
     public LampEvent.Run send(Question question) throws IOException, InterruptedException, Failed {
         Ran ran = runToEnd(launcher, listeners, askCommand(directory, question, "--no-wait"));
-        for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.RunAccepted accepted) return accepted.run();
+        for ( LampEvent event : ran.events() )
+            if (event instanceof LampEvent.RunAccepted(LampEvent.Run run))
+                return run;
         ran.orThrow();
         throw new Failed(ran.status(), internal("the engine reported no run"));
     }
@@ -867,8 +900,13 @@ public final class Lamp implements AutoCloseable {
         return command.toArray(String[]::new);
     }
 
-    private static LampEvent.RunFinished ask(Launcher launcher, List<Consumer<LampEvent>> listeners, Path directory,
-                                             Question question) throws IOException, InterruptedException, Failed {
+    private static LampEvent.RunFinished ask(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final Path directory,
+        final Question question
+    ) throws IOException, InterruptedException, Failed
+    {
         Ran ran = runToEnd(launcher, listeners, askCommand(directory, question));
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.RunFinished finished) return finished;
@@ -997,8 +1035,9 @@ public final class Lamp implements AutoCloseable {
     public boolean holds() { return holding; }
 
     private void readEvents() {
-        try (BufferedReader output = new BufferedReader(
-                new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))) {
+        try (
+            var output = new BufferedReader(new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))
+        ) {
             String line;
             while ((line = output.readLine()) != null) {
                 try {
@@ -1063,10 +1102,15 @@ public final class Lamp implements AutoCloseable {
     /// up when the terminal the application was started from closes. One still held ends anyway,
     /// with the application.
     private static Process sameJava(List<String> arguments, Map<String, String> environment) throws IOException {
-        List<String> command = new ArrayList<>(List.of("setsid",
-                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-cp", System.getProperty("java.class.path"),
-                ENGINE));
+        List<String> command = new ArrayList<>(
+                List.of(
+                        "setsid",
+                        Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                        "-cp",
+                        System.getProperty("java.class.path"),
+                        ENGINE
+                )
+        );
         command.addAll(arguments);
         ProcessBuilder builder = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT);
         builder.environment().putAll(environment);
