@@ -24,8 +24,8 @@ class ZoomingIntoAGeniesDesktopSpec extends Specification {
             click on − to the next step below, 50%.
         """
         expect:
-            DesktopZoom.FIT.in(0.6) == new DesktopZoom(0.67)
-            DesktopZoom.FIT.out(0.6) == new DesktopZoom(0.5)
+            DesktopZoom.FIXED.in(0.6) == new DesktopZoom(0.67)
+            DesktopZoom.FIXED.out(0.6) == new DesktopZoom(0.5)
     }
 
     def 'Each step goes to the next size, and stops at the smallest and the largest'() {
@@ -45,8 +45,8 @@ class ZoomingIntoAGeniesDesktopSpec extends Specification {
             Between the buttons, the current size is shown: the panel's, fitted, or a percentage.
         """
         expect:
-            DesktopZoom.PANEL.label() == 'Panel'
             DesktopZoom.FIT.label() == 'Fit'
+            DesktopZoom.FIXED.label() == 'Fixed'
             new DesktopZoom(1.25).label() == '125%'
     }
 
@@ -57,9 +57,9 @@ class ZoomingIntoAGeniesDesktopSpec extends Specification {
             larger desktop picks Fit or a scale.
         """
         expect:
-            GeniesState.of(Tuple.of(Genie), Settings.defaults(), Optional.empty()).zoom() == DesktopZoom.PANEL
-            DesktopZoom.PANEL.isPanel() && !DesktopZoom.PANEL.isFit()
-            DesktopZoom.FIT.isFit() && !DesktopZoom.FIT.isPanel()
+            GeniesState.of(Tuple.of(Genie), Settings.defaults(), Optional.empty()).zoom() == DesktopZoom.FIT
+            DesktopZoom.FIT.isFit() && !DesktopZoom.FIT.isFixed()
+            DesktopZoom.FIXED.isFixed() && !DesktopZoom.FIXED.isFit()
     }
 
     def 'Zooming from the panel\'s size starts from the scale the desktop is drawn at'() {
@@ -69,7 +69,7 @@ class ZoomingIntoAGeniesDesktopSpec extends Specification {
             from Fit, and leaves the panel's size: the desktop gets its own size back.
         """
         expect:
-            DesktopZoom.PANEL.in(0.6) == new DesktopZoom(0.67)
-            DesktopZoom.PANEL.out(0.6) == new DesktopZoom(0.5)
+            DesktopZoom.FIT.in(0.6) == new DesktopZoom(0.67)
+            DesktopZoom.FIT.out(0.6) == new DesktopZoom(0.5)
     }
 }
