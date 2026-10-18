@@ -4,6 +4,7 @@ import dev.gui.model.JobDraft
 import dev.gui.model.Recurrence
 import dev.gui.model.Schedule
 import dev.gui.model.Timeline
+import spock.lang.Rollup
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -29,24 +30,33 @@ class PlanningAGeniesWeekSpec extends Specification {
 
     static Instant at(LocalDateTime time) { time.atZone(BERLIN).toInstant() }
 
+    /** Each way of repeating the page offers, by how the user would say it. */
+    static final Map<String, Recurrence> RECURRENCES = [
+            'every hour, at 15 past'          : new Recurrence.Hourly(15),
+            'every day, at 07:05'             : new Recurrence.Daily(LocalTime.of(7, 5)),
+            'every weekday, at 09:00'         : new Recurrence.Weekdays(LocalTime.of(9, 0)),
+            'Mondays and Thursdays, at 08:30' : new Recurrence.Weekly(Tuple.of(DayOfWeek, DayOfWeek.MONDAY, DayOfWeek.THURSDAY), LocalTime.of(8, 30)),
+            'an expression of the user\'s own': new Recurrence.Custom('0 9 1 * *')]
+
+    @Rollup
     def 'Each way of repeating becomes a cron expression, and reads back as the same words'() {
         reportInfo """
             The user never has to write cron. What they pick becomes an expression oillamp reads,
             and a job read from oillamp, whoever wrote it, is shown in words again. An expression
             that is none of the page's shapes is kept as it is, and still said as well as can be.
         """
-        expect:
-            recurrence.cron() == cron
-            recurrence.describe() == words
-            Recurrence.of(cron) == recurrence
+        expect: 'the way of repeating in the row below gives that cron expression and those words, and back'
+            RECURRENCES[picked].cron() == cron
+            RECURRENCES[picked].describe() == words
+            Recurrence.of(cron) == RECURRENCES[picked]
 
         where:
-            recurrence                                                                           || cron             | words
-            new Recurrence.Hourly(15)                                                            || '15 * * * *'     | 'Every hour at 15 past'
-            new Recurrence.Daily(LocalTime.of(7, 5))                                             || '5 7 * * *'      | 'Every day at 07:05'
-            new Recurrence.Weekdays(LocalTime.of(9, 0))                                          || '0 9 * * 1-5'    | 'Every weekday at 09:00'
-            new Recurrence.Weekly(Tuple.of(DayOfWeek, DayOfWeek.MONDAY, DayOfWeek.THURSDAY), LocalTime.of(8, 30)) || '30 8 * * 1,4' | 'Every Monday and Thursday at 08:30'
-            new Recurrence.Custom('0 9 1 * *')                                                   || '0 9 1 * *'      | 'On the cron schedule “0 9 1 * *”'
+            picked                              || cron           | words
+            'every hour, at 15 past'            || '15 * * * *'   | 'Every hour at 15 past'
+            'every day, at 07:05'               || '5 7 * * *'    | 'Every day at 07:05'
+            'every weekday, at 09:00'           || '0 9 * * 1-5'  | 'Every weekday at 09:00'
+            'Mondays and Thursdays, at 08:30'   || '30 8 * * 1,4' | 'Every Monday and Thursday at 08:30'
+            'an expression of the user\'s own'  || '0 9 1 * *'    | 'On the cron schedule “0 9 1 * *”'
     }
 
     def 'Expressions written elsewhere are recognised when they mean one of the page\'s shapes'() {

@@ -40,6 +40,11 @@ class RunningARealGenieSpec extends Specification {
 
     static final String KEY = System.getenv('EDENAI_API_KEY') ?: ''
     static final String MODEL = System.getenv('OILLAMP_SPIKE_MODEL') ?: 'mistral/mistral-small-latest'
+    /**
+     *  Where pi keeps the conversations of an agent that runs in its home, relative to that home.
+     *  pi names the directory after the directory it runs in, here {@code /home/agent}.
+     */
+    static final String CONVERSATIONS = '.pi/agent/sessions/--home-agent--'
 
     @Shared Path lamp = RealLamps.newLampPath('genie')
     @Shared Genie genie = Genie.named('Spike')
@@ -131,13 +136,13 @@ class RunningARealGenieSpec extends Specification {
         '''
         given: 'a conversation whose second question was asked twice'
             var home = Lamp.agentHome(lamp).get()
-            var sessions = Files.createDirectories(home.resolve(Conversations.DIRECTORY))
+            var sessions = Files.createDirectories(home.resolve(CONVERSATIONS))
             Files.writeString(sessions.resolve('forked.jsonl'), [
                     '{"type":"session","version":3,"id":"forked","timestamp":"2026-09-29T10:00:00.000Z","cwd":"/home/agent"}',
                     said('q1', null, 'user', 'Plan a trip'), said('a1', 'q1', 'assistant', 'Where to?'),
                     said('q2', 'a1', 'user', 'By train'), said('a2', 'q2', 'assistant', 'Trains it is.'),
                     said('q2b', 'a1', 'user', 'By bike'), said('a2b', 'q2b', 'assistant', 'Bikes it is.')].join('\n') + '\n')
-            var file = Conversations.DIRECTORY + '/forked.jsonl'
+            var file = CONVERSATIONS + '/forked.jsonl'
 
         when:
             runner.reloadConversations()
