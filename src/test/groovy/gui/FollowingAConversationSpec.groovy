@@ -290,15 +290,15 @@ class FollowingAConversationSpec extends Specification {
             var none = Tuple.of(Lamp.Conversation.ToolCall)
             var said = { String id, String parent, String text, Tuple<Lamp.Conversation.ToolCall> calls, boolean failed ->
                 new Lamp.Conversation.Entry(id, Optional.of(parent), at, Lamp.Conversation.Kind.MESSAGE_FROM_AGENT,
-                        text, '', calls, Optional.empty(), failed)
+                        text, '', calls, Optional.empty(), failed, Optional.empty())
             }
             var conversation = new Lamp.Conversation('c', 'run-44 (job-3)', 'x.jsonl', at, at, Tuple.of(Lamp.Conversation.Entry,
                     new Lamp.Conversation.Entry('q1', Optional.empty(), at, Lamp.Conversation.Kind.MESSAGE_TO_AGENT,
-                            'Make something', '', none, Optional.empty(), false),
+                            'Make something', '', none, Optional.empty(), false, Optional.empty()),
                     said('a1', 'q1', "I'll make a game.", Tuple.of(Lamp.Conversation.ToolCall,
                             new Lamp.Conversation.ToolCall('t1', 'write', 'game.html')), false),
                     new Lamp.Conversation.Entry('o1', Optional.of('a1'), at, Lamp.Conversation.Kind.TOOL_OUTPUT,
-                            'Wrote it', '', none, Optional.of('write'), false),
+                            'Wrote it', '', none, Optional.of('write'), false, Optional.empty()),
                     said('a2', 'o1', '502 oillamp: cannot reach the model service at api.eu.edenai.run — Connect timed out\n', none, true),
                     said('a3', 'a2', 'Connection error.', none, true),
                     said('a4', 'a3', 'It is half done.\n\nRequest was aborted', none, true)))
