@@ -814,9 +814,10 @@ oillamp single file.
 
 Genies does not run pi. It asks the lamp's session, which holds the one pi of the lamp, with
 `Lamp.send`, follows the answer on the lamp's run events, stops it with `Lamp.cancel`, and reads
-the conversations with `Lamp.conversations`. It gives pi the genie's instructions through pi's own
-files in the genie's home, and the model through the lamp (`LampDirectory.model`,
-`Lamp.useModel`). The conversations are kept by pi, in the genie's home.
+the conversations with `Lamp.conversations`. It gives the lamp the genie's instructions and the
+model (`LampDirectory.instructions`, `LampDirectory.model`, `Lamp.useModel`), and the lamp's engine
+puts them where pi reads them; Genies never writes into the genie's home itself. The
+conversations are kept by pi, in the genie's home.
 
 *Why:* a lamp has one agent, so a scheduled job and the chat can never run two pis in one home, and
 every message is saved in the lamp's history like any run. Reading conversations from the lamp's
@@ -824,7 +825,9 @@ files shows them while the genie sleeps. Keeping them in the sandbox gives them 
 deleting the genie deletes them.
 
 *Given up:* each message starts a short-lived engine process, about a second before the run
-begins. Only pi is supported. *(changed on 2026-09-30; before, Genies ran its own pi over ssh)*
+begins. Only pi is supported. *(changed on 2026-09-30; before, Genies ran its own pi over ssh;
+changed on 2026-10-18: before, Genies wrote pi's instructions and default model into the genie's
+home itself)*
 
 ### Genies has one model, in its settings, for every genie and every conversation
 
@@ -846,9 +849,8 @@ because the lamp's relay would send it to the old service, which may not know it
 message would fail with an error that explains nothing. Which model wrote an answer matters when something
 went wrong or the model changed, not while reading, so it is there on hover and nowhere else.
 
-*Given up:* an awake genie keeps its old service and key until it sleeps and wakes. pi's default
-in the genie's home is written as well, so that a new conversation starts on the model without a
-switch entry; it is a convenience, never what decides. *(added on 2026-10-18)*
+*Given up:* an awake genie keeps its old service and key until it sleeps and wakes. *(added on
+2026-10-18)*
 
 ### Genies lights every lamp with its schedule on
 

@@ -527,9 +527,10 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   is answered by that model; that is tested against a stand-in pi, against real pi, and once in a
   real sandbox with Eden AI (see "Runs and the schedule"). `oillamp model` and `Lamp.useModel` on a
   running session are tested against a stand-in pi only.
-- Genies gives its lamps the settings' model, changes it on awake genies with `Lamp.useModel`, and
-  shows which model wrote an answer on hover. That is tested against the engine on a simulated
-  machine, with a stand-in pi, not yet in the real app with a real lamp.
+- Genies gives its lamps the settings' model and the genie's instructions through the Lamp API
+  only, changes the model on awake genies with `Lamp.useModel`, and shows which model wrote an
+  answer on hover. That is tested against the engine on a simulated machine, with a stand-in pi,
+  not yet in the real app with a real lamp.
 
 - Ubuntu 26.04, and any distribution other than Ubuntu 24.04.
 - A Java Swing modal dialog on the sandbox desktop. (A Swing window works; see the lessons table.)
