@@ -238,6 +238,15 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
         return LocalDateTime.ofInstant(now, genie().schedule().zone());
     }
 
+    /// What the settings say while genies are awake: which of their changes reach those genies
+    /// now, and which only when they next wake. Nothing when every genie sleeps.
+    public Optional<String> noteForAwakeGenies() {
+        if (!genies.any(genie -> genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) return Optional.empty();
+        return Optional.of("Genies that are awake answer with a new model from their next message on. "
+                         + "A new place, address or key reaches them when they next wake, and so does "
+                         + "everything for a genie that kept running while Genies was closed.");
+    }
+
     /// The settings are asking the service they name for its models.
     public GeniesState askingForModels() {
         Tuple<String> known = lookUp.isFor(settings) ? lookUp.models() : Tuple.of(String.class);

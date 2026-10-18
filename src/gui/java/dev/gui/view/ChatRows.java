@@ -191,8 +191,12 @@ final class ChatRows {
 
     /// The answer as a page of text next to the genie, the way chat apps show a model's answer:
     /// no bubble, the full column. While it streams in, its newest characters fade in.
+    ///
+    /// Which model wrote it shows only when the user points at the answer, so the chat stays as
+    /// plain as a chat between two people.
     private UIForAnySwing<?, ?> answer(Var<Entry> entry) {
         Val<Boolean> copyable = entry.viewAs(Boolean.class, it -> !it.isWriting());
+        Val<String> writtenBy = entry.viewAsString(Entry::writtenBy);
         UUID id = entry.get().id();
         var entryMarkdown = entry
                             .viewAsString(Entry::text)
@@ -228,6 +232,7 @@ final class ChatRows {
                     )
                     // The user drags across the answer to select part of it, and copies it with Ctrl+C.
                     .withTextSelection()
+                    .withTooltip(writtenBy)
                 )
                 .add("left",
                     button("⧉  Copy").group(Skin.ICON_BUTTON).isVisibleIf(copyable)

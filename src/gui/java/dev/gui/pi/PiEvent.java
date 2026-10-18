@@ -30,7 +30,9 @@ public sealed interface PiEvent {
     /// @param text   the whole answer, as pi finally recorded it
     /// @param failed why the model could not answer, such as a refused key, or empty
     /// @param tokens how many tokens the model counted for this answer, in and out
-    record Answered(String text, String failed, int tokens) implements PiEvent {}
+    /// @param model  the model that wrote it, or failed to, as the service names it, such as
+    ///               `azure/gpt-6.1-sol`; empty when not known
+    record Answered(String text, String failed, int tokens, String model) implements PiEvent {}
 
     /// The model call failed and pi tries again shortly.
     record Retrying(int attempt, int attempts, String reason) implements PiEvent {}
@@ -54,7 +56,9 @@ public sealed interface PiEvent {
         /// @param id        pi's id for the message, by which it can be asked differently
         /// @param usedTools for an answer, the genie used tools after it
         /// @param failed    for an answer, the model failed, and `text` is the error it gave
-        public record Line(boolean fromUser, String text, String id, boolean usedTools, boolean failed) {}
+        /// @param model     for an answer, the model that wrote it, as the service names it; empty
+        ///                  for the user's messages, and when not known
+        public record Line(boolean fromUser, String text, String id, boolean usedTools, boolean failed, String model) {}
     }
 
     /// The chat shows this conversation.
