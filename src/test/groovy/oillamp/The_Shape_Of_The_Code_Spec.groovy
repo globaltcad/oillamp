@@ -9,6 +9,9 @@ import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Title
 
+import java.nio.file.Files
+import java.nio.file.Path
+
 @Title('The shape of the code')
 @Narrative('''
 Promises about the structure of the code that are easy to break by accident, and expensive to
@@ -177,6 +180,35 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             genies.size() > 20
             intoTheEngine.isEmpty()
             intoGenies.isEmpty()
+    }
+
+    def 'Genies leaves the agent\'s own files to the engine'() {
+        reportInfo """
+            Which agent runs in a lamp, and where it keeps its settings and instructions, is the
+            engine's business. Genies gives the lamp the model and the genie's instructions with
+            `LampDirectory.model` and `LampDirectory.instructions`, and the engine writes them
+            into pi's files in the agent's home, never through a link the agent may have planted
+            there. A Genies that wrote those files itself would break when pi changes its layout,
+            and would have to be as careful with links as the engine is.
+
+            Writing a file is no dependency between classes, so this rule is checked in the
+            source: no file of Genies names pi's directory, its instructions file, or the keys of
+            its default model.
+        """
+        given: 'what only code that knows pi\'s files would write'
+            var piOwn = ['.pi/', 'APPEND_SYSTEM', 'defaultModel', 'defaultProvider']
+
+        when:
+            var naming = []
+            Files.walk(Path.of('src/gui/java')).withCloseable { files ->
+                files.filter { it.toString().endsWith('.java') }.each { file ->
+                    var text = Files.readString(file)
+                    piOwn.findAll { text.contains(it) }.each { naming << "${file.fileName} names ${it}" }
+                }
+            }
+
+        then:
+            naming.isEmpty()
     }
 
     def 'No public method takes or returns a type that is not public'() {
