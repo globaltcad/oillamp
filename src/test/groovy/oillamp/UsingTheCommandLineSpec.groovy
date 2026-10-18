@@ -105,6 +105,7 @@ class UsingTheCommandLineSpec extends Specification {
             'status LAMP --no-windows'         | "`oillamp status` does not take --no-windows" | 'oillamp status <dir>'
             'view LAMP --model-service https://api.eu.edenai.run' | "`oillamp view` does not take --model-service" | 'oillamp view <dir>'
             'view LAMP --model-key-env EDENAI_API_KEY' | "`oillamp view` does not take --model-key-env" | 'oillamp view <dir>'
+            'ask LAMP hello --model azure/gpt-6.1-sol' | "`oillamp ask` does not take --model" | 'oillamp ask <dir>'
             'stop LAMP --enable-scheduling'    | "`oillamp stop` does not take --enable-scheduling" | 'oillamp stop <dir>'
             'history LAMP --in c1'             | "`oillamp history` does not take --in"   | 'oillamp history <dir>'
             'history LAMP --after e1'          | "`oillamp history` does not take --after" | 'oillamp history <dir>'
@@ -129,6 +130,7 @@ class UsingTheCommandLineSpec extends Specification {
                      'remove LAMP --dry-run', 'remove LAMP -y', 'recordings LAMP --prune --dry-run', '--no-color list',
                      'config LAMP check', 'completion bash',
                      'at LAMP --dry-run --model-service https://api.eu.edenai.run --model-key-env EDENAI_API_KEY',
+                     'at LAMP --dry-run --model azure/gpt-6.1-sol', 'at LAMP --dry-run --model=llama3.2:3b',
                      'at LAMP --dry-run --enable-scheduling', 'doctor --no-install',
                      'config LAMP check --dry-run --no-install', 'view LAMP --view-only',
                      'recordings LAMP --open 20260101-120000', 'remove LAMP --yes --embedded',
@@ -325,6 +327,7 @@ class UsingTheCommandLineSpec extends Specification {
             Files.writeString(script, outcome.console())
             complete(script, 'oillamp', 'sta').containsAll(['status'])
             complete(script, 'oillamp', 'at', '/x', '--dry').containsAll(['--dry-run'])
+            complete(script, 'oillamp', 'at', '/x', '--model').containsAll(['--model', '--model-service', '--model-key-env'])
             !complete(script, 'oillamp', 'config', '').contains('check')
             complete(script, 'oillamp', 'config', '/x', '').containsAll(['check', 'show-effective', 'path'])
 
@@ -358,6 +361,8 @@ class UsingTheCommandLineSpec extends Specification {
             'at LAMP --model-service=ftp://models.example'         | '--model-service "ftp://models.example": expected a scheme'
             'at LAMP --model-key-env not-a-name'                   | '--model-key-env "not-a-name": expected the name of an environment variable'
             'at LAMP --model-key-env=not-a-name'                   | '--model-key-env "not-a-name": expected the name of an environment variable'
+            'at LAMP --model azure/gpt‑6.1'                        | '--model "azure/gpt‑6.1": expected a model as the service names it'
+            'at LAMP --model=azure/gpt‑6.1'                        | '--model "azure/gpt‑6.1": expected a model as the service names it'
             'ask LAMP --after e1 hello'                            | '--after and --instead-of name an entry of the conversation that --in names'
             'ask LAMP --after=e1 hello'                            | '--after and --instead-of name an entry of the conversation that --in names'
             'ask LAMP --instead-of e1 hello'                       | '--after and --instead-of name an entry of the conversation that --in names'
@@ -398,14 +403,18 @@ class UsingTheCommandLineSpec extends Specification {
             'schedule LAMP add hi --expires' | '--expires needs a value, for example --expires "in 14d"'       | 'oillamp schedule <dir>'
             'at LAMP --model-service'      | '--model-service needs a value, for example --model-service https://api.eu.edenai.run' | 'oillamp at <dir>'
             'at LAMP --model-key-env'      | '--model-key-env needs a value, for example --model-key-env MY_MODEL_KEY' | 'oillamp at <dir>'
+            'at LAMP --model'              | '--model needs a value, for example --model azure/gpt-6.1-sol' | 'oillamp at <dir>'
     }
 
-    def 'A model service or key variable that cannot be right is refused before anything starts: oillamp #line'() {
+    def 'A model service, key variable or model that cannot be right is refused before anything starts: oillamp #line'() {
         reportInfo """
             `--model-service` and `--model-key-env` override the lamp's [model] settings for one
             session. The key is sent to that service, so an address that is not https, or a
             variable name the shell could never have set, is refused at once, in the same words
-            as the same mistake in oillamp.toml would be.
+            as the same mistake in oillamp.toml would be. `--model` names the model every run is
+            answered by. No service names a model with a space or a character outside ASCII,
+            such as the non-breaking hyphen a copy from a web page can bring along, so such a
+            name is refused too, rather than failing every run of the session.
         """
         when:
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
@@ -423,6 +432,8 @@ class UsingTheCommandLineSpec extends Specification {
             'at LAMP --model-service https://models.example?x'  | 'expected a scheme, a host'
             'at LAMP --model-key-env 1PASSWORD'                 | 'expected the name of an environment variable, such as EDENAI_API_KEY'
             'at LAMP --model-key-env $EDENAI_API_KEY'           | 'expected the name of an environment variable'
+            'at LAMP --model azure/gpt‑6.1-sol'                 | 'expected a model as the service names it, such as azure/gpt-6.1-sol, without spaces'
+            'at LAMP --model=gpt-6.1-sol\u00a0'                 | 'expected a model as the service names it'
     }
 
     def 'After --, every argument is taken as written, even one that looks like an option'() {

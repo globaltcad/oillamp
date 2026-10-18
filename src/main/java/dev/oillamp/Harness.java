@@ -19,8 +19,15 @@ import dev.lamp.LampEvent.RunOutcome;
 ///
 /// A session has at most one, and only the session's runs use it, one at a time, so the agent
 /// never works on two things at once. pi starts with the first run and stays for the next ones.
-/// Each run begins a new pi conversation, named after the run, so that it starts with a clear
-/// head; what it should remember from earlier runs is in the prompt.
+/// A run begins a new pi conversation, named after the run, so that it starts with a clear head;
+/// what it should remember from earlier runs is in the prompt. Only a question asked in a
+/// conversation continues that one.
+///
+/// A session given a model with `--model` has every run answered by it, in a new conversation and
+/// in an old one alike. pi remembers in each conversation's file which model it was on, and goes
+/// back to that model when the conversation is opened again, so without this an old conversation
+/// would stay on its first model whatever the session was given. Earlier answers keep the model
+/// that gave them; only the next answer comes from the session's model.
 ///
 /// pi reads and writes one JSON object per line: commands on its input, and replies and events on
 /// its output. Its documentation is in the sandbox, at
@@ -37,16 +44,23 @@ final class Harness implements AutoCloseable {
     /// The command of oillamp's extension that moves within a conversation, and how it says it could not.
     private static final String MOVE = "oillamp-goto";
     private static final String COULD_NOT_MOVE = "oillamp: could not move: ";
+    /// pi's provider for the lamp's model service: the one the pi-edenai extension adds, which the
+    /// image installs. It reaches whichever service the lamp uses, through the relay, so it is
+    /// the only provider pi in a lamp has.
+    private static final String PROVIDER = "edenai";
 
     private final Machine machine;
     private final LampLayout layout;
+    /// The model every run is answered by, as the service names it; empty to leave it to pi.
+    private final Optional<String> model;
     private Optional<Machine.Conversation> pi = Optional.empty();
     private int commands;
     private volatile boolean stopping;
 
-    Harness(Machine machine, LampLayout layout) {
+    Harness(Machine machine, LampLayout layout, Optional<String> model) {
         this.machine = machine;
         this.layout = layout;
+        this.model = model;
     }
 
     /// How a run ended, the agent's last message, and the conversation it happened in.
@@ -96,9 +110,15 @@ final class Harness implements AutoCloseable {
                     if (couldNot.isPresent()) return failed("pi could not go to entry " + target.get().moveTo().get() + ": " + couldNot.get());
                 }
             }
-            Optional<String> conversation = answer(agent, command("get_state"))
-                    .map(state -> state.path("data").path("sessionId").asText("")).filter(id -> !id.isEmpty());
+            Optional<JsonNode> state = answer(agent, command("get_state"));
+            Optional<String> conversation = state
+                    .map(s -> s.path("data").path("sessionId").asText("")).filter(id -> !id.isEmpty());
             conversation.ifPresent(id -> progress.accept(new LampEvent.Progress.Opened(id)));
+            if (model.isPresent()) {
+                Optional<String> couldNot = switchModel(agent, state, model.get());
+                if (couldNot.isPresent())
+                    return failed("pi could not switch to the model " + model.get() + ": " + couldNot.get()).in(conversation);
+            }
             if (cancelled.getAsBoolean()) return new Answer(RunOutcome.CANCELLED, "").in(conversation);
             ObjectNode ask = command("prompt").put("message", prompt);
             if (!accepted(answer(agent, ask))) return failed("pi did not accept the prompt").in(conversation);
@@ -288,6 +308,26 @@ final class Harness implements AutoCloseable {
             declineDialog(agent, record.get());
         }
         return Optional.of("pi did not say it had moved");
+    }
+
+    /// Makes pi answer with `wanted` from now on, unless it already does.
+    ///
+    /// pi is only told when its model is another one, because telling it is not free of
+    /// consequences even for the model it is on: it writes a `model_change` entry into the
+    /// conversation's file every time, and sets the thinking level again from its settings,
+    /// which can differ from the level the conversation was on.
+    ///
+    /// @param state pi's answer to `get_state`, which says the model it is on now
+    /// @return why pi could not, or empty once it answers with `wanted`
+    private Optional<String> switchModel(Machine.Conversation agent, Optional<JsonNode> state, String wanted)
+            throws IOException, InterruptedException {
+        JsonNode current = state.map(s -> s.path("data").path("model")).orElse(JsonUtil.object());
+        if (current.path("provider").asText().equals(PROVIDER) && current.path("id").asText().equals(wanted))
+            return Optional.empty();
+        Optional<JsonNode> reply = answer(agent, command("set_model").put("provider", PROVIDER).put("modelId", wanted));
+        if (reply.isEmpty()) return Optional.of("pi did not answer");
+        if (!accepted(reply)) return Optional.of(reply.get().path("error").asText("pi refused"));
+        return Optional.empty();
     }
 
     /// pi failed, unless the session is ending: then it stopped waiting for pi, and pi did not fail.

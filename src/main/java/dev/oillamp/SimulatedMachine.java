@@ -71,6 +71,7 @@ final class SimulatedMachine implements Machine {
     private final Optional<InputStream> standardInput;
     private final RealMachine realMachine = new RealMachine();
     private final Optional<SimulatedAgent> agent;
+    private final Optional<Tuple<String>> modelsOffered;
 
     /// The sockets the simulated container is listening on, and whether it is still up.
     ///
@@ -104,6 +105,7 @@ final class SimulatedMachine implements Machine {
         this.randomToken = builder.randomToken;
         this.interactive = builder.interactive;
         this.agent = builder.agent;
+        this.modelsOffered = builder.modelsOffered;
     }
 
     /// A clock that stands still, unless a scenario asked for one that moves.
@@ -467,7 +469,7 @@ final class SimulatedMachine implements Machine {
         boolean pi = command.argv().any(argument -> argument.contains("pi --mode rpc"));
         if (!pi || agent.isEmpty())
             return new SimulatedPi.Gone(pi ? "bash: line 1: pi: command not found" : "not simulated: " + command.commandLine());
-        return new SimulatedPi(agent.get(), agentHome(command));
+        return new SimulatedPi(agent.get(), agentHome(command), modelsOffered);
     }
 
     /// The agent's home of the lamp an ssh command reaches, found from the `ssh_config` it names,
@@ -490,13 +492,31 @@ final class SimulatedMachine implements Machine {
     /// files in the agent's home, starts and opens them, moves within them with oillamp's
     /// extension command, hands each prompt to the scenario's [SimulatedAgent], and reports the
     /// answer the way pi does.
+    ///
+    /// It keeps track of its model as pi does, too. A new conversation starts on the default
+    /// model in pi's settings in the agent's home, and records it with its first entry after its
+    /// name. An opened one goes back to the model it was last on: the last `model_change` entry or
+    /// answer in its file. `set_model` switches the model and records a `model_change`, even when
+    /// the model is the one it was on, and each answer names the model that gave it.
     private static final class SimulatedPi implements Conversation {
 
         private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
         private static final String SESSIONS = ".pi/agent/sessions/--home-agent-workspace--";
+        /// The provider pi-edenai adds, and the model pi starts on when its settings name none.
+        private static final String PROVIDER = "edenai";
+        private static final String DEFAULT_MODEL = "openai/gpt-4o";
 
         private final SimulatedAgent agent;
         private final Optional<Path> home;
+        /// The models `set_model` accepts; empty to accept any.
+        private final Optional<Tuple<String>> offered;
+        /// The model pi answers with now, as provider and id.
+        private String provider = PROVIDER;
+        private String model = DEFAULT_MODEL;
+        /// The `model_change` a new conversation starts with. Like pi, the stand-in writes it only
+        /// with the conversation's first entry after its name, so that a conversation is never in
+        /// its file without the name a job's run gives it.
+        private Optional<com.fasterxml.jackson.databind.node.ObjectNode> startingModel = Optional.empty();
         private final BlockingQueue<Optional<String>> output = new LinkedBlockingQueue<>();
         private volatile Optional<Thread> working = Optional.empty();
         private volatile boolean closed;
@@ -506,9 +526,11 @@ final class SimulatedMachine implements Machine {
         private Optional<String> leaf = Optional.empty();
         private int entries;
 
-        SimulatedPi(SimulatedAgent agent, Optional<Path> home) {
+        SimulatedPi(SimulatedAgent agent, Optional<Path> home, Optional<Tuple<String>> offered) {
             this.agent = agent;
             this.home = home;
+            this.offered = offered;
+            useTheDefaultModel();
         }
 
         @Override public synchronized void send(String line) throws IOException {
@@ -537,8 +559,25 @@ final class SimulatedMachine implements Machine {
                     write(JSON.createObjectNode().put("type", "session_info").put("name", command.path("name").asText()));
                     say(response(id, type, true));
                 }
-                case "get_state" -> say(response(id, type, true).set("data",
-                        JSON.createObjectNode().put("sessionId", sessionId).put("sessionFile", file.map(Path::toString).orElse(""))));
+                case "get_state" -> {
+                    com.fasterxml.jackson.databind.node.ObjectNode data = JSON.createObjectNode()
+                            .put("sessionId", sessionId).put("sessionFile", file.map(Path::toString).orElse(""));
+                    data.putObject("model").put("provider", provider).put("id", model);
+                    say(response(id, type, true).set("data", data));
+                }
+                case "set_model" -> {
+                    String wantedProvider = command.path("provider").asText();
+                    String wanted = command.path("modelId").asText();
+                    if (!wantedProvider.equals(PROVIDER) || offered.filter(models -> !models.contains(wanted)).isPresent()) {
+                        say(response(id, type, false).put("error", "Model not found: " + wantedProvider + "/" + wanted));
+                        return;
+                    }
+                    provider = wantedProvider;
+                    model = wanted;
+                    writeTheStartingModel();
+                    write(modelChange());
+                    say(response(id, type, true).set("data", JSON.createObjectNode().put("provider", provider).put("id", model)));
+                }
                 case "get_commands" -> {
                     com.fasterxml.jackson.databind.node.ObjectNode data = JSON.createObjectNode();
                     data.putArray("commands").addObject().put("name", "oillamp-goto").put("source", "extension");
@@ -561,31 +600,75 @@ final class SimulatedMachine implements Machine {
                     }
                     if (file.isEmpty()) start();
                     say(response(id, type, true));
+                    writeTheStartingModel();
                     write(message("user", prompt, "stop", ""));
-                    working = Optional.of(Thread.ofVirtual().name("simulated-pi").start(() -> work(prompt)));
+                    String answering = model;
+                    working = Optional.of(Thread.ofVirtual().name("simulated-pi").start(() -> work(prompt, answering)));
                 }
                 default -> say(response(id, type, false).put("error", "not simulated: " + type));
             }
         }
 
-        /// A new conversation, in a file of its own, as pi names them.
+        /// A new conversation, in a file of its own, as pi names them, on pi's default model.
         private void start() {
             sessionId = UUID.randomUUID().toString();
             leaf = Optional.empty();
             file = home.map(h -> h.resolve(SESSIONS).resolve(Instant.now().toString().replace(':', '-') + "_" + sessionId + ".jsonl"));
             append(JSON.createObjectNode().put("type", "session").put("version", 3).put("id", sessionId)
                     .put("timestamp", Instant.now().toString()).put("cwd", "/home/agent/workspace"));
+            useTheDefaultModel();
+            startingModel = Optional.of(modelChange());
         }
 
-        /// Opens a conversation, which stands at its last entry.
+        /// Opens a conversation, which stands at its last entry, on the model it was last on.
         private void open(Path opened) throws IOException {
             file = Optional.of(opened);
             leaf = Optional.empty();
+            startingModel = Optional.empty();
+            useTheDefaultModel();
             for (String line : Files.readAllLines(opened)) {
                 com.fasterxml.jackson.databind.JsonNode record = JSON.readTree(line);
                 if (record.path("type").asText().equals("session")) sessionId = record.path("id").asText();
                 else if (record.path("id").isTextual()) leaf = Optional.of(record.path("id").asText());
+                if (record.path("type").asText().equals("model_change")) {
+                    provider = record.path("provider").asText();
+                    model = record.path("modelId").asText();
+                } else if (record.path("message").path("role").asText().equals("assistant")
+                        && record.path("message").path("model").isTextual()) {
+                    provider = record.path("message").path("provider").asText();
+                    model = record.path("message").path("model").asText();
+                }
             }
+        }
+
+        /// The model pi's settings in the agent's home name, as Genies writes them, or pi's own
+        /// default when they name none.
+        private void useTheDefaultModel() {
+            provider = PROVIDER;
+            model = DEFAULT_MODEL;
+            Optional<Path> settings = home.map(h -> h.resolve(".pi/agent/settings.json")).filter(Files::isRegularFile);
+            if (settings.isEmpty()) return;
+            try {
+                com.fasterxml.jackson.databind.JsonNode read = JSON.readTree(Files.readString(settings.get()));
+                if (read.path("defaultModel").isTextual()) {
+                    provider = read.path("defaultProvider").asText(PROVIDER);
+                    model = read.path("defaultModel").asText();
+                }
+            } catch (IOException unreadable) {
+                // pi starts on its own default then, too.
+            }
+        }
+
+        /// The entry recording the model pi is on, as pi writes one when a conversation starts and
+        /// whenever it is told to switch.
+        private com.fasterxml.jackson.databind.node.ObjectNode modelChange() {
+            return JSON.createObjectNode().put("type", "model_change").put("provider", provider).put("modelId", model);
+        }
+
+        /// Writes the `model_change` a new conversation starts with, if it is not written yet.
+        private void writeTheStartingModel() {
+            startingModel.ifPresent(this::write);
+            startingModel = Optional.empty();
         }
 
         /// What oillamp's extension does: at a question, stand just before it; anywhere else, stand there.
@@ -612,7 +695,7 @@ final class SimulatedMachine implements Machine {
                     .put("method", "notify").put("message", message));
         }
 
-        private void work(String prompt) {
+        private void work(String prompt, String answering) {
             say(JSON.createObjectNode().put("type", "agent_start"));
             String stop = "stop";
             String text = "";
@@ -649,6 +732,7 @@ final class SimulatedMachine implements Machine {
                     say(delta("text_delta", word));
             }
             com.fasterxml.jackson.databind.node.ObjectNode message = message("assistant", text, stop, error);
+            ((com.fasterxml.jackson.databind.node.ObjectNode) message.path("message")).put("provider", PROVIDER).put("model", answering);
             synchronized (this) {
                 write(message);
             }
@@ -855,6 +939,7 @@ final class SimulatedMachine implements Machine {
         private Duration applicationLeavesAfter = Duration.ofMillis(500);
         private Optional<InputStream> standardInput = Optional.empty();
         private Optional<SimulatedAgent> agent = Optional.empty();
+        private Optional<Tuple<String>> modelsOffered = Optional.empty();
 
         private Instant clock = Instant.parse("2026-09-22T14:15:03Z");
         private ZoneId zone = ZoneOffset.UTC;
@@ -945,6 +1030,7 @@ final class SimulatedMachine implements Machine {
         public void clockRunsFaster(long times) { this.clockRuns = true; this.clockSpeed = times; }
         public void zone(ZoneId zone) { this.zone = zone; }
         public void agent(SimulatedAgent agent) { this.agent = Optional.of(agent); }
+        public void modelsOffered(Tuple<String> models) { this.modelsOffered = Optional.of(models); }
         public void randomToken(String token) { this.randomToken = token; }
         public void scriptCommand(String prefix, Outcome outcome) { scriptedCommands.put(prefix, outcome); }
         public void filesystemType(String type) { this.filesystemType = type; }

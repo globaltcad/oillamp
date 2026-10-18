@@ -56,6 +56,9 @@ import sprouts.Tuple;
 /// The key goes to the engine in its environment, which only this user can read, and never onto
 /// its command line or into the lamp.
 ///
+/// An application that lets its user choose the model also gives that, with [Starting#model]. The
+/// agent then answers every question with it, in old conversations too.
+///
 /// Public because this is what an application uses oillamp through.
 public final class Lamp implements AutoCloseable {
 
@@ -109,7 +112,7 @@ public final class Lamp implements AutoCloseable {
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
     public static Starting at(Path directory) {
         return new Starting(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
-                            Optional.empty(), Optional.empty(), false);
+                            Optional.empty(), Optional.empty(), Optional.empty(), false);
     }
 
     /// Starts the engine as a separate process, with `arguments` after the engine's main class
@@ -130,6 +133,7 @@ public final class Lamp implements AutoCloseable {
         private final Launcher launcher;
         private final Optional<URI> modelService;
         private final Optional<String> modelKey;
+        private final Optional<String> model;
         private final boolean scheduling;
 
         private Starting(
@@ -138,6 +142,7 @@ public final class Lamp implements AutoCloseable {
             final Launcher launcher,
             final Optional<URI> modelService,
             final Optional<String> modelKey,
+            final Optional<String> model,
             final boolean scheduling
         ) {
             this.directory = directory;
@@ -145,6 +150,7 @@ public final class Lamp implements AutoCloseable {
             this.launcher = launcher;
             this.modelService = modelService;
             this.modelKey = modelKey;
+            this.model = model;
             this.scheduling = scheduling;
         }
 
@@ -159,11 +165,11 @@ public final class Lamp implements AutoCloseable {
         public Starting onEvent(Consumer<LampEvent> listener) {
             List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
             more.add(listener);
-            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, scheduling);
+            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, scheduling);
         }
 
         public Starting launchedBy(Launcher launcher) {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, scheduling);
         }
 
         /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -174,7 +180,7 @@ public final class Lamp implements AutoCloseable {
         /// Only Eden AI's models are filtered to those served in the EU. Any other service's
         /// models are all offered, since its model list names no regions.
         public Starting modelService(URI service) {
-            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, scheduling);
+            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, scheduling);
         }
 
         /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
@@ -183,14 +189,34 @@ public final class Lamp implements AutoCloseable {
         /// @throws IllegalArgumentException when `key` is blank, which would only fail later
         public Starting modelKey(String key) {
             if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), scheduling);
+            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, scheduling);
         }
 
         /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
         /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
         /// changed.
         public Starting enableScheduling() {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, true);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, true);
+        }
+
+        /// Has the agent answer every question with `id`, a model as the service names it, such
+        /// as `azure/gpt-6.1-sol` from [Lamp#models]. It applies to new conversations and to old
+        /// ones alike: a question in a conversation that was on another model is answered by this
+        /// one, and the earlier answers keep the model that gave them.
+        ///
+        /// Without it, a new conversation gets the default model in pi's settings in the agent's
+        /// home, and an old one stays on the model it was last on.
+        ///
+        /// A model the service does not offer fails each run that needs it, and the run's answer
+        /// names the model.
+        ///
+        /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
+        ///                                  model has
+        public Starting model(String id) {
+            // The engine checks the same, for the command line.
+            if (!id.matches("[\\x21-\\x7E]{1,200}"))
+                throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
+            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), scheduling);
         }
 
         /// Starts the engine, and returns at once. The sandbox is running when
@@ -201,6 +227,7 @@ public final class Lamp implements AutoCloseable {
             List<String> arguments = new ArrayList<>(List.of("at", directory.toString(), "--embedded"));
             modelService.ifPresent(service -> arguments.addAll(List.of("--model-service", service.toString())));
             modelKey.ifPresent(key -> arguments.addAll(List.of("--model-key-env", MODEL_KEY_VARIABLE)));
+            model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
             if (scheduling) arguments.add("--enable-scheduling");
             Process engine = launcher.launch(List.copyOf(arguments),
                     modelKey.map(key -> Map.of(MODEL_KEY_VARIABLE, key)).orElse(Map.of()));

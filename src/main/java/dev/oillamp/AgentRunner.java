@@ -76,7 +76,7 @@ final class AgentRunner {
         this.config = config;
         this.session = session;
         this.book = new ScheduleBook(layout);
-        this.harness = new Harness(machine, layout);
+        this.harness = new Harness(machine, layout, context.options().model().id());
     }
 
     /// Starts working, once the sandbox is up. Runs asked for before this wait until now.

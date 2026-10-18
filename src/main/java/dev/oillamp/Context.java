@@ -35,8 +35,9 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
     /// @param embedded    `--embedded`: an application started oillamp and owns the session. No
     ///                    windows open, events go to standard output as JSON lines, and the
     ///                    session ends when standard input closes
-    /// @param model       `--model-service` and `--model-key-env`: where model requests go and
-    ///                    which variable holds the key, in place of the lamp's `[model]` settings
+    /// @param model       `--model-service`, `--model-key-env` and `--model`: where model requests
+    ///                    go, which variable holds the key, in place of the lamp's `[model]`
+    ///                    settings, and which model the agent answers with
     /// @param enableScheduling `--enable-scheduling`: `schedule.enabled` is true for this session,
     ///                    whatever oillamp.toml says
     public record Options(boolean verbose, boolean debug, boolean dryRun,
@@ -92,9 +93,30 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
     /// The model settings given on the command line. Each one that is present replaces the
     /// lamp's own, for this session only. The key itself is never on the command line, which
     /// other users of the machine can read: only the name of the variable that holds it.
-    public record ModelOverride(Optional<URI> service, Optional<String> keyEnv) {
+    ///
+    /// @param id the model the agent answers with in every run of this session, as the service
+    ///           names it, such as `azure/gpt-6.1-sol`. It applies to new conversations and to old
+    ///           ones alike. oillamp.toml has no such setting, because pi keeps its own default
+    ///           model in its settings in the agent's home. Without one, pi decides as it always
+    ///           does: its default for a new conversation, and the model a conversation was last
+    ///           on for an old one
+    public record ModelOverride(Optional<URI> service, Optional<String> keyEnv, Optional<String> id) {
 
-        static final ModelOverride NONE = new ModelOverride(Optional.empty(), Optional.empty());
+        static final ModelOverride NONE = new ModelOverride(Optional.empty(), Optional.empty(), Optional.empty());
+
+        public ModelOverride {
+            Optional<String> wrong = id.flatMap(ModelOverride::idProblem);
+            if (wrong.isPresent()) throw new IllegalArgumentException("model \"" + id.get() + "\": " + wrong.get());
+        }
+
+        /// Why `id` cannot be a model's id, or empty if it can. Services name their models with
+        /// letters, digits and punctuation, such as `azure/gpt-6.1-sol` or `llama3.2:3b`, never
+        /// with spaces.
+        static Optional<String> idProblem(String id) {
+            if (id.matches("[\\x21-\\x7E]{1,200}")) return Optional.empty();
+            return Optional.of("expected a model as the service names it, such as azure/gpt-6.1-sol, "
+                             + "without spaces");
+        }
 
         public LampConfig.Model applyTo(LampConfig.Model configured) {
             return new LampConfig.Model(service.orElse(configured.service()),

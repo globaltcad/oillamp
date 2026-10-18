@@ -164,6 +164,8 @@ sealed interface Command {
                     usageOf("at"));
             case "--model-key-env" -> ProblemCatalogUtil.usage(
                     "--model-key-env needs a value, for example --model-key-env MY_MODEL_KEY", usageOf("at"));
+            case "--model" -> ProblemCatalogUtil.usage(
+                    "--model needs a value, for example --model azure/gpt-6.1-sol", usageOf("at"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -171,6 +173,7 @@ sealed interface Command {
 
         Optional<String> modelService = values.get("--model-service");
         Optional<String> modelKeyEnv = values.get("--model-key-env");
+        Optional<String> model = values.get("--model");
         if (modelService.isPresent()) {
             Optional<String> wrong = ConfigLoadingUtil.serviceProblem(modelService.get());
             if (wrong.isPresent())
@@ -181,7 +184,13 @@ sealed interface Command {
             return Result.err(ProblemCatalogUtil.usage(
                     "--model-key-env \"" + modelKeyEnv.get() + "\": expected the name of an "
                   + "environment variable, such as EDENAI_API_KEY", usageOf("at")));
-        options = options.withModel(new Context.ModelOverride(modelService.map(URI::create), modelKeyEnv));
+        if (model.isPresent()) {
+            Optional<String> wrong = Context.ModelOverride.idProblem(model.get());
+            if (wrong.isPresent())
+                return Result.err(ProblemCatalogUtil.usage(
+                        "--model \"" + model.get() + "\": " + wrong.get(), usageOf("at")));
+        }
+        options = options.withModel(new Context.ModelOverride(modelService.map(URI::create), modelKeyEnv, model));
 
         if (positional.isEmpty()) return Result.ok(new NoCommand(options));
 
@@ -330,7 +339,7 @@ sealed interface Command {
             Association.between(String.class, ValueSet.classTyped(String.class))
                 .put("at",         ValueSet.of("--init", "--dry-run", "--no-install", "--no-viewer", "--no-windows",
                                                "--embedded", "--model-service", "--model-key-env",
-                                               "--enable-scheduling"))
+                                               "--model", "--enable-scheduling"))
                 .put("view",       ValueSet.of("--view-only"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
@@ -357,7 +366,7 @@ sealed interface Command {
 
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
-            "--open", "--model-service", "--model-key-env", "--message", "--cron", "--at", "--expires",
+            "--open", "--model-service", "--model-key-env", "--model", "--message", "--cron", "--at", "--expires",
             "--in", "--after", "--instead-of");
 
     /// The commands that take a lamp directory and cannot do without it.
@@ -394,7 +403,7 @@ sealed interface Command {
 
               at <dir> [--init] [--dry-run] [--no-install] [--no-viewer] [--no-windows]
                        [--embedded] [--model-service <url>] [--model-key-env <name>]
-                       [--enable-scheduling]
+                       [--model <id>] [--enable-scheduling]
                     Set up (if needed) and run a session. Opens a shell window and a viewer
                     onto the sandbox's desktop, and stays in the foreground until the session
                     ends: Ctrl-C here, closing this terminal, or `oillamp stop <dir>`.
@@ -410,6 +419,10 @@ sealed interface Command {
                       --model-service <url>, --model-key-env <name>
                                       use this model service, and the key in this variable,
                                       instead of the lamp's [model] settings, for this session
+                      --model <id>    answer every run with this model, as the service names
+                                      it, such as azure/gpt-6.1-sol: new conversations, and old
+                                      ones that were on another model. Without it, a new
+                                      conversation gets pi's default, and an old one keeps its own
                       --enable-scheduling
                                       let jobs on the schedule wake the agent in this session,
                                       as `enabled = true` under [schedule] would

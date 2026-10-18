@@ -576,6 +576,13 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
             return this;
         }
 
+        /// The only models the agent's pi can be switched to, as the service names them, such as
+        /// a service would list them. Without this, pi takes any model it is given.
+        public SimulationBuilder modelsOffered(String... models) {
+            builder.modelsOffered(Tuple.of(String.class, models));
+            return this;
+        }
+
         /// Lets the clock move `times` as fast as a real one, so that a scenario can wait for a
         /// minute to pass in a second. Only what oillamp measures with its clock is sped up, such as
         /// how long a run has taken; waiting itself takes real time.
