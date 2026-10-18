@@ -76,6 +76,9 @@ public final class Lamp implements AutoCloseable {
     /// The variable in the engine's environment that holds instructions given with
     /// [Starting#instructions].
     static final String INSTRUCTIONS_VARIABLE = "OILLAMP_INSTRUCTIONS";
+    /// The variable in the engine's environment that holds the host-access requirements given
+    /// with [Starting#security].
+    static final String SECURITY_REQUIREMENTS_VARIABLE = "OILLAMP_SECURITY_REQUIREMENTS";
     /// The longest instructions, in bytes of UTF-8. The engine checks the same.
     static final int LONGEST_INSTRUCTIONS = 64 * 1024;
     /// What a model's id may be: printable ASCII without spaces, as every service names its
@@ -124,7 +127,8 @@ public final class Lamp implements AutoCloseable {
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
     public static Starting at(Path directory) {
         return new Starting(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
-                            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false);
+                            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false,
+                            Optional.empty());
     }
 
     /// Starts the engine as a separate process, with `arguments` after the engine's main class
@@ -148,6 +152,21 @@ public final class Lamp implements AutoCloseable {
         private final Optional<String> model;
         private final Optional<String> instructions;
         private final boolean scheduling;
+        private final Optional<Security> security;
+
+        /// What the agent may do on the host, and what it is judged against.
+        ///
+        /// @param requirements the user's own words: what the agent may not see, change or run.
+        ///                     Handed to the checking model with every request, and to no one else
+        public record Security(String requirements) {
+            public Security {
+                if (requirements == null || requirements.isBlank())
+                    throw new IllegalArgumentException("the host-access requirements cannot be blank");
+                if (requirements.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
+                    throw new IllegalArgumentException("the host-access requirements cannot be longer than "
+                                                       + LONGEST_INSTRUCTIONS / 1024 + " KiB");
+            }
+        }
 
         private Starting(
             final Path directory,
@@ -157,7 +176,8 @@ public final class Lamp implements AutoCloseable {
             final Optional<String> modelKey,
             final Optional<String> model,
             final Optional<String> instructions,
-            final boolean scheduling
+            final boolean scheduling,
+            final Optional<Security> security
         ) {
             this.directory = directory;
             this.listeners = listeners;
@@ -167,6 +187,7 @@ public final class Lamp implements AutoCloseable {
             this.model = model;
             this.instructions = instructions;
             this.scheduling = scheduling;
+            this.security = security;
         }
 
         /// Receives every event the engine reports, in order, from the moment it starts.
@@ -180,11 +201,11 @@ public final class Lamp implements AutoCloseable {
         public Starting onEvent(Consumer<LampEvent> listener) {
             List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
             more.add(listener);
-            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling);
+            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
         }
 
         public Starting launchedBy(Launcher launcher) {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
         }
 
         /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -195,7 +216,7 @@ public final class Lamp implements AutoCloseable {
         /// Only Eden AI's models are filtered to those served in the EU. Any other service's
         /// models are all offered, since its model list names no regions.
         public Starting modelService(URI service) {
-            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling);
+            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security);
         }
 
         /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
@@ -204,14 +225,14 @@ public final class Lamp implements AutoCloseable {
         /// @throws IllegalArgumentException when `key` is blank, which would only fail later
         public Starting modelKey(String key) {
             if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security);
         }
 
         /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
         /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
         /// changed.
         public Starting enableScheduling() {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, true);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security);
         }
 
         /// Has the agent answer every question with `id`, a model as the service names it, such
@@ -233,7 +254,7 @@ public final class Lamp implements AutoCloseable {
         public Starting model(String id) {
             if (!id.matches(MODEL_ID))
                 throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security);
         }
 
         /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
@@ -254,7 +275,33 @@ public final class Lamp implements AutoCloseable {
             if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
             if (text.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
                 throw new IllegalArgumentException("instructions cannot be longer than " + LONGEST_INSTRUCTIONS / 1024 + " KiB");
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security);
+        }
+
+        /// Lets the agent reach the host machine through oillamp, as `[host_access]` in the lamp's
+        /// file would, and says what it is judged against.
+        ///
+        /// Every request from the sandbox to the host is first judged by a model, in a
+        /// conversation of its own that never sees the agent's messages: it sees the requirements,
+        /// the request, and what the run was asked to do and did just before. A refusal is final
+        /// for that request. The gate judges by your text and nothing else, so it is the text that
+        /// matters: say what must not happen.
+        ///
+        /// The feature must be on in the lamp's `oillamp.toml` already: an application gives the
+        /// rules, it does not open a door the user never asked for. The roots, the executable
+        /// allowlist and the rest stay as the file has them.
+        ///
+        /// The model that judges is the one the agent answers with, from [#model] and later
+        /// [Lamp#useModel], unless the lamp's file names a `checker_model` of its own. A lamp with
+        /// neither does not start: there is no model to judge with.
+        ///
+        /// The requirements go to the engine in its environment, like [Starting#instructions], so
+        /// that they are not on a command line any user of the machine can read.
+        ///
+        /// @throws IllegalArgumentException when the requirements are blank or longer than 64 KiB
+        public Starting security(String requirements) {
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model,
+                                instructions, scheduling, Optional.of(new Security(requirements)));
         }
 
         /// Starts the engine, and returns at once. The sandbox is running when
@@ -267,10 +314,13 @@ public final class Lamp implements AutoCloseable {
             modelKey.ifPresent(key -> arguments.addAll(List.of("--model-key-env", MODEL_KEY_VARIABLE)));
             model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
             instructions.ifPresent(text -> arguments.addAll(List.of("--instructions-env", INSTRUCTIONS_VARIABLE)));
+            security.ifPresent(rules -> arguments.addAll(List.of("--security-requirements-env",
+                    SECURITY_REQUIREMENTS_VARIABLE)));
             if (scheduling) arguments.add("--enable-scheduling");
             Map<String, String> environment = new HashMap<>();
             modelKey.ifPresent(key -> environment.put(MODEL_KEY_VARIABLE, key));
             instructions.ifPresent(text -> environment.put(INSTRUCTIONS_VARIABLE, text));
+            security.ifPresent(rules -> environment.put(SECURITY_REQUIREMENTS_VARIABLE, rules.requirements()));
             Process engine = launcher.launch(List.copyOf(arguments), Map.copyOf(environment));
             Lamp lamp = new Lamp(directory, launcher, engine, listeners, true);
             Thread.ofVirtual().name("lamp-events-" + directory.getFileName()).start(lamp::readEvents);

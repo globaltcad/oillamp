@@ -12,6 +12,8 @@ record Forward(String name, int port, HostAndPort target) {
     public static final int PROXY_PORT = 3128;
     /// The port inside the sandbox where the harnesses reach the model service, through oillamp.
     public static final int MODEL_PORT = 3129;
+    /// The port inside the sandbox where the host tools reach oillamp's gate, while it is on.
+    public static final int HOST_ACCESS_PORT = 3131;
 
     public Forward {
         if (!name.matches("[a-z0-9-]+"))

@@ -327,6 +327,14 @@ design prepared was needed.
 
 ---
 
+## Supervised host access
+
+The agent can reach the host only through the tools in [HOST-ACCESS.md](HOST-ACCESS.md), only in a
+lamp whose `oillamp.toml` turns it on, and only for a request a separate model call allows. It is
+built and covered by `ReachingTheHostSpec`, against the simulated machine and a stand-in checker;
+it has not been tried yet in a real sandbox with a real model. See "Planned but not built" below
+for what is still missing from it.
+
 ## Known gaps
 
 Places where the code does less than the configuration, the help text or the original design
@@ -354,6 +362,20 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   it are new and Debian's packages are as old as before. Telling the two apart would mean
   reading the age of the cached apt layers (`podman history`), or remembering the last
   `--system` build per lamp. Undecided.
+
+### Host access, still missing
+
+- The clipboard tools are refused with a "not built yet" answer: nothing on the host reads or
+  writes the user's selection, because that needs a tool oillamp does not carry.
+- Asking the user works through the session: the question is an event, and the answer goes back
+  on the control socket as `host-access-answer`. There is no command yet to answer it from a
+  terminal, and the `Lamp` API has no method for it, so outside a test a request that needs the
+  person waits its minute and is refused.
+- `host_run` and the `ask_the_user` path are covered against the simulated machine only.
+- An application's `.security(...)` replaces the file's rules, but the file still has to carry
+  requirements of its own while `enabled = true`, or it does not load.
+- The checker has not been tried against Eden AI with real requirements, only against a stand-in
+  answering fixed JSON.
 
 ### Things that are described but do not exist
 

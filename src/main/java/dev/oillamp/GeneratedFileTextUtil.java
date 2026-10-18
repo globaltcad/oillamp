@@ -153,6 +153,27 @@ final class GeneratedFileTextUtil {
             max_agent_runs_per_day     = 48   # agent jobs due beyond this, in any 24 hours, are skipped
             max_run_minutes            = 30   # any run that takes longer is stopped, yours included
             notes_max_kb               = 8    # how large the agent's ~/workspace/NOTES.md may grow
+
+            # Let the agent reach this machine - read a document, put a file where you will find
+            # it, open a page - always through oillamp, which asks a model about every request
+            # first. That model sees your requirements below, the request, and what the agent was
+            # asked to do and did just before; it does not see the agent's own conversation.
+            # Turning this on means your model service sees your requirements, the agent's
+            # instruction, and the names and contents of the files it touches. Off unless you
+            # turn it on.
+            [host_access]
+            enabled = false
+            # Your own words. This is the only thing the checker judges by, and the agent never
+            # sees it. Say what must not happen. Use triple single quotes for paths and regular
+            # expressions, so that a backslash is a backslash.
+            requirements = '''
+            '''
+            checker_model     = ""       # the model that judges; empty: the one the agent answers with
+            roots             = []       # absolute paths; empty means your home directory
+            max_read_bytes    = 65536    # how much of one file the agent may be handed
+            executables       = []       # programs it may ask to run here; empty: none
+            allow_additive    = true     # writing and copying files out, opening pages, notifications
+            ask_the_user      = false    # ask you, rather than refuse, a request outside roots
             """;
     }
 

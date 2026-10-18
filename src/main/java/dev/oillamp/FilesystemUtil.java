@@ -90,6 +90,32 @@ final class FilesystemUtil {
         return read.flatMap(text -> text);
     }
 
+    /// Reads the file `relative` in the agent's `home` as bytes, without following a symbolic
+    /// link anywhere below `home`, as [#readInAgentHome] reads text.
+    ///
+    /// @param largest the most bytes the file may have
+    /// @return the file's bytes; empty when the file, or a directory on the way to it, is not there
+    /// @throws LinkInAgentHome when the file or a directory on the way is a link
+    /// @throws IOException     when it is not a regular file, is larger than `largest`, or could
+    ///                         not be read
+    static Optional<byte[]> readBytesInAgentHome(Path home, Path relative, int largest) throws IOException {
+        Optional<Optional<byte[]>> read = inDirectoryOf(home, relative, false, (directory, name, where) -> {
+            Optional<BasicFileAttributes> found = attributesOf(directory, name);
+            if (found.isEmpty()) return Optional.<byte[]>empty();
+            if (found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+            if (!found.get().isRegularFile()) throw new IOException(where + " is not a regular file");
+            try (SeekableByteChannel channel = directory.newByteChannel(name,
+                         Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+                 InputStream in = Channels.newInputStream(channel)) {
+                byte[] bytes = in.readNBytes(largest + 1);
+                if (bytes.length > largest)
+                    throw new IOException(where + " is larger than " + largest / (1024 * 1024) + " MiB");
+                return Optional.of(bytes);
+            }
+        });
+        return read.flatMap(bytes -> bytes);
+    }
+
     /// Writes `content` to the file `relative` in the agent's `home`, without following a
     /// symbolic link anywhere below `home`, and makes the directories on the way that are not
     /// there yet.

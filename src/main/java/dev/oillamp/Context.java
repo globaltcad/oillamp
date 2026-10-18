@@ -45,55 +45,66 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
     public record Options(boolean verbose, boolean debug, boolean dryRun,
                           boolean autoInstall, boolean init, boolean openViewer, boolean openWindows,
                           boolean embedded,
-                          ModelOverride model, boolean enableScheduling, Optional<String> instructionsEnv) {
+                          ModelOverride model, boolean enableScheduling, Optional<String> instructionsEnv,
+                          Optional<HostAccessGrant> hostAccess) {
+
+        /// What an application asked for through the `Lamp` API, in front of the lamp's file: the
+        /// name of the variable that holds the requirements. The text itself reaches the engine in
+        /// its environment, never on its command line, because it is long and it is nobody else's
+        /// business.
+        public record HostAccessGrant(String requirementsEnv) {}
 
         public static Options defaults() {
             return new Options(false, false, false, true, false, true, true, false, ModelOverride.NONE, false,
-                               Optional.empty());
+                               Optional.empty(), Optional.empty());
         }
 
         public Options withInstructionsEnv(Optional<String> instructionsEnv) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withModel(ModelOverride model) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withDryRun(boolean dryRun) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withAutoInstall(boolean autoInstall) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withInit(boolean init) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withVerbose(boolean verbose) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withDebug(boolean debug) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withViewer(boolean openViewer) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withWindows(boolean openWindows) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withEmbedded(boolean embedded) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
+        }
+
+        public Options withHostAccess(Optional<HostAccessGrant> hostAccess) {
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
 
         public Options withScheduling(boolean enableScheduling) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess);
         }
     }
 

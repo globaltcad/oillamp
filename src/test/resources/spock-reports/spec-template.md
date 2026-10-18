@@ -30,7 +30,7 @@
 <%
     def specTitle = utils.specAnnotation( data, spock.lang.Title )?.value()
     if ( specTitle ) {
-        specTitle.split('\n').each { out << '##' << it << '\n' }
+        specTitle.split('\n').each { out << '## ' << it << '\n' }
     }
     if ( data.info.narrative ) {
         if ( specTitle ) { out << '\n' }

@@ -67,6 +67,8 @@ final class ConsoleRenderer {
     /// With wrapping off, a line that is too long is cut off at the right edge instead.
     private static final String WRAP_OFF = "\u001B[?7l", WRAP_ON = "\u001B[?7h";
     /// Colour codes and other terminal escape sequences, and control characters such as tabs.
+    /// Anything that would act on the terminal rather than be read in it: an ANSI sequence, or a
+    /// control character. Used wherever the agent's or a model's text is printed.
     static final Pattern NOT_PRINTABLE =
             Pattern.compile("\u001B\\[[0-9;?]*[ -/]*[@-~]|\u001B.|\\p{Cntrl}");
 
@@ -288,6 +290,30 @@ final class ConsoleRenderer {
             case LampEvent.AgentStatus ignored -> { }
             case LampEvent.Conversations listed -> printLine(listing(listed.conversations()));
             case LampEvent.ConversationShown shown -> printLine(describe(shown.conversation()));
+            // What the agent asked for on this machine, and what the checker said. It is printed
+            // without --verbose as well: the user is meant to see every way out, and never have
+            // to read a log to find one. The checker's reason is quoted; the agent's arguments
+            // are shortened, because they are the agent's words and can be long.
+            case LampEvent.HostAccessEnabled enabled -> printLine(area("host access")
+                    + colour(GREEN, "✓ ") + "the agent may reach this machine through "
+                    + enabled.tools().size() + (enabled.tools().size() == 1 ? " tool" : " tools")
+                    + ", each request judged by " + enabled.checker().orElse("the agent's model"));
+            case LampEvent.HostAccessRequested requested -> printLine(area("host access")
+                    + dim("· " + (requested.run().isEmpty() ? "" : requested.run() + " ") + requested.tool() + " "
+                          + shortened(NOT_PRINTABLE.matcher(requested.said()).replaceAll(" "), 90)));
+            case LampEvent.HostAccessDecided decided -> {
+                LampEvent.Verdict verdict = decided.verdict();
+                printLine(area("host access")
+                        + (verdict.allowed() ? colour(GREEN, "✓ allowed ") : colour(YELLOW, "✗ refused "))
+                        + decided.tool() + " (" + verdict.risk().name().toLowerCase(Locale.ROOT) + ", "
+                        + seconds(decided.took()) + "): " + shortened(NOT_PRINTABLE.matcher(verdict.reason()).replaceAll(" "), 120));
+            }
+            case LampEvent.HostAccessRefused refused -> printLine(area("host access")
+                    + colour(YELLOW, "✗ refused ") + refused.tool() + ": "
+                    + shortened(NOT_PRINTABLE.matcher(refused.why()).replaceAll(" "), 120));
+            case LampEvent.HostAccessAsked asked -> printLine(area("host access")
+                    + colour(YELLOW, "◉ ") + "the agent asks you to allow " + asked.tool() + ": "
+                    + shortened(NOT_PRINTABLE.matcher(asked.what()).replaceAll(" "), 120));
             case LampEvent.Warning warning -> problem(warning.problem());
             case LampEvent.Failure failure -> problem(failure.problem());
         }

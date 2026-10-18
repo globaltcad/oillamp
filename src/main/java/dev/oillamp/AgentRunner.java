@@ -49,6 +49,9 @@ final class AgentRunner {
     private final SessionId session;
     private final ScheduleBook book;
     private final Harness harness;
+    /// The session's queue. Every run's activity goes through it, so that one thread (the event
+    /// loop) is the only writer of the state the host-access gate reads.
+    private final java.util.function.Consumer<SessionEvent> post;
 
     private final LinkedBlockingDeque<Pending> queue = new LinkedBlockingDeque<>();
     private final Semaphore look = new Semaphore(0);
@@ -71,14 +74,17 @@ final class AgentRunner {
 
     /// @param instructions what the agent is told in addition to pi's own instructions, for the
     ///                     whole session; empty to leave pi's instructions as they are
+    /// @param post         puts a run's activity on the session's queue, so that the one event loop
+    ///                     keeps it in the state; the host-access gate reads it from there
     AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config, SessionId session,
-                Optional<String> instructions) {
+                Optional<String> instructions, java.util.function.Consumer<SessionEvent> post) {
         this.machine = machine;
         this.context = context;
         this.layout = layout;
         this.config = config;
         this.session = session;
         this.book = new ScheduleBook(layout);
+        this.post = post;
         this.harness = new Harness(machine, layout, context.options().model().id(), instructions);
     }
 
@@ -115,6 +121,10 @@ final class AgentRunner {
     /// Has every run from the next one on answered by `model`, as the service names it, and
     /// makes it pi's default for new conversations.
     void useModel(String model) { harness.useModel(model, context.sink()); }
+
+    /// The model the next run is answered by, as [#useModel] or `--model` last said; empty when
+    /// the session leaves it to pi.
+    Optional<String> model() { return harness.model(); }
 
     /// Stops a run: the one in progress, or one still waiting, which then never starts.
     ///
@@ -157,6 +167,10 @@ final class AgentRunner {
     }
 
     boolean busy() { return current.isPresent() || !queue.isEmpty(); }
+
+    /// The run in progress, if any. The host-access gate judges a request by this run, because
+    /// the session knows which run the agent is in and the agent's own word for it is no fact.
+    Optional<LampEvent.Run> currentRun() { return current.map(Pending::run); }
 
     /// Stops the run in progress, if any, and every waiting one, as the session ends. Waits until
     /// the run in progress is saved, for at most [#WIND_DOWN].
@@ -311,6 +325,7 @@ final class AgentRunner {
         ZoneId zone = machine.zone();
         pending.job().ifPresent(job -> startedJob(job, started, zone));
         context.sink().accept(new LampEvent.RunStarted(run));
+        post.accept(new SessionEvent.RunBegan(run.id(), run.prompt()));
 
         History history = new History(layout);
         Association<String, String> trailers = Association.between(String.class, String.class)
@@ -334,7 +349,7 @@ final class AgentRunner {
         Optional<String> name = run.job().map(job -> run.id() + " (" + job + ")");
         Harness.Answer answer = harness.run(name, prompt, config.maxRun(), pending.where(),
                 () -> cancelled.equals(Optional.of(run.id())),
-                progress -> context.sink().accept(new LampEvent.RunProgress(run.id(), progress)));
+                progress -> remember(progress, run.id()));
         if (answer.outcome() == RunOutcome.FAILED && !answer.text().isBlank() && answer.text().startsWith("pi "))
             context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.runFailed(run.id(), answer.text())));
         Instant ended = machine.now();
@@ -363,6 +378,14 @@ final class AgentRunner {
         }
         return new LampEvent.RunFinished(run, answer.outcome(), answer.text().strip(),
                 snapshot, Duration.between(started, ended), conversation);
+    }
+
+    private void remember(LampEvent.Progress progress, String run) {
+        context.sink().accept(new LampEvent.RunProgress(run, progress));
+        if (progress instanceof LampEvent.Progress.ToolStarted tool)
+            post.accept(new SessionEvent.RunToolCalled(run, tool.tool(), tool.summary()));
+        if (progress instanceof LampEvent.Progress.Thought thought)
+            post.accept(new SessionEvent.RunThought(run, thought.text()));
     }
 
     /// Records that a job's run began. A job that runs once is then done, and comes off the schedule.

@@ -49,6 +49,26 @@ sealed interface SessionEvent {
     /// The shutdown sequence has finished, with whatever went wrong along the way.
     record ShutdownCompleted(Tuple<Problem> problems) implements SessionEvent {}
 
+    /// The agent asked the host for something that needs the person at the session to decide.
+    ///
+    /// It arrives on the event queue like everything else, so the state machine decides whether
+    /// it may be asked and the supervisor asks it. The gate on the other side then waits for
+    /// `UserAnswered`, which comes back from the person.
+    ///
+    /// @param run      the run the request came from, or empty when the agent asked outside one
+    /// @param tool     the tool it named, such as `host_run`
+    /// @param question what it is, in the agent's terms, such as "run `inkscape a.svg`, in ~/Documents"
+    record HostAccessAsked(String run, String tool, String question) implements SessionEvent {}
+
+    /// The person answered a host-access question, or the answer timed out.
+    record UserAnswered(String question, boolean yes) implements SessionEvent {}
+
+    /// A run began, or did something. The session keeps these as its memory of what the agent did,
+    /// which the host-access gate reads to judge a request.
+    record RunBegan(String run, String instruction) implements SessionEvent {}
+    record RunToolCalled(String run, String tool, String summary) implements SessionEvent {}
+    record RunThought(String run, String text) implements SessionEvent {}
+
     /// What this event is called in the session log.
     default String describe() {
         return switch (this) {
@@ -65,6 +85,12 @@ sealed interface SessionEvent {
                                              + " — " + failed.problem().code();
             case ShutdownCompleted done     -> "shutdown finished with " + done.problems().size()
                                              + " problem(s)";
+            case HostAccessAsked asked      -> "the agent asks: " + asked.question();
+            case UserAnswered answered      -> "the person said " + (answered.yes() ? "yes" : "no")
+                                             + " to " + answered.question();
+            case RunBegan began             -> began.run() + " began";
+            case RunToolCalled called       -> called.run() + " ran " + called.tool();
+            case RunThought thought         -> thought.run() + " thought something";
         };
     }
 }

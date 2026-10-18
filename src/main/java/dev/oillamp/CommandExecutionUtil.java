@@ -1411,7 +1411,24 @@ final class CommandExecutionUtil {
                 + ", " + config.network().rules().size() + " rule(s), "
                 + config.forwards().size() + " forward(s)\n"
              + "image        " + config.image().base() + ", " + config.image().jdkPackage()
-                + ", node " + config.image().nodeVersion();
+                + ", node " + config.image().nodeVersion()
+             + "\nhost access  " + describeHostAccess(config.hostAccess());
+    }
+
+    /// What the sandbox may reach on the host, and what it is judged by. The requirements are the
+    /// user's own text and are printed as written: this is the command they use to check it.
+    private static String describeHostAccess(LampConfig.HostAccess access) {
+        if (!access.enabled()) return "off";
+        String roots = access.roots().isEmpty() ? "your home directory" : String.join(", ", access.roots());
+        return (access.requirements().isBlank() ? "(no requirements!)" : "on") + "\n"
+             + "               checker " + (access.checkerModel().isBlank() ? "the agent's model" : access.checkerModel())
+             + ", roots " + roots
+             + ", " + (access.allowAdditive() ? "writing and opening pages allowed" : "read only")
+             + (access.askTheUser() ? ", asks you past the roots" : "")
+             + ", " + (access.executables().isEmpty() ? "no programs" : "programs: " + String.join(", ", access.executables()))
+             + "\n"
+             + "               requirements, as the checker sees them:\n"
+             + access.requirements().lines().map(line -> "                 | " + line).reduce("", (a, b) -> a + (a.isEmpty() ? "" : "\n") + b);
     }
 
     /// Says who holds the lamp, from the `session.json` the running session wrote.

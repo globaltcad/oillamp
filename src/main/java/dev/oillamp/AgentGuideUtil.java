@@ -333,6 +333,15 @@ final class AgentGuideUtil {
     /// session over a socket; see `src/main/resources/agent/oillamp-schedule.js`.
     static String scheduleTools() { return resource("oillamp-schedule.js"); }
 
+    /// The pi extension with the host tools; see `src/main/resources/agent/oillamp-host-access.js`.
+    /// It registers only the tools `access` offers, so its list is filled in here.
+    static String hostAccessTools(LampConfig.HostAccess access) {
+        StringBuilder offered = new StringBuilder("[");
+        for (String tool : HostTool.offeredBy(access))
+            offered.append(offered.length() > 1 ? ", " : "").append('"').append(tool).append('"');
+        return resource("oillamp-host-access.js").replace("/* offered */[]", offered.append(']').toString());
+    }
+
     /// The pi extension through which the session moves within a conversation, to ask a question
     /// after an earlier entry. See `src/main/resources/agent/oillamp-conversations.js`.
     static String conversationTools() { return resource("oillamp-conversations.js"); }

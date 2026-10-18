@@ -171,6 +171,9 @@ sealed interface Command {
                     "--model needs a value, for example --model azure/gpt-6.1-sol", usageOf("at"));
             case "--instructions-env" -> ProblemCatalogUtil.usage(
                     "--instructions-env needs a value, for example --instructions-env MY_INSTRUCTIONS", usageOf("at"));
+            case "--security-requirements-env" -> ProblemCatalogUtil.usage(
+                    "--security-requirements-env needs a value, for example --security-requirements-env MY_RULES",
+                    usageOf("at"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -202,6 +205,16 @@ sealed interface Command {
                     "--instructions-env \"" + instructionsEnv.get() + "\": expected the name of an "
                   + "environment variable, such as MY_INSTRUCTIONS", usageOf("at")));
         options = options.withInstructionsEnv(instructionsEnv);
+
+        // What an application asks for with the `Lamp` API. The requirements are a long text, so
+        // the variable is named and the text is read from the environment, like the instructions.
+        Optional<String> requirementsEnv = values.get("--security-requirements-env");
+        if (requirementsEnv.isPresent() && !ConfigLoadingUtil.isVariableName(requirementsEnv.get()))
+            return Result.err(ProblemCatalogUtil.usage(
+                    "--security-requirements-env \"" + requirementsEnv.get() + "\": expected the name of an "
+                  + "environment variable, such as OILLAMP_SECURITY_REQUIREMENTS", usageOf("at")));
+        if (requirementsEnv.isPresent())
+            options = options.withHostAccess(Optional.of(new Context.Options.HostAccessGrant(requirementsEnv.get())));
 
         if (positional.isEmpty()) return Result.ok(new NoCommand(options));
 
@@ -361,7 +374,8 @@ sealed interface Command {
             Association.between(String.class, ValueSet.classTyped(String.class))
                 .put("at",         ValueSet.of("--init", "--dry-run", "--no-install", "--no-viewer", "--no-windows",
                                                "--embedded", "--model-service", "--model-key-env",
-                                               "--model", "--instructions-env", "--enable-scheduling"))
+                                               "--model", "--instructions-env", "--enable-scheduling",
+                                               "--security-requirements-env"))
                 .put("view",       ValueSet.of("--view-only"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
@@ -390,6 +404,7 @@ sealed interface Command {
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
+            "--security-requirements-env",
             "--in", "--after", "--instead-of");
 
     /// The commands that take a lamp directory and cannot do without it.
@@ -427,6 +442,7 @@ sealed interface Command {
               at <dir> [--init] [--dry-run] [--no-install] [--no-viewer] [--no-windows]
                        [--embedded] [--model-service <url>] [--model-key-env <name>]
                        [--model <id>] [--instructions-env <name>] [--enable-scheduling]
+                       [--security-requirements-env <name>]
                     Set up (if needed) and run a session. Opens a shell window and a viewer
                     onto the sandbox's desktop, and stays in the foreground until the session
                     ends: Ctrl-C here, closing this terminal, or `oillamp stop <dir>`.
@@ -455,6 +471,12 @@ sealed interface Command {
                       --enable-scheduling
                                       let jobs on the schedule wake the agent in this session,
                                       as `enabled = true` under [schedule] would
+                      --security-requirements-env <name>
+                                      for an application that decided this itself: judge the
+                                      agent's requests to the host against what this variable
+                                      holds, in place of the requirements under [host_access].
+                                      The feature must be on in the lamp's file; the model that
+                                      judges is the file's checker_model, or else the agent's
               view <dir> [--view-only]
                     Open another viewer onto a running session's desktop. Needs a display.
                     --view-only lets you watch without typing.

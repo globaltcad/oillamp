@@ -171,7 +171,8 @@ known lifetime:
 | `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start, and for the agent's requests | `oillamp schedule`, the session every 30 s | until `oillamp remove` |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save or restore runs | every other save and restore, which wait for it | the lock ends with the process |
-| `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` and, with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`; once the sandbox is up, `Harness` writes the session's instructions to `.pi/agent/APPEND_SYSTEM.md` and its model into `.pi/agent/settings.json` | the agent, you | until `oillamp remove` |
+| `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`, and with host access on,
+`.pi/agent/extensions/oillamp-host-access.js`; once the sandbox is up, `Harness` writes the session's instructions to `.pi/agent/APPEND_SYSTEM.md` and its model into `.pi/agent/settings.json` | the agent, you | until `oillamp remove` |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/sockets` (a symlink) | `LampPlanUtil.planSkeleton`, every start | every host-side socket path | in memory: gone at reboot, made again next start |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/run/*.sock` | `Supervisor` (relays, control socket) | `oillamp stop/status/view/shell`, the shell window | deleted at shutdown; a killed supervisor leaves them |
 | `~/.config/oillamp/config.toml` | you (optional) | every command that reads configuration | until you delete it |
@@ -207,12 +208,13 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   │   └── gitconfig            the name and email on the agent's commits
 │   ├── image/context/           the image build files, extracted from the jar before a build
 │   ├── sockets/                 not attached itself; each directory below is, on its own
-│   │   ├── host/                you;        proxy.sock, model.sock, fwd-*.sock, schedule.sock, desktop.sock;
+│   │   ├── host/                you;        proxy.sock, model.sock, fwd-*.sock, schedule.sock, desktop.sock,
+│   │   │                        host-access.sock (only while host access is on);
 │   │   │                        read-only in the container
 │   │   ├── infra/               infra user; vnc.sock, ready.json
 │   │   └── agent/               you;        ssh.sock
 │   ├── recordings/              infra user; <session>.mkv; attached at /oillamp/recordings
-│   ├── logs/                    network-<session>.jsonl
+│   ├── logs/                    network-<session>.jsonl, host-access-<session>.jsonl
 │   ├── history/                 the lamp's snapshots, a bare git repository; never attached
 │   ├── history.lock             locked while a save or a restore runs
 │   ├── schedule.json            the jobs that wake the agent; never attached
@@ -228,8 +230,10 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     │   │                        writes them, replacing what was there
     │   └── extensions/
     │       ├── oillamp-conversations.js   moving within a conversation; written each session
-    │       └── oillamp-schedule.js        the scheduling tools; written each session while the
-    │                                      schedule is on
+    │       ├── oillamp-schedule.js        the scheduling tools; written each session while the
+    │       │                              schedule is on
+    │       └── oillamp-host-access.js     the host tools; written each session while host
+    │                                      access is on
     ├── workspace/
     │   └── NOTES.md             the agent's notes between runs, written by the agent
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path
@@ -1507,8 +1511,57 @@ instead, explaining that it may take a while.
 | Image and container | `SandboxPhase`, `SandboxImageFilesUtil`, `ImageTag`, `ContainerName`, `RuntimeEnvFileUtil`, `ReadyInfo`, `AgentGuideUtil`, `DesktopRendererUtil` |
 | Session | `Supervisor`, `SessionMachine`, `SessionState`, `SessionEvent`, `SessionAction`, `Relay`, `Control`, `SandboxSshUtil`, `TerminalEmulatorUtil`, `VncViewerUtil` |
 | Network | `Egress`, `NetworkPolicyUtil`, `NetworkPolicy`, `Rule`, `Decision`, `HostPattern`, `Cidr`, `IpAddress`, `PortRange`, `HostAndPort`, `Forward` |
+| Host access | `HostAccess` (the socket and the order of a request), `HostTool` (the tools, their tiers, and how a request and a verdict are read), `HostPaths` (resolving a path against the roots), `HostAccessChecker` (the model call), `HostAccessTools` (the effects on the host), `HostAccessProblems` |
 
 ---
+
+## Supervised host access
+
+Planned and built as described in [HOST-ACCESS.md](HOST-ACCESS.md); this is where it sits in the
+running session.
+
+The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on, and the
+entrypoint bridges `127.0.0.1:3131` in the sandbox to it only while `OILLAMP_HOST_ACCESS` is `1`.
+One JSON line per connection is read by [Control.Server][Control.Server], as on the schedule and
+desktop sockets, and handed to `HostAccess.answer` on that connection's thread.
+
+`HostAccess.answer` is the order in which a request becomes an effect:
+
+1. `HostTool.read` turns the line into a tool call, or refuses it before anything else. A line
+   that is not a request is not logged.
+2. `HostTool.closedBecause` refuses a request in a tier the lamp closed: no program, no writing,
+   no pages opened.
+3. `HostPaths.locate` resolves every path it names on the host (`~` is the probed user's home;
+   `.` and `..` are refused), then anything inside the lamp or its state is refused, compared
+   with links followed on both sides. `HostPaths.within` checks the roots: a path outside them is
+   refused, or with `ask_the_user` marked for the person.
+4. What the tool rules out by itself: `host_show` of a file the desktop would run
+   (`HostAccessTools.whyNotShown`), and `host_copy_out` from outside the sandbox's home.
+5. `HostAccessChecker.check` asks the model, in a conversation of its own, and `HostTool.verdict`
+   reads the answer; anything unreadable, untimed, or unreachable is a refusal.
+6. An executing request, or (with `ask_the_user`) an allowed request outside the roots, goes to
+   the person: `SessionEvent.HostAccessAsked` on the event queue. The state machine asks one
+   question at a time, and only while the session runs; any other is declined at once. The
+   supervisor keeps one future per question, answered by `host-access-answer` on the control
+   socket, and timed out after `HostAccess.USER_PATIENCE`.
+7. `HostAccessTools.perform` does the work, after the paths are resolved once more.
+
+The run a request is judged by is the one `AgentRunner` is working on; the request does not name
+it. What each run was asked and did is a value in the session state (`SessionState.runs()`),
+written by the event loop from `SessionEvent.RunBegan`, `RunToolCalled` and `RunThought`, which
+the runner posts only while host access is on; the gate reads it, so the activity has one writer
+like everything else in the session. Every request is written to
+`.oillamp/logs/host-access-<session>.jsonl`.
+
+The extension in the sandbox is written with the list of tools the lamp offers
+(`AgentGuideUtil.hostAccessTools`), and registers only those.
+
+The checker reaches the model service as `Egress` does, with the same key read on the host, so the
+sandbox holds neither. Its model is the lamp's `checker_model` when the file names one, and
+otherwise the model the agent answers with, read from the session's runner for every request
+(`HostAccessChecker.forSession`, `AgentRunner.model`), so it follows `oillamp model`. A session
+with the feature on and neither is refused as it starts (`LampPhase.hostAccessInForce`,
+`OIL-HOSTACCESS-015`).
 
 ## Packaging
 
@@ -1606,6 +1659,14 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `schedule.max_agent_runs_per_day` | 48 | runs of the agent's jobs in any 24 hours; more are skipped (0–1440) | yes |
 | `schedule.max_run_minutes` | 30 | any run, yours too, is stopped after this (1–1440) | yes |
 | `schedule.notes_max_kb` | 8 | how large the agent's `NOTES.md` may be; the prompt shows no more (1–1024) | yes |
+| `host_access.enabled` | false | let the agent reach the host through oillamp, every request judged first; off unless set ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
+| `host_access.requirements` | `""` | the user's own words, the only thing the checker judges by; required when it is enabled | yes |
+| `host_access.checker_model` | `""` | the model that judges, as the service names it; empty means the model the agent answers with | yes |
+| `host_access.roots` | `[]` | absolute host paths the tools may name; empty means the user's home directory | yes |
+| `host_access.max_read_bytes` | 65536 | how much of one host file the agent may be handed (1–16777216) | yes |
+| `host_access.executables` | `[]` | programs the agent may ask to run on the host; empty closes the executing tier | yes |
+| `host_access.allow_additive` | true | offer writing, copying out, opening pages and notifications at all | yes |
+| `host_access.ask_the_user` | false | ask the user, rather than refuse, about an allowed request outside `roots` | yes |
 
 `oillamp config <dir> check` validates, `show-effective` prints a summary of the merged result,
 `path` prints the file's path. `check` and `show-effective` merge the global file and the lamp's,
@@ -1701,4 +1762,19 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-SANDBOX-006` | Warning: podman did not say whether the sandbox is running; the session carries on. |
 | `OIL-EXEC-001` | A required command is not on `PATH`. |
 | `OIL-USAGE-001` | Invalid command line. |
+| `OIL-HOSTACCESS-001` | The agent asked for a host tool this lamp does not offer. |
+| `OIL-HOSTACCESS-002` | A host tool was called without the arguments it reads. |
+| `OIL-HOSTACCESS-003` | A host path is outside the lamp's `host_access.roots`. |
+| `OIL-HOSTACCESS-004` | The checker refused a host request. |
+| `OIL-HOSTACCESS-005` | The checker's answer was not a verdict. |
+| `OIL-HOSTACCESS-006` | The checker could not be asked. |
+| `OIL-HOSTACCESS-007` | The checker did not answer in time. |
+| `OIL-HOSTACCESS-008` | The user did not answer, so the request was refused. |
+| `OIL-HOSTACCESS-009` | The user refused a host request. |
+| `OIL-HOSTACCESS-010` | The host could not do what was allowed. |
+| `OIL-HOSTACCESS-011` | The host tools socket received something that is not a request. |
+| `OIL-HOSTACCESS-012` | Host access is on, but the checker has no key. |
+| `OIL-HOSTACCESS-013` | A request needed the user, and the user could not be asked. |
+| `OIL-HOSTACCESS-014` | An application gave host-access rules for a lamp whose file has the feature off. |
+| `OIL-HOSTACCESS-015` | Host access is on, but no model judges: no `checker_model`, and no model for the session. |
 | `OIL-INTERNAL-001` | A bug in oillamp. |

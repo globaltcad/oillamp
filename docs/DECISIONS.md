@@ -449,6 +449,20 @@ every run is saved before and after.
 *Given up:* the reader depends on pi's session file format (version 3). A change to it in a new pi
 needs a change in `PiSessionFile`. *(added on 2026-09-30)*
 
+### Host access, when it exists, is judged on the host by a model with its own prompt
+
+Planned, not built; see [HOST-ACCESS.md](HOST-ACCESS.md). The agent gets typed tools whose
+implementation is on the host. Each request is judged by a separate model call that sees the
+user's requirements, the request and the run's activity, but never the agent's conversation. The
+tools are in tiers, deterministic checks enforce the outermost one, and the feature is off by
+default with no command-line switch.
+
+*Why:* permission dialogues are for people who enjoy permission dialogues. A judgement call made
+per request, bounded by checks that do not depend on the model, and off unless asked for, is the
+smallest thing that can work. The threat is a prompt injection, so the judge must not share the
+poisoned context, and the judge may only ever tighten what the checks allow. *(added on
+2026-10-18)*
+
 ---
 
 ## Host setup

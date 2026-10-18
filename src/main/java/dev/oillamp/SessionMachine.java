@@ -2,6 +2,7 @@ package dev.oillamp;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
@@ -88,11 +89,11 @@ record SessionMachine(Settings settings) {
             case SessionEvent.ContainerExited exited -> containerExited(state, exited, now);
 
             case SessionEvent.ContainerReady ready when state instanceof SessionState.Starting ->
-                    started(ready, now);
+                    started(ready, now, state.runs());
 
             case SessionEvent.PrimaryConnected ignored
                     when state instanceof SessionState.AwaitingTerminal awaiting ->
-                    Transition.to(new SessionState.Running(now, awaiting.ready(), true, 0),
+                    Transition.to(new SessionState.Running(now, awaiting.ready(), true, 0, Optional.empty(), awaiting.runs()),
                             new SessionAction.Announce(
                                 new LampEvent.Ok("session",
                                     "your sandbox shell is connected — closing its window leaves the session running"
@@ -105,7 +106,7 @@ record SessionMachine(Settings settings) {
             case SessionEvent.PrimaryDisconnected ignored
                     when state instanceof SessionState.Running running ->
                     Transition.to(new SessionState.Running(running.since(), running.ready(), false,
-                                    running.extraShells()),
+                                    running.extraShells(), running.asked(), running.runs()),
                             new SessionAction.Announce(new LampEvent.Info("session",
                                     "the shell window closed; the session keeps running — "
                                   + "`oillamp shell " + settings.lamp() + "` opens another, "
@@ -115,6 +116,42 @@ record SessionMachine(Settings settings) {
                     shells(running, +1);
             case SessionEvent.ShellDisconnected ignored when state instanceof SessionState.Running running ->
                     shells(running, -1);
+
+            // The agent wants something on the host that needs a person. Only a running session
+            // has one to ask, and it asks one question at a time: a question that cannot be asked
+            // now is declined at once, so the request is refused with a reason instead of waiting
+            // out its patience for a person who was never shown it.
+            case SessionEvent.HostAccessAsked asked when state instanceof SessionState.Running running
+                    && running.asked().isEmpty() ->
+                    Transition.to(new SessionState.Running(running.since(), running.ready(),
+                                    running.shellWindowOpen(), running.extraShells(),
+                                    Optional.of(asked.question()), running.runs()),
+                            new SessionAction.AskTheUser(asked.run(), asked.tool(), asked.question()));
+            case SessionEvent.HostAccessAsked asked ->
+                    Transition.to(state, new SessionAction.DeclineQuestion(asked.question(),
+                            state instanceof SessionState.Running
+                                    ? "the person is already being asked about another request"
+                                    : "the session is not running, so there is nobody to ask"));
+
+            // The person answered, or the question timed out. Either way it is closed, and the
+            // next one may be asked.
+            case SessionEvent.UserAnswered answered when state instanceof SessionState.Running running
+                    && running.asked().filter(answered.question()::equals).isPresent() ->
+                    Transition.to(new SessionState.Running(running.since(), running.ready(),
+                                    running.shellWindowOpen(), running.extraShells(),
+                                    Optional.empty(), running.runs()),
+                            new SessionAction.Announce(new LampEvent.Info("host access",
+                                    "the person said " + (answered.yes() ? "yes" : "no")
+                                  + " to: " + answered.question())));
+
+            // What the agent did, kept for the host-access gate. There is no decision to make:
+            // the run's log is part of the state, and the next state carries it on.
+            case SessionEvent.RunBegan began -> remember(state, began.run(), log -> new HostAccess.RunLog(
+                    began.run(), began.instruction(), "", Tuple.of(String.class)));
+            case SessionEvent.RunToolCalled called -> remember(state, called.run(), log ->
+                    HostAccess.withToolCall(log, called.tool(), called.summary()));
+            case SessionEvent.RunThought thought -> remember(state, thought.run(), log ->
+                    HostAccess.withThinking(log, thought.text()));
 
             case SessionEvent.Tick ignored -> tick(state, now);
 
@@ -131,22 +168,45 @@ record SessionMachine(Settings settings) {
     ///
     /// A session without windows (embedded, or `--no-windows`) has nobody to wait for: whoever
     /// started it gets in their own way, so the session is up at once.
-    private Transition started(SessionEvent.ContainerReady ready, Instant now) {
+    private Transition started(SessionEvent.ContainerReady ready, Instant now, Tuple<HostAccess.RunLog> runs) {
         Tuple<SessionAction> actions = Tuple.of(SessionAction.class,
                 new SessionAction.Announce(new LampEvent.Ok("session",
                         "the desktop is up — " + ready.info().describe())));
         if (!settings.openWindows())
-            return new Transition(new SessionState.Running(now, ready.info(), false, 0), actions);
+            return new Transition(new SessionState.Running(now, ready.info(), false, 0, Optional.empty(), runs),
+                    actions);
         if (settings.openViewer())
             actions = actions.add(new SessionAction.LaunchViewer(settings.viewOnly()));
         actions = actions.add(new SessionAction.LaunchTerminal());
-        return new Transition(new SessionState.AwaitingTerminal(now, ready.info()), actions);
+        return new Transition(new SessionState.AwaitingTerminal(now, ready.info(), runs), actions);
+    }
+
+    /// Replaces one run's log in the state, keeping every other part as it is. A run's log is only
+    /// ever replaced whole, and only from the event loop, so the gate reads a value that does not
+    /// change under it.
+    private Transition remember(SessionState state, String run,
+                                java.util.function.UnaryOperator<HostAccess.RunLog> change) {
+        Tuple<HostAccess.RunLog> before = state.runs();
+        Tuple<HostAccess.RunLog> after = HostAccess.rememberRun(before,
+                change.apply(HostAccess.logOf(before, run)));
+        return switch (state) {
+            case SessionState.Starting starting ->
+                    Transition.stay(new SessionState.Starting(starting.since(), after));
+            case SessionState.AwaitingTerminal awaiting ->
+                    Transition.stay(new SessionState.AwaitingTerminal(awaiting.since(), awaiting.ready(), after));
+            case SessionState.Running running ->
+                    Transition.stay(new SessionState.Running(running.since(), running.ready(),
+                            running.shellWindowOpen(), running.extraShells(), running.asked(), after));
+            case SessionState.ShuttingDown shuttingDown ->
+                    Transition.stay(new SessionState.ShuttingDown(shuttingDown.since(), shuttingDown.reason(), after));
+            case SessionState.Stopped stopped -> Transition.stay(stopped);
+        };
     }
 
     private Transition shells(SessionState.Running running, int change) {
         int count = Math.max(0, running.extraShells() + change);
         return Transition.to(new SessionState.Running(running.since(), running.ready(),
-                        running.shellWindowOpen(), count),
+                        running.shellWindowOpen(), count, running.asked(), running.runs()),
                 new SessionAction.Announce(new LampEvent.Info("session",
                         count == 0 ? "the extra shell closed"
                                    : count + " extra shell" + (count == 1 ? "" : "s") + " attached")));
@@ -189,7 +249,7 @@ record SessionMachine(Settings settings) {
             actions = actions.add(new SessionAction.Announce(new LampEvent.Failure(failed.problem())));
         if (state.extraShells() > 0) actions = actions.add(new SessionAction.CloseShells());
         actions = actions.add(new SessionAction.BeginShutdown(reason));
-        return new Transition(new SessionState.ShuttingDown(now, reason), actions);
+        return new Transition(new SessionState.ShuttingDown(now, reason, state.runs()), actions);
     }
 
     private Transition finish(SessionState.ShuttingDown state, SessionEvent.ShutdownCompleted done) {

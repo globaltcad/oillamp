@@ -128,6 +128,9 @@ class HoldingALampSpec extends Specification {
         when: 'someone stops it'
             var stopped = host.oillamp.run('stop', host.lampPath().toString())
             host.engines.first().waitFor()
+            // The lamp records how its engine ended on its own reader thread, a moment after the
+            // process is gone.
+            for (int i = 0; i < 100 && lamp.exitStatus().isEmpty(); i++) Thread.sleep(50)
 
         then: 'it ends cleanly, and leaves nothing behind'
             stopped.succeeded()

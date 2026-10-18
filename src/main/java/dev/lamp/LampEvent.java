@@ -317,6 +317,58 @@ public sealed interface LampEvent {
     /// One conversation, in full. What `oillamp conversations <dir> <conversation>` answers.
     record ConversationShown(Lamp.Conversation conversation) implements LampEvent {}
 
+    // ─── host access ───────────────────────────────────────────────────────────────────────
+
+    /// How risky a host request is, and how much it may change. The order is the ceiling: a
+    /// request is judged at most at its own tier, and the checker may only put it lower.
+    enum Risk {
+        /// Reads, and returns what it read. It cannot change anything.
+        PASSIVE,
+        /// Changes something on the host, but in a way the user can see and undo.
+        ADDITIVE,
+        /// Runs a program on the host. Closed unless the lamp names the programs.
+        EXECUTING
+    }
+
+    /// What the checker decided about one host request, and why.
+    record Verdict(boolean allowed, Risk risk, String reason) {}
+
+    /// The session has the host tools, and the agent can see them.
+    ///
+    /// @param tools   the tool names the agent is offered, such as `["host_read_file", …]`
+    /// @param checker the model that judges requests as the session starts: the lamp's
+    ///                `checker_model`, or else the model the agent answers with, which the
+    ///                checker then follows when it changes
+    record HostAccessEnabled(Tuple<String> tools, Optional<String> checker) implements LampEvent {}
+
+    /// The agent asked the host for something, and the request passed the checks that need no
+    /// model; the checker is asked next.
+    ///
+    /// @param run  the run the request came from, such as `run-12`; empty when the agent asked
+    ///             outside a run, such as from a shell
+    ///
+    /// @param tool the tool it named, such as `host_read_file`
+    /// @param said the arguments as one line, with no secret in it (the tool decides what that is)
+    record HostAccessRequested(String run, String tool, String said) implements LampEvent {}
+
+    /// The checker answered, and the request was then done or refused.
+    ///
+    /// @param verdict what it decided, its risk tier and its reason in its own words
+    /// @param took    from the request arriving to this event
+    record HostAccessDecided(String run, String tool, Verdict verdict, Duration took) implements LampEvent {}
+
+    /// A request was refused other than by the checker's own decision: before the checker was
+    /// asked, because it broke a rule that needs no judgement (a path outside the lamp's roots, a
+    /// closed tier, a tool it does not have); because the checker could not be asked or answered
+    /// beyond the tool's tier; because the person said no; or because the host could not do it.
+    record HostAccessRefused(String run, String tool, String why) implements LampEvent {}
+
+    /// The user is being asked about a request the checker allowed, and needs to look. The answer
+    /// goes back on the session's control socket as `host-access-answer`, naming `what`.
+    ///
+    /// @param what what is about to happen, in words, and where
+    record HostAccessAsked(String run, String tool, String what) implements LampEvent {}
+
     /// Something went wrong but oillamp carried on.
     record Warning(Problem problem)                     implements LampEvent {}
     /// Something went wrong and oillamp stopped.

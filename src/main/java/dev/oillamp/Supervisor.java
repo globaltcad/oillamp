@@ -92,6 +92,9 @@ final class Supervisor {
     private volatile Optional<Control.Server> scheduleDesk = Optional.empty();
     /// The socket through which the agent asks the user to look at its desktop.
     private volatile Optional<Control.Server> desktopDesk = Optional.empty();
+    /// The socket of supervised access to the host. Present only while `host_access.enabled`
+    /// is on.
+    private volatile Optional<Control.Server> hostAccessDesk = Optional.empty();
     /// Every time the agent is woken, by a job or by `oillamp ask`.
     private final AgentRunner runs;
     /// Everyone following the session with `oillamp follow`. Every event passes through it.
@@ -104,6 +107,13 @@ final class Supervisor {
     private boolean desktopAnswering = true;
     private boolean shellAnswering = true;
     private boolean briefed;
+    /// The host-access questions waiting for the person, by the text they were shown. Each is
+    /// answered by `host-access-answer`, declined by the state machine when nobody can be asked,
+    /// times out after [HostAccess#USER_PATIENCE], or is refused when the session ends; however
+    /// it ends, it leaves this map and the state machine hears that it is closed.
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Boolean>> questions =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /// Whether the last question to podman about the container went unanswered, so that a podman
     /// that stops answering is reported once, not every two seconds.
     private boolean podmanSilent;
@@ -128,9 +138,12 @@ final class Supervisor {
                 prepared.layout().root().toString(),
                 !context.options().embedded() && context.options().openWindows()));
         this.sessionStarted = machine.now();
-        this.state = new SessionState.Starting(sessionStarted);
+        this.state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
+        // What each run does is kept only for the host-access gate, so a lamp without it keeps
+        // nothing, and its event loop is not handed every piece of the agent's thinking.
         this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(), prepared.session(),
-                                    instructions);
+                                    instructions,
+                                    prepared.config().hostAccess().enabled() ? this::post : event -> { });
     }
 
     /// Runs the session to its end and reports how it ended.
@@ -139,7 +152,7 @@ final class Supervisor {
     /// however it ended.
     public ExitStatus run() {
         sessionStarted = machine.now();
-        state = new SessionState.Starting(sessionStarted);
+        state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
 
         Result<Tuple<Problem>> opened = openTheSession();
         if (opened instanceof Result.Err<Tuple<Problem>>(Tuple<Problem> problems)) {
@@ -283,6 +296,26 @@ final class Supervisor {
 
     // ─── what the machine asks for ─────────────────────────────────────────────────────────
 
+    /// Puts a host-access question on the event queue, where [SessionMachine] decides whether
+    /// this session has a person to ask, and returns what the person answers.
+    ///
+    /// The future completes with the answer, or fails with the reason there was none: nobody to
+    /// ask, no answer in time, or the session ending. A question with the same text as one that
+    /// already waits is not asked twice; it is declined.
+    private java.util.concurrent.CompletableFuture<Boolean> awaitAnswered(HostAccess.RequestForPermission request) {
+        var answer = new java.util.concurrent.CompletableFuture<Boolean>();
+        if (questions.putIfAbsent(request.what(), answer) != null)
+            return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException(
+                    "the person is already being asked about the same request"));
+        var unused = answer.orTimeout(HostAccess.USER_PATIENCE.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
+              .whenComplete((yes, failed) -> {
+                  questions.remove(request.what(), answer);
+                  post(new SessionEvent.UserAnswered(request.what(), Boolean.TRUE.equals(yes)));
+              });
+        post(new SessionEvent.HostAccessAsked(request.run(), request.tool(), request.what()));
+        return answer;
+    }
+
     private void perform(SessionAction action) {
         switch (action) {
             case SessionAction.Announce announce -> context.sink().accept(announce.event());
@@ -290,6 +323,12 @@ final class Supervisor {
             case SessionAction.LaunchTerminal ignored -> openTerminal();
             case SessionAction.CloseShells ignored -> extras.ifPresent(Relay::close);
             case SessionAction.BeginShutdown shutdown -> beginShutdown(shutdown.reason());
+            // The state machine decided the person should be asked; here it is turned into the
+            // event the terminal shows (and `oillamp follow` relays, and an application renders).
+            case SessionAction.AskTheUser asked ->
+                    context.sink().accept(new LampEvent.HostAccessAsked(asked.run(), asked.tool(), asked.question()));
+            case SessionAction.DeclineQuestion declined -> Optional.ofNullable(questions.get(declined.question()))
+                    .ifPresent(answer -> answer.completeExceptionally(new IllegalStateException(declined.why())));
             // Handled by the loop, which records the exit code. Listed so that a new kind of action
             // does not compile until it is handled here.
             case SessionAction.Exit ignored -> { }
@@ -426,6 +465,24 @@ final class Supervisor {
         }
 
         Tuple<Problem> warnings = Tuple.of(Problem.class);
+
+        // The way out to the host. Every request on it is judged by a model, and its effect
+        // happens here. A lamp that did not ask for it has no socket at all.
+        if (prepared.config().hostAccess().enabled()) {
+            LampConfig.Model service = prepared.config().model();
+            Optional<String> key = machine.environmentVariable(service.keyEnv());
+            if (key.isEmpty())
+                warnings = warnings.add(HostAccessProblems.checkerHasNoKey(service.keyEnv()));
+            HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
+                    HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
+                    context.sink(), this::awaitAnswered, runs::currentRun,
+                    run -> HostAccess.logOf(state.runs(), run));
+            Result<Control.Server> door = Control.Server.open(layout.hostAccessSocket(), granted::answer);
+            if (door instanceof Result.Err<Control.Server>(Tuple<Problem> problems)) return Result.err(problems);
+            hostAccessDesk = Optional.of(((Result.Ok<Control.Server>) door).value());
+            granted.announce();
+        }
+
         // The agent's way to ask the user to look at its desktop. Without it, the session works
         // as before, and the agent is told so when it asks; so failing to open it is a warning.
         Result<Control.Server> look = Control.Server.open(layout.desktopSocket(), this::answerAboutTheDesktop);
@@ -480,6 +537,9 @@ final class Supervisor {
                 "stopping the agent's run and saving what it did"));
         scheduleDesk.ifPresent(Control.Server::close);
         desktopDesk.ifPresent(Control.Server::close);
+        hostAccessDesk.ifPresent(Control.Server::close);
+        questions.values().forEach(answer -> answer.completeExceptionally(
+                new IllegalStateException("the session is ending")));
         runs.stop();
 
         // 1. Stop accepting shells, and drop the ones that are open.
@@ -998,6 +1058,18 @@ final class Supervisor {
                         out.write(event.get().toJson());
                 }
             });
+            // The answer to a host-access question the agent asked. The question is the text
+            // the person was shown; the state machine closes it and the gate hears the answer.
+            case "host-access-answer" -> {
+                String question = request.arguments().get("question").orElse("");
+                if (question.isEmpty()) yield Control.Reply.failed("say which question, as the event names it");
+                var waiting = questions.get(question);
+                if (waiting == null) yield Control.Reply.failed("no host-access question waits with that text");
+                boolean yes = request.flag("yes");
+                // Closing the question tells the state machine; see awaitAnswered.
+                waiting.complete(yes);
+                yield Control.Reply.ok().with("question", question).with("answer", yes ? "yes" : "no");
+            }
             case "schedule-changed" -> {
                 runs.scheduleChanged();
                 yield Control.Reply.ok();

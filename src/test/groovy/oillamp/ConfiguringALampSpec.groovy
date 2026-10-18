@@ -564,4 +564,73 @@ class ConfiguringALampSpec extends Specification {
             runtimeEnv.contains("OILLAMP_LLM_PROVIDER='corp'")
             runtimeEnv.contains("OILLAMP_FORWARDS='llm:8000'")
     }
+
+    def 'Host access is off unless asked for, and turning it on without requirements is refused'() {
+        reportInfo """
+            Reaching the host is off unless a lamp says otherwise, so a lamp that never mentions
+            it behaves exactly as it did before the feature existed. Turning it on without saying
+            what the agent may not do would leave the checker with nothing to judge by, and a
+            checker with nothing to judge by says yes. So oillamp refuses that, and names the key
+            to fill in, rather than starting a lamp with an open door.
+
+            The checker's model is not one of those keys. Without one, requests are judged by the
+            model the agent answers with, which is known only once a session starts with one.
+        """
+        given: 'a lamp that turns host access on, writes no requirements, and gives a relative root'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, """
+                schema_version = 1
+
+                [host_access]
+                enabled = true
+                requirements = ""
+                roots = ["relative/path"]
+            """.stripIndent())
+
+        when: 'the user checks the configuration'
+            var outcome = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'the missing text and the relative path are both named'
+            outcome.status() == ExitStatus.USAGE
+            outcome.errors().size() == 2
+            outcome.reported('OIL-CONFIG-004')
+            outcome.console().contains('host_access.requirements')
+            outcome.console().contains('host_access.roots')
+            !outcome.console().contains('host_access.checker_model')
+
+        and: 'a file without the table is simply off'
+            host.givenConfig(lamp, 'schema_version = 1' + System.lineSeparator())
+            host.oillamp.run('config', lamp.toString(), 'check').status() == ExitStatus.SUCCESS
+    }
+
+    def 'The requirements are one piece of text, written over several lines'() {
+        reportInfo """
+            The requirements are the user's own words, not a checklist, so they are a single
+            multi-line string. Both TOML spellings work: the literal one, which keeps a backslash
+            as a backslash, is the one to use for paths and regular expressions.
+        """
+        given:
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, """
+                schema_version = 1
+
+                [host_access]
+                enabled = true
+                requirements = '''
+                You may read ~/Documents.
+                Never read ~/.ssh, nor anything under ~/\\.gnupg.
+                '''
+            """.stripIndent())
+
+        when:
+            var outcome = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'the checker would be given both lines, backslash and all'
+            outcome.status() == ExitStatus.SUCCESS
+            outcome.console().contains('You may read ~/Documents.')
+            outcome.console().contains('Never read ~/.ssh, nor anything under ~/\\.gnupg.')
+
+        and: 'with no checker model of its own, the lamp judges with the agent\'s'
+            outcome.console().contains("checker the agent's model")
+    }
 }

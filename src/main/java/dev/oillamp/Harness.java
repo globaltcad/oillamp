@@ -75,6 +75,9 @@ final class Harness implements AutoCloseable {
         this.instructions = instructions;
     }
 
+    /// The model the next run is answered by; empty when the session leaves it to pi.
+    Optional<String> model() { return model; }
+
     /// Writes the session's instructions and model into pi's files in the agent's home, before
     /// the first run starts pi: the instructions into `APPEND_SYSTEM.md`, replacing what was
     /// there, and the model as pi's default into `settings.json`, keeping its other settings. A

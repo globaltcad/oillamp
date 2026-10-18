@@ -84,7 +84,7 @@ final class ConfigLoadingUtil {
         LampConfig defaults = ConfigDefaultsUtil.lampConfig();
         root.allowOnly("schema_version", "display", "viewer", "terminal", "recording",
                        "limits", "network", "llm", "model", "git", "agent_tools", "image", "host", "timeouts",
-                       "schedule");
+                       "schedule", "host_access");
 
         LampConfig.Display display   = readDisplay(root.table("display"), defaults.display());
         LampConfig.Viewer viewer     = readViewer(root.table("viewer"), defaults.viewer());
@@ -105,9 +105,11 @@ final class ConfigLoadingUtil {
         LampConfig.Host host         = readHost(root.table("host"), defaults.host());
         LampConfig.Timeouts timeouts = readTimeouts(root.table("timeouts"), defaults.timeouts());
         LampConfig.Schedule schedule = readSchedule(root.table("schedule"), defaults.schedule());
+        LampConfig.HostAccess hostAccess = readHostAccess(root.table("host_access"), defaults.hostAccess());
 
         return new LampConfig(display, viewer, terminal, recording, limits,
-                              network, forwards, llm, model, git, tools, image, host, timeouts, schedule);
+                              network, forwards, llm, model, git, tools, image, host, timeouts, schedule,
+                              hostAccess);
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {
@@ -429,6 +431,45 @@ final class ConfigLoadingUtil {
                 bounded(s, "max_run_minutes", fallback.maxRunMinutes(), 1, 24 * 60,
                         "a number of minutes from 1 to 1440"),
                 bounded(s, "notes_max_kb", fallback.notesMaxKb(), 1, 1024, "a size in kilobytes from 1 to 1024"));
+    }
+
+    private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {
+        s.allowOnly("enabled", "requirements", "checker_model", "roots", "max_read_bytes",
+                    "executables", "allow_additive", "ask_the_user");
+        boolean enabled = s.bool("enabled", fallback.enabled());
+        String requirements = s.string("requirements", fallback.requirements());
+        Tuple<String> roots = s.strings("roots", fallback.roots());
+        Tuple<String> executables = s.strings("executables", fallback.executables());
+        int maxReadBytes = bounded(s, "max_read_bytes", fallback.maxReadBytes(), 1, 16 * 1024 * 1024,
+                "a number of bytes from 1 to 16777216");
+        boolean allowAdditive = s.bool("allow_additive", fallback.allowAdditive());
+        boolean askTheUser = s.bool("ask_the_user", fallback.askTheUser());
+
+        // A request judged against nothing would be allowed on the checker's own judgement, which
+        // is exactly what this feature must not do. So the two go together. Every missing piece is
+        // reported, not only the first: a user fixing the table should need one edit, not three.
+        boolean complete = true;
+        if (enabled && requirements.isBlank()) {
+            s.invalid("requirements", "(empty)",
+                    "the requirements the checker judges against; a lamp with host access on must say in its own words what the agent may not do");
+            complete = false;
+        }
+        for (String root : roots)
+            if (!root.startsWith("/"))
+                s.invalid("roots", "\"" + root + "\"", "an absolute path, such as \"/home/me/Documents\"");
+        Tuple<String> absoluteRoots = roots.retainIf(root -> root.startsWith("/"));
+
+        // The checker gets its own conversation, on the model the agent answers with unless the
+        // lamp names another one here. Whether the session has a model at all is known only when
+        // it starts; see LampPhase.
+        String checkerModel = s.string("checker_model", fallback.checkerModel());
+        if (!checkerModel.isBlank() && Context.ModelOverride.idProblem(checkerModel).isPresent()) {
+            s.invalid("checker_model", "\"" + checkerModel + "\"", "a model as the service names it, such as \"azure/gpt-6.1-sol\"");
+            complete = false;
+        }
+        enabled = enabled && complete;
+        return new LampConfig.HostAccess(enabled, requirements, checkerModel, absoluteRoots,
+                                         maxReadBytes, executables, allowAdditive, askTheUser);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────

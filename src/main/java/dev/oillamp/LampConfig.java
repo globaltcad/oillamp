@@ -31,19 +31,27 @@ record LampConfig(
     Image image,
     Host host,
     Timeouts timeouts,
-    Schedule schedule
+    Schedule schedule,
+    HostAccess hostAccess
 ) {
     /// The same configuration with other `[model]` settings, such as those an application gave
     /// on the command line for one session.
     public LampConfig withModel(Model changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              changed, git, agentTools, image, host, timeouts, schedule);
+                              changed, git, agentTools, image, host, timeouts, schedule, hostAccess);
     }
 
     /// The same configuration with other `[schedule]` settings.
     public LampConfig withSchedule(Schedule changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, changed);
+                              model, git, agentTools, image, host, timeouts, changed, hostAccess);
+    }
+
+    /// The same configuration with other `[host_access]` settings, such as the requirements an
+    /// application gave for one session.
+    public LampConfig withHostAccess(HostAccess changed) {
+        return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
+                              model, git, agentTools, image, host, timeouts, schedule, changed);
     }
 
     /// The version of the config schema this build writes and understands.
@@ -195,5 +203,39 @@ record LampConfig(
     /// The forward that `llm.forward` names, if both are configured.
     public Optional<Forward> llmForward() {
         return llm.flatMap(config -> forwardNamed(config.forward()));
+    }
+
+    /// `[host_access]`: whether the agent may reach the host through oillamp, and what it is
+    /// allowed to do there.
+    ///
+    /// Off unless `enabled` is true. The requirements are the user's own words; they are the
+    /// only authority the checker has, and the agent never sees them.
+    ///
+    /// @param enabled         whether a session serves the host tools at all
+    /// @param requirements    the user's text, given to the checker with every request
+    /// @param checkerModel    the model that judges, as the service names it; empty to judge
+    ///                        with the model the agent answers with
+    /// @param roots           absolute host paths the tools may mention at all; empty means the
+    ///                        user's home directory
+    /// @param maxReadBytes    how much of one file the agent may be handed
+    /// @param executables     programs the agent may ask to run on the host; empty closes the
+    ///                        executing tier
+    /// @param allowAdditive   whether writing, copying out, opening pages and notifications are
+    ///                        offered at all
+    /// @param askTheUser      whether a request outside `roots` goes to a person once the checker
+    ///                        allows it, rather than being refused
+    public record HostAccess(boolean enabled, String requirements, String checkerModel,
+                             Tuple<String> roots, int maxReadBytes, Tuple<String> executables,
+                             boolean allowAdditive, boolean askTheUser) {
+        public HostAccess {
+            if (maxReadBytes < 1) throw new IllegalArgumentException("host_access.max_read_bytes");
+            for (String root : roots)
+                if (!root.startsWith("/"))
+                    throw new IllegalArgumentException("host_access.roots entries must be absolute paths: " + root);
+        }
+        public HostAccess switchedOn() {
+            return new HostAccess(true, requirements, checkerModel, roots, maxReadBytes, executables,
+                                  allowAdditive, askTheUser);
+        }
     }
 }

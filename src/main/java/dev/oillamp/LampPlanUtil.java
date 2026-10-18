@@ -220,13 +220,16 @@ final class LampPlanUtil {
     /// @param gitConfig       the agent's git identity, see [AgentGitConfigUtil]
     /// @param scheduleTools   the pi extension with the agent's scheduling tools, or empty when
     ///                        the schedule is off and the agent should have none
+    /// @param hostAccessTools the pi extension with the agent's host tools, or empty when host
+    ///                        access is off and the agent should have none
     public static Result<Plan> planSession(LampLayout layout,
                                            String clientPublicKey,
                                            String hostPublicKey,
                                            String runtimeEnv,
                                            String agentGuide,
                                            String gitConfig,
-                                           Optional<String> scheduleTools) {
+                                           Optional<String> scheduleTools,
+                                           Optional<String> hostAccessTools) {
         Tuple<Step> steps = Tuple.of(Step.class);
         steps = steps.add(new Step.WriteFile(layout.runtimeEnvFile(), runtimeEnv,
                 PosixMode.PUBLIC_FILE, Step.WritePolicy.ALWAYS));
@@ -255,6 +258,12 @@ final class LampPlanUtil {
                         layout.scheduleTools(), tools, "the agent has no scheduling tools in this session"))
                 .orElseGet(() -> new Step.RemoveFromAgentHome(layout.agentDir(), layout.scheduleTools(),
                         "the schedule is off, so the agent has no scheduling tools")));
+        // The host tools follow the same rule: the extension is there exactly when the way out
+        // is, so an agent in a lamp without host access never sees a tool that would refuse it.
+        steps = steps.add(hostAccessTools.<Step>map(tools -> new Step.WriteIntoAgentHome(layout.agentDir(),
+                        layout.hostAccessTools(), tools, "the agent has no tools for reaching the host in this session"))
+                .orElseGet(() -> new Step.RemoveFromAgentHome(layout.agentDir(), layout.hostAccessTools(),
+                        "host access is off, so the agent has no tools for reaching the host")));
 
         steps = steps.add(new Step.WriteFile(layout.sshConfig(), SandboxSshUtil.renderClientConfig(layout),
                 PosixMode.PRIVATE_FILE, Step.WritePolicy.ALWAYS));

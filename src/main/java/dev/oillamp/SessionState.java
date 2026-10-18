@@ -7,6 +7,8 @@ import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.Problem;
 
+import sprouts.Tuple;
+
 /// Where a session has got to.
 ///
 /// The states differ in what an event means. In `AwaitingTerminal` the container is up but
@@ -20,21 +22,29 @@ import dev.lamp.Problem;
 sealed interface SessionState {
 
     /// The container has been asked to start; nothing is known about it yet.
-    record Starting(Instant since) implements SessionState {}
+    // Every live state carries the runs' logs: what each run was asked and did, which the
+    // host-access gate reads from here rather than keeping a mutable copy of its own. They stay
+    // empty in a lamp without host access: the session records them only while it is on.
+
+    record Starting(Instant since, Tuple<HostAccess.RunLog> runs) implements SessionState {}
 
     /// The sandbox answered on both sockets; the terminal window has been asked to open.
-    record AwaitingTerminal(Instant since, ReadyInfo ready) implements SessionState {}
+    record AwaitingTerminal(Instant since, ReadyInfo ready, Tuple<HostAccess.RunLog> runs)
+            implements SessionState {}
 
     /// The user's shell connected, so the session is up.
     ///
     /// @param shellWindowOpen whether the shell window oillamp opened is still open. Closing it
     ///                        ends nothing; it is tracked only so that `oillamp status` is right
     /// @param extraShells     how many `oillamp shell` sessions are attached
-    record Running(Instant since, ReadyInfo ready, boolean shellWindowOpen, int extraShells)
-            implements SessionState {}
+    /// @param asked           the host-access question the person has not answered yet; empty
+    ///                        when there is none, which is almost always
+    record Running(Instant since, ReadyInfo ready, boolean shellWindowOpen, int extraShells,
+                   Optional<String> asked, Tuple<HostAccess.RunLog> runs) implements SessionState {}
 
     /// The shutdown sequence is running; further events are ignored.
-    record ShuttingDown(Instant since, ShutdownReason reason) implements SessionState {}
+    record ShuttingDown(Instant since, ShutdownReason reason, Tuple<HostAccess.RunLog> runs)
+            implements SessionState {}
 
     /// Final. Carries the exit code the process will leave with.
     record Stopped(ShutdownReason reason, ExitStatus exit) implements SessionState {}
@@ -106,6 +116,18 @@ sealed interface SessionState {
     /// True while the shutdown sequence has not begun — the states an event can still change.
     default boolean isLive() {
         return this instanceof Starting || this instanceof AwaitingTerminal || this instanceof Running;
+    }
+
+    /// What each run was asked and did, kept in the state so that the host-access gate reads it
+    /// rather than keeping its own copy.
+    default Tuple<HostAccess.RunLog> runs() {
+        return switch (this) {
+            case Starting starting -> starting.runs();
+            case AwaitingTerminal awaiting -> awaiting.runs();
+            case Running running -> running.runs();
+            case ShuttingDown shuttingDown -> shuttingDown.runs();
+            case Stopped ignored -> Tuple.of(HostAccess.RunLog.class);
+        };
     }
 
     /// How many extra `oillamp shell` sessions are attached.

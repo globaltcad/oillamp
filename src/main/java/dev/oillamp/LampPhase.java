@@ -67,10 +67,15 @@ final class LampPhase {
         // Model settings given on the command line replace the lamp's own, for this session, and
         // so does --enable-scheduling.
         LampConfig configured = ((Result.Ok<LampConfig>) configuration).value();
+        // The requirements an application gave are read now, before anything changes, so a
+        // missing variable stops the session instead of starting it without a gate.
+        Result<LampConfig.HostAccess> access = hostAccessInForce(configured.hostAccess());
+        if (access instanceof Result.Err<LampConfig.HostAccess> refused) return Result.err(refused.problems());
         LampConfig config = configured
                 .withModel(context.options().model().applyTo(configured.model()))
                 .withSchedule(context.options().enableScheduling() ? configured.schedule().switchedOn()
-                                                                   : configured.schedule());
+                                                                   : configured.schedule())
+                .withHostAccess(((Result.Ok<LampConfig.HostAccess>) access).value());
         context.sinkAcceptProblems(configuration.warnings());
         describeConfiguration(config);
 
@@ -125,6 +130,39 @@ final class LampPhase {
         return found;
     }
 
+    /// The `[host_access]` settings in force. Requirements an application gave win over the
+    /// file's, as `--model` does over `[model]`: it is the user picking in the application's own
+    /// settings screen. A lamp that did not turn the feature on stays off, whatever an
+    /// application puts in its environment.
+    ///
+    /// The model that judges is the file's `checker_model`, or else the one the agent answers
+    /// with, which the session must then have been given: a gate with no model to ask stays shut.
+    private Result<LampConfig.HostAccess> hostAccessInForce(LampConfig.HostAccess configured) {
+        if (configured.enabled() && configured.checkerModel().isBlank() && context.options().model().id().isEmpty())
+            return Result.err(HostAccessProblems.noModelToJudgeWith());
+        Optional<Context.Options.HostAccessGrant> given = context.options().hostAccess();
+        if (given.isEmpty()) return Result.ok(configured);
+        if (!configured.enabled()) {
+            // Said, so that an application that gave rules knows they guard nothing.
+            context.sink().accept(new LampEvent.Warning(HostAccessProblems.grantIgnored()));
+            return Result.ok(configured);
+        }
+        String variable = given.get().requirementsEnv();
+        Optional<String> text = machine.environmentVariable(variable);
+        if (text.isEmpty() || text.get().isBlank())
+            return Result.err(ProblemCatalogUtil.usage(
+                    "--security-requirements-env " + variable + ": the variable is not set, or empty",
+                    Command.usageOf("at")));
+        if (text.get().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS)
+            return Result.err(ProblemCatalogUtil.usage(
+                    "--security-requirements-env " + variable + ": more than "
+                  + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024 + " KiB, far more than any useful rules",
+                    Command.usageOf("at")));
+        return Result.ok(new LampConfig.HostAccess(true, text.get(), configured.checkerModel(),
+                configured.roots(), configured.maxReadBytes(), configured.executables(),
+                configured.allowAdditive(), configured.askTheUser()));
+    }
+
     /// Renders the per-session files. Separate from the skeleton because it needs the keys that
     /// the skeleton generated; see [LampPlanUtil#planSession].
     private Result<Plan> planSessionFiles(LampLayout layout, LampConfig config,
@@ -132,7 +170,8 @@ final class LampPhase {
         if (context.options().dryRun())
             return LampPlanUtil.planSession(layout, "(generated client key)", "(generated host key)",
                     "(rendered per session)", "(rendered per session)", "(rendered per session)",
-                    config.schedule().enabled() ? Optional.of("(the scheduling tools)") : Optional.empty());
+                    config.schedule().enabled() ? Optional.of("(the scheduling tools)") : Optional.empty(),
+                    config.hostAccess().enabled() ? Optional.of("(the host tools)") : Optional.empty());
 
         Optional<String> clientKey = FilesystemUtil.readString(layout.clientKeyPub());
         Optional<String> hostKey = FilesystemUtil.readString(layout.hostKeyPub());
@@ -149,7 +188,9 @@ final class LampPhase {
         return LampPlanUtil.planSession(layout, clientKey.get(), hostKey.get(),
                 ((Result.Ok<String>) environment).value(), AgentGuideUtil.render(config),
                 AgentGitConfigUtil.render(gitAuthor(config.git(), layout)),
-                config.schedule().enabled() ? Optional.of(AgentGuideUtil.scheduleTools()) : Optional.empty());
+                config.schedule().enabled() ? Optional.of(AgentGuideUtil.scheduleTools()) : Optional.empty(),
+                config.hostAccess().enabled() ? Optional.of(AgentGuideUtil.hostAccessTools(config.hostAccess()))
+                                              : Optional.empty());
     }
 
     /// The name and email the agent's commits carry, as `[git]` chooses, said on the console

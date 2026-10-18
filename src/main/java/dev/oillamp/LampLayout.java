@@ -139,6 +139,12 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path scheduleTools() {
         return piDir().resolve("extensions").resolve("oillamp-schedule.js");
     }
+    /// The pi extension that gives the agent its host tools. Written while
+    /// `host_access.enabled` is on, removed while it is off.
+    public Path hostAccessTools() {
+        return piDir().resolve("extensions").resolve("oillamp-host-access.js");
+    }
+
     /// The agent's own `~/.bashrc`, written once and then left alone.
     ///
     /// It exists because `/etc/profile` is read by _login_ shells only. An agent
@@ -159,6 +165,8 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path modelSocket()       { return shortSockets().resolve("host").resolve("model.sock"); }
     /// Where the agent reads and changes the lamp's schedule, through the session.
     public Path scheduleSocket()    { return shortSockets().resolve("host").resolve("schedule.sock"); }
+    /// The agent's way to ask the host for something, served only while `host_access.enabled`.
+    public Path hostAccessSocket()  { return shortSockets().resolve("host").resolve("host-access.sock"); }
     /// Where the agent asks the user to look at its desktop, through the session.
     public Path desktopSocket()     { return shortSockets().resolve("host").resolve("desktop.sock"); }
     public Path forwardSocket(String name) {

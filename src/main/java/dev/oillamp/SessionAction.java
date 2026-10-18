@@ -32,6 +32,14 @@ sealed interface SessionAction {
     /// Leave, with this code. Only ever the last action of a transition.
     record Exit(ExitStatus status) implements SessionAction {}
 
+    /// Ask the person at the session whether a host request may happen. The answer arrives as
+    /// `SessionEvent.UserAnswered`.
+    record AskTheUser(String run, String tool, String question) implements SessionAction {}
+
+    /// Answer a host-access question with no, without asking anyone, because nobody can be asked
+    /// now.
+    record DeclineQuestion(String question, String why) implements SessionAction {}
+
     /// What this action is called in the session log.
     default String describe() {
         return switch (this) {
@@ -41,6 +49,8 @@ sealed interface SessionAction {
             case BeginShutdown shutdown -> "shut the session down — " + shutdown.reason().describe();
             case Announce announce -> "tell the user: " + announce.event().getClass().getSimpleName();
             case Exit exit -> "exit " + exit.status().code();
+            case AskTheUser asked -> "ask the user: " + asked.question();
+            case DeclineQuestion declined -> "decline, unasked: " + declined.question() + " — " + declined.why();
         };
     }
 }
