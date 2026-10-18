@@ -36,7 +36,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp at <dir> --no-install` | Works. Reports missing packages instead of installing them. |
 | `oillamp at <dir> --no-viewer` | Works. |
 | `oillamp at <dir> --no-windows` | Works in the simulated scenarios. No window opens and no display is needed; the session ends as usual. Not yet tried under a real tmux. |
-| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does, and the harness's commands were checked against real pi 1.3.0 with a stand-in model service (see "Runs and the schedule"). Not yet tried in a real session. Also `LampDirectory.model`. |
+| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does; the harness's commands were checked against real pi 1.3.0 with a stand-in model service, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `LampDirectory.model`. |
 | `oillamp at <dir> --embedded` | Works in the simulated scenarios, also driven through `dev.lamp.Lamp`. No window opens; the session ends when standard input closes, unless the application wrote `leave-running` first. Not yet tried with a real application. |
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
@@ -524,10 +524,12 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - A session started without `--model` leaves the model to pi: its default for a new
   conversation, and the conversation's own model for an old one. A lamp whose pi has no default
   model, or one the model service refuses, fails every run, and says so. With `--model`, every run
-  is answered by that model; that is tested against a stand-in pi, and pi's side of it against
-  real pi, but not yet in a real session. Genies does not give its lamps a model this way yet; it
-  still writes the model into pi's settings only, so its old conversations stay on their first
-  model.
+  is answered by that model; that is tested against a stand-in pi, against real pi, and once in a
+  real sandbox with Eden AI (see "Runs and the schedule"). `oillamp model` and `Lamp.useModel` on a
+  running session are tested against a stand-in pi only.
+- Genies gives its lamps the settings' model, changes it on awake genies with `Lamp.useModel`, and
+  shows which model wrote an answer on hover. That is tested against the engine on a simulated
+  machine, with a stand-in pi, not yet in the real app with a real lamp.
 
 - Ubuntu 26.04, and any distribution other than Ubuntu 24.04.
 - A Java Swing modal dialog on the sandbox desktop. (A Swing window works; see the lessons table.)

@@ -30,13 +30,19 @@ final class GeniePiSetupUtil {
     ///
     /// @throws IOException when pi's directory is a link, or a file could not be written
     static void prepare(Path home, String name, String model) throws IOException {
-        Path pi = home;
-        for (Path part : Path.of(PI_DIRECTORY)) {
-            pi = pi.resolve(part);
-            if (Files.isSymbolicLink(pi)) throw new IOException("the genie's " + PI_DIRECTORY + " is a link");
-        }
-        Files.createDirectories(pi);
+        Path pi = piDirectory(home);
         Files.writeString(pi.resolve("APPEND_SYSTEM.md"), about(name), StandardCharsets.UTF_8);
+        useModel(home, model);
+    }
+
+    /// Writes `model` as pi's default into its settings in `home`, keeping everything else in
+    /// them. pi starts a new conversation on it, so a conversation started on the genie's model
+    /// needs no switch. Which model answers is the lamp's to decide; this only spares pi a
+    /// needless switch.
+    ///
+    /// @throws IOException when pi's directory is a link, or the file could not be written
+    static void useModel(Path home, String model) throws IOException {
+        Path pi = piDirectory(home);
         Path settingsFile = pi.resolve("settings.json");
         ObjectNode settings = JSON.createObjectNode();
         if (Files.isRegularFile(settingsFile, LinkOption.NOFOLLOW_LINKS)) {
@@ -46,6 +52,20 @@ final class GeniePiSetupUtil {
         settings.put("defaultProvider", "edenai").put("defaultModel", model);
         Files.writeString(settingsFile, JSON.writerWithDefaultPrettyPrinter().writeValueAsString(settings) + "\n",
                 StandardCharsets.UTF_8);
+    }
+
+    /// pi's directory in `home`, made if it is not there.
+    ///
+    /// @throws IOException when it, or a directory on the way to it, is a link, which could lead
+    ///                     the files Genies writes out of the genie's home
+    private static Path piDirectory(Path home) throws IOException {
+        Path pi = home;
+        for (Path part : Path.of(PI_DIRECTORY)) {
+            pi = pi.resolve(part);
+            if (Files.isSymbolicLink(pi)) throw new IOException("the genie's " + PI_DIRECTORY + " is a link");
+        }
+        Files.createDirectories(pi);
+        return pi;
     }
 
     /// Added to pi's own instructions. The sandbox's AGENTS.md, which pi reads too, explains the

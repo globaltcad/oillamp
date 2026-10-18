@@ -48,7 +48,7 @@ final class LampApiConversionUtil {
         Tuple<PiEvent.History.Line> lines = Tuple.of(PiEvent.History.Line.class);
         for (LampConversation.Entry entry : conversation.lineTo(leaf)) {
             if (entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT && !entry.text().isBlank())
-                lines = lines.add(new PiEvent.History.Line(true, entry.text(), entry.id(), false, false));
+                lines = lines.add(new PiEvent.History.Line(true, entry.text(), entry.id(), false, false, ""));
             if (entry.kind() != LampConversation.Kind.MESSAGE_FROM_AGENT) continue;
             String said = entry.text();
             String error = "";
@@ -58,10 +58,11 @@ final class LampApiConversionUtil {
                 error = split < 0 ? said : said.substring(split + 2);
                 said = split < 0 ? "" : said.substring(0, split);
             }
+            String model = entry.model().orElse("");
             if (!said.isBlank())
-                lines = lines.add(new PiEvent.History.Line(false, said, entry.id(), !entry.calls().isEmpty(), false));
+                lines = lines.add(new PiEvent.History.Line(false, said, entry.id(), !entry.calls().isEmpty(), false, model));
             if (!error.isBlank())
-                lines = lines.add(new PiEvent.History.Line(false, error, entry.id(), false, true));
+                lines = lines.add(new PiEvent.History.Line(false, error, entry.id(), false, true, model));
         }
         return new PiEvent.History(lines, leaf);
     }
@@ -73,7 +74,8 @@ final class LampApiConversionUtil {
             case LampAgentProgress.Said said -> Optional.of(new PiEvent.Said(said.text()));
             case LampAgentProgress.Thought thought -> Optional.of(new PiEvent.Thinking(thought.text()));
             case LampAgentProgress.Answered answered -> Optional.of(new PiEvent.Answered(
-                    answered.failed() ? "" : answered.text(), answered.failed() ? answered.text() : "", 0));
+                    answered.failed() ? "" : answered.text(), answered.failed() ? answered.text() : "", 0,
+                    answered.model().orElse("")));
             case LampAgentProgress.ToolStarted tool -> Optional.of(new PiEvent.ToolStarted(tool.call(), tool.tool(), tool.summary()));
             case LampAgentProgress.ToolFinished tool -> Optional.of(new PiEvent.ToolFinished(tool.call(), tool.failed(), tool.output()));
             case LampAgentProgress.Retrying retrying -> Optional.of(new PiEvent.Retrying(retrying.attempt(), retrying.most(), retrying.why()));
