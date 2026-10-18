@@ -211,6 +211,33 @@ class KeepingAGeniesScheduleSpec extends Specification {
             waitUntil { genie.transcript().entries().any { it.kind() == Entry.Kind.GENIE && it.text() == 'I tidied the downloads folder.' } }
     }
 
+    def 'A genie woken after a job ran opens the user\'s chat, not the job\'s run'() {
+        reportInfo """
+            Waking a genie shows the conversation the user was last in, or else the most recent
+            one. A job's run is not one of the user's conversations: it is listed with the
+            scheduled runs. So a genie that has had no chat yet, but ran a job, wakes to an empty
+            chat. Opening the job's run instead would put the user's next message into the
+            job's conversation, among its prompt and its notes.
+        """
+        given: 'a genie that ran a job while it was awake, and was put to sleep'
+            awake()
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
+            Lamp.at(lamp).launchedBy(sandbox.launcher).once('in 5m', 'Water the plants')
+            sandbox.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            awake()
+            waitUntil { Lamp.conversations(lamp).any { it.job().isPresent() && it.entries().size() > 2 } }
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
+
+        when: 'it wakes again'
+            awake()
+
+        then: 'the chat is empty, ready for a conversation of the user\'s own'
+            genie.transcript().isEmpty()
+            genie.conversations().current().isEmpty()
+    }
+
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     private LocalDateTime local() {
