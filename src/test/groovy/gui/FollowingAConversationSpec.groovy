@@ -63,7 +63,7 @@ class FollowingAConversationSpec extends Specification {
             }
 
         when:
-            var done = heard.hear(new PiEvent.Answered('Hello!', '', 42)).hear(new PiEvent.Settled())
+            var done = heard.hear(new PiEvent.Answered('Hello!', '', 42, '')).hear(new PiEvent.Settled())
 
         then: 'the final text, done, and the genie waits again'
             done.transcript().entries().last().text() == 'Hello!'
@@ -170,7 +170,7 @@ class FollowingAConversationSpec extends Specification {
                     .hear(new PiEvent.Said('## Finding'))
                     .hear(new PiEvent.Thinking(''))
                     .hear(new PiEvent.Said(' big files'))
-                    .hear(new PiEvent.Answered('## Finding big files', '', 10))
+                    .hear(new PiEvent.Answered('## Finding big files', '', 10, ''))
                     .hear(new PiEvent.Settled())
 
         then:
@@ -189,9 +189,9 @@ class FollowingAConversationSpec extends Specification {
         when:
             var failed = genie.withDraft('hi').send()
                     .hear(new PiEvent.Retrying(1, 3, '529 overloaded'))
-                    .hear(new PiEvent.Answered('', '503 unavailable', 0))
+                    .hear(new PiEvent.Answered('', '503 unavailable', 0, ''))
                     .hear(new PiEvent.Retrying(2, 3, '503 unavailable'))
-                    .hear(new PiEvent.Answered('', '401 there is no model key', 0))
+                    .hear(new PiEvent.Answered('', '401 there is no model key', 0, ''))
                     .hear(new PiEvent.Settled())
 
         then:
@@ -215,7 +215,7 @@ class FollowingAConversationSpec extends Specification {
             genie's conversations.
         """
         when:
-            var failed = genie.withDraft('hi').send().hear(new PiEvent.Answered('', error, 0))
+            var failed = genie.withDraft('hi').send().hear(new PiEvent.Answered('', error, 0, ''))
 
         then:
             failed.transcript().entries().last().isFailed()
@@ -246,7 +246,7 @@ class FollowingAConversationSpec extends Specification {
         when:
             var stopped = genie.withDraft('hi').send()
                     .hear(new PiEvent.Said('Half'))
-                    .hear(new PiEvent.Answered('Half', 'Request was aborted', 0))
+                    .hear(new PiEvent.Answered('Half', 'Request was aborted', 0, ''))
 
         then:
             stopped.transcript().entries()*.text() == ['hi', 'Half', 'Stopped before the answer was done.']
@@ -262,13 +262,13 @@ class FollowingAConversationSpec extends Specification {
         when:
             var worked = genie.withDraft('tidy up').send()
                     .hear(new PiEvent.Said('Let me look.'))
-                    .hear(new PiEvent.Answered('Let me look.', '', 0))
+                    .hear(new PiEvent.Answered('Let me look.', '', 0, ''))
                     .hear(new PiEvent.ToolStarted('c1', 'bash', 'ls'))
                     .hear(new PiEvent.ToolFinished('c1', false, 'notes.md'))
                     .hear(new PiEvent.ToolStarted('c2', 'bash', 'rm -r tmp'))
                     .hear(new PiEvent.ToolFinished('c2', false, ''))
                     .hear(new PiEvent.Said('Done.'))
-                    .hear(new PiEvent.Answered('Done.', '', 0))
+                    .hear(new PiEvent.Answered('Done.', '', 0, ''))
                     .hear(new PiEvent.Settled())
 
         then:
@@ -327,8 +327,8 @@ class FollowingAConversationSpec extends Specification {
         """
         when:
             var restored = genie.hear(new PiEvent.History(Tuple.of(PiEvent.History.Line,
-                    new PiEvent.History.Line(true, 'hello', 'q1', false, false),
-                    new PiEvent.History.Line(false, 'hi there', 'a1', false, false)), 'a1'))
+                    new PiEvent.History.Line(true, 'hello', 'q1', false, false, ''),
+                    new PiEvent.History.Line(false, 'hi there', 'a1', false, false, '')), 'a1'))
 
         then:
             restored.transcript().entries()*.kind() == [Entry.Kind.YOU, Entry.Kind.GENIE]
@@ -348,13 +348,13 @@ class FollowingAConversationSpec extends Specification {
         given:
             var answered = genie.withDraft('draw me a map').send()
                     .hear(new PiEvent.ToolStarted('c1', 'bash', 'draw-map'))
-                    .hear(new PiEvent.Answered('Here it is.', '', 10))
+                    .hear(new PiEvent.Answered('Here it is.', '', 10, ''))
                     .hear(new PiEvent.Settled())
 
         when:
             var learned = answered.learn(new PiEvent.History(Tuple.of(PiEvent.History.Line,
-                    new PiEvent.History.Line(true, 'draw me a map', 'q1', false, false),
-                    new PiEvent.History.Line(false, 'Here it is.', 'a1', false, false)), 'a1'))
+                    new PiEvent.History.Line(true, 'draw me a map', 'q1', false, false, ''),
+                    new PiEvent.History.Line(false, 'Here it is.', 'a1', false, false, '')), 'a1'))
 
         then:
             learned.transcript().entries()*.kind() == [Entry.Kind.YOU, Entry.Kind.TOOL, Entry.Kind.GENIE]
@@ -363,7 +363,7 @@ class FollowingAConversationSpec extends Specification {
 
         and: 'questions pi has differently, as when it expanded a template, leave the chat as it is'
             answered.learn(new PiEvent.History(Tuple.of(PiEvent.History.Line,
-                    new PiEvent.History.Line(true, 'Draw a map of: ...', 'q1', false, false)), 'a1')).transcript() == answered.transcript()
+                    new PiEvent.History.Line(true, 'Draw a map of: ...', 'q1', false, false, '')), 'a1')).transcript() == answered.transcript()
     }
 
     def 'Asking a question differently leaves out what followed it, and the genie works on the new one'() {
@@ -375,10 +375,10 @@ class FollowingAConversationSpec extends Specification {
         """
         given:
             var talked = genie.hear(new PiEvent.History(Tuple.of(PiEvent.History.Line,
-                    new PiEvent.History.Line(true, 'Plan a trip', 'q1', false, false),
-                    new PiEvent.History.Line(false, 'Where to?', 'a1', false, false),
-                    new PiEvent.History.Line(true, 'By train', 'q2', false, false),
-                    new PiEvent.History.Line(false, 'Nice.', 'a2', false, false)), 'a2'))
+                    new PiEvent.History.Line(true, 'Plan a trip', 'q1', false, false, ''),
+                    new PiEvent.History.Line(false, 'Where to?', 'a1', false, false, ''),
+                    new PiEvent.History.Line(true, 'By train', 'q2', false, false, ''),
+                    new PiEvent.History.Line(false, 'Nice.', 'a2', false, false, '')), 'a2'))
 
         when:
             var changed = talked.askInstead('q2', '  By bike  ')
@@ -401,15 +401,15 @@ class FollowingAConversationSpec extends Specification {
             shares no user message with the chat is built anew from the first entry.
         """
         given:
-            var line = { boolean fromUser, String text, String id -> new PiEvent.History.Line(fromUser, text, id, false, false) }
+            var line = { boolean fromUser, String text, String id -> new PiEvent.History.Line(fromUser, text, id, false, false, '') }
             var talked = genie.withDraft('Plan a trip').send()
                     .hear(new PiEvent.ToolStarted('c1', 'bash', 'look up trains'))
-                    .hear(new PiEvent.Answered('Where to?', '', 10))
+                    .hear(new PiEvent.Answered('Where to?', '', 10, ''))
                     .hear(new PiEvent.Settled())
                     .learn(new PiEvent.History(Tuple.of(PiEvent.History.Line,
                             line(true, 'Plan a trip', 'q1'), line(false, 'Where to?', 'a1')), 'a1'))
                     .withDraft('By train').send()
-                    .hear(new PiEvent.Answered('Nice.', '', 10))
+                    .hear(new PiEvent.Answered('Nice.', '', 10, ''))
                     .hear(new PiEvent.Settled())
                     .learn(new PiEvent.History(Tuple.of(PiEvent.History.Line,
                             line(true, 'Plan a trip', 'q1'), line(false, 'Where to?', 'a1'),

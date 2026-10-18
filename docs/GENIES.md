@@ -31,6 +31,22 @@ chosen, and on Look up. For Eden AI these are the models served in the EU. The S
 stays pressed in while the page is open; pressed again, like Done, it keeps the settings and goes
 back to the genie's chat.
 
+**The model** in the settings is the only one that decides, for every genie and every
+conversation. Genies gives it to each genie's lamp, which has every answer written by it: in a new
+conversation, and in an old one that began on another model. The earlier answers keep the model
+that wrote them. Changed while genies are awake, it reaches each of them when the settings are
+left (`GenieRunner.useModel`, which calls `Lamp.useModel`), for its next message or job, and its
+lamp stays lit, so whatever runs on its desktop goes on. That happens only for a lamp lit with the
+service and key the settings now give: its relay sends every request there, and a model from
+another place would not be known. A changed place, address or key needs the lamp to be lit again,
+which would end what runs on its desktop, so Genies leaves all the new settings, the model with
+them, for the genie's next wake. A genie Genies joined when it opened, whose service and key it
+cannot know, keeps its model until then too. While genies are awake the settings say so in one
+quiet line (`GeniesState.noteForAwakeGenies`). The
+model is named as the service names it, which is how pi names it too: an Eden AI name such as
+`azure/gpt-6.1-sol`, the name a model server lists, or `genies/<model>` on the simple way. A name
+with a space, or a character outside plain ASCII, is pointed out in the settings.
+
 ## The first start, and the simple way to a model
 
 Without genies, Genies opens on the settings, without the list of genies, and welcomes the user:
@@ -105,7 +121,7 @@ start asleep, unless their lamp was left running: see "Closing Genies".
 
 **Waking a genie** (`GenieRunner.wake`):
 
-1. `Lamp.at(<lamp>).enableScheduling().modelService(<service>).modelKey(<key>).start()` starts oillamp's engine as a
+1. `Lamp.at(<lamp>).model(<model>).enableScheduling().modelService(<service>).modelKey(<key>).start()` starts oillamp's engine as a
    process of its own. The key goes into that process's environment, never onto its command line
    or into the lamp. The first time, the engine builds the sandbox image, which takes minutes; its
    progress becomes the genie's status line. While the genie wakes, a wave of the flame's colour
@@ -117,9 +133,12 @@ start asleep, unless their lamp was left running: see "Closing Genies".
 3. Genies writes the genie's instructions (`~/outbox`, `~/inbox`, its desktop being watched) to
    `~/.pi/agent/APPEND_SYSTEM.md`, and the model from the settings into `~/.pi/agent/settings.json`,
    keeping that file's other keys. pi reads both when the lamp's session starts it, at the first
-   message.
-4. The chat shows the conversation Genies was in, or else the genie's most recent one, read with
-   `Lamp.conversations`.
+   message. The model there is pi's default for a new conversation, which so starts on the right
+   model without a switch; the lamp's model decides all the same.
+4. The chat shows the conversation Genies was in, or else the user's most recent one, read with
+   `Lamp.conversations`. A job's run is never opened this way: it is listed with the scheduled
+   runs, and the user's next message must not land in it. With only job runs, the chat starts
+   empty.
 
 Genies does not start pi. The lamp's session holds the genie's one pi, as it does for any lamp,
 and every message, scheduled job and `oillamp ask` goes through it, one run at a time.
@@ -165,8 +184,8 @@ catch-up comes first and ends with an `AgentStatus`; `GenieRunner` holds those e
 then. If the agent is answering a question of the user's, the chat shows that conversation as it
 stood before the question, then the question, and the genie is working: the held-back run events
 replay what it has written so far, and the rest arrives as it is written. Otherwise the chat shows
-the conversation Genies was in. The lamp keeps the model settings it was started with until the
-genie is put to sleep.
+the conversation Genies was in, or else the user's most recent one, never a job's run. The lamp
+keeps the model service, key and model it was started with until the genie is put to sleep.
 
 **Deleting** a genie puts it to sleep, then `Lamp.at(<lamp>).remove()` has the engine delete the
 lamp. The engine has to do it: part of a lamp belongs to the sandbox's own users, and neither Genies
@@ -286,10 +305,18 @@ position can show a jump.
 When the model cannot answer, the chat says why as a problem in red, in plain words, from the
 error pi got (`Transcript.explained`): oillamp could not reach the model service, the connection
 to it broke off, or the service refused the key, took no more requests, refused the request, or
-had trouble of its own, each with the service's own message. A retry pi makes by itself adds
+had trouble of its own, each with the service's own message. A refused request names the model it
+was for, such as "tensorx/deepseek/deepseek-v4.1-flash refused the request (400): …", since the
+same request may suit another model. A retry pi makes by itself adds
 "Trying again, 1 of 3." A genie the user stopped ends with a grey notice instead. A conversation
 read again from pi's session file shows its failures the same way, and keeps for each answer
 whether the genie used tools after it; it leaves out the tools and thoughts themselves.
+
+Pointing at an answer shows which model wrote it, "Written by azure/gpt-6.1-sol", as a tooltip
+(`Entry.writtenBy`), and nothing else in the chat says it. The model comes with the answer as it
+is written (`LampAgentProgress.Answered.model`), and from pi's session file when a conversation is
+read again (`LampConversation.Entry.model`), so a conversation that changed model says it answer
+by answer.
 
 Genies brings its own fonts, Inter for text and JetBrains Mono for code, so it looks the same
 whatever font the desktop uses. Where JetBrains Mono is also installed on the desktop, in weights
@@ -601,6 +628,7 @@ it, so `apt` installs it along.
 | `SettingUpAModelSpec` | model sizes and where they run, the suggestion, the welcome's page, and what setting up Ollama has left to do |
 | `FindingOllamaSpec` | the memory and NVIDIA cards, read as Linux and `nvidia-smi` print them |
 | `WatchingAGeniesDesktopSpec` | the VNC client, against a stand-in desktop playing wayvnc's part byte by byte, asking for a size and being told no included |
+| `ChoosingTheGeniesModelSpec` | the settings' model reaching each genie's lamp in all four ways to a model, changing it while a genie is awake without putting its lamp out, which model wrote each answer on hover, a refused request naming the model, and the note in the settings |
 | `KeepingAGenieAliveSpec` | a genie's life through the Lamp API, with oillamp's engine in the test's JVM on a simulated machine and a stand-in pi that writes conversations as pi does; `lamp show` opening its desktop |
 | `PlanningAGeniesWeekSpec` | the ways a job repeats and their cron expressions, the editor's checks and sentence, and the timeline |
 | `KeepingAGeniesScheduleSpec` | the schedule read and changed through the lamp, asleep and awake, and a job's run followed on the page, against the engine in the test's JVM |

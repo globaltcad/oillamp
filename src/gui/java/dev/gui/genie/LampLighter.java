@@ -21,7 +21,9 @@ import dev.lamp.LampRun;
 /// Lights genies' lamps with oillamp, the way any application does: through [Lamp].
 ///
 /// The model service and key from the settings go to the lamp's engine, which keeps the key on
-/// the host. The sandbox gets only its fixed relay address and a placeholder.
+/// the host. The sandbox gets only its fixed relay address and a placeholder. The model from the
+/// settings goes to the engine too, which has every run answered by it, in old conversations as
+/// in new ones; [Lit#useModel] changes it while the lamp is lit.
 ///
 /// Every lamp is lit with its schedule on, so the jobs on it wake the genie while it is awake.
 public final class LampLighter implements Lighter {
@@ -46,7 +48,13 @@ public final class LampLighter implements Lighter {
     public Lit light(Path directory, Settings settings, String key, Consumer<String> progress,
                      Consumer<LampEvent> events) throws IOException, InterruptedException {
         AtomicReference<String> problem = new AtomicReference<>("");
-        Lamp lamp = unlit(directory)
+        LampDirectory starting;
+        try {
+            starting = unlit(directory).model(settings.model().strip());
+        } catch (IllegalArgumentException wrong) {
+            throw new IOException("\"" + settings.model().strip() + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol", wrong);
+        }
+        Lamp lamp = starting
                 .enableScheduling()
                 .modelService(URI.create(settings.service().strip()))
                 .modelKey(key)
@@ -95,6 +103,8 @@ public final class LampLighter implements Lighter {
                     throws IOException, InterruptedException, LampFailedException { return lamp.send(question); }
             @Override public void cancel(String run)
                     throws IOException, InterruptedException, LampFailedException { lamp.cancel(run); }
+            @Override public void useModel(String model)
+                    throws IOException, InterruptedException, LampFailedException { lamp.useModel(model); }
             @Override public void close() {
                 if (lamp.holds()) {
                     lamp.close();
