@@ -270,6 +270,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
                     dev.gui.desktop.Desktop desktop() { lit.desktop() }
                     LampRun send(LampPrompt question) { lit.send(question) }
                     void cancel(String run) { lit.cancel(run) }
+                    void useModel(String model) { lit.useModel(model) }
                     void close() { lit.close() }
                 }
             }

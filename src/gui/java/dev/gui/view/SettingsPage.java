@@ -169,6 +169,8 @@ final class SettingsPage {
         Val<Boolean> hasProblem = state.viewAs(Boolean.class, it -> it.advanced() && it.settingsProblem().isPresent());
         Val<Boolean> fine = state.viewAs(Boolean.class, it -> it.advanced() && it.settingsProblem().isEmpty());
         Val<Boolean> welcome = state.viewAs(Boolean.class, it -> !it.hasGenies());
+        Val<String> awakeNote = state.viewAsString(it -> it.noteForAwakeGenies().orElse(""));
+        Val<Boolean> anyAwake = awakeNote.viewAs(Boolean.class, it -> !it.isEmpty());
         // Whether the card's halves stand side by side.
         Var<Boolean> split = Var.of(false);
         Val<Boolean> busy = ollama.viewAs(Boolean.class, it -> it.step().isBusy());
@@ -228,7 +230,8 @@ final class SettingsPage {
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(advanced.viewAsString(it -> it
                                     ? "Where your genies' model runs, and how they reach it."
                                     : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."),
-                                    SUBTEXT, Val.of(true))))
+                                    SUBTEXT, Val.of(true)))
+                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, SUBTEXT, anyAwake)))
                         .add(
                             box("ins 0, hidemode 3")
                             .add(ViewPartsUtil.link("Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)

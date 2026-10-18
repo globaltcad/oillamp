@@ -65,6 +65,9 @@ public interface Lighter {
         /// See [Lamp#cancel(String)].
         void cancel(String run) throws IOException, InterruptedException, LampFailedException;
 
+        /// See [Lamp#useModel]: the genie answers with `model` from its next run on.
+        void useModel(String model) throws IOException, InterruptedException, LampFailedException;
+
         /// Ends the sandbox, and returns once it is gone.
         @Override void close();
 
