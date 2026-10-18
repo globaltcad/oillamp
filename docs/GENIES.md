@@ -35,8 +35,8 @@ back to the genie's chat.
 conversation. Genies gives it to each genie's lamp, which has every answer written by it: in a new
 conversation, and in an old one that began on another model. The earlier answers keep the model
 that wrote them. Changed while genies are awake, it reaches each of them when the settings are
-left (`GenieRunner.useModel`, which calls `Lamp.useModel`), for its next message or job, and its
-lamp stays lit, so whatever runs on its desktop goes on. That happens only for a lamp lit with the
+left (`GenieRunner.useModel`, which calls `Lamp.useModel` and nothing else), for its next message
+or job, in an old conversation or a new one, and its lamp stays lit, so whatever runs on its desktop goes on. That happens only for a lamp lit with the
 service and key the settings now give: its relay sends every request there, and a model from
 another place would not be known. A changed place, address or key needs the lamp to be lit again,
 which would end what runs on its desktop, so Genies leaves all the new settings, the model with
@@ -106,7 +106,8 @@ with at most 8 billion parameters working on each word; otherwise `qwen3:1.7b`.
 | Ollama, when Genies installed it, and what Ollama printed when Genies started it | `~/.local/share/genies/ollama/`, with `bin/ollama` and `serve.log` | Genies |
 | Ollama's models, and Genies' `genies/<model>` versions of them | `~/.ollama/models` | Ollama |
 | each genie's conversations, one file each, with every branch | in its home, `.pi/agent/sessions/<folder>/*.jsonl`, inside its lamp | pi, run by the lamp's session |
-| the genie's instructions, and the model pi uses | in its home, `.pi/agent/APPEND_SYSTEM.md`, and `defaultProvider` and `defaultModel` in `.pi/agent/settings.json` | Genies writes them at every wake |
+| the genie's instructions, which tell it its name, `~/outbox`, `~/inbox` and that its desktop can be shown | in `GenieInstructionsUtil`; at every wake Genies gives them to the lamp with `Lamp.Starting.instructions`, and the lamp's engine writes them where the genie's pi reads them | Genies (the text); oillamp (the file in the genie's home) |
+| the model pi starts a new conversation on | in the genie's home, as pi's default; written by the lamp's engine from the model Genies gives it with `Lamp.Starting.model` and `Lamp.useModel` | oillamp |
 | the files a genie hands over | `~/outbox` in its home | the genie |
 | the files the user gives a genie | `~/inbox` in its home | Genies puts them there |
 | each genie's jobs | `.oillamp/schedule.json` in its lamp | oillamp; Genies changes it through `Lamp.Starting` |
@@ -121,21 +122,21 @@ start asleep, unless their lamp was left running: see "Closing Genies".
 
 **Waking a genie** (`GenieRunner.wake`):
 
-1. `Lamp.at(<lamp>).model(<model>).enableScheduling().modelService(<service>).modelKey(<key>).start()` starts oillamp's engine as a
-   process of its own. The key goes into that process's environment, never onto its command line
-   or into the lamp. The first time, the engine builds the sandbox image, which takes minutes; its
+1. `Lamp.at(<lamp>).model(<model>).instructions(<the genie's instructions>).enableScheduling().modelService(<service>).modelKey(<key>).start()`
+   starts oillamp's engine as a process of its own. The key and the instructions go into that
+   process's environment; the key never reaches its command line or the lamp. The first time, the
+   engine builds the sandbox image, which takes minutes; its
    progress becomes the genie's status line. While the genie wakes, a wave of the flame's colour
    runs through that line, under its name in its card and in the chat's top bar, and in the chat
    where the message box would be, one 120-unit wave each 1.2 seconds, so a step that takes long
    still shows that it goes on. `enableScheduling` turns the lamp's schedule on for
    this session, whatever its `oillamp.toml` says, so its jobs wake the genie while it is awake.
+   Once the sandbox is up, and before the genie's pi starts at the first message, the engine
+   writes the instructions where pi adds them to its system prompt, and the model as pi's default
+   for a new conversation. Genies does not know where those are, nor that the agent is pi: it
+   uses the Lamp API alone, and never writes into the genie's home itself.
 2. Once the lamp runs, `mkdir -p ~/outbox ~/inbox` runs in the sandbox, over the lamp's ssh command.
-3. Genies writes the genie's instructions (`~/outbox`, `~/inbox`, its desktop being watched) to
-   `~/.pi/agent/APPEND_SYSTEM.md`, and the model from the settings into `~/.pi/agent/settings.json`,
-   keeping that file's other keys. pi reads both when the lamp's session starts it, at the first
-   message. The model there is pi's default for a new conversation, which so starts on the right
-   model without a switch; the lamp's model decides all the same.
-4. The chat shows the conversation Genies was in, or else the user's most recent one, read with
+3. The chat shows the conversation Genies was in, or else the user's most recent one, read with
    `Lamp.conversations`. A job's run is never opened this way: it is listed with the scheduled
    runs, and the user's next message must not land in it. With only job runs, the chat starts
    empty.
@@ -560,7 +561,7 @@ painted without smoothing, which does nothing for squares on whole pixels but sl
 | `dev.gui.model` | `GeniesState`, `Genie`, `Transcript`, `Entry`, `Settings`, `OllamaSetup` and `Hardware` for the simple way to a model, `Handout`, `Conversations`, `Conversation` and `Talk` for the tree, `Fold` for the trees and the list of genies above a narrow window's genie, `Schedule`, `JobDraft`, `Recurrence`, `Timeline` and `DateWordingUtil` for the schedule, and `History` for the history: records with withers, every change a pure method | no |
 | `dev.gui.pi` | `PiEvent` (what the chat is told) | no |
 | `dev.gui.desktop` | `RfbConnection`, `X11KeysymUtil`, `Desktop` (its socket and its own size) | `RfbConnection` only |
-| `dev.gui.genie` | `GenieRunner` (one genie's life), `LampLighter` (lamps through `dev.lamp`), `GenieFileTransferUtil` (files), `LampApiConversionUtil` (Lamp events and conversations as `PiEvent` values and tree rows), `GeniePiSetupUtil` (pi's instructions and model in the genie's home), `ScheduleKeeper` (the schedule, through the lamp), `HistoryKeeper` (the history, read and saved to through the lamp), `OllamaKeeper` (Ollama found, installed, started, and a model readied), `Shelf` (what is kept on disk) | yes |
+| `dev.gui.genie` | `GenieRunner` (one genie's life), `LampLighter` (lamps through `dev.lamp`), `GenieFileTransferUtil` (files), `LampApiConversionUtil` (Lamp events and conversations as `PiEvent` values and tree rows), `GenieInstructionsUtil` (what a genie is told about living in Genies), `ScheduleKeeper` (the schedule, through the lamp), `HistoryKeeper` (the history, read and saved to through the lamp), `OllamaKeeper` (Ollama found, installed, started, and a model readied), `Shelf` (what is kept on disk) | yes |
 | `dev.gui.view` | `GeniesView` (the window, bound to `Var<GeniesState>` through lenses), `SchedulePage`, `HistoryPage`, `SettingsPage`, `DesktopScreen`, the look | Swing only |
 | `dev.gui` | `Genies`: the entry point, and the `Actions` the window calls | ties it together |
 
@@ -628,8 +629,8 @@ it, so `apt` installs it along.
 | `SettingUpAModelSpec` | model sizes and where they run, the suggestion, the welcome's page, and what setting up Ollama has left to do |
 | `FindingOllamaSpec` | the memory and NVIDIA cards, read as Linux and `nvidia-smi` print them |
 | `WatchingAGeniesDesktopSpec` | the VNC client, against a stand-in desktop playing wayvnc's part byte by byte, asking for a size and being told no included |
-| `ChoosingTheGeniesModelSpec` | the settings' model reaching each genie's lamp in all four ways to a model, changing it while a genie is awake without putting its lamp out, which model wrote each answer on hover, a refused request naming the model, and the note in the settings |
-| `KeepingAGenieAliveSpec` | a genie's life through the Lamp API, with oillamp's engine in the test's JVM on a simulated machine and a stand-in pi that writes conversations as pi does; `lamp show` opening its desktop |
+| `ChoosingTheGeniesModelSpec` | what Genies hands the lamp and what it leaves to it; the settings' model reaching each genie's lamp in all four ways to a model, changing it while a genie is awake without putting its lamp out, in an old chat and a new one, which model wrote each answer on hover, a refused request naming the model, and the note in the settings |
+| `KeepingAGenieAliveSpec` | a genie's life through the Lamp API, from the model, instructions and key its lamp is lit with, with oillamp's engine in the test's JVM on a simulated machine and a stand-in pi that writes conversations as pi does; `lamp show` opening its desktop |
 | `PlanningAGeniesWeekSpec` | the ways a job repeats and their cron expressions, the editor's checks and sentence, and the timeline |
 | `KeepingAGeniesScheduleSpec` | the schedule read and changed through the lamp, asleep and awake, and a job's run followed on the page, against the engine in the test's JVM |
 | `KeepingAGeniesHistorySpec` | the history read and saved to, going back and undoing it, against the engine in the test's JVM; how a long history folds, and when undo is offered |

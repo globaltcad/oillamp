@@ -254,8 +254,8 @@ class KeepingAGeniesScheduleSpec extends Specification {
     private Lighter lighter() {
         var real = new LampLighter(sandbox.launcher)
         return new Lighter() {
-            Lighter.Lit light(Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
-                var lit = real.light(directory, settings, key, progress, events)
+            Lighter.Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
+                var lit = real.light(directory, name, settings, key, progress, events)
                 new Lighter.Lit() {
                     Process exec(String... command) {
                         var home = Lamp.agentHome(lamp).orElseThrow()

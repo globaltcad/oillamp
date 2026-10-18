@@ -114,14 +114,12 @@ public final class GenieRunner {
             sleeping = false;
             changes.accept(Genie::waking);
             try {
-                Lighter.Lit lit = lighter.light(directory, settings, key,
+                Lighter.Lit lit = lighter.light(directory, name, settings, key,
                         what -> changes.accept(genie -> genie.lampSays(what)), this::onLampEvent);
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays("waking the genie"));
                 GenieFileTransferUtil.makeDirectories(lit);
-                GeniePiSetupUtil.prepare(home().orElseThrow(() -> new IOException("the genie's lamp has no home")),
-                        name, settings.model());
                 showConversation(fileOrMostRecent(conversation), leaf);
                 var files = GenieFileTransferUtil.list(lit);
                 changes.accept(genie -> genie.withHandouts(files).awake());
@@ -455,7 +453,7 @@ public final class GenieRunner {
 
     /// Has the genie answer with the model `settings` name from its next message on, without
     /// putting its lamp out: whatever runs on its desktop goes on. A job that runs next uses it
-    /// too. pi's default in the genie's home follows, so that a new conversation starts on it.
+    /// too, and so does a conversation the genie starts.
     ///
     /// Only when the lamp reaches its model the way `settings` say, with `key`: its relay sends
     /// every request to the service and with the key it was lit with, which may not know a
@@ -474,8 +472,6 @@ public final class GenieRunner {
             try {
                 lit.get().useModel(wanted);
                 litWith = Optional.of(was.get().withModel(wanted));
-                Optional<Path> home = home();
-                if (home.isPresent()) GeniePiSetupUtil.useModel(home.get(), wanted);
             } catch (IOException | Lamp.Failed | IllegalArgumentException failed) {
                 String why = failed instanceof Lamp.Failed refused ? refused.problem().whatHappened() : reasonOf(failed);
                 showProblem("The genie keeps answering with " + was.get().model() + " until it wakes again: " + why);
@@ -598,9 +594,6 @@ public final class GenieRunner {
             }
         });
     }
-
-    /// The genie's home in its lamp, once the lamp was first lit.
-    private Optional<Path> home() { return Lamp.agentHome(directory); }
 
     private static String reasonOf(Exception failed) {
         return Optional.ofNullable(failed.getMessage()).filter(message -> !message.isBlank()).orElse(failed.toString());

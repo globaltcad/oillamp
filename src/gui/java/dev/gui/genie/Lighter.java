@@ -18,12 +18,15 @@ public interface Lighter {
 
     /// Starts the lamp in `directory` and returns once its sandbox runs.
     ///
+    /// @param name     the genie's name, which it is told in its instructions
+    /// @param settings the model service and the model the genie answers with
     /// @param key      the model key, which the lamp's engine keeps on the host
     /// @param progress receives what the lamp is doing, in a few words, while it starts
     /// @param events   receives every event of the lamp's session, from any thread, including
     ///                 the progress of the agent's runs
     /// @throws IOException when the lamp did not start; the message says why, for the user
-    Lit light(Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events)
+    Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress,
+              Consumer<LampEvent> events)
             throws IOException, InterruptedException;
 
     /// The lamp in `directory`, not lit, for what works without its sandbox: its schedule and
