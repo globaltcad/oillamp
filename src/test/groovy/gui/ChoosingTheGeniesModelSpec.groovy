@@ -13,14 +13,14 @@ import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampPrompt
 import dev.lamp.LampRun
-import groovy.json.JsonSlurper
 import oillamp.ScenarioHost
 import sprouts.Tuple
+import spock.lang.Narrative
+import spock.lang.Rollup
 import spock.lang.Specification
 import spock.lang.TempDir
 import spock.lang.Timeout
 
-import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
@@ -28,23 +28,71 @@ import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.function.UnaryOperator
 
-/**
- *  The genies' model: the one in Genies' settings, for every genie and every conversation.
- *
- *  <p>The settings hold one model for all genies, and nothing else decides. Genies gives it to
- *  each genie's lamp, which has every answer written by it, in an old conversation as in a new
- *  one. Changed while a genie is awake, it applies to the genie's next message, and the genie's
- *  lamp stays lit, so whatever runs on its desktop goes on. Which model wrote an answer is shown
- *  only when the user points at the answer.
- *
- *  <p>The lamp is oillamp's real engine, in this JVM, on a simulated machine with a stand-in pi
- *  that keeps track of its model as pi does, and writes into each answer which model gave it.
- */
+@Narrative('''
+The genies' model: the one in Genies' settings, for every genie and every conversation.
+
+The settings hold one model for all genies, and nothing else decides. Changed while a genie is
+awake, it applies to the genie's next message, and the genie's lamp stays lit, so whatever runs
+on its desktop goes on. Which model wrote an answer is shown when the user points at the answer.
+
+## What Genies does, and what it leaves to the lamp
+
+Genies uses the Lamp API and nothing else. It does not know that a genie's agent is pi, nor
+where pi keeps its settings: the lamp's engine looks after that.
+
+```
+ Genies                                   Lamp API                     the lamp's engine
+ ──────                                   ────────                     ─────────────────
+ a genie wakes:
+   GenieRunner.wake ─▶ LampLighter.light ─▶ Lamp.at(dir)
+                                              .modelService(url)      ─▶ oillamp at <dir> --embedded
+                                              .modelKey(key)               --model <id> …
+                                              .model(id)                   writes pi's default model
+                                              .instructions(text)          and the instructions, and
+                                              .start()                     has every run answered by <id>
+
+ the settings' model changes while it is awake:
+   GenieRunner.useModel ─────────────────▶ lamp.useModel(id)         ─▶ oillamp model <dir> <id>
+                                                                          the next run, and pi's
+                                                                          default for new chats
+```
+
+`url`, `key` and `id` come from the settings; `text` is the genie's instructions, which tell it
+its name and how Genies works. Genies hands a new model to an awake genie's lamp only when the
+lamp reaches its models the way the settings now say, through the same service with the same
+key: the lamp's model relay sends every request to the service it was lit with, which may not
+know a model from another place at all.
+
+## How the scenarios see it
+
+The lamp is oillamp's real engine, in this JVM, on a simulated machine with a stand-in pi that
+keeps track of its model as pi does, and writes into each answer which model gave it. What
+Genies gave the lamp is read from the engine's command line, as the scenarios' launcher
+recorded it; which model wrote an answer, from the chat as Genies shows it.
+''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class ChoosingTheGeniesModelSpec extends Specification {
 
+    /** The model the settings name in most scenarios: one Eden AI offers, as Eden AI names it. */
     static final String GPT = 'azure/gpt-6.1-sol'
+    /** Another one, for a genie that answered before the settings changed. */
     static final String DEEPSEEK = 'tensorx/deepseek/deepseek-v4.1-flash'
+
+    /** The settings for each place a model can run, by the place's name in the settings. */
+    static final Map<String, Settings> SETTINGS = [
+            'Eden AI'                 : Settings.defaults().withModel(GPT),
+            'a server elsewhere'      : Settings.defaults().withPlace(Settings.Place.ELSEWHERE)
+                    .withElsewhere(new Settings.Elsewhere('https://llm.example.com/v1', '', 'llama3.3:70b')),
+            'a server on this machine': Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
+                    .withLocal(new Settings.OnThisMachine('http://127.0.0.1:1234/v1', 'qwen2.5-7b-instruct')),
+            'Ollama, the simple way'  : Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
+                    .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, 'genies/qwen3:8b'))]
+
+    /** Model names a user might enter, by what is special about them. */
+    static final Map<String, String> NAMES = [
+            'as Eden AI names it'                       : GPT,
+            'with a space'                              : 'azure/gpt 6.1',
+            'with a non-breaking hyphen from a web page': 'azure/gpt\u20116.1-sol']
 
     @TempDir Path tmp
     ScenarioHost host
@@ -66,41 +114,38 @@ class ChoosingTheGeniesModelSpec extends Specification {
         runner?.sleepAndWait(30)
     }
 
-    def 'The model in the settings reaches the genie\'s lamp, wherever the model runs: #where'() {
+    @Rollup
+    def 'The model in the settings reaches the genie\'s lamp, wherever the model runs'() {
         reportInfo """
             Whichever way the user reaches a model, the model the settings name is the one the
             genie's lamp is given, as the model server names it, since that is how pi names it
             too: the Eden AI name, the name a server lists, or Genies' own version of an Ollama
-            model, which it calls genies/ and the model.
+            model, which it calls genies/ and the model. pi in the lamp reaches each of them
+            through the same provider, so the name is all the lamp needs.
         """
-        when:
-            runner.wake('Jafar', settings, 'sk-key')
+        when: 'Jafar wakes with settings for the place in the row below'
+            runner.wake('Jafar', SETTINGS[where], 'sk-key')
             waitUntil { genie.phase() == Genie.Phase.READY }
 
-        then:
-            var arguments = host.engines.first().arguments
-            arguments[arguments.indexOf('--model') + 1] == model
-
-        and: 'pi starts a new conversation on it, too'
-            piSettings().defaultModel == model
+        then: 'the genie\'s engine was started with the model the settings name there'
+            modelGivenWhenLit() == model
 
         where:
-            where                     | settings                                                                                      || model
-            'Eden AI'                 | Settings.defaults().withModel(GPT)                                                            || GPT
-            'a server elsewhere'      | Settings.defaults().withPlace(Settings.Place.ELSEWHERE)
-                                                .withElsewhere(new Settings.Elsewhere('https://llm.example.com/v1', '', 'llama3.3:70b')) || 'llama3.3:70b'
-            'a server on this machine'| Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
-                                                .withLocal(new Settings.OnThisMachine('http://127.0.0.1:1234/v1', 'qwen2.5-7b-instruct'))  || 'qwen2.5-7b-instruct'
-            'Ollama, the simple way'  | Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
-                                                .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, 'genies/qwen3:8b'))                || 'genies/qwen3:8b'
+            where                      || model
+            'Eden AI'                  || GPT
+            'a server elsewhere'       || 'llama3.3:70b'
+            'a server on this machine' || 'qwen2.5-7b-instruct'
+            'Ollama, the simple way'   || 'genies/qwen3:8b'
     }
 
-    def 'A model changed while the genie is awake writes its next answer, in the same conversation, and the lamp stays lit'() {
+    def 'A model changed while the genie is awake writes its next answer, in the same conversation and in a new one, and the lamp stays lit'() {
         reportInfo """
             The user picks another model in the settings while a genie is awake, and goes on
             chatting where they were. The next answer comes from the new model, though the
-            conversation began on the old one. The genie's lamp is not put out for it: whatever
-            the genie had open on its desktop is still there.
+            conversation began on the old one, and so does the first answer of a chat the user
+            starts afresh. Genies only tells the lamp; the lamp's engine sees to both. The
+            genie's lamp is not put out for it: whatever the genie had open on its desktop is
+            still there.
         """
         given: 'a genie that answered on DeepSeek'
             runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key')
@@ -108,19 +153,30 @@ class ChoosingTheGeniesModelSpec extends Specification {
             say('hello')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
-        when: 'the settings change to GPT, as leaving the settings page applies them'
+        when: 'the settings change to GPT, as leaving the settings page applies them, and the chat goes on'
             runner.useModel(Settings.defaults().withModel(GPT), 'sk-key')
             say('and again')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 2 }
 
-        then: 'GPT wrote the new answer in the same conversation, and pointing at each answer says so'
+        then: 'Genies told the lamp the new model, through the Lamp API'
+            host.engines.any { it.arguments == ['model', lamp.toString(), GPT, '--embedded'] }
+
+        and: 'GPT wrote the new answer in the same conversation, and pointing at each answer says so'
             Lamp.conversations(lamp).size() == 1
             answers()*.writtenBy() == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
 
-        and: 'the lamp stayed lit, and pi starts new conversations on GPT from now on'
+        and: 'the lamp stayed lit'
             closed.isEmpty()
             runner.isAwake()
-            piSettings().defaultModel == GPT
+
+        when: 'the user starts a new chat'
+            runner.startAfresh()
+            waitUntil { answers().isEmpty() }
+            say('hello again')
+            waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
+
+        then: 'GPT wrote its first answer'
+            answers()*.writtenBy() == ["Written by ${GPT}".toString()]
     }
 
     def 'Pointing at an answer of a conversation read back from the lamp says which model wrote it'() {
@@ -146,7 +202,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             runner.wake('Jafar', Settings.defaults().withModel(GPT), 'sk-key')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 2 }
 
-        then:
+        then: 'each answer names its own model, and the user\'s messages name none'
             answers()*.writtenBy() == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
             genie.transcript().entries().findAll { it.kind() == Entry.Kind.YOU }*.writtenBy() == ['', '']
     }
@@ -171,10 +227,9 @@ class ChoosingTheGeniesModelSpec extends Specification {
             say('hello')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
-        then: 'GPT still answers, and nothing was changed on the lamp or in pi\'s settings'
+        then: 'GPT still answers, and the lamp was not told of either change'
             answers()*.writtenBy() == ["Written by ${GPT}".toString()]
             !host.engines.any { it.arguments.first() == 'model' }
-            piSettings().defaultModel == GPT
 
         when: 'the genie sleeps and wakes with the new settings'
             runner.sleep()
@@ -184,9 +239,8 @@ class ChoosingTheGeniesModelSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.READY }
 
         then: 'its lamp is lit with all of them'
-            var arguments = host.engines.findAll { it.arguments.first() == 'at' }.last().arguments
-            arguments[arguments.indexOf('--model') + 1] == 'genies/qwen3:8b'
-            arguments[arguments.indexOf('--model-service') + 1] == Settings.OLLAMA
+            modelGivenWhenLit() == 'genies/qwen3:8b'
+            optionGivenWhenLit('--model-service') == Settings.OLLAMA
     }
 
     def 'A genie that kept running while Genies was closed keeps its model until it wakes again'() {
@@ -213,7 +267,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             say('hello')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
-        then:
+        then: 'DeepSeek answered'
             answers()*.writtenBy() == ["Written by ${DEEPSEEK}".toString()]
     }
 
@@ -224,7 +278,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             Naming the model tells the user what to change. Without a known model, the chat says
             what it said before.
         """
-        given:
+        given: 'what Eden AI answered when it refused the DeepSeek model'
             var refusal = '400: {"message":"OpenAIException - Invalid request","type":"invalid_request_error","param":null,"code":"invalid_parameter"}'
 
         expect: 'as the answer fails'
@@ -249,11 +303,11 @@ class ChoosingTheGeniesModelSpec extends Specification {
             does not do that by itself; the settings say it happens when a genie next wakes.
             With every genie asleep there is nothing to say.
         """
-        given:
+        given: 'one genie asleep, and one awake'
             var asleep = Genie.named('Jafar')
             var awake = Genie.named('Iago').waking().awake()
 
-        expect:
+        expect: 'nothing to say with every genie asleep, and one calm line once one is awake'
             GeniesState.of(Tuple.of(Genie, asleep), Settings.defaults(), Optional.empty()).noteForAwakeGenies().isEmpty()
             GeniesState.of(Tuple.of(Genie, asleep, awake), Settings.defaults(), Optional.empty()).noteForAwakeGenies() ==
                     Optional.of('Genies that are awake answer with a new model from their next message on. ' +
@@ -261,20 +315,21 @@ class ChoosingTheGeniesModelSpec extends Specification {
                                 'everything for a genie that kept running while Genies was closed.')
     }
 
+    @Rollup
     def 'A model name that no service could have is pointed out in the settings'() {
         reportInfo """
             A name with a space, or a character pasted along from a web page such as a
             non-breaking hyphen, would fail every message. The settings say so before a genie
             wakes with it.
         """
-        expect:
-            Settings.defaults().withModel(name).problem(Optional.of('sk-key')).orElse('').contains("A model's name has no spaces") == refused
+        expect: 'the settings point at the name the row below describes, or not'
+            Settings.defaults().withModel(NAMES[name]).problem(Optional.of('sk-key')).orElse('').contains("A model's name has no spaces") == pointedOut
 
         where:
-            name                 || refused
-            GPT                  || false
-            'azure/gpt 6.1'      || true
-            'azure/gpt‑6.1-sol'  || true
+            name                                       || pointedOut
+            'as Eden AI names it'                      || false
+            'with a space'                             || true
+            'with a non-breaking hyphen from a web page' || true
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
@@ -288,11 +343,16 @@ class ChoosingTheGeniesModelSpec extends Specification {
         genie.transcript().entries().findAll { it.kind() == Entry.Kind.GENIE && !it.isWriting() }
     }
 
-    private Path home() { Lamp.agentHome(lamp).orElseThrow() }
+    /** The model the genie's lamp was last lit with, from its engine's command line. */
+    private String modelGivenWhenLit() { optionGivenWhenLit('--model') }
 
-    private Map piSettings() {
-        new JsonSlurper().parseText(Files.readString(home().resolve('.pi/agent/settings.json'))) as Map
+    /** The value of {@code option} on the command line of the engine that last lit the genie's lamp. */
+    private String optionGivenWhenLit(String option) {
+        var arguments = host.engines.findAll { it.arguments.first() == 'at' }.last().arguments
+        arguments[arguments.indexOf(option) + 1]
     }
+
+    private Path home() { Lamp.agentHome(lamp).orElseThrow() }
 
     /**
      *  oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put
@@ -301,8 +361,8 @@ class ChoosingTheGeniesModelSpec extends Specification {
      */
     private Lighter lighter() {
         var real = new LampLighter(host.launcher)
-        var light = { Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
-            here(real.light(directory, settings, key, progress, events))
+        var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
+            here(real.light(directory, name, settings, key, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events -> real.join(directory, events).map { here(it) } }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
