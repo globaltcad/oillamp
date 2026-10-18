@@ -40,53 +40,60 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
     ///                    settings, and which model the agent answers with
     /// @param enableScheduling `--enable-scheduling`: `schedule.enabled` is true for this session,
     ///                    whatever oillamp.toml says
+    /// @param instructionsEnv `--instructions-env`: the environment variable that holds what the
+    ///                    agent is told in addition to pi's own instructions, for this session
     public record Options(boolean verbose, boolean debug, boolean dryRun,
                           boolean autoInstall, boolean init, boolean openViewer, boolean openWindows,
                           boolean embedded,
-                          ModelOverride model, boolean enableScheduling) {
+                          ModelOverride model, boolean enableScheduling, Optional<String> instructionsEnv) {
 
         public static Options defaults() {
-            return new Options(false, false, false, true, false, true, true, false, ModelOverride.NONE, false);
+            return new Options(false, false, false, true, false, true, true, false, ModelOverride.NONE, false,
+                               Optional.empty());
+        }
+
+        public Options withInstructionsEnv(Optional<String> instructionsEnv) {
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withModel(ModelOverride model) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withDryRun(boolean dryRun) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withAutoInstall(boolean autoInstall) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withInit(boolean init) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withVerbose(boolean verbose) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withDebug(boolean debug) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withViewer(boolean openViewer) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withWindows(boolean openWindows) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withEmbedded(boolean embedded) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
 
         public Options withScheduling(boolean enableScheduling) {
-            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling);
+            return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv);
         }
     }
 

@@ -1,15 +1,27 @@
 package dev.oillamp;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SecureDirectoryStream;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import sprouts.Tuple;
@@ -22,9 +34,204 @@ import sprouts.Tuple;
 ///
 /// Files are written atomically: to a temporary file in the same directory, then renamed. An
 /// interrupted run cannot leave a half-written `lamp.json` or `runtime.env` behind.
+///
+/// Files inside the agent's home are a case of their own, read and written with
+/// [#readInAgentHome] and [#writeInAgentHome]. The agent can change anything in its home,
+/// while the sandbox runs and between sessions, and it runs as the same user as oillamp on the
+/// host. A directory it replaced by a symbolic link would otherwise lead oillamp's writes to
+/// wherever the link points, such as the user's own `~/.bashrc`.
 final class FilesystemUtil {
 
     private FilesystemUtil() {}
+
+    /// The largest file [#readInAgentHome] reads. The files oillamp reads there are a few
+    /// kilobytes; anything much larger was not written by pi.
+    static final int LARGEST_AGENT_FILE = 1024 * 1024;
+
+    /// A symbolic link where oillamp was about to read or write a file in the agent's home: at
+    /// the file itself, or at a directory on the way to it. Nothing was read or written.
+    static final class LinkInAgentHome extends IOException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final transient Path link;
+
+        LinkInAgentHome(Path link) {
+            super(link + " is a symbolic link, and oillamp does not follow links in the agent's home");
+            this.link = link;
+        }
+
+        /// The link, as a path on the host.
+        Path link() { return link; }
+    }
+
+    /// Reads the text file `relative` in the agent's `home`, without following a symbolic link
+    /// anywhere below `home`.
+    ///
+    /// @return the file's text; empty when the file, or a directory on the way to it, is not there
+    /// @throws LinkInAgentHome when the file or a directory on the way is a link
+    /// @throws IOException     when it is not a regular file, is larger than [#LARGEST_AGENT_FILE],
+    ///                         or could not be read
+    static Optional<String> readInAgentHome(Path home, Path relative) throws IOException {
+        Optional<Optional<String>> read = inDirectoryOf(home, relative, false, (directory, name, where) -> {
+            Optional<BasicFileAttributes> found = attributesOf(directory, name);
+            if (found.isEmpty()) return Optional.<String>empty();
+            if (found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+            if (!found.get().isRegularFile()) throw new IOException(where + " is not a regular file");
+            try (SeekableByteChannel channel = directory.newByteChannel(name,
+                         Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+                 InputStream in = Channels.newInputStream(channel)) {
+                byte[] bytes = in.readNBytes(LARGEST_AGENT_FILE + 1);
+                if (bytes.length > LARGEST_AGENT_FILE)
+                    throw new IOException(where + " is larger than " + LARGEST_AGENT_FILE / 1024 + " KiB");
+                return Optional.of(new String(bytes, StandardCharsets.UTF_8));
+            }
+        });
+        return read.flatMap(text -> text);
+    }
+
+    /// Writes `content` to the file `relative` in the agent's `home`, without following a
+    /// symbolic link anywhere below `home`, and makes the directories on the way that are not
+    /// there yet.
+    ///
+    /// The file is written atomically, as [#writeFile] writes, but each step goes through an open
+    /// handle on the directory that refuses links: the directories are opened one by one, the
+    /// temporary file is created in the last one, and renamed there. A link the agent plants
+    /// while this runs makes the write fail; it never moves the write elsewhere. The one thing
+    /// done by path is making a directory that is missing, which oillamp does before the first
+    /// sandbox of a lamp starts. Should the agent swap a directory on the way for a link at that
+    /// very moment, an empty directory could appear where the link points, and nothing more:
+    /// the file is still written only through the handles.
+    ///
+    /// @throws LinkInAgentHome when the file or a directory on the way is a link
+    /// @throws IOException     when the file could not be written
+    static void writeInAgentHome(Path home, Path relative, String content, PosixMode mode) throws IOException {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        inDirectoryOf(home, relative, true, (directory, name, where) -> {
+            Optional<BasicFileAttributes> found = attributesOf(directory, name);
+            if (found.isPresent() && found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+            if (found.isPresent() && found.get().isDirectory()) throw new IOException(where + " is a directory");
+            Path temporary = Path.of(".oillamp-" + UUID.randomUUID() + ".tmp");
+            try {
+                try (SeekableByteChannel out = directory.newByteChannel(temporary,
+                        Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS),
+                        PosixFilePermissions.asFileAttribute(mode.permissions()))) {
+                    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                    while (buffer.hasRemaining()) out.write(buffer);
+                }
+                // The creation applies the user's umask, which can take bits away from the mode.
+                directory.getFileAttributeView(temporary, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
+                         .setPermissions(mode.permissions());
+                // A rename replaces whatever has the name, a link too, and never follows it.
+                directory.move(temporary, directory, name);
+            } finally {
+                try {
+                    directory.deleteFile(temporary);
+                } catch (NoSuchFileException renamed) {
+                    // The usual case: the temporary file has its final name now.
+                }
+            }
+            return true;
+        });
+    }
+
+    /// Deletes the file `relative` in the agent's `home`, if it is there, without following a
+    /// symbolic link to a directory on the way. A link at the file itself is deleted, not what it
+    /// points to.
+    ///
+    /// @throws LinkInAgentHome when a directory on the way is a link
+    /// @throws IOException     when the file could not be deleted
+    static void deleteInAgentHome(Path home, Path relative) throws IOException {
+        inDirectoryOf(home, relative, false, (directory, name, where) -> {
+            try {
+                directory.deleteFile(name);
+            } catch (NoSuchFileException absent) {
+                // Nothing to delete.
+            }
+            return true;
+        });
+    }
+
+    /// What [#inDirectoryOf] does in the directory it opened.
+    @FunctionalInterface
+    private interface InDirectory<T> {
+        /// @param directory the file's directory, opened without following links
+        /// @param name      the file's name in it
+        /// @param where     the file's path on the host, for messages
+        T apply(SecureDirectoryStream<Path> directory, Path name, Path where) throws IOException;
+    }
+
+    /// Opens the directory of `relative` in `home`, one directory at a time and never through a
+    /// link, and does `action` there.
+    ///
+    /// @param create whether to make directories that are missing; otherwise a missing one ends
+    ///               the walk
+    /// @return what `action` returned; empty when a directory was missing and not made
+    private static <T> Optional<T> inDirectoryOf(Path home, Path relative, boolean create, InDirectory<T> action)
+            throws IOException {
+        Path name = relative.getFileName();
+        if (relative.isAbsolute() || name == null || name.toString().isEmpty())
+            throw new IllegalArgumentException("not a plain path inside the agent's home: " + relative);
+        for (Path part : relative)
+            if (part.toString().equals("..") || part.toString().equals("."))
+                throw new IllegalArgumentException("not a plain path inside the agent's home: " + relative);
+        // The home itself is the agent directory in the lamp, which the agent cannot replace: its
+        // parent, the lamp directory, is not in the sandbox.
+        if (Files.isSymbolicLink(home)) throw new LinkInAgentHome(home);
+        try (DirectoryStream<Path> opened = Files.newDirectoryStream(home)) {
+            if (!(opened instanceof SecureDirectoryStream<Path> secure))
+                throw new IOException("this system cannot open " + home + " without following links");
+            return walk(secure, home, relative, 0, create, action, home.resolve(relative));
+        }
+    }
+
+    /// [#inDirectoryOf], from the directory `directory`, at `where`, which is `depth` names into
+    /// `relative`.
+    private static <T> Optional<T> walk(SecureDirectoryStream<Path> directory, Path where, Path relative, int depth,
+                                        boolean create, InDirectory<T> action, Path file) throws IOException {
+        Path part = relative.getName(depth);
+        if (depth == relative.getNameCount() - 1) return Optional.of(action.apply(directory, part, file));
+        Path inner = where.resolve(part);
+        Optional<SecureDirectoryStream<Path>> opened = directoryIn(directory, part, inner);
+        if (opened.isEmpty()) {
+            if (!create) return Optional.empty();
+            Files.createDirectory(inner, PosixFilePermissions.asFileAttribute(PosixMode.PUBLIC_DIR.permissions()));
+            // The creation applies the user's umask, which can take bits away from the mode.
+            directory.getFileAttributeView(part, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
+                     .setPermissions(PosixMode.PUBLIC_DIR.permissions());
+            opened = directoryIn(directory, part, inner);
+            if (opened.isEmpty()) throw new IOException(inner + " went away as it was made");
+        }
+        try (SecureDirectoryStream<Path> next = opened.get()) {
+            return walk(next, inner, relative, depth + 1, create, action, file);
+        }
+    }
+
+    /// The directory `name` in `parent`, opened without following a link; empty when it is not
+    /// there.
+    ///
+    /// @throws LinkInAgentHome when it is a link
+    private static Optional<SecureDirectoryStream<Path>> directoryIn(SecureDirectoryStream<Path> parent, Path name,
+                                                                     Path where) throws IOException {
+        Optional<BasicFileAttributes> found = attributesOf(parent, name);
+        if (found.isEmpty()) return Optional.empty();
+        if (found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+        if (!found.get().isDirectory()) throw new IOException(where + " is not a directory");
+        // Opened with O_NOFOLLOW: had it become a link since the look above, this fails.
+        return Optional.of(parent.newDirectoryStream(name, LinkOption.NOFOLLOW_LINKS));
+    }
+
+    /// The attributes of `name` in `directory` itself, a link's own if it is one; empty when
+    /// nothing has that name.
+    private static Optional<BasicFileAttributes> attributesOf(SecureDirectoryStream<Path> directory, Path name)
+            throws IOException {
+        try {
+            return Optional.of(directory.getFileAttributeView(name, BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
+                                        .readAttributes());
+        } catch (NoSuchFileException missing) {
+            return Optional.empty();
+        }
+    }
 
     public static void createDirectory(Path path, PosixMode mode) throws IOException {
         if (Files.isDirectory(path)) {

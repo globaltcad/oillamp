@@ -246,13 +246,14 @@ final class LampPlanUtil {
                 PosixMode.PUBLIC_FILE, Step.WritePolicy.ALWAYS));
         // How the session moves within a conversation, for a question asked after an earlier
         // entry. Always there, since any lamp can be asked.
-        steps = steps.add(new Step.WriteFile(layout.conversationTools(), AgentGuideUtil.conversationTools(),
-                PosixMode.PUBLIC_FILE, Step.WritePolicy.ALWAYS));
+        steps = steps.add(new Step.WriteIntoAgentHome(layout.agentDir(), layout.conversationTools(),
+                AgentGuideUtil.conversationTools(),
+                "a question asked after an earlier entry of a conversation cannot be placed there"));
         // Rewritten every session, like the guide, so that it always matches this oillamp. The
         // agent could change it, but it only asks the host, which decides.
-        steps = steps.add(scheduleTools.<Step>map(tools -> new Step.WriteFile(layout.scheduleTools(), tools,
-                        PosixMode.PUBLIC_FILE, Step.WritePolicy.ALWAYS))
-                .orElseGet(() -> new Step.RemovePath(layout.scheduleTools(),
+        steps = steps.add(scheduleTools.<Step>map(tools -> new Step.WriteIntoAgentHome(layout.agentDir(),
+                        layout.scheduleTools(), tools, "the agent has no scheduling tools in this session"))
+                .orElseGet(() -> new Step.RemoveFromAgentHome(layout.agentDir(), layout.scheduleTools(),
                         "the schedule is off, so the agent has no scheduling tools")));
 
         steps = steps.add(new Step.WriteFile(layout.sshConfig(), SandboxSshUtil.renderClientConfig(layout),

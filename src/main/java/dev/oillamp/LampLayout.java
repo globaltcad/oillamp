@@ -123,14 +123,21 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path libs()       { return agentDir().resolve("libs"); }
     public Path screenshots(){ return agentDir().resolve("screenshots"); }
     public Path agentsMd()   { return agentDir().resolve("AGENTS.md"); }
-    /// The pi extension that gives the agent its scheduling tools. pi loads every extension in
-    /// this directory. Written while `schedule.enabled` is on, removed while it is off.
+    /// pi's agent directory, where it keeps its settings, its packages and its conversations.
+    public Path piDir()      { return agentDir().resolve(".pi").resolve("agent"); }
+    /// pi's settings. The session writes its model here as pi's default, keeping the rest.
+    public Path piSettings() { return piDir().resolve("settings.json"); }
+    /// What pi adds to its system prompt. The session writes the instructions it was given here.
+    public Path piInstructions() { return piDir().resolve("APPEND_SYSTEM.md"); }
+    /// The pi extension with which the session moves within a conversation. pi loads every
+    /// extension in this directory.
     public Path conversationTools() {
-        return agentDir().resolve(".pi").resolve("agent").resolve("extensions").resolve("oillamp-conversations.js");
+        return piDir().resolve("extensions").resolve("oillamp-conversations.js");
     }
-    /// The pi extension that gives the agent its scheduling tools. See [#conversationTools()].
+    /// The pi extension that gives the agent its scheduling tools. Written while
+    /// `schedule.enabled` is on, removed while it is off.
     public Path scheduleTools() {
-        return agentDir().resolve(".pi").resolve("agent").resolve("extensions").resolve("oillamp-schedule.js");
+        return piDir().resolve("extensions").resolve("oillamp-schedule.js");
     }
     /// The agent's own `~/.bashrc`, written once and then left alone.
     ///

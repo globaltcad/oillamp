@@ -57,7 +57,11 @@ import sprouts.Tuple;
 /// its command line or into the lamp.
 ///
 /// An application that lets its user choose the model also gives that, with [Starting#model]. The
-/// agent then answers every question with it, in old conversations too.
+/// agent then answers every question with it, in old conversations too. And an application that
+/// has something to tell the agent about the world it lives in, such as how the user talks to it,
+/// gives that with [Starting#instructions]. The engine writes both into pi's own files in the
+/// agent's home, so the application never needs to know where pi keeps them, or what they look
+/// like.
 ///
 /// Public because this is what an application uses oillamp through.
 public final class Lamp implements AutoCloseable {
@@ -69,6 +73,11 @@ public final class Lamp implements AutoCloseable {
     static final String LEAVE_RUNNING = "leave-running";
     /// The variable in the engine's environment that holds a key given with [Starting#modelKey].
     static final String MODEL_KEY_VARIABLE = "OILLAMP_MODEL_KEY";
+    /// The variable in the engine's environment that holds instructions given with
+    /// [Starting#instructions].
+    static final String INSTRUCTIONS_VARIABLE = "OILLAMP_INSTRUCTIONS";
+    /// The longest instructions, in bytes of UTF-8. The engine checks the same.
+    static final int LONGEST_INSTRUCTIONS = 64 * 1024;
     /// What a model's id may be: printable ASCII without spaces, as every service names its
     /// models. The engine checks the same, for the command line.
     static final String MODEL_ID = "[\\x21-\\x7E]{1,200}";
@@ -115,7 +124,7 @@ public final class Lamp implements AutoCloseable {
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
     public static Starting at(Path directory) {
         return new Starting(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
-                            Optional.empty(), Optional.empty(), Optional.empty(), false);
+                            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false);
     }
 
     /// Starts the engine as a separate process, with `arguments` after the engine's main class
@@ -137,6 +146,7 @@ public final class Lamp implements AutoCloseable {
         private final Optional<URI> modelService;
         private final Optional<String> modelKey;
         private final Optional<String> model;
+        private final Optional<String> instructions;
         private final boolean scheduling;
 
         private Starting(
@@ -146,6 +156,7 @@ public final class Lamp implements AutoCloseable {
             final Optional<URI> modelService,
             final Optional<String> modelKey,
             final Optional<String> model,
+            final Optional<String> instructions,
             final boolean scheduling
         ) {
             this.directory = directory;
@@ -154,6 +165,7 @@ public final class Lamp implements AutoCloseable {
             this.modelService = modelService;
             this.modelKey = modelKey;
             this.model = model;
+            this.instructions = instructions;
             this.scheduling = scheduling;
         }
 
@@ -168,11 +180,11 @@ public final class Lamp implements AutoCloseable {
         public Starting onEvent(Consumer<LampEvent> listener) {
             List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
             more.add(listener);
-            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, scheduling);
+            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling);
         }
 
         public Starting launchedBy(Launcher launcher) {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling);
         }
 
         /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -183,7 +195,7 @@ public final class Lamp implements AutoCloseable {
         /// Only Eden AI's models are filtered to those served in the EU. Any other service's
         /// models are all offered, since its model list names no regions.
         public Starting modelService(URI service) {
-            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, scheduling);
+            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling);
         }
 
         /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
@@ -192,14 +204,14 @@ public final class Lamp implements AutoCloseable {
         /// @throws IllegalArgumentException when `key` is blank, which would only fail later
         public Starting modelKey(String key) {
             if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, scheduling);
+            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling);
         }
 
         /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
         /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
         /// changed.
         public Starting enableScheduling() {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, true);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, true);
         }
 
         /// Has the agent answer every question with `id`, a model as the service names it, such
@@ -207,8 +219,11 @@ public final class Lamp implements AutoCloseable {
         /// ones alike: a question in a conversation that was on another model is answered by this
         /// one, and the earlier answers keep the model that gave them.
         ///
-        /// Without it, a new conversation gets the default model in pi's settings in the agent's
-        /// home, and an old one stays on the model it was last on.
+        /// The engine also writes it as pi's default model into pi's settings in the agent's home,
+        /// keeping the rest of them, so that pi starts a new conversation on it by itself.
+        ///
+        /// Without it, a new conversation gets whatever default model pi's settings name, and an
+        /// old one stays on the model it was last on.
         ///
         /// A model the service does not offer fails each run that needs it, and the run's answer
         /// names the model.
@@ -218,7 +233,28 @@ public final class Lamp implements AutoCloseable {
         public Starting model(String id) {
             if (!id.matches(MODEL_ID))
                 throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), scheduling);
+            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling);
+        }
+
+        /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
+        /// what it is, how the user reaches it, where it hands over files. pi adds it to its
+        /// system prompt, in every conversation, old and new.
+        ///
+        /// The engine writes it into the agent's home, where pi reads it, once the sandbox is up
+        /// and before pi starts; that is `~/.pi/agent/APPEND_SYSTEM.md`, replacing what was
+        /// there. Without this, that file stays as it is, with whatever an earlier session, the
+        /// agent or a person put there.
+        ///
+        /// The text goes to the engine in its environment, like the key: it can be long and run
+        /// over many lines, which a command line is poor at, and it is nobody else's business.
+        ///
+        /// @throws IllegalArgumentException when `text` is blank, or longer than 64 KiB, far more
+        ///                                  than any useful instructions
+        public Starting instructions(String text) {
+            if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
+            if (text.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
+                throw new IllegalArgumentException("instructions cannot be longer than " + LONGEST_INSTRUCTIONS / 1024 + " KiB");
+            return new Starting(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling);
         }
 
         /// Starts the engine, and returns at once. The sandbox is running when
@@ -230,9 +266,12 @@ public final class Lamp implements AutoCloseable {
             modelService.ifPresent(service -> arguments.addAll(List.of("--model-service", service.toString())));
             modelKey.ifPresent(key -> arguments.addAll(List.of("--model-key-env", MODEL_KEY_VARIABLE)));
             model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
+            instructions.ifPresent(text -> arguments.addAll(List.of("--instructions-env", INSTRUCTIONS_VARIABLE)));
             if (scheduling) arguments.add("--enable-scheduling");
-            Process engine = launcher.launch(List.copyOf(arguments),
-                    modelKey.map(key -> Map.of(MODEL_KEY_VARIABLE, key)).orElse(Map.of()));
+            Map<String, String> environment = new HashMap<>();
+            modelKey.ifPresent(key -> environment.put(MODEL_KEY_VARIABLE, key));
+            instructions.ifPresent(text -> environment.put(INSTRUCTIONS_VARIABLE, text));
+            Process engine = launcher.launch(List.copyOf(arguments), Map.copyOf(environment));
             Lamp lamp = new Lamp(directory, launcher, engine, listeners, true);
             Thread.ofVirtual().name("lamp-events-" + directory.getFileName()).start(lamp::readEvents);
             return lamp;
@@ -899,8 +938,9 @@ public final class Lamp implements AutoCloseable {
 
     /// Has the agent answer with `id`, a model as the service names it, from its next run on, as
     /// [Starting#model] would have had it from the start: in new conversations and in old ones,
-    /// for questions and scheduled jobs alike. A run in progress finishes on the model it started
-    /// with. The session's service and key stay as they are; changing those needs a new session.
+    /// for questions and scheduled jobs alike, and as pi's default. A run in progress finishes on
+    /// the model it started with. The session's service and key stay as they are; changing those
+    /// needs a new session.
     ///
     /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
     ///                                  model has

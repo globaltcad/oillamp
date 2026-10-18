@@ -205,9 +205,20 @@ included, give it to the session, as the service names it:
 oillamp at ~/lamps/first --model azure/gpt-6.1-sol
 ```
 
-The earlier answers keep the model that gave them. A model the service does not offer fails the
-run, and says so. A running session takes another model with `oillamp model ~/lamps/first <id>`,
-from its next run on; the sandbox keeps running.
+The session also writes it as pi's default, in `~/.pi/agent/settings.json` in the sandbox, so a
+new conversation starts on it. The earlier answers keep the model that gave them. A model the
+service does not offer fails the run, and says so. A running session takes another model with
+`oillamp model ~/lamps/first <id>`, from its next run on; the sandbox keeps running.
+
+To tell the agent something for the whole session, in addition to pi's own instructions, put it
+in a variable and name the variable:
+
+```sh
+INSTRUCTIONS="$(cat ~/notes/about-the-project.md)" oillamp at ~/lamps/first --instructions-env INSTRUCTIONS
+```
+
+The session writes the text to `~/.pi/agent/APPEND_SYSTEM.md` in the sandbox, which pi adds to its
+system prompt in every conversation. A session started without it leaves that file as it is.
 
 Every run is saved just before and just after, so `oillamp history` reads as a log of what the agent
 did, and `oillamp restore` undoes any run:
@@ -243,6 +254,7 @@ oillamp update <dir>             # newer opencode and pi, and a fresh model list
 oillamp update <dir> --system    # the whole image again, with Debian's updates
 oillamp at <dir> --dry-run       # print every step it would take, and do nothing
 oillamp at <dir> --model <id>    # answer every run with this model, old conversations too
+oillamp at <dir> --instructions-env <name>  # tell the agent what this variable holds
 oillamp doctor [<dir>]           # check this machine (and a lamp's config), change nothing
 oillamp view <dir>               # open another desktop viewer
 oillamp shell <dir>              # open another shell, in this terminal

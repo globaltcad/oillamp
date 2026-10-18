@@ -308,15 +308,21 @@ the user changed and what each run changed are separate snapshots, and any run c
 
 A session can be given a model, as the service names it: `oillamp at --model <id>`, or
 `Lamp.Starting.model(id)`. Every run of the session is then answered by that model, whether it
-starts a conversation or continues one. After opening the conversation, and moving within it if
-the question says so, the harness compares the model pi reports in `get_state` with the session's
+starts a conversation or continues one. Two things see to that. The session writes the model as
+pi's default (`defaultProvider` `edenai` and `defaultModel` in pi's `settings.json`), once the
+sandbox is up and before pi starts, so that a new conversation starts on it by itself; see "The
+engine sets up pi's files". And after opening the conversation, and moving within it if the
+question says so, the harness compares the model pi reports in `get_state` with the session's
 model, and sends `set_model` (provider `edenai`, the only one pi in a lamp has) only when they
-differ. A `set_model` that pi refuses fails the run, with pi's reason and the model's name; the
-question is not asked. Without a model, nothing is sent, and pi decides as it always did.
+differ, which is when an old conversation was on another model. A `set_model` that pi refuses
+fails the run, with pi's reason and the model's name; the question is not asked. Without a model,
+nothing is written and nothing is sent, and pi decides as it always did.
 
 *Why:* pi writes the model it is on into each conversation's file, and goes back to that model
 whenever the conversation is opened again. A default model in pi's settings therefore only
-reaches new conversations; an old one stays on the model it started with. A genie broke that way:
+reaches new conversations; an old one stays on the model it started with. The default is still
+worth writing: without it, every new conversation would start on another model and need a switch,
+with the cost below. A genie broke that way:
 its old chat was on a model the service had started refusing, while its settings named one that
 worked. A user who changes the model expects the next answer to come from the new model,
 whichever chat they are in. The earlier answers keep the model that gave them; when the model
@@ -344,7 +350,9 @@ each time it starts the lamp, the way it hands over the model service and the ke
 
 A running session can be given another model, with `oillamp model <dir> <id>` or
 `Lamp.useModel(id)`, which reach the session over its control socket like `oillamp cancel`. It
-applies from the next run on, whatever kind of run; the run in progress keeps the model it started
+applies from the next run on, whatever kind of run, and becomes pi's default at once: pi reads its
+settings each time it starts or opens a conversation, also when its process has been running for
+a while, so the next new conversation starts on it. The run in progress keeps the model it started
 with, so that one answer never mixes two models. The change lasts for the session only. An
 application changes the model when its user does, without starting the lamp again, which would end
 everything running on the agent's desktop. The service and the key cannot be changed this way: the
@@ -355,8 +363,61 @@ each answer, and `LampEvent.Progress.Answered.model` says it as the answer comes
 older engine, without it, reads with no model.
 
 *Given up:* a model that is not in the service's list fails every run until the session is given
-another one. Only pi's runs are covered: opencode, or a pi started by hand in the sandbox, keeps
-its own model. *(added on 2026-10-18)*
+another one. Only pi's runs are covered: opencode keeps its own model, and a pi started by hand in
+the sandbox gets the session's model only as its default. *(added on 2026-10-18; changed on
+2026-10-18: the session writes pi's default too, which Genies did before)*
+
+### The engine sets up pi's files; applications give it the model and the instructions
+
+What pi needs from a session goes into pi's own files in the agent's home, and the engine writes
+them, never an application: the session's model as pi's default in `~/.pi/agent/settings.json`,
+keeping every other key, and the session's instructions in `~/.pi/agent/APPEND_SYSTEM.md`, which
+pi adds to its system prompt. An application gives both to the lamp, with `Lamp.Starting.model`
+and `Lamp.Starting.instructions` (by hand: `--model` and `--instructions-env`), and `Lamp.useModel`
+later. `Harness` writes the files once the sandbox is up, before the first run starts pi, and
+again for the default whenever the model changes; `PiSetupUtil` decides what goes in them.
+
+A session without instructions leaves `APPEND_SYSTEM.md` as it is, and one without a model leaves
+`settings.json` as it is. Both are in the agent's home, where the user, the agent or pi itself may
+have written them, so a session that has nothing to say keeps out, even when an earlier session
+wrote the file. To take instructions away, delete the file, or give a session other instructions.
+
+The files are written without following a symbolic link anywhere in the agent's home: each
+directory is opened through the previous one without following links, and the file is created
+and renamed there. A link is a warning (`OIL-LAMP-012`), and the file stays unwritten. The same
+now goes for oillamp's pi extensions in `~/.pi/agent/extensions`, which followed links before.
+Settings that are not a JSON object are left alone, with a warning (`OIL-LAMP-013`).
+
+The instructions reach the engine in its environment, in a variable the command line names:
+`Lamp.Starting.instructions` puts them in `OILLAMP_INSTRUCTIONS` and passes
+`--instructions-env OILLAMP_INSTRUCTIONS`. `at` reads the variable before anything else and
+refuses one that is not set, empty or longer than 64 KiB.
+
+*Why the engine:* which agent runs in a lamp, and how it keeps its settings, belongs behind
+`dev.lamp`. An application that wrote these files itself would have to know pi's directory, its
+file names and the keys of its settings, and to be careful with links on its own, and every change
+in pi's layout would reach every application. With the files the engine's, an application uses a
+small, stable API, and can be tested against it: by what it hands the lamp, on the engine's
+command line and in its environment, not by which files appear in the agent's home.
+
+*Why after the sandbox is up:* the sandbox's first start copies pi's settings from the image
+into the agent's home, but only where the home has no such file yet. Those settings list pi's
+packages, among them the pi-edenai extension that gives pi its one provider. A `settings.json`
+written before that copy would keep it from happening.
+
+*Why the environment for the instructions:* they can run over many lines and a few kilobytes.
+On the command line they would be visible to every user of the machine in `ps`, and Linux limits
+one argument to 128 KiB. The engine's standard input already has a job: the session lasts while
+it is open, and `leave-running` arrives on it; mixing text into it would need framing, and would
+work only for an embedded engine. A file would have to be written by the application, kept until
+the engine has read it, and removed afterwards, also when the application crashes. The key
+already travels in the environment, which only this user can read; the instructions go the same
+way, in a variable of their own, and nothing is left behind. By hand that is one shell line:
+`GENIE="$(cat about.md)" oillamp at <dir> --instructions-env GENIE`.
+
+*Given up:* someone running `oillamp at` by hand puts the instructions in a variable rather than
+naming a file. A file in the agent's home that the agent replaced by a link is not written until
+someone removes the link. *(added on 2026-10-18)*
 
 ### The agent schedules its own jobs by asking the host, which applies the rules
 

@@ -40,6 +40,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp at <dir> --embedded` | Works in the simulated scenarios, also driven through `dev.lamp.Lamp`. No window opens; the session ends when standard input closes, unless the application wrote `leave-running` first. Not yet tried with a real application. |
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
+| `oillamp at <dir> --instructions-env <name>` | Works in the scenarios, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `Lamp.Starting.instructions`. |
 | `oillamp shell <dir>` | Works. An extra shell in the current terminal. |
 | `oillamp stop <dir>` | Works. Also cleans up after a supervisor that was killed. |
 | `oillamp status <dir>` | Works. |
@@ -55,7 +56,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). |
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
-| `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session. |
+| `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
 | `oillamp completion bash` | Works. |
@@ -131,6 +132,24 @@ so that it could run beside the original. Started with `--model azure/gpt-6.1-so
 `--in` that conversation, it answered in 4 seconds, from `azure/gpt-6.1-sol`, and the
 conversation's file got exactly one new `model_change`. A second copy started without `--model`
 failed the same question with the same 400, as before.
+
+**pi's default model and instructions, written by the session, in a real sandbox with Eden AI.**
+Checked on 2026-10-18 on a new scratch lamp, removed afterwards, started with `--model
+azure/gpt-6.1-sol`, `--model-service https://api.eu.edenai.run` and three lines of instructions in
+a variable named with `--instructions-env` (a name, and a secret word to give when asked). Once
+the sandbox was up the session reported both files written; `settings.json` held the image's
+`packages` (`git:github.com/edenai/pi-edenai`) with `defaultProvider` `edenai` and `defaultModel`
+`azure/gpt-6.1-sol`, so the entrypoint's copy had happened first and was kept; `APPEND_SYSTEM.md`
+held the text. One question, one model request: the answer, from `azure/gpt-6.1-sol` in 4 seconds,
+gave the name and the secret word, and the new conversation's file held one `model_change`, pi's
+own, so no `set_model` was needed.
+
+**pi reads its settings again for each conversation.** pi 1.3.0's source makes a new settings
+manager and resource loader whenever it starts or opens a conversation (`createRuntime` in
+`main.js`, called by `newSession` and `switchSession`), and a check against real pi 1.3.0 in RPC
+mode confirmed it: `defaultModel` changed in `settings.json` while pi ran, and the next
+`new_session` started on the new model. So a model changed with `oillamp model` reaches the next
+new conversation by way of the default, without restarting pi.
 
 pi's source confirms why `set_model` is sent only when the model differs: `AgentSession.setModel`
 always appends a `model_change`, and sets the thinking level again from the settings, and pi drops
@@ -395,6 +414,9 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   (`conversations`, `send` with a `Question`, `RunProgress`, `cancel`, `agentStatus`); Genies does
   not use it yet.
 - The scheduling tools are pi's only. Another harness in the sandbox, such as opencode, has none.
+- The session writes its model and instructions into pi's files without following links, through
+  Java's `SecureDirectoryStream`. That is tested on Linux, the only system oillamp runs on; a
+  system without it refuses to write those files, with a warning.
 - A session started without `--model` leaves the model to pi: its default for a new
   conversation, and the conversation's own model for an old one. A lamp whose pi has no default
   model, or one the model service refuses, fails every run, and says so. With `--model`, every run

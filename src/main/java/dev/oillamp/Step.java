@@ -42,6 +42,30 @@ sealed interface Step {
 
     record WriteFile(Path path, String content, PosixMode mode, WritePolicy policy) implements Step {}
 
+    /// Writes a file oillamp owns in the agent's home, such as one of its pi extensions, always,
+    /// and never through a symbolic link: the agent can replace any directory in its home with a
+    /// link to somewhere else on this machine. A link is reported as a warning, and the file is
+    /// left unwritten.
+    ///
+    /// @param home      the agent's home, [LampLayout#agentDir()]
+    /// @param file      the file, inside `home`
+    /// @param withoutIt what the session lacks when the file could not be written
+    record WriteIntoAgentHome(Path home, Path file, String content, String withoutIt) implements Step {
+        public WriteIntoAgentHome {
+            if (!file.startsWith(home) || file.equals(home))
+                throw new IllegalArgumentException(file + " is not in the agent's home " + home);
+        }
+    }
+
+    /// Removes a file oillamp wrote in the agent's home, never through a symbolic link to a
+    /// directory, for the same reason as [WriteIntoAgentHome].
+    record RemoveFromAgentHome(Path home, Path file, String reason) implements Step {
+        public RemoveFromAgentHome {
+            if (!file.startsWith(home) || file.equals(home))
+                throw new IllegalArgumentException(file + " is not in the agent's home " + home);
+        }
+    }
+
     record CopyFile(Path from, Path to, PosixMode mode) implements Step {}
 
     record CreateSymlink(Path link, Path target) implements Step {}
@@ -110,6 +134,8 @@ sealed interface Step {
             case CreateDirectory s -> "create directory " + s.path() + " (mode " + s.mode() + ")";
             case WriteFile s       -> (s.policy() == WritePolicy.IF_ABSENT ? "create if absent " : "write ")
                                       + s.path() + " (mode " + s.mode() + ")";
+            case WriteIntoAgentHome s -> "write " + s.file() + " (in the agent's home, never through a link)";
+            case RemoveFromAgentHome s -> "remove " + s.file() + " (" + s.reason() + ")";
             case CopyFile s        -> "copy " + s.from() + " to " + s.to() + " (mode " + s.mode() + ")";
             case CreateSymlink s   -> "link " + s.link() + " -> " + s.target();
             case ChownForContainer s -> "give " + s.path() + " to container uid " + s.containerUid()
@@ -153,6 +179,9 @@ sealed interface Step {
             }
             case WriteFile s -> s.path() + " (mode " + s.mode() + ", " + s.policy() + ")\n"
                               + indent(s.content());
+            case WriteIntoAgentHome s -> s.file() + " (mode " + PosixMode.PUBLIC_FILE + ", always, never through a link)\n"
+                              + indent(s.content());
+            case RemoveFromAgentHome ignored -> describe();
             case DeleteContainerOwnedFiles s -> {
                 StringBuilder out = new StringBuilder(s.reason() + ":");
                 for (Path file : s.files()) out.append("\n  ").append(file);

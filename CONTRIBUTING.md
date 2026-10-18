@@ -63,7 +63,12 @@ clear them now and then with `podman images localhost/oillamp/sandbox` and `podm
   runtime directory under `$XDG_RUNTIME_DIR`. Any change that moves a socket must respect this.
 - **`/home/agent` is a bind mount**, so anything the image puts there at build time is hidden when
   the container runs. SDKMAN and pi's settings are installed elsewhere and copied in by the
-  entrypoint; any new tool that installs into the home needs the same treatment.
+  entrypoint, entry by entry, only where the home has nothing yet; any new tool that installs into
+  the home needs the same treatment. That is also why the session writes its model into pi's
+  settings only once the sandbox is up: a file there before the copy would keep it from happening.
+- **The agent can change anything in its home**, and on the host it runs as you. oillamp writes
+  files under the home's `.pi/` only with `FilesystemUtil.writeInAgentHome`, which never follows
+  a link the agent may have put there.
 - **The agent runs as your uid.** Its isolation comes from what the container can see. Think twice
   before attaching another directory or changing the uid map.
 
@@ -147,7 +152,8 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
 | `HoldingALampSpec` | an application holding a lamp through `dev.lamp.Lamp` |
 | `ChoosingTheModelForALampSpec` | an application choosing the model service and key |
-| `ChoosingTheAgentsModelSpec` | `--model` and `Lamp.Starting.model`: one model for every run, old conversations too, with a stand-in pi that keeps track of its model |
+| `ChoosingTheAgentsModelSpec` | `--model`, `oillamp model` and the Lamp API's: one model for every run, old conversations too, written as pi's default; how a model gets from an application to an answer; with a stand-in pi that keeps track of its model |
+| `GivingTheAgentInstructionsSpec` | `--instructions-env` and `Lamp.Starting.instructions`: the text's way from an application to pi's `APPEND_SYSTEM.md`, leaving pi's files alone without, and refusing links the agent planted |
 | `ListingAServicesModelsSpec` | `Lamp.models`, against a stand-in server |
 
 Genies' scenarios, in `src/test/groovy/gui/` and `src/test/groovy/dev/gui/view/`, run its model
@@ -208,7 +214,11 @@ for them.
   public types; everything else is package-private by default and needs no comment about it.
 - **Scenarios:** the name says what the user experiences. The `reportInfo` block explains, without
   referring to other documents, why the behaviour matters. It is rendered into the test report and
-  should make sense on its own.
+  should make sense on its own. A specification whose scenarios only make sense with the mechanism
+  behind them says how it works in a `@Narrative`, with a drawing of the flow in a ``` block where
+  it helps. Both are rendered as Markdown, without the source's indentation, by the template in
+  `src/test/resources/spock-reports/`. The labels of `given:`, `when:`, `then:` and `and:` read as
+  sentences, and helpers are named for what they mean in the scenario.
 
 ## License
 

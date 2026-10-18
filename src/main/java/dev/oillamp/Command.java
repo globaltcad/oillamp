@@ -169,6 +169,8 @@ sealed interface Command {
                     "--model-key-env needs a value, for example --model-key-env MY_MODEL_KEY", usageOf("at"));
             case "--model" -> ProblemCatalogUtil.usage(
                     "--model needs a value, for example --model azure/gpt-6.1-sol", usageOf("at"));
+            case "--instructions-env" -> ProblemCatalogUtil.usage(
+                    "--instructions-env needs a value, for example --instructions-env MY_INSTRUCTIONS", usageOf("at"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -194,6 +196,12 @@ sealed interface Command {
                         "--model \"" + model.get() + "\": " + wrong.get(), usageOf("at")));
         }
         options = options.withModel(new Context.ModelOverride(modelService.map(URI::create), modelKeyEnv, model));
+        Optional<String> instructionsEnv = values.get("--instructions-env");
+        if (instructionsEnv.isPresent() && !ConfigLoadingUtil.isVariableName(instructionsEnv.get()))
+            return Result.err(ProblemCatalogUtil.usage(
+                    "--instructions-env \"" + instructionsEnv.get() + "\": expected the name of an "
+                  + "environment variable, such as MY_INSTRUCTIONS", usageOf("at")));
+        options = options.withInstructionsEnv(instructionsEnv);
 
         if (positional.isEmpty()) return Result.ok(new NoCommand(options));
 
@@ -353,7 +361,7 @@ sealed interface Command {
             Association.between(String.class, ValueSet.classTyped(String.class))
                 .put("at",         ValueSet.of("--init", "--dry-run", "--no-install", "--no-viewer", "--no-windows",
                                                "--embedded", "--model-service", "--model-key-env",
-                                               "--model", "--enable-scheduling"))
+                                               "--model", "--instructions-env", "--enable-scheduling"))
                 .put("view",       ValueSet.of("--view-only"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
@@ -381,7 +389,7 @@ sealed interface Command {
 
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
-            "--open", "--model-service", "--model-key-env", "--model", "--message", "--cron", "--at", "--expires",
+            "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
             "--in", "--after", "--instead-of");
 
     /// The commands that take a lamp directory and cannot do without it.
@@ -418,7 +426,7 @@ sealed interface Command {
 
               at <dir> [--init] [--dry-run] [--no-install] [--no-viewer] [--no-windows]
                        [--embedded] [--model-service <url>] [--model-key-env <name>]
-                       [--model <id>] [--enable-scheduling]
+                       [--model <id>] [--instructions-env <name>] [--enable-scheduling]
                     Set up (if needed) and run a session. Opens a shell window and a viewer
                     onto the sandbox's desktop, and stays in the foreground until the session
                     ends: Ctrl-C here, closing this terminal, or `oillamp stop <dir>`.
@@ -436,8 +444,14 @@ sealed interface Command {
                                       instead of the lamp's [model] settings, for this session
                       --model <id>    answer every run with this model, as the service names
                                       it, such as azure/gpt-6.1-sol: new conversations, and old
-                                      ones that were on another model. Without it, a new
-                                      conversation gets pi's default, and an old one keeps its own
+                                      ones that were on another model; it also becomes pi's
+                                      default. Without it, a new conversation gets pi's default,
+                                      and an old one keeps its own
+                      --instructions-env <name>
+                                      tell the agent what this variable holds, in addition to
+                                      pi's own instructions: written to the agent's
+                                      ~/.pi/agent/APPEND_SYSTEM.md. Without it, that file stays
+                                      as it is
                       --enable-scheduling
                                       let jobs on the schedule wake the agent in this session,
                                       as `enabled = true` under [schedule] would
@@ -498,8 +512,8 @@ sealed interface Command {
                     Stop the run the agent is working on, or a run that is still waiting.
               model <dir> <id>
                     Have a running session's agent answer with this model from its next run
-                    on, as `at --model` would have: in new conversations and in old ones. A run
-                    in progress finishes on the model it started with.
+                    on, as `at --model` would have: in new conversations and in old ones, and
+                    as pi's default. A run in progress finishes on the model it started with.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
               recordings <dir> [--open <session>] [--prune]

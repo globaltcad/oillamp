@@ -494,10 +494,12 @@ final class SimulatedMachine implements Machine {
     /// answer the way pi does.
     ///
     /// It keeps track of its model as pi does, too. A new conversation starts on the default
-    /// model in pi's settings in the agent's home, and records it with its first entry after its
-    /// name. An opened one goes back to the model it was last on: the last `model_change` entry or
-    /// answer in its file. `set_model` switches the model and records a `model_change`, even when
-    /// the model is the one it was on, and each answer names the model that gave it.
+    /// model in pi's settings in the agent's home, read again for each conversation as pi reads
+    /// it, and records it with its first entry after its name. A default the service does not
+    /// offer is passed over for one it does, as pi passes over a model it cannot find. An opened
+    /// conversation goes back to the model it was last on: the last `model_change` entry or answer
+    /// in its file. `set_model` switches the model and records a `model_change`, even when the
+    /// model is the one it was on, and each answer names the model that gave it.
     private static final class SimulatedPi implements Conversation {
 
         private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -642,21 +644,27 @@ final class SimulatedMachine implements Machine {
             }
         }
 
-        /// The model pi's settings in the agent's home name, as Genies writes them, or pi's own
-        /// default when they name none.
+        /// The model pi's settings in the agent's home name, as the session writes them, or pi's
+        /// own default when they name none. When the service does not offer it, the first model
+        /// the service offers.
         private void useTheDefaultModel() {
             provider = PROVIDER;
             model = DEFAULT_MODEL;
             Optional<Path> settings = home.map(h -> h.resolve(".pi/agent/settings.json")).filter(Files::isRegularFile);
-            if (settings.isEmpty()) return;
-            try {
-                com.fasterxml.jackson.databind.JsonNode read = JSON.readTree(Files.readString(settings.get()));
-                if (read.path("defaultModel").isTextual()) {
-                    provider = read.path("defaultProvider").asText(PROVIDER);
-                    model = read.path("defaultModel").asText();
+            if (settings.isPresent()) {
+                try {
+                    com.fasterxml.jackson.databind.JsonNode read = JSON.readTree(Files.readString(settings.get()));
+                    if (read.path("defaultModel").isTextual()) {
+                        provider = read.path("defaultProvider").asText(PROVIDER);
+                        model = read.path("defaultModel").asText();
+                    }
+                } catch (IOException unreadable) {
+                    // pi starts on its own default then, too.
                 }
-            } catch (IOException unreadable) {
-                // pi starts on its own default then, too.
+            }
+            if (offered.isPresent() && !offered.get().isEmpty() && !offered.get().contains(model)) {
+                provider = PROVIDER;
+                model = offered.get().first();
             }
         }
 

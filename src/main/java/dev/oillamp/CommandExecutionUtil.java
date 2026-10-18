@@ -183,6 +183,23 @@ final class CommandExecutionUtil {
         return checkConfiguration(machine, context, lampPath.get(), false);
     }
 
+    /// What the agent is told in addition to pi's own instructions in this session: the text of
+    /// the variable `--instructions-env` names, or empty without that option.
+    ///
+    /// @return an error when the variable is not set, is empty, or holds more than
+    ///         [PiSetupUtil#LONGEST_INSTRUCTIONS]
+    private static Result<Optional<String>> instructions(Machine machine, Context context) {
+        Optional<String> variable = context.options().instructionsEnv();
+        if (variable.isEmpty()) return Result.ok(Optional.empty());
+        Optional<String> text = machine.environmentVariable(variable.get());
+        Optional<String> wrong = text.isEmpty() ? Optional.of("the variable is not set, or empty")
+                               : PiSetupUtil.instructionsProblem(text.get());
+        if (wrong.isPresent())
+            return Result.err(ProblemCatalogUtil.usage("--instructions-env " + variable.get() + ": " + wrong.get(),
+                    Command.usageOf("at")));
+        return Result.ok(text);
+    }
+
     /// `oillamp at <dir>`: prepare the host and the lamp, then run a session.
     ///
     /// Runs the phases in order: host, lamp, image and sandbox, then the [Supervisor]. It
@@ -193,6 +210,13 @@ final class CommandExecutionUtil {
         final Context context,
         final Path lampPath
     ) {
+        // Read now, before anything changes on the machine, so that a missing variable stops
+        // the session before it starts rather than leave the agent without its instructions.
+        Result<Optional<String>> instructions = instructions(machine, context);
+        if (instructions instanceof Result.Err<Optional<String>> wrong) {
+            context.sinkAcceptProblems(wrong.problems());
+            return ExitStatus.USAGE;
+        }
         // Only a session that opens windows needs the host's display.
         boolean opensWindows = !context.options().embedded() && context.options().openWindows();
         HostPhase.Outcome host = new HostPhase(machine, context)
@@ -285,7 +309,8 @@ final class CommandExecutionUtil {
             // From here `at` does not return until the session is over, and the supervisor
             // removes the container however the session ends.
             stopWatching(abandon);
-            return new Supervisor(machine, context, host.facts(), prepared, running).run();
+            return new Supervisor(machine, context, host.facts(), prepared, running,
+                                  ((Result.Ok<Optional<String>>) instructions).value()).run();
         } catch (RuntimeException bug) {
             // A bug while the sandbox starts reaches the user as a problem; the container it
             // started must not outlive it.

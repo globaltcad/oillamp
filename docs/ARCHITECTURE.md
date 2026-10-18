@@ -171,7 +171,7 @@ known lifetime:
 | `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start, and for the agent's requests | `oillamp schedule`, the session every 30 s | until `oillamp remove` |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save or restore runs | every other save and restore, which wait for it | the lock ends with the process |
-| `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc` and, with the schedule on, `.pi/agent/extensions/oillamp-schedule.js` | the agent, you | until `oillamp remove` |
+| `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` and, with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`; once the sandbox is up, `Harness` writes the session's instructions to `.pi/agent/APPEND_SYSTEM.md` and its model into `.pi/agent/settings.json` | the agent, you | until `oillamp remove` |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/sockets` (a symlink) | `LampPlanUtil.planSkeleton`, every start | every host-side socket path | in memory: gone at reboot, made again next start |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/run/*.sock` | `Supervisor` (relays, control socket) | `oillamp stop/status/view/shell`, the shell window | deleted at shutdown; a killed supervisor leaves them |
 | `~/.config/oillamp/config.toml` | you (optional) | every command that reads configuration | until you delete it |
@@ -220,8 +220,16 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 └── agent-lamp-<agent id>/       attached read-write at /home/agent
     ├── AGENTS.md                rewritten each session
     ├── .bashrc                  written once, then left alone
-    ├── .pi/agent/extensions/oillamp-schedule.js
-    │                            the scheduling tools; written each session while the schedule is on
+    ├── .pi/agent/               pi's own directory; the sandbox's first start copies pi's
+    │   │                        settings and packages in from the image, where missing
+    │   ├── settings.json        pi's settings; with --model, the session writes its model as
+    │   │                        defaultProvider and defaultModel, keeping the rest
+    │   ├── APPEND_SYSTEM.md     added to pi's system prompt; with instructions, the session
+    │   │                        writes them, replacing what was there
+    │   └── extensions/
+    │       ├── oillamp-conversations.js   moving within a conversation; written each session
+    │       └── oillamp-schedule.js        the scheduling tools; written each session while the
+    │                                      schedule is on
     ├── workspace/
     │   └── NOTES.md             the agent's notes between runs, written by the agent
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path
@@ -242,6 +250,15 @@ The paths come from `LampLayout`. Why it is laid out like this:
 - **A lamp cannot be deleted with `rm -rf`**, because those infra-owned files belong to a
   subordinate id. `oillamp remove` deletes them with `podman unshare rm -rf`.
 - The name **`agent-lamp-<id>`** means a copied agent directory is never mistaken for a lamp.
+- **oillamp never follows a link inside the agent directory.** The agent can change anything
+  there, and on the host it runs as you, so a directory it replaced with a symbolic link could
+  lead oillamp's writes anywhere you can write. The files oillamp writes under `.pi/` go through
+  `FilesystemUtil.writeInAgentHome`, which opens each directory on the way without following a
+  link (Java's `SecureDirectoryStream`, `openat` with `O_NOFOLLOW` underneath), creates the file
+  in the last one and renames it into place there. A link is reported as a warning
+  (`OIL-LAMP-012`) and the file is left unwritten; the session goes on. `AGENTS.md` and `.bashrc`
+  sit directly in the agent directory, which the agent cannot replace, and are renamed into
+  place, which replaces a link rather than follow it.
 
 ### The history
 
@@ -876,10 +893,12 @@ is on. If the session was given a model (`--model`, `Lamp.Starting.model`, or la
 and `Lamp.useModel`, which take effect at the next run) and pi is on another
 one, the harness sends `set_model` with provider `edenai` and that model's id; if pi refuses, the
 run fails with pi's reason, naming the model, and the question is not asked. pi is on another model
-when a new conversation starts on the default in pi's settings, or when an old conversation was
-last answered by another model: pi goes back to that model whenever it opens the conversation.
-Without a model given, nothing is sent, and pi uses its default for a new conversation and the
-conversation's own model for an old one. So the commands of a run are:
+when an old conversation was last answered by another model: pi goes back to that model whenever
+it opens the conversation, whatever its default says. A new conversation starts on the session's
+model by itself, because the session writes it as pi's default (below); only when that file could
+not be written does a new conversation need the switch too. Without a model given, nothing is
+sent, and pi uses its default for a new conversation and the conversation's own model for an old
+one. So the commands of a run are:
 
 ```
 new_session [set_session_name] | switch_session [get_commands, prompt /oillamp-goto <entry>]
@@ -898,6 +917,29 @@ When the time is up, someone cancels the run, or the session is ending, it sends
 30 s for pi to settle;
 then it ends pi, and the next run starts a new one. If pi dies, the run fails with pi's last error
 lines (`OIL-SCHEDULE-005`), and the next run starts it again.
+
+**pi's own files.** Before the first run, as the sandbox comes up (`AgentRunner.begin`),
+`Harness.prepare` writes into pi's directory in the agent's home what the session was given:
+
+| Given | File | What is written |
+|---|---|---|
+| a model (`--model`, `Lamp.Starting.model`) | `~/.pi/agent/settings.json` | `defaultProvider` `edenai` and `defaultModel` the model; every other key stays, among them the `packages` that load pi-edenai |
+| instructions (`--instructions-env`, `Lamp.Starting.instructions`) | `~/.pi/agent/APPEND_SYSTEM.md` | the text, replacing what was there |
+
+A session without a model, or without instructions, leaves that file as it is. `oillamp model`
+and `Lamp.useModel` write the new model into `settings.json` at once, too. pi reads both files
+each time it starts or opens a conversation (`new_session`, `switch_session`), also in a pi
+process that has been running for a while, so a changed default applies to the next new
+conversation. The files are written once the sandbox is up and not before, because the
+entrypoint copies pi's settings from the image into the home only where the home has no such
+file: a `settings.json` written before the first start would keep pi from loading pi-edenai.
+Settings that are not a JSON object are left alone, with a warning (`OIL-LAMP-013`); a link is
+refused (`OIL-LAMP-012`). What goes into the files is decided by `PiSetupUtil`.
+
+The instructions reach the engine in its environment, in the variable `--instructions-env`
+names: `Lamp.Starting.instructions` puts them in `OILLAMP_INSTRUCTIONS`, as it puts the key in
+`OILLAMP_MODEL_KEY`. `at` reads the variable before anything else, and refuses one that is not
+set, empty, or longer than 64 KiB (`OIL-USAGE-001`).
 
 **A run**, on the `oillamp-runs` thread, one at a time:
 
@@ -1457,7 +1499,7 @@ instead, explaining that it may take a while.
 | Host phase | `HostPhase`, `HostProbeUtil`, `HostPlanUtil`, `HostFacts`, `HostRequirements`, `SubIdRangeUtil`, and fact records `OsRelease`, `UserInfo`, `GraphicalSession`, `PodmanFacts`, `UserNameSpaceFacts`, `SubIdFacts`, `SudoFacts`, `GpuFacts`, `TerminalCandidate`, `IdRange`, `DistroFamily`, `Installing` |
 | Lamp phase | `LampPhase`, `LampPlanUtil`, `LampDirectoryUtil`, `LampState`, `LampLayout`, `LampLocationUtil`, `LampMeta`, `AgentId`, `SessionId`, `DirListing`, `RecordingRetentionUtil`, `RecordingFile` |
 | History | `History` (reads the agent directory, writes and reads the repository), `GitObjectUtil` (git's object format and the commit messages, pure) |
-| Schedule and runs | `AgentRunner` (the queue, the schedule watcher, the agent's requests), `Harness` (pi over ssh), `Schedule` and `ScheduledJob` (the jobs and their rules, pure), `ScheduleBook` (the file), `CronExpression`, `TimeNotationUtil` (times as people write them), `WakePromptUtil` (a run's prompt, pure); in `dev.lamp`, `PiSessionFile` (pi's session files as `Lamp.Conversation`, pure) |
+| Schedule and runs | `AgentRunner` (the queue, the schedule watcher, the agent's requests), `Harness` (pi over ssh, and the session's model and instructions in pi's files), `PiSetupUtil` (what goes into those files, pure), `Schedule` and `ScheduledJob` (the jobs and their rules, pure), `ScheduleBook` (the file), `CronExpression`, `TimeNotationUtil` (times as people write them), `WakePromptUtil` (a run's prompt, pure); in `dev.lamp`, `PiSessionFile` (pi's session files as `Lamp.Conversation`, pure) |
 | Configuration | `ConfigLoadingUtil`, `ConfigTree`, `ConfigSection`, `ConfigSource`, `ConfigDefaultsUtil`, `LampConfig`, `GeneratedFileTextUtil`, and value types `GpuMode`, `ClipboardMode`, `TerminalProfileId`, `WindowLayout` |
 | Plans | `Plan`, `Step`, `StepRunner`, `PosixMode` |
 | Errors and events | `Problem`, `ProblemCatalogUtil`, `Result`, `LampEvent`, `ExitStatus` |
@@ -1611,6 +1653,9 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-LAMP-008` | `remove` could not delete part of the lamp. |
 | `OIL-LAMP-009` | `recordings --open` named a session with no recording. |
 | `OIL-LAMP-010` | The desktop could not open a recording. |
+| `OIL-LAMP-011` | A socket directory of the lamp was replaced by a link. |
+| `OIL-LAMP-012` | Warning: a file in the agent's home was not written, because it or a directory on the way is a link. |
+| `OIL-LAMP-013` | Warning: a file in the agent's home was not written, such as pi's settings that are not a JSON object. |
 | `OIL-HISTORY-001` | `restore` named no snapshot, or more than one. |
 | `OIL-HISTORY-002` | The history cannot be read. |
 | `OIL-HISTORY-003` | The lamp could not be saved. |

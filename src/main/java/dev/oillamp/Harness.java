@@ -2,6 +2,7 @@ package dev.oillamp;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampEvent.RunOutcome;
+import dev.lamp.Problem;
 
 /// The agent, as a running session holds it: pi in RPC mode, in the sandbox, reached through ssh.
 ///
@@ -24,10 +26,19 @@ import dev.lamp.LampEvent.RunOutcome;
 /// conversation continues that one.
 ///
 /// A session given a model with `--model`, or later with `oillamp model`, has every run answered
-/// by it, in a new conversation and in an old one alike. pi remembers in each conversation's file which model it was on, and goes
-/// back to that model when the conversation is opened again, so without this an old conversation
-/// would stay on its first model whatever the session was given. Earlier answers keep the model
-/// that gave them; only the next answer comes from the session's model.
+/// by it, in a new conversation and in an old one alike. Two things see to that:
+///
+/// - [#prepare] and [#useModel] write the model into pi's settings in the agent's home as pi's
+///   default. pi reads its settings whenever it starts or opens a conversation, so a new
+///   conversation starts on the session's model by itself.
+/// - Before each run, the harness asks pi which model it is on, and tells it to switch only if
+///   that is another one. pi remembers in each conversation's file which model it was on, and
+///   goes back to that model when the conversation is opened again, whatever its default says;
+///   without the switch an old conversation would stay on its first model. Earlier answers keep
+///   the model that gave them; only the next answer comes from the session's model.
+///
+/// A session given instructions has [#prepare] write them where pi adds them to its system
+/// prompt. Both files are pi's own, in `~/.pi/agent`; [PiSetupUtil] decides what goes into them.
 ///
 /// pi reads and writes one JSON object per line: commands on its input, and replies and events on
 /// its output. Its documentation is in the sandbox, at
@@ -44,24 +55,45 @@ final class Harness implements AutoCloseable {
     /// The command of oillamp's extension that moves within a conversation, and how it says it could not.
     private static final String MOVE = "oillamp-goto";
     private static final String COULD_NOT_MOVE = "oillamp: could not move: ";
-    /// pi's provider for the lamp's model service: the one the pi-edenai extension adds, which the
-    /// image installs. It reaches whichever service the lamp uses, through the relay, so it is
-    /// the only provider pi in a lamp has.
-    private static final String PROVIDER = "edenai";
+    private static final String PROVIDER = PiSetupUtil.PROVIDER;
 
     private final Machine machine;
     private final LampLayout layout;
     /// The model every run is answered by, as the service names it; empty to leave it to pi.
     /// Read once at the start of each run, so a change applies from the next run on.
     private volatile Optional<String> model;
+    /// What pi is to add to its system prompt in this session; empty to leave pi's file alone.
+    private final Optional<String> instructions;
     private Optional<Machine.Conversation> pi = Optional.empty();
     private int commands;
     private volatile boolean stopping;
 
-    Harness(Machine machine, LampLayout layout, Optional<String> model) {
+    Harness(Machine machine, LampLayout layout, Optional<String> model, Optional<String> instructions) {
         this.machine = machine;
         this.layout = layout;
         this.model = model;
+        this.instructions = instructions;
+    }
+
+    /// Writes the session's instructions and model into pi's files in the agent's home, before
+    /// the first run starts pi: the instructions into `APPEND_SYSTEM.md`, replacing what was
+    /// there, and the model as pi's default into `settings.json`, keeping its other settings. A
+    /// session without instructions, or without a model, leaves that file as it is.
+    ///
+    /// Called once the sandbox is up, not before: the sandbox's first start copies pi's settings
+    /// from the image into the agent's home, but only where the home has no such file yet, so a
+    /// settings file written before then would keep pi from loading its extensions.
+    ///
+    /// @param report told what was written, and, as a warning, what was not and why. The session
+    ///               goes on either way
+    void prepare(Consumer<LampEvent> report) {
+        instructions.ifPresent(text -> changeInAgentHome(layout.piInstructions(),
+                "pi works without the instructions this session was given",
+                "pi adds the session's instructions to its system prompt", report, (home, relative) -> {
+                    FilesystemUtil.writeInAgentHome(home, relative, text, PosixMode.PUBLIC_FILE);
+                    return Optional.empty();
+                }));
+        writeDefaultModel(report);
     }
 
     /// How a run ended, the agent's last message, and the conversation it happened in.
@@ -220,9 +252,69 @@ final class Harness implements AutoCloseable {
                 .put("id", request.path("id").asText()).put("cancelled", true));
     }
 
-    /// Has every run from the next one on answered by `model`. The run in progress, if any, keeps
-    /// the model it started with.
-    void useModel(String model) { this.model = Optional.of(model); }
+    /// Has every run from the next one on answered by `model`, and writes it as pi's default, so
+    /// that a new conversation starts on it. The run in progress, if any, keeps the model it
+    /// started with.
+    ///
+    /// @param report as for [#prepare]
+    void useModel(String model, Consumer<LampEvent> report) {
+        this.model = Optional.of(model);
+        writeDefaultModel(report);
+    }
+
+    /// Writes the session's model, as it is now, as pi's default into its settings, keeping
+    /// everything else in them; without a model, leaves them alone.
+    ///
+    /// [#prepare] runs as the sandbox comes up, and [#useModel] whenever `oillamp model` asks, on
+    /// another thread, so the two can overlap. Each reads the settings, changes them and writes
+    /// them back, so this is one at a time, and writes [#model] as it is when its turn comes, not
+    /// the model its caller had: whichever write comes last then holds the newest model, and an
+    /// older one cannot land on top of it. The overlap cannot be made to happen on purpose in a
+    /// scenario, since both sides run inside the engine, so it is not one.
+    private synchronized void writeDefaultModel(Consumer<LampEvent> report) {
+        Optional<String> now = model;
+        if (now.isEmpty()) return;
+        String id = now.get();
+        changeInAgentHome(layout.piSettings(),
+                "pi starts a new conversation on its own default model; each run still switches it to "
+              + id + " first, which costs an entry in the conversation's file",
+                "pi starts new conversations on " + id, report, (home, relative) -> {
+                    Optional<String> merged = PiSetupUtil.withDefaultModel(FilesystemUtil.readInAgentHome(home, relative), id);
+                    if (merged.isEmpty()) return Optional.of("it holds something other than a JSON object, which pi cannot read either");
+                    FilesystemUtil.writeInAgentHome(home, relative, merged.get(), PosixMode.PUBLIC_FILE);
+                    return Optional.empty();
+                });
+    }
+
+    /// A change to a file in the agent's home.
+    @FunctionalInterface
+    private interface AgentFileChange {
+        /// @param home     the agent's home
+        /// @param relative the file, relative to it
+        /// @return why the file was left alone; empty once it is written
+        Optional<String> make(Path home, Path relative) throws IOException;
+    }
+
+    /// Makes `change` to `file` in the agent's home, and reports how it went: what was written,
+    /// or, as a warning, why not. A link on the way is never followed.
+    ///
+    /// @param withoutIt what the session does when the file was not written
+    /// @param done      what the session says once it is written
+    private void changeInAgentHome(Path file, String withoutIt, String done, Consumer<LampEvent> report,
+                                   AgentFileChange change) {
+        Path home = layout.agentDir();
+        Optional<Problem> problem;
+        try {
+            problem = change.make(home, home.relativize(file))
+                    .map(why -> ProblemCatalogUtil.agentFileNotWritten(file, why, withoutIt));
+        } catch (FilesystemUtil.LinkInAgentHome link) {
+            problem = Optional.of(ProblemCatalogUtil.agentFileBehindALink(file, link.link(), withoutIt));
+        } catch (IOException failed) {
+            problem = Optional.of(ProblemCatalogUtil.agentFileNotWritten(file, ProblemCatalogUtil.reason(failed), withoutIt));
+        }
+        report.accept(problem.<LampEvent>map(LampEvent.Warning::new)
+                             .orElseGet(() -> new LampEvent.Info("agent", done + " (" + file + ")")));
+    }
 
     /// Asks the current run to stop, and every later one not to start: the session is ending.
     void stop() { stopping = true; }

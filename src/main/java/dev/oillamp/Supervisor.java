@@ -112,8 +112,10 @@ final class Supervisor {
     /// An event and when it happened. [SessionMachine] gets the time from here rather than asking the clock.
     private record Timed(SessionEvent event, Instant at) {}
 
+    /// @param instructions what the agent is told in addition to pi's own instructions, from
+    ///                     `--instructions-env`; empty to leave pi's instructions as they are
     Supervisor(Machine machine, Context context, HostFacts host,
-               LampPhase.Prepared prepared, SandboxPhase.Running sandbox) {
+               LampPhase.Prepared prepared, SandboxPhase.Running sandbox, Optional<String> instructions) {
         this.machine = machine;
         this.context = context.alsoTelling(followers);
         this.host = host;
@@ -127,7 +129,8 @@ final class Supervisor {
                 !context.options().embedded() && context.options().openWindows()));
         this.sessionStarted = machine.now();
         this.state = new SessionState.Starting(sessionStarted);
-        this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(), prepared.session());
+        this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(), prepared.session(),
+                                    instructions);
     }
 
     /// Runs the session to its end and reports how it ended.

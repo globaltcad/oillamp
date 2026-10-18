@@ -83,6 +83,26 @@ final class StepRunner {
         };
     }
 
+    /// A change to a file in the agent's home.
+    @FunctionalInterface
+    private interface AgentHomeChange { void make() throws IOException; }
+
+    /// Makes `change` to `file` in the agent's home. A link on the way is the agent's doing, and
+    /// no reason to refuse the user their session: it becomes a warning, and the file stays as it
+    /// was.
+    ///
+    /// @param withoutIt what the session lacks without the change, for the warning
+    private static Result<Step> intoAgentHome(Step step, Path file, String withoutIt, AgentHomeChange change)
+            throws IOException {
+        try {
+            change.make();
+            return Result.ok(step);
+        } catch (FilesystemUtil.LinkInAgentHome link) {
+            return Result.ok(step, Tuple.of(Problem.class,
+                    ProblemCatalogUtil.agentFileBehindALink(file, link.link(), withoutIt)));
+        }
+    }
+
     private Result<Step> perform(Step step) {
         try {
             return switch (step) {
@@ -94,6 +114,11 @@ final class StepRunner {
                     FilesystemUtil.writeFile(s.path(), s.content(), s.mode());
                     yield Result.ok(step);
                 }
+                case Step.WriteIntoAgentHome s -> intoAgentHome(step, s.file(), s.withoutIt(),
+                        () -> FilesystemUtil.writeInAgentHome(s.home(), s.home().relativize(s.file()), s.content(),
+                                                              PosixMode.PUBLIC_FILE));
+                case Step.RemoveFromAgentHome s -> intoAgentHome(step, s.file(), "it stays where it is",
+                        () -> FilesystemUtil.deleteInAgentHome(s.home(), s.home().relativize(s.file())));
                 case Step.CopyFile s -> {
                     FilesystemUtil.copyFile(s.from(), s.to(), s.mode());
                     yield Result.ok(step);

@@ -49,6 +49,8 @@ final class ProblemCatalogUtil {
     public static final Code NO_SUCH_RECORDING     = new Code("OIL-LAMP-009");
     public static final Code RECORDING_NOT_OPENED  = new Code("OIL-LAMP-010");
     public static final Code LAMP_TAMPERED         = new Code("OIL-LAMP-011");
+    public static final Code AGENT_FILE_LINKED     = new Code("OIL-LAMP-012");
+    public static final Code AGENT_FILE_NOT_WRITTEN = new Code("OIL-LAMP-013");
     public static final Code NO_SUCH_SNAPSHOT      = new Code("OIL-HISTORY-001");
     public static final Code HISTORY_DAMAGED       = new Code("OIL-HISTORY-002");
     public static final Code SAVE_FAILED           = new Code("OIL-HISTORY-003");
@@ -333,6 +335,36 @@ final class ProblemCatalogUtil {
                              "rm " + directory))
             .withFix(Fix.of("check " + pointsTo + " is as you expect, and look at what the agent "
                           + "in this lamp was doing"));
+    }
+
+    /// A file the session writes in the agent's home, or a directory on the way to it, is a
+    /// symbolic link. A warning: the session goes on without the file.
+    ///
+    /// @param consequence what the session does without the file
+    public static Problem agentFileBehindALink(Path file, Path link, String consequence) {
+        return warning(AGENT_FILE_LINKED, "A file in the agent's home was not written, because of a link",
+                "oillamp did not write " + file + ": " + link + " is a symbolic link. " + consequence,
+                "the agent can change anything in its home, and runs as you on this machine. Had "
+              + "oillamp followed the link, the agent could have had it write wherever the link "
+              + "points, outside the sandbox. oillamp never makes this link, so the agent, or "
+              + "something it ran, most likely did")
+            .withEvidence(new Evidence.File(link, "symbolic link"))
+            .withFix(Fix.run("remove the link (this removes only the link, not what it points to); "
+                           + "the next session writes the file again", "rm " + link))
+            .withFix(Fix.of("look at what the agent in this lamp was doing"));
+    }
+
+    /// A file the session writes in the agent's home could not be written, or its old content
+    /// could not be kept. A warning: the session goes on without it.
+    ///
+    /// @param consequence what the session does without the file
+    public static Problem agentFileNotWritten(Path file, String why, String consequence) {
+        return warning(AGENT_FILE_NOT_WRITTEN, "A file in the agent's home was not written",
+                "oillamp did not write " + file + ": " + why + ". " + consequence,
+                "the file is the agent's, so oillamp leaves it as it is rather than replace what "
+              + "someone wrote there")
+            .withEvidence(new Evidence.Value("reason", why))
+            .withFix(Fix.of("correct or remove " + file + "; the next session writes it again"));
     }
 
     public static Problem lockBusy(Path root, long supervisorPid, String startedAt) {

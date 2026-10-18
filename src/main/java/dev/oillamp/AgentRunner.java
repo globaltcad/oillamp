@@ -69,19 +69,26 @@ final class AgentRunner {
     private record Pending(LampEvent.Run run, Optional<ScheduledJob> job, Optional<Harness.Target> where,
                            CompletableFuture<LampEvent.RunFinished> done) {}
 
-    AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config, SessionId session) {
+    /// @param instructions what the agent is told in addition to pi's own instructions, for the
+    ///                     whole session; empty to leave pi's instructions as they are
+    AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config, SessionId session,
+                Optional<String> instructions) {
         this.machine = machine;
         this.context = context;
         this.layout = layout;
         this.config = config;
         this.session = session;
         this.book = new ScheduleBook(layout);
-        this.harness = new Harness(machine, layout, context.options().model().id());
+        this.harness = new Harness(machine, layout, context.options().model().id(), instructions);
     }
 
     /// Starts working, once the sandbox is up. Runs asked for before this wait until now.
+    ///
+    /// First the session's instructions and model are written into pi's files in the agent's
+    /// home, so that pi, which the first run starts, reads them.
     void begin() {
         if (worker.isPresent()) return;
+        harness.prepare(context.sink());
         worker = Optional.of(Thread.ofVirtual().name("oillamp-runs").start(this::performQueuedRuns));
         if (config.enabled()) Thread.ofVirtual().name("oillamp-schedule").start(this::watchTheSchedule);
     }
@@ -105,8 +112,9 @@ final class AgentRunner {
         return Result.ok(new Asked(run, done));
     }
 
-    /// Has every run from the next one on answered by `model`, as the service names it.
-    void useModel(String model) { harness.useModel(model); }
+    /// Has every run from the next one on answered by `model`, as the service names it, and
+    /// makes it pi's default for new conversations.
+    void useModel(String model) { harness.useModel(model, context.sink()); }
 
     /// Stops a run: the one in progress, or one still waiting, which then never starts.
     ///
@@ -156,6 +164,14 @@ final class AgentRunner {
         stopping = true;
         harness.stop();
         look.release();
+        // A worker with no run waits for the next one with a timed poll, and would notice
+        // `stopping` when the poll times out. That time-out has been seen to come more than a
+        // minute late on a virtual thread, holding up the end of the session, so an idle worker
+        // is woken at once. Never one working on a run: an interrupt could break the save at its
+        // end. The worker sets `current` before it looks at `stopping`, and this method the other
+        // way round, so one of the two always sees the other: either the worker is woken here, or
+        // it sees `stopping` and leaves its run to be reported below as never started.
+        if (current.isEmpty()) worker.ifPresent(Thread::interrupt);
         worker.ifPresent(thread -> {
             try {
                 thread.join(WIND_DOWN);
@@ -259,6 +275,11 @@ final class AgentRunner {
             }
             if (next == null) continue;
             current = Optional.of(next);
+            if (stopping) {
+                current = Optional.empty();
+                queue.addFirst(next);
+                return;
+            }
             LampEvent.RunFinished finished;
             Optional<RuntimeException> crashed = Optional.empty();
             try {
