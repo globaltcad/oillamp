@@ -195,8 +195,18 @@ oillamp ask ~/lamps/first "What are you working on?" # wake it now, and print it
 The agent is pi, which the session starts and keeps. It works on one thing at a time; anything that
 comes while it is busy waits its turn. Each run starts a fresh pi conversation, so the agent
 keeps notes for itself in `~/workspace/NOTES.md`, and oillamp puts those notes, what the last few
-runs changed, and the last run's final message into the prompt. pi uses whatever model it is
-configured with in the sandbox.
+runs changed, and the last run's final message into the prompt.
+
+pi answers with the default model in its settings in the sandbox, and in an old conversation with
+the model that conversation was on. To have every run answered by one model, old conversations
+included, give it to the session, as the service names it:
+
+```sh
+oillamp at ~/lamps/first --model azure/gpt-6.1-sol
+```
+
+The earlier answers keep the model that gave them. A model the service does not offer fails the
+run, and says so.
 
 Every run is saved just before and just after, so `oillamp history` reads as a log of what the agent
 did, and `oillamp restore` undoes any run:
@@ -231,6 +241,7 @@ oillamp at <dir>                 # start (or resume) a sandbox in <dir>
 oillamp update <dir>             # newer opencode and pi, and a fresh model list
 oillamp update <dir> --system    # the whole image again, with Debian's updates
 oillamp at <dir> --dry-run       # print every step it would take, and do nothing
+oillamp at <dir> --model <id>    # answer every run with this model, old conversations too
 oillamp doctor [<dir>]           # check this machine (and a lamp's config), change nothing
 oillamp view <dir>               # open another desktop viewer
 oillamp shell <dir>              # open another shell, in this terminal

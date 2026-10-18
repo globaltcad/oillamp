@@ -300,10 +300,51 @@ its commit message.
 fills with detail that no longer matters. Notes the agent rewrites stay small, and they are in its
 home, where the user can read and correct them. The two saves make the history a log of runs: what
 the user changed and what each run changed are separate snapshots, and any run can be undone with
-`oillamp restore`. pi uses whatever model it is configured with in the sandbox, so oillamp has no
-model setting of its own for runs.
+`oillamp restore`.
 
 *Given up:* the agent only knows what it chose to write down. *(added on 2026-09-29)*
+
+### A session's model applies to every run, old conversations too, and pi is told only when it differs
+
+A session can be given a model, as the service names it: `oillamp at --model <id>`, or
+`Lamp.Starting.model(id)`. Every run of the session is then answered by that model, whether it
+starts a conversation or continues one. After opening the conversation, and moving within it if
+the question says so, the harness compares the model pi reports in `get_state` with the session's
+model, and sends `set_model` (provider `edenai`, the only one pi in a lamp has) only when they
+differ. A `set_model` that pi refuses fails the run, with pi's reason and the model's name; the
+question is not asked. Without a model, nothing is sent, and pi decides as it always did.
+
+*Why:* pi writes the model it is on into each conversation's file, and goes back to that model
+whenever the conversation is opened again. A default model in pi's settings therefore only
+reaches new conversations; an old one stays on the model it started with. A genie broke that way:
+its old chat was on a model the service had started refusing, while its settings named one that
+worked. A user who changes the model expects the next answer to come from the new model,
+whichever chat they are in. The earlier answers keep the model that gave them; when the model
+changes, pi does not send the earlier model's reasoning to the new one, only the text of its
+answers.
+
+pi is only told when the model differs, because telling it is not free even for the model it is
+on: `set_model` always writes a `model_change` entry into the conversation's file, and sets the
+thinking level again from pi's settings, which can differ from the level the conversation was on.
+Sending it before every question would fill the file with entries and could change the thinking
+level unasked. With the same model, nothing changes, and pi sends the model its own earlier
+reasoning back with each question, as before. Both were checked against real pi 1.3.0, with a
+stand-in model service.
+
+Failing the run is better than going on with the old model: the old model may be the very one that
+fails, and a run answered by another model than the user chose would be a surprise found much
+later.
+
+The model is a setting of the session, given on the command line or by the application, not of
+oillamp.toml. pi already keeps a default model of its own, in its settings in the agent's home,
+which a user at the sandbox's terminal changes with pi's `/model`; a second, lasting setting in
+oillamp.toml could silently disagree with it, and would only reach the runs, not a pi started by
+hand. An application such as Genies keeps the user's choice in its own settings and hands it over
+each time it starts the lamp, the way it hands over the model service and the key.
+
+*Given up:* a model that is not in the service's list fails every run until the session is given
+another one. Only pi's runs are covered: opencode, or a pi started by hand in the sandbox, keeps
+its own model. *(added on 2026-10-18)*
 
 ### The agent schedules its own jobs by asking the host, which applies the rules
 

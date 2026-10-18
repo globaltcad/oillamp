@@ -870,12 +870,27 @@ conversation:
   command, the harness checks with `get_commands` that pi has it; without the extension, pi would
   send `/oillamp-goto …` to the model as a prompt.
 
-Then `get_state` says the conversation's id (reported as `RunProgress` `Opened`), `prompt` sends
-the question, and the harness reads events until `agent_settled`, which means pi will not continue
-by itself (`agent_end` can be followed by retries). Along the way it reports `RunProgress` events:
-each `text_delta` and `thinking_delta`, each tool as it starts and ends, each complete message, and
-each retry. The last assistant message is the answer; its `stopReason` says whether it failed. pi
-uses the model it is configured with in the sandbox. An extension's question
+Then `get_state` says the conversation's id (reported as `RunProgress` `Opened`) and the model pi
+is on. If the session was given a model (`--model`, `Lamp.Starting.model`) and pi is on another
+one, the harness sends `set_model` with provider `edenai` and that model's id; if pi refuses, the
+run fails with pi's reason, naming the model, and the question is not asked. pi is on another model
+when a new conversation starts on the default in pi's settings, or when an old conversation was
+last answered by another model: pi goes back to that model whenever it opens the conversation.
+Without a model given, nothing is sent, and pi uses its default for a new conversation and the
+conversation's own model for an old one. So the commands of a run are:
+
+```
+new_session [set_session_name] | switch_session [get_commands, prompt /oillamp-goto <entry>]
+get_state
+[set_model]          only when the session has a model and pi is on another one
+prompt
+```
+
+`prompt` sends the question, and the harness reads events until `agent_settled`, which means pi
+will not continue by itself (`agent_end` can be followed by retries). Along the way it reports
+`RunProgress` events: each `text_delta` and `thinking_delta`, each tool as it starts and ends, each
+complete message, and each retry. The last assistant message is the answer; its `stopReason` says
+whether it failed. An extension's question
 (`extension_ui_request` for `confirm`, `select`, `input`, `editor`) is answered with "cancelled", since no one is there to answer during a run.
 When the time is up, someone cancels the run, or the session is ending, it sends `abort` and waits
 30 s for pi to settle;
@@ -1090,9 +1105,12 @@ channel `model`, never with its key or content.
 
 Both settings can be replaced for one session without editing the file:
 `oillamp at <dir> --model-service <url> --model-key-env <name>`. The key itself is never an
-argument, because any user of the machine can read a process's arguments. An application holding
-a `Lamp` uses `Lamp.at(dir).modelService(url).modelKey(key)`: the lamp puts the key in the engine's
-environment as `OILLAMP_MODEL_KEY` and passes `--model-key-env OILLAMP_MODEL_KEY`.
+argument, because any user of the machine can read a process's arguments. `--model <id>` chooses
+the model every run of the session is answered by, as the harness under "Runs and the schedule"
+describes. An application holding
+a `Lamp` uses `Lamp.at(dir).modelService(url).modelKey(key).model(id)`: the lamp puts the key in
+the engine's environment as `OILLAMP_MODEL_KEY` and passes `--model-key-env OILLAMP_MODEL_KEY`, and
+the model as `--model <id>`.
 `Lamp.models(url, key)` lists the models such a lamp's agent is offered, without an engine: it
 asks the service on the host where the relay would, `<path>/models` or `/v3/models` for a service
 without a path, with the key as a bearer token, and for Eden AI keeps the models served in the EU.

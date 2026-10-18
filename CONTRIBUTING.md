@@ -147,6 +147,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
 | `HoldingALampSpec` | an application holding a lamp through `dev.lamp.Lamp` |
 | `ChoosingTheModelForALampSpec` | an application choosing the model service and key |
+| `ChoosingTheAgentsModelSpec` | `--model` and `Lamp.Starting.model`: one model for every run, old conversations too, with a stand-in pi that keeps track of its model |
 | `ListingAServicesModelsSpec` | `Lamp.models`, against a stand-in server |
 
 Genies' scenarios, in `src/test/groovy/gui/` and `src/test/groovy/dev/gui/view/`, run its model

@@ -36,6 +36,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp at <dir> --no-install` | Works. Reports missing packages instead of installing them. |
 | `oillamp at <dir> --no-viewer` | Works. |
 | `oillamp at <dir> --no-windows` | Works in the simulated scenarios. No window opens and no display is needed; the session ends as usual. Not yet tried under a real tmux. |
+| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does, and the harness's commands were checked against real pi 1.3.0 with a stand-in model service (see "Runs and the schedule"). Not yet tried in a real session. Also `Lamp.Starting.model`. |
 | `oillamp at <dir> --embedded` | Works in the simulated scenarios, also driven through `dev.lamp.Lamp`. No window opens; the session ends when standard input closes, unless the application wrote `leave-running` first. Not yet tried with a real application. |
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
@@ -105,6 +106,25 @@ Checked on 2026-09-29, in a real session started with `oillamp at <dir> --no-win
 listed its trailers, the agent's last message, the files it changed and pi's own record of the
 conversation. Not tried for real: a run stopped by `schedule.max_run_minutes`, a run interrupted
 by the session ending, and Ctrl-C during a run; the scenarios cover all three against a stand-in pi.
+
+**The session's model, with real pi.** Checked on 2026-10-18 without a sandbox or a real model
+service: real pi 1.3.0 in RPC mode, from the image's files, with the pi-edenai extension, pointed at
+a stand-in OpenAI-compatible service on 127.0.0.1 that lists two models and streams each answer
+with reasoning (`reasoning_content`) before its text, and logs every request. A script sent pi the
+harness's commands, each run in a new pi process, as after a session restarts:
+
+| Run | Commands | What pi sent, and what its file got |
+|---|---|---|
+| a new conversation, the session's model is pi's default (DeepSeek) | `new_session`, `get_state`, `prompt` | no `set_model`; pi itself wrote one `model_change` and the thinking level at the start |
+| continue it, same model | `switch_session`, `get_state`, `prompt` | pi was already on DeepSeek, so no `set_model`; the request carried the first answer with its reasoning; no new `model_change` |
+| continue it, the session's model is now GPT | `switch_session`, `get_state`, `set_model`, `prompt` | the request went to GPT, well-formed: the earlier answers as text only, without DeepSeek's reasoning; one new `model_change`; the thinking level stayed `medium` |
+| continue it, GPT again | `switch_session`, `get_state`, `prompt` | pi reopened the conversation on GPT; no `set_model`; GPT's own earlier reasoning was sent back, DeepSeek's was not; no new `model_change` |
+| `set_model` for a model the service does not list | `switch_session`, `set_model` | `success: false`, `Model not found: edenai/nobody/offers-this`; pi stayed on GPT and wrote nothing |
+| a new conversation, the session's model is GPT, pi's default DeepSeek | `new_session`, `get_state`, `set_model`, `prompt` | GPT answered; the file holds pi's own `model_change` to DeepSeek, then the one to GPT |
+
+pi's source confirms why `set_model` is sent only when the model differs: `AgentSession.setModel`
+always appends a `model_change`, and sets the thinking level again from the settings, and pi drops
+an answer's reasoning when the model it is sent to differs in provider, API or id.
 
 ### The agent cannot reach the infrastructure
 
@@ -365,9 +385,13 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   (`conversations`, `send` with a `Question`, `RunProgress`, `cancel`, `agentStatus`); Genies does
   not use it yet.
 - The scheduling tools are pi's only. Another harness in the sandbox, such as opencode, has none.
-- A run uses whatever model pi is configured with in the sandbox. A lamp whose pi has no default
-  model, or one the model service refuses, fails every run, and says so; oillamp has no setting
-  of its own for the model of a run.
+- A session started without `--model` leaves the model to pi: its default for a new
+  conversation, and the conversation's own model for an old one. A lamp whose pi has no default
+  model, or one the model service refuses, fails every run, and says so. With `--model`, every run
+  is answered by that model; that is tested against a stand-in pi, and pi's side of it against
+  real pi, but not yet in a real session. Genies does not give its lamps a model this way yet; it
+  still writes the model into pi's settings only, so its old conversations stay on their first
+  model.
 
 - Ubuntu 26.04, and any distribution other than Ubuntu 24.04.
 - A Java Swing modal dialog on the sandbox desktop. (A Swing window works; see the lessons table.)
