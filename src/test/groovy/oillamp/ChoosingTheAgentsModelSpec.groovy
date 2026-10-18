@@ -232,10 +232,10 @@ class ChoosingTheAgentsModelSpec extends Specification {
 
     def 'An application gives the model with Lamp.Starting.model, and its questions are answered by it'() {
         reportInfo """
-            Genies keeps each genie's model in its own settings, and starts the genie's lamp
-            each time it is woken. It hands the model to the lamp the way it hands over the
-            model service and the key; the engine gets it on its command line, which is fine,
-            since a model's name is no secret.
+            Genies has one model setting, in its own settings, for all its genies, and starts a
+            genie's lamp each time the genie is woken. It hands the model to the lamp the way it
+            hands over the model service and the key; the engine gets it on its command line,
+            which is fine, since a model's name is no secret.
         """
         given:
             aLampWhosePiDefaultsTo(DEEPSEEK)

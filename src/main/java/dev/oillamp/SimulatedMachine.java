@@ -602,8 +602,9 @@ final class SimulatedMachine implements Machine {
                     say(response(id, type, true));
                     writeTheStartingModel();
                     write(message("user", prompt, "stop", ""));
+                    String answeringProvider = provider;
                     String answering = model;
-                    working = Optional.of(Thread.ofVirtual().name("simulated-pi").start(() -> work(prompt, answering)));
+                    working = Optional.of(Thread.ofVirtual().name("simulated-pi").start(() -> work(prompt, answeringProvider, answering)));
                 }
                 default -> say(response(id, type, false).put("error", "not simulated: " + type));
             }
@@ -695,7 +696,9 @@ final class SimulatedMachine implements Machine {
                     .put("method", "notify").put("message", message));
         }
 
-        private void work(String prompt, String answering) {
+        /// Hands `prompt` to the scenario's agent, and reports its answer as given by the model
+        /// pi was on when the prompt came: `answeringProvider` and `answering`.
+        private void work(String prompt, String answeringProvider, String answering) {
             say(JSON.createObjectNode().put("type", "agent_start"));
             String stop = "stop";
             String text = "";
@@ -732,7 +735,7 @@ final class SimulatedMachine implements Machine {
                     say(delta("text_delta", word));
             }
             com.fasterxml.jackson.databind.node.ObjectNode message = message("assistant", text, stop, error);
-            ((com.fasterxml.jackson.databind.node.ObjectNode) message.path("message")).put("provider", PROVIDER).put("model", answering);
+            ((com.fasterxml.jackson.databind.node.ObjectNode) message.path("message")).put("provider", answeringProvider).put("model", answering);
             synchronized (this) {
                 write(message);
             }
