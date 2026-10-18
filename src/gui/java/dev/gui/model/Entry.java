@@ -19,8 +19,10 @@ import sprouts.HasId;
 /// @param expanded whether its detail, such as what a tool printed, is shown in the chat
 /// @param beforeTools for an answer, whether the genie went on to use tools after it: it said what
 ///              it was doing, rather than answering
+/// @param model for an answer, or a failed one, the model that wrote it, as the service names it,
+///              such as `azure/gpt-6.1-sol`; otherwise, or when not known, nothing
 public record Entry(UUID id, Kind kind, String title, String text, String detail, String ref, State state,
-                    boolean expanded, boolean beforeTools)
+                    boolean expanded, boolean beforeTools, String model)
         implements HasId<UUID> {
 
     public enum Kind { YOU, GENIE, THINKING, TOOL, FILE, NOTICE }
@@ -28,18 +30,26 @@ public record Entry(UUID id, Kind kind, String title, String text, String detail
     public enum State { WRITING, DONE, FAILED }
 
     public static Entry of(Kind kind, String text) {
-        return new Entry(UUID.randomUUID(), kind, "", text, "", "", State.DONE, false, false);
+        return new Entry(UUID.randomUUID(), kind, "", text, "", "", State.DONE, false, false, "");
     }
 
-    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
-    public Entry withText(String text)     { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
-    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
-    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
-    public Entry withState(State state)    { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
+    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withText(String text)     { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withState(State state)    { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
 
-    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
+    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
 
-    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools); }
+    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+
+    public Entry withModel(String model) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+
+    /// What the chat says about the entry when the user points at it: for an answer, which model
+    /// wrote it. Nothing when that is not known, so that nothing is shown.
+    public String writtenBy() {
+        return kind == Kind.GENIE && !model.isBlank() ? "Written by " + model : "";
+    }
 
     public boolean isWriting() { return state == State.WRITING; }
 

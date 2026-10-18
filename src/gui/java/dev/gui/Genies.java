@@ -104,7 +104,10 @@ public final class Genies implements Actions {
         this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
         // Shown, they look again whether Ollama is there, and what it has.
         Viewable.cast(page).onChange(From.ALL, it -> {
-            if (it.currentValue().orElseNull() != GeniesState.Page.SETTINGS) keepSettings();
+            if (it.currentValue().orElseNull() != GeniesState.Page.SETTINGS) {
+                keepSettings();
+                useTheSettingsModel();
+            }
             else lookForOllama();
         });
         this.placeShown = state.viewAsString(it -> it.page() == GeniesState.Page.SETTINGS ? it.settings().place().name() : "");
@@ -476,9 +479,21 @@ public final class Genies implements Actions {
         }
     }
 
-    /// Joins the genie's lamp if it was left running, and shows it where it was.
+    /// Joins the genie's lamp if it was left running, and shows it where it was. The lamp keeps
+    /// the model it was lit with until the genie next wakes: Genies cannot know which service
+    /// and key it was lit with, and a model from another place would fail there.
     private void rejoin(UUID id) {
         state.get().find(id).ifPresent(genie -> runner(id).rejoin(conversationShown(genie), leafShown(genie)));
+    }
+
+    /// Every awake genie whose lamp reaches the settings' service with their key answers with
+    /// the settings' model from its next message on, in whatever conversation, without its lamp
+    /// going out. Any other awake genie gets all the new settings when it next wakes; the
+    /// settings say so.
+    private void useTheSettingsModel() {
+        GeniesState now = state.get();
+        String key = now.settings().keyFrom(now.environmentKey()).orElse("");
+        for (GenieRunner runner : runners.values()) runner.useModel(now.settings(), key);
     }
 
     /// The file of the conversation the genie was last in, or empty for its most recent one.

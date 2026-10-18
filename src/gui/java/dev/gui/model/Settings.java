@@ -77,6 +77,10 @@ public record Settings(Place place, EdenAi edenAi, Elsewhere elsewhere, OnThisMa
     /// Eden AI's EU endpoint. It answers OpenAI-style requests under `/v3`.
     public static final String EDEN_AI_SERVICE = "https://api.eu.edenai.run";
 
+    /// What a model's name may be: printable ASCII without spaces, as every service names its
+    /// models, and as the lamp's engine accepts it.
+    static final String MODEL_NAME = "[\\x21-\\x7E]{1,200}";
+
     /// The variable the Eden AI key is read from, unless the user entered one.
     public static final String KEY_VARIABLE = "EDENAI_API_KEY";
 
@@ -156,6 +160,8 @@ public record Settings(Place place, EdenAi edenAi, Elsewhere elsewhere, OnThisMa
 
     /// Why a genie could not reach its model with these settings, or nothing when it can.
     public Optional<String> problem(Optional<String> environmentKey) {
+        if (!model().isBlank() && !model().strip().matches(MODEL_NAME))
+            return Optional.of("A model's name has no spaces and only plain letters, digits and signs, such as azure/gpt-6.1-sol.");
         return switch (place) {
             case EDEN_AI -> {
                 if (edenAi.model().isBlank()) yield Optional.of("Name the model the genies should use; Look up shows Eden AI's list.");
