@@ -342,6 +342,18 @@ oillamp.toml could silently disagree with it, and would only reach the runs, not
 hand. An application such as Genies keeps the user's choice in its own settings and hands it over
 each time it starts the lamp, the way it hands over the model service and the key.
 
+A running session can be given another model, with `oillamp model <dir> <id>` or
+`Lamp.useModel(id)`, which reach the session over its control socket like `oillamp cancel`. It
+applies from the next run on, whatever kind of run; the run in progress keeps the model it started
+with, so that one answer never mixes two models. The change lasts for the session only. An
+application changes the model when its user does, without starting the lamp again, which would end
+everything running on the agent's desktop. The service and the key cannot be changed this way: the
+relay holds them from the start of the session, and changing them needs a new session.
+
+pi records the model with every answer, so `Lamp.Conversation.Entry.model` says which model wrote
+each answer, and `LampEvent.Progress.Answered.model` says it as the answer comes. An event from an
+older engine, without it, reads with no model.
+
 *Given up:* a model that is not in the service's list fails every run until the session is given
 another one. Only pi's runs are covered: opencode, or a pi started by hand in the sandbox, keeps
 its own model. *(added on 2026-10-18)*

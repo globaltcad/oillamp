@@ -55,6 +55,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). |
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
+| `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
 | `oillamp completion bash` | Works. |
@@ -121,6 +122,15 @@ harness's commands, each run in a new pi process, as after a session restarts:
 | continue it, GPT again | `switch_session`, `get_state`, `prompt` | pi reopened the conversation on GPT; no `set_model`; GPT's own earlier reasoning was sent back, DeepSeek's was not; no new `model_change` |
 | `set_model` for a model the service does not list | `switch_session`, `set_model` | `success: false`, `Model not found: edenai/nobody/offers-this`; pi stayed on GPT and wrote nothing |
 | a new conversation, the session's model is GPT, pi's default DeepSeek | `new_session`, `get_state`, `set_model`, `prompt` | GPT answered; the file holds pi's own `model_change` to DeepSeek, then the one to GPT |
+
+**The session's model, in a real sandbox with Eden AI.** Checked on 2026-10-18, on a copy of a
+genie's lamp whose only conversation had been answered by `tensorx/deepseek/deepseek-v4.1-flash`
+at thinking level `medium`, which Eden AI had begun to refuse (400 `invalid_parameter`) on every
+question, while pi's settings named `azure/gpt-6.1-sol`. The copy was given an agent id of its own,
+so that it could run beside the original. Started with `--model azure/gpt-6.1-sol` and asked
+`--in` that conversation, it answered in 4 seconds, from `azure/gpt-6.1-sol`, and the
+conversation's file got exactly one new `model_change`. A second copy started without `--model`
+failed the same question with the same 400, as before.
 
 pi's source confirms why `set_model` is sent only when the model differs: `AgentSession.setModel`
 always appends a `model_change`, and sets the thinking level again from the settings, and pi drops

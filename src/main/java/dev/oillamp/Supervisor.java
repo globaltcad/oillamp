@@ -972,6 +972,16 @@ final class Supervisor {
                     yield Control.Reply.failed("the session is ending");
                 }
             }
+            // Applies from the next run on; the run in progress keeps its model.
+            case "model" -> {
+                Optional<String> model = request.arguments().get("model");
+                Optional<String> wrong = model.isEmpty() ? Optional.of("no model was given")
+                                       : Context.ModelOverride.idProblem(model.get());
+                if (wrong.isPresent()) yield Control.Reply.failed(wrong.get());
+                runs.useModel(model.get());
+                context.sink().accept(new LampEvent.Ok("run", "the agent answers with " + model.get() + " from its next run on"));
+                yield Control.Reply.ok().with("model", model.get());
+            }
             case "cancel" -> {
                 Result<String> cancelled = runs.cancel(request.arguments().get("run").filter(run -> !run.isBlank()));
                 yield cancelled instanceof Result.Ok<String>(String run, var _)

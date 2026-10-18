@@ -58,11 +58,11 @@ class TheEventWireFormatSpec extends Specification {
             Tuple.of(dev.lamp.Lamp.Conversation.Entry,
                 new dev.lamp.Lamp.Conversation.Entry('q1', Optional.empty(), Instant.parse('2026-09-29T18:14:03Z'),
                         dev.lamp.Lamp.Conversation.Kind.MESSAGE_TO_AGENT, 'What "now"?\nTell me.', '',
-                        Tuple.of(dev.lamp.Lamp.Conversation.ToolCall), Optional.empty(), false),
+                        Tuple.of(dev.lamp.Lamp.Conversation.ToolCall), Optional.empty(), false, Optional.empty()),
                 new dev.lamp.Lamp.Conversation.Entry('a1', Optional.of('q1'), Instant.parse('2026-09-29T18:15:00Z'),
                         dev.lamp.Lamp.Conversation.Kind.MESSAGE_FROM_AGENT, '', 'thinking…',
                         Tuple.of(dev.lamp.Lamp.Conversation.ToolCall, new dev.lamp.Lamp.Conversation.ToolCall('c1', 'bash', 'ls')),
-                        Optional.of('bash'), true)))
+                        Optional.of('bash'), true, Optional.of('azure/gpt-6.1-sol'))))
 
     static final LampEvent.Run RUN = new LampEvent.Run('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
@@ -106,7 +106,8 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Opened('01a0ec69-de1c')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Said('Hel')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Thought('hmm\n"quoted"')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Answered('Hello.', false)),
+            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Answered('Hello.', false, Optional.of('azure/gpt-6.1-sol'))),
+            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Answered('', true, Optional.empty())),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolStarted('call-1', 'bash', 'ls -la')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolFinished('call-1', true, 'no such file')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Retrying(2, 3, '529 overloaded')),
@@ -162,5 +163,16 @@ class TheEventWireFormatSpec extends Specification {
         where:
             line << ['', 'not json', '{}', '{"type":"FromTheFuture","x":1}', '{"type":"Ok","area":"x"}',
                      '{"type":"Failure","problem":{"code":{"value":"nonsense"}}}']
+    }
+
+    def 'An answer from an engine that did not yet say which model wrote it reads with no model'() {
+        reportInfo """
+            An application may join a session that an older oillamp started, and read its events.
+            Answers then come without the model that wrote them; they read as answers whose
+            model is not known, rather than not at all.
+        """
+        expect:
+            LampEvent.fromJson('{"type":"RunProgress","run":"run-3","progress":{"type":"Answered","text":"Hi.","failed":false}}') ==
+                    Optional.of(new LampEvent.RunProgress('run-3', new LampEvent.Progress.Answered('Hi.', false, Optional.empty())))
     }
 }

@@ -829,6 +829,7 @@ the container, and the next start cleans up the rest.
 | `{"op":"shell"}` | `{"ok":true,"argv":["ssh","-F",…]}`; the *asking* process runs that ssh in its own terminal |
 | `{"op":"ask","prompt":…}` | answered once the run has ended: `{"ok":true,"run":"run-3","outcome":"FINISHED","answer":…,"seconds":…,"snapshot":…,"conversation":…}`; `oillamp ask` waits up to a day for it. With `"conversation"` and `"file"` it continues that conversation, and with `"move_to"` it goes after that entry first. With `"no_wait":"true"` it is answered at once with the run's id |
 | `{"op":"cancel","run":…}` | `{"ok":true,"run":…}`: the run is being stopped, or was taken off the queue; without `run`, the one in progress |
+| `{"op":"model","model":…}` | `{"ok":true,"model":…}`: every run from the next one on is answered by that model, as with `--model`; the run in progress keeps its own. `oillamp model` and `Lamp.useModel` send it |
 | `{"op":"schedule-changed"}` | `{"ok":true}`, and the session looks at the schedule now rather than at its next half minute |
 | `{"op":"follow"}` | `{"ok":true}`, then every event of the session as a line of JSON, until the session ends and closes the connection. The first lines catch up: `SessionOpened`, the last `SessionStateChanged`, the run in progress from its `RunStarted` (with its text pieces joined), a `RunQueued` for each run waiting, and an `AgentStatus`, which ends the catch-up. `oillamp follow` prints them |
 
@@ -871,7 +872,8 @@ conversation:
   send `/oillamp-goto …` to the model as a prompt.
 
 Then `get_state` says the conversation's id (reported as `RunProgress` `Opened`) and the model pi
-is on. If the session was given a model (`--model`, `Lamp.Starting.model`) and pi is on another
+is on. If the session was given a model (`--model`, `Lamp.Starting.model`, or later `oillamp model`
+and `Lamp.useModel`, which take effect at the next run) and pi is on another
 one, the harness sends `set_model` with provider `edenai` and that model's id; if pi refuses, the
 run fails with pi's reason, naming the model, and the question is not asked. pi is on another model
 when a new conversation starts on the default in pi's settings, or when an old conversation was

@@ -105,6 +105,9 @@ final class AgentRunner {
         return Result.ok(new Asked(run, done));
     }
 
+    /// Has every run from the next one on answered by `model`, as the service names it.
+    void useModel(String model) { harness.useModel(model); }
+
     /// Stops a run: the one in progress, or one still waiting, which then never starts.
     ///
     /// @param run the run, or empty for the one in progress

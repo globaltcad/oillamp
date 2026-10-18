@@ -74,7 +74,7 @@ final class PiSessionFile {
         return switch (type) {
             case "message" -> switch (message.path("role").asText()) {
                 case "user" -> new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.MESSAGE_TO_AGENT,
-                        text(message.path("content")), "", none, Optional.empty(), false);
+                        text(message.path("content")), "", none, Optional.empty(), false, Optional.empty());
                 case "assistant" -> {
                     String stop = message.path("stopReason").asText();
                     boolean failed = stop.equals("error") || stop.equals("aborted");
@@ -82,15 +82,16 @@ final class PiSessionFile {
                     String error = message.path("errorMessage").asText("");
                     yield new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.MESSAGE_FROM_AGENT,
                             failed && !error.isBlank() ? (said.isBlank() ? error : said + "\n\n" + error) : said,
-                            thinking(message.path("content")), calls(message.path("content")), Optional.empty(), failed);
+                            thinking(message.path("content")), calls(message.path("content")), Optional.empty(), failed,
+                            Optional.of(message.path("model").asText("")).filter(model -> !model.isBlank()));
                 }
                 case "toolResult" -> new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.TOOL_OUTPUT,
                         text(message.path("content")), "", none,
-                        Optional.of(message.path("toolName").asText("")), message.path("isError").asBoolean(false));
+                        Optional.of(message.path("toolName").asText("")), message.path("isError").asBoolean(false), Optional.empty());
                 default -> other(id, parent, at, "");
             };
             case "compaction", "branch_summary" -> new Lamp.Conversation.Entry(id, parent, at,
-                    Lamp.Conversation.Kind.SUMMARY, record.path("summary").asText(""), "", none, Optional.empty(), false);
+                    Lamp.Conversation.Kind.SUMMARY, record.path("summary").asText(""), "", none, Optional.empty(), false, Optional.empty());
             case "custom_message" -> other(id, parent, at,
                     record.path("display").asBoolean(false) ? text(record.path("content")) : "");
             default -> other(id, parent, at, "");
@@ -99,7 +100,7 @@ final class PiSessionFile {
 
     private static Lamp.Conversation.Entry other(String id, Optional<String> parent, Instant at, String text) {
         return new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.OTHER, text, "",
-                Tuple.of(Lamp.Conversation.ToolCall.class), Optional.empty(), false);
+                Tuple.of(Lamp.Conversation.ToolCall.class), Optional.empty(), false, Optional.empty());
     }
 
     private static Optional<JsonNode> readLine(String line) {

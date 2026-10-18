@@ -254,6 +254,115 @@ class ChoosingTheAgentsModelSpec extends Specification {
             answeredBy(answer.conversation().orElseThrow()) == [GPT]
     }
 
+    def 'A running session is given another model, and the next question is answered by it, in an old conversation too'() {
+        reportInfo """
+            A user who changes the model in an application's settings expects the next answer
+            to come from the new model, without the sandbox starting again: whatever runs on the
+            agent's desktop would be gone. `oillamp model`, and `Lamp.useModel`, tell the running
+            session; the next run uses the new model, whether it continues a conversation or
+            starts one. pi is told to switch only once per conversation, as with --model.
+        """
+        given: 'a session given DeepSeek, and a conversation DeepSeek answered'
+            aLampWhosePiDefaultsTo(DEEPSEEK)
+            startASession('--model', DEEPSEEK)
+            var conversation = conversationOf(host.oillamp.run('ask', lamp.toString(), 'Name a colour'))
+
+        when: 'the session is given GPT'
+            var changed = host.oillamp.run('model', lamp.toString(), GPT)
+
+        then: 'it says so, and so does the session to whoever follows it'
+            changed.succeeded()
+            changed.console().contains('the agent answers with azure/gpt-6.1-sol from its next run on')
+            waitFor(LampEvent.Ok) { it.text().contains('answers with azure/gpt-6.1-sol') }
+
+        when: 'the conversation goes on, twice'
+            assert host.oillamp.run('ask', lamp.toString(), '--in', conversation, 'Name a fruit').succeeded()
+            assert host.oillamp.run('ask', lamp.toString(), '--in', conversation, 'Name a tree').succeeded()
+
+        then: 'GPT answered both, after one switch'
+            answeredBy(conversation) == [DEEPSEEK, GPT, GPT]
+            modelsRecorded(conversation) == [DEEPSEEK, GPT]
+
+        when: 'an application holding the lamp goes back to DeepSeek'
+            Lamp.at(lamp).launchedBy(host.launcher).join().withCloseable { it.useModel(DEEPSEEK) }
+            assert host.oillamp.run('ask', lamp.toString(), '--in', conversation, 'Name a river').succeeded()
+
+        then:
+            answeredBy(conversation) == [DEEPSEEK, GPT, GPT, DEEPSEEK]
+    }
+
+    def 'A run in progress when the model changes finishes on the model it started with'() {
+        reportInfo """
+            Switching the model in the middle of a run would mix two models in one answer. The
+            change waits for the next run; the one in progress ends on its own model.
+        """
+        given: 'an agent that works until it is let go'
+            aLampWhosePiDefaultsTo(DEEPSEEK)
+            var letGo = new java.util.concurrent.CountDownLatch(1)
+            host.machine { it.agent { String prompt -> prompts << prompt; if (prompt.contains('slowly')) letGo.await(); 'Fine.' } }
+            startASession()
+            var slow = Thread.start { host.oillamp.run('ask', lamp.toString(), 'Count slowly') }
+            waitFor(LampEvent.RunStarted)
+
+        when: 'the model changes while it works'
+            assert host.oillamp.run('model', lamp.toString(), GPT).succeeded()
+            letGo.countDown()
+            slow.join(30_000)
+            var slowRun = waitFor(LampEvent.RunFinished)
+            var next = conversationOf(host.oillamp.run('ask', lamp.toString(), 'Name a colour'))
+
+        then:
+            answeredBy(slowRun.conversation().orElseThrow()) == [DEEPSEEK]
+            answeredBy(next) == [GPT]
+    }
+
+    def 'The conversations say which model wrote each answer, and so does each answer as it comes'() {
+        reportInfo """
+            pi records the model with every answer. An application can show it, for instance
+            when the user points at an answer, which matters most in a conversation that changed
+            model: each answer says where it came from.
+        """
+        given:
+            aLampWhosePiDefaultsTo(DEEPSEEK)
+            startASession()
+            var conversation = conversationOf(host.oillamp.run('ask', lamp.toString(), 'Name a colour'))
+            assert host.oillamp.run('model', lamp.toString(), GPT).succeeded()
+
+        when:
+            assert host.oillamp.run('ask', lamp.toString(), '--in', conversation, 'Name a fruit').succeeded()
+
+        then: 'the conversation names the model of each answer, and of nothing else'
+            var entries = Lamp.conversation(lamp, conversation).orElseThrow().entries()
+            entries.findAll { it.kind() == Lamp.Conversation.Kind.MESSAGE_FROM_AGENT }*.model() == [Optional.of(DEEPSEEK), Optional.of(GPT)]
+            entries.findAll { it.kind() != Lamp.Conversation.Kind.MESSAGE_FROM_AGENT }.every { it.model().isEmpty() }
+
+        and: 'each answer, as the session reported it, named its model'
+            reported.findAll { it instanceof LampEvent.RunProgress && it.progress() instanceof LampEvent.Progress.Answered }
+                    *.progress()*.model() == [Optional.of(DEEPSEEK), Optional.of(GPT)]
+    }
+
+    def 'A running session cannot be given a model no service could have, and a lamp without a session says so'() {
+        reportInfo """
+            The same rule as for --model: a name with a space, or outside ASCII, is refused before
+            the session is asked. A lamp with no session running has nothing to change, and says
+            so, rather than keeping the model for later.
+        """
+        given:
+            aLampWhosePiDefaultsTo(DEEPSEEK)
+
+        when: 'no session runs'
+            var noSession = host.oillamp.run('model', lamp.toString(), GPT)
+
+        then:
+            noSession.reported('OIL-SESSION-001')
+
+        when:
+            Lamp.at(lamp).launchedBy(host.launcher).join().withCloseable { it.useModel('azure/gpt 6.1') }
+
+        then:
+            thrown(IllegalArgumentException)
+    }
+
     def 'A model no service could have is refused where the application gives it'() {
         reportInfo """
             An empty settings field, or a model name with a space pasted into it, would only

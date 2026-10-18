@@ -152,6 +152,7 @@ final class CommandExecutionUtil {
                     conversations(machine, context, conversations.lamp(), conversations.conversation());
             case Command.Ask ask       -> ask(machine, context, ask);
             case Command.Cancel cancel -> cancel(machine, context, cancel.lamp(), cancel.run());
+            case Command.Model model   -> model(machine, context, model.lamp(), model.model());
         };
     }
 
@@ -1083,6 +1084,14 @@ final class CommandExecutionUtil {
                 new LampEvent.Ok("run",
                 "cancelled " + reply.values().get("run").orElse("the run")
               + "; what the agent did until now is saved as the run ends")));
+    }
+
+    /// `oillamp model <dir> <id>`: the running session's agent answers with `model` from its next
+    /// run on.
+    private static ExitStatus model(Machine machine, Context context, Path lampPath, String model) {
+        return askTheSession(machine, context, lampPath, "model", Control.Request.of("model").with("model", model),
+                reply -> context.sink().accept(new LampEvent.Ok("run",
+                        "the agent answers with " + model + " from its next run on")));
     }
 
     /// `oillamp follow <dir>`: report everything a running session reports, as it happens,

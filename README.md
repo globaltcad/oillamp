@@ -206,7 +206,8 @@ oillamp at ~/lamps/first --model azure/gpt-6.1-sol
 ```
 
 The earlier answers keep the model that gave them. A model the service does not offer fails the
-run, and says so.
+run, and says so. A running session takes another model with `oillamp model ~/lamps/first <id>`,
+from its next run on; the sandbox keeps running.
 
 Every run is saved just before and just after, so `oillamp history` reads as a log of what the agent
 did, and `oillamp restore` undoes any run:
@@ -255,6 +256,7 @@ oillamp restore <dir> <snapshot> # go back to a snapshot (stop the session first
 oillamp schedule <dir> [add ...] # list or change the jobs that wake the agent
 oillamp ask <dir> "<prompt>"     # wake the agent in a running session, print its answer
 oillamp cancel <dir> [<run>]     # stop the agent's run
+oillamp model <dir> <id>         # answer with this model from the next run on, without restarting
 oillamp conversations <dir> [<id>] # list the agent's conversations, or show one
 oillamp recordings <dir>         # list screen recordings (if recording is on)
 oillamp config <dir> check       # validate the lamp's oillamp.toml

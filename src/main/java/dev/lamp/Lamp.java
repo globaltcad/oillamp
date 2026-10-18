@@ -69,6 +69,9 @@ public final class Lamp implements AutoCloseable {
     static final String LEAVE_RUNNING = "leave-running";
     /// The variable in the engine's environment that holds a key given with [Starting#modelKey].
     static final String MODEL_KEY_VARIABLE = "OILLAMP_MODEL_KEY";
+    /// What a model's id may be: printable ASCII without spaces, as every service names its
+    /// models. The engine checks the same, for the command line.
+    static final String MODEL_ID = "[\\x21-\\x7E]{1,200}";
     /// Where pi keeps conversations, relative to the agent's home.
     static final String SESSIONS = ".pi/agent/sessions";
     /// Session files larger than this are left out. A long conversation with much tool output is
@@ -213,8 +216,7 @@ public final class Lamp implements AutoCloseable {
         /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
         ///                                  model has
         public Starting model(String id) {
-            // The engine checks the same, for the command line.
-            if (!id.matches("[\\x21-\\x7E]{1,200}"))
+            if (!id.matches(MODEL_ID))
                 throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
             return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), scheduling);
         }
@@ -617,8 +619,12 @@ public final class Lamp implements AutoCloseable {
         /// @param tool     for a tool's output, the tool's name; otherwise empty
         /// @param failed   for an answer, the model failed or was stopped; for a tool's output, the
         ///                 tool reported an error
+        /// @param model    for an answer, the model that wrote it, as the service names it, such as
+        ///                 `azure/gpt-6.1-sol`; otherwise empty. pi records it with every answer,
+        ///                 so a conversation that changed model says which answer came from which
         public record Entry(String id, Optional<String> parent, Instant at, Kind kind, String text,
-                            String thinking, Tuple<ToolCall> calls, Optional<String> tool, boolean failed) {}
+                            String thinking, Tuple<ToolCall> calls, Optional<String> tool, boolean failed,
+                            Optional<String> model) {}
 
         public enum Kind {
             /// A message to the agent: a person's question, or a job's prompt.
@@ -889,6 +895,20 @@ public final class Lamp implements AutoCloseable {
                 return run;
         ran.orThrow();
         throw new Failed(ran.status(), internal("the engine reported no run"));
+    }
+
+    /// Has the agent answer with `id`, a model as the service names it, from its next run on, as
+    /// [Starting#model] would have had it from the start: in new conversations and in old ones,
+    /// for questions and scheduled jobs alike. A run in progress finishes on the model it started
+    /// with. The session's service and key stay as they are; changing those needs a new session.
+    ///
+    /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
+    ///                                  model has
+    /// @throws Failed when the session is not running
+    public void useModel(String id) throws IOException, InterruptedException, Failed {
+        if (!id.matches(MODEL_ID))
+            throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
+        runToEnd(launcher, listeners, "model", directory.toString(), id).orThrow();
     }
 
     /// Stops the run the agent is working on. What it did until then is saved, as for any run,

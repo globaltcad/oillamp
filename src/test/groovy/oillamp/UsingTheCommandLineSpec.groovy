@@ -106,6 +106,10 @@ class UsingTheCommandLineSpec extends Specification {
             'view LAMP --model-service https://api.eu.edenai.run' | "`oillamp view` does not take --model-service" | 'oillamp view <dir>'
             'view LAMP --model-key-env EDENAI_API_KEY' | "`oillamp view` does not take --model-key-env" | 'oillamp view <dir>'
             'ask LAMP hello --model azure/gpt-6.1-sol' | "`oillamp ask` does not take --model" | 'oillamp ask <dir>'
+            'model LAMP azure/gpt-6.1-sol --model x' | "`oillamp model` does not take --model" | 'oillamp model <dir> <id>'
+            'model LAMP azure/gpt-6.1-sol extra' | "'extra'"                                  | 'oillamp model <dir> <id>'
+            'model LAMP'                       | 'needs the model, as the service names it' | 'oillamp model <dir> <id>'
+            'model LAMP azure/gpt‑6.1'         | 'expected a model as the service names it'  | 'oillamp model <dir> <id>'
             'stop LAMP --enable-scheduling'    | "`oillamp stop` does not take --enable-scheduling" | 'oillamp stop <dir>'
             'history LAMP --in c1'             | "`oillamp history` does not take --in"   | 'oillamp history <dir>'
             'history LAMP --after e1'          | "`oillamp history` does not take --after" | 'oillamp history <dir>'
@@ -136,7 +140,7 @@ class UsingTheCommandLineSpec extends Specification {
                      'recordings LAMP --open 20260101-120000', 'remove LAMP --yes --embedded',
                      'save LAMP --message note --embedded', 'history LAMP --embedded',
                      'restore LAMP a1b2c3d4 --embedded', 'stop LAMP --embedded', 'status LAMP --embedded',
-                     'follow LAMP --embedded', 'cancel LAMP --embedded', 'conversations LAMP --embedded',
+                     'follow LAMP --embedded', 'cancel LAMP --embedded', 'model LAMP azure/gpt-6.1-sol --embedded', 'conversations LAMP --embedded',
                      'schedule LAMP --embedded', 'schedule LAMP add --at in-2h --expires in-3d hello',
                      'ask LAMP --no-wait --embedded hello']
     }

@@ -73,6 +73,9 @@ sealed interface Command {
     record Ask(Path lamp, String prompt, Optional<String> conversation, Optional<String> after,
                Optional<String> insteadOf, boolean waitForAnswer, Context.Options options) implements Command {}
     record Cancel(Path lamp, Optional<String> run, Context.Options options) implements Command {}
+    /// `model` is the model the running session's agent answers with from its next run on, as
+    /// the service names it.
+    record Model(Path lamp, String model, Context.Options options) implements Command {}
 
 
     /// Reads the command line into a [Command], or says what is wrong with it.
@@ -326,6 +329,17 @@ sealed interface Command {
                 yield Result.ok(new Ask(Path.of(rest.first()), rest.get(1), in, after, insteadOf,
                         wait, options));
             }
+            case "model" -> {
+                if (rest.size() < 2)
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "`oillamp model` needs the model, as the service names it, such as azure/gpt-6.1-sol",
+                            usageOf("model")));
+                Optional<String> wrong = Context.ModelOverride.idProblem(rest.get(1));
+                if (wrong.isPresent())
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "`oillamp model` \"" + rest.get(1) + "\": " + wrong.get(), usageOf("model")));
+                yield Result.ok(new Model(Path.of(rest.first()), rest.get(1), options));
+            }
             case "cancel" -> Result.ok(new Cancel(Path.of(rest.first()),
                     rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty(), options));
             default -> Result.err(ProblemCatalogUtil.usage("'" + command + "' is not an oillamp command", usage()));
@@ -351,6 +365,7 @@ sealed interface Command {
                 .put("schedule",   ValueSet.of("--cron", "--at", "--expires", "--embedded"))
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
+                .put("model",      ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("restore",    ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of(String.class))
@@ -372,7 +387,7 @@ sealed interface Command {
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
-            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "update");
+            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "model", "update");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
@@ -382,7 +397,7 @@ sealed interface Command {
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("restore", 2).put("schedule", 3).put("ask", 2)
-                .put("conversations", 2).put("cancel", 2)
+                .put("conversations", 2).put("cancel", 2).put("model", 2)
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
     /// The line of [#usage] that describes `command`, such as `oillamp stop <dir>`.
@@ -481,6 +496,10 @@ sealed interface Command {
                       --no-wait       say which run answers it, and return at once
               cancel <dir> [<run>]
                     Stop the run the agent is working on, or a run that is still waiting.
+              model <dir> <id>
+                    Have a running session's agent answer with this model from its next run
+                    on, as `at --model` would have: in new conversations and in old ones. A run
+                    in progress finishes on the model it started with.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
               recordings <dir> [--open <session>] [--prune]

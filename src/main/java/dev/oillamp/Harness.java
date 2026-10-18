@@ -23,8 +23,8 @@ import dev.lamp.LampEvent.RunOutcome;
 /// what it should remember from earlier runs is in the prompt. Only a question asked in a
 /// conversation continues that one.
 ///
-/// A session given a model with `--model` has every run answered by it, in a new conversation and
-/// in an old one alike. pi remembers in each conversation's file which model it was on, and goes
+/// A session given a model with `--model`, or later with `oillamp model`, has every run answered
+/// by it, in a new conversation and in an old one alike. pi remembers in each conversation's file which model it was on, and goes
 /// back to that model when the conversation is opened again, so without this an old conversation
 /// would stay on its first model whatever the session was given. Earlier answers keep the model
 /// that gave them; only the next answer comes from the session's model.
@@ -52,7 +52,8 @@ final class Harness implements AutoCloseable {
     private final Machine machine;
     private final LampLayout layout;
     /// The model every run is answered by, as the service names it; empty to leave it to pi.
-    private final Optional<String> model;
+    /// Read once at the start of each run, so a change applies from the next run on.
+    private volatile Optional<String> model;
     private Optional<Machine.Conversation> pi = Optional.empty();
     private int commands;
     private volatile boolean stopping;
@@ -114,10 +115,11 @@ final class Harness implements AutoCloseable {
             Optional<String> conversation = state
                     .map(s -> s.path("data").path("sessionId").asText("")).filter(id -> !id.isEmpty());
             conversation.ifPresent(id -> progress.accept(new LampEvent.Progress.Opened(id)));
-            if (model.isPresent()) {
-                Optional<String> couldNot = switchModel(agent, state, model.get());
+            Optional<String> wanted = model;
+            if (wanted.isPresent()) {
+                Optional<String> couldNot = switchModel(agent, state, wanted.get());
                 if (couldNot.isPresent())
-                    return failed("pi could not switch to the model " + model.get() + ": " + couldNot.get()).in(conversation);
+                    return failed("pi could not switch to the model " + wanted.get() + ": " + couldNot.get()).in(conversation);
             }
             if (cancelled.getAsBoolean()) return new Answer(RunOutcome.CANCELLED, "").in(conversation);
             ObjectNode ask = command("prompt").put("message", prompt);
@@ -178,7 +180,8 @@ final class Harness implements AutoCloseable {
                         stopReason = message.path("stopReason").asText();
                         error = message.path("errorMessage").asText("");
                         boolean failed = stopReason.equals("error") || stopReason.equals("aborted");
-                        progress.accept(new LampEvent.Progress.Answered(failed && !error.isBlank() ? error : text, failed));
+                        progress.accept(new LampEvent.Progress.Answered(failed && !error.isBlank() ? error : text, failed,
+                                Optional.of(message.path("model").asText("")).filter(model -> !model.isBlank())));
                     }
                 }
                 case "tool_execution_start" -> progress.accept(new LampEvent.Progress.ToolStarted(
@@ -216,6 +219,10 @@ final class Harness implements AutoCloseable {
         send(agent, JsonUtil.object().put("type", "extension_ui_response")
                 .put("id", request.path("id").asText()).put("cancelled", true));
     }
+
+    /// Has every run from the next one on answered by `model`. The run in progress, if any, keeps
+    /// the model it started with.
+    void useModel(String model) { this.model = Optional.of(model); }
 
     /// Asks the current run to stop, and every later one not to start: the session is ending.
     void stop() { stopping = true; }

@@ -264,7 +264,9 @@ public sealed interface LampEvent {
         ///
         /// @param text   the message; when it failed, the error
         /// @param failed the model failed, or the message was stopped
-        record Answered(String text, boolean failed) implements Progress {}
+        /// @param model  the model that wrote it, or failed to, as the service names it, such as
+        ///               `azure/gpt-6.1-sol`; empty when pi did not say
+        record Answered(String text, boolean failed, Optional<String> model) implements Progress {}
         /// A tool call began.
         ///
         /// @param call    the id the matching [ToolFinished] has
