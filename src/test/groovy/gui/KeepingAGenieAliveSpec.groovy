@@ -13,7 +13,6 @@ import dev.lamp.LampEvent
 import dev.lamp.LampConversation
 import dev.lamp.LampPrompt
 import dev.lamp.LampRun
-import groovy.json.JsonSlurper
 import oillamp.ScenarioHost
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -72,35 +71,35 @@ class KeepingAGenieAliveSpec extends Specification {
         runner?.sleepAndWait(30)
     }
 
-    def 'Waking a genie lights its lamp, and tells its pi who it is and which model to use'() {
+    def 'Waking a genie lights its lamp, and hands the lamp who the genie is and which model it answers with'() {
         reportInfo """
-            The lamp's session runs the genie's pi, so Genies cannot give it options on a command
-            line. It writes pi's own files in the genie's home instead: the genie's instructions,
-            which pi adds to its system prompt, and the model from the settings, keeping whatever
-            else pi's settings hold, such as its installed packages.
+            A genie is an agent that knows it lives in Genies: that the user talks to it in a
+            chat, where to put files for the user, how to show the user its desktop. Genies says
+            so in the genie's instructions, and gives them to the lamp with the model from the
+            settings, through the Lamp API alone. The lamp passes both to its engine: the model
+            on the engine's command line, the instructions and the key in variables of its
+            environment. Where the agent keeps such things is the engine's business; Genies
+            writes nothing into the genie's home itself.
         """
-        when:
+        when: 'Jafar wakes, with a model and a key in the settings'
             runner.wake('Jafar', Settings.defaults().withModel('mistral/mistral-large-latest'), 'sk-key')
-
-        then:
             waitUntil { genie.phase() == Genie.Phase.READY }
+
+        then: 'the engine was started with the model, and with the names of the variables that hold the instructions and the key'
+            var engine = host.engines.first()
+            engine.arguments.join(' ').contains('--model mistral/mistral-large-latest')
+            engine.arguments.join(' ').contains('--instructions-env OILLAMP_INSTRUCTIONS')
+            engine.arguments.join(' ').contains('--model-key-env OILLAMP_MODEL_KEY')
+
+        and: 'the instructions tell the genie its name and where things go; the key is only in the environment'
+            engine.environment.OILLAMP_INSTRUCTIONS.startsWith('You are Jafar, a genie')
+            engine.environment.OILLAMP_INSTRUCTIONS.contains('~/outbox')
+            engine.environment.OILLAMP_MODEL_KEY == 'sk-key'
+            !engine.arguments.any { it.contains('sk-key') }
+
+        and: 'the genie has its inbox and outbox'
             Files.isDirectory(home().resolve('outbox'))
-            Files.readString(home().resolve('.pi/agent/APPEND_SYSTEM.md')).startsWith('You are Jafar, a genie')
-            var settings = piSettings()
-            settings.defaultProvider == 'edenai'
-            settings.defaultModel == 'mistral/mistral-large-latest'
-
-        when: 'it wakes again with another model, and pi has packages of its own'
-            runner.sleep()
-            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
-            Files.writeString(home().resolve('.pi/agent/settings.json'),
-                    '{"packages":["git:github.com/edenai/pi-edenai"],"defaultModel":"old"}')
-            runner.wake('Jafar', Settings.defaults().withModel('mistral/mistral-small-latest'), 'sk-key')
-
-        then:
-            waitUntil { genie.phase() == Genie.Phase.READY }
-            piSettings().packages == ['git:github.com/edenai/pi-edenai']
-            piSettings().defaultModel == 'mistral/mistral-small-latest'
+            Files.isDirectory(home().resolve('inbox'))
     }
 
     def 'A message goes to the genie, its answer comes back as it is written, and a file it made is announced'() {
@@ -419,7 +418,7 @@ class KeepingAGenieAliveSpec extends Specification {
             and in its chat.
         """
         given:
-            runner = new GenieRunner(lamp, { dir, settings, key, progress, events ->
+            runner = new GenieRunner(lamp, { dir, name, settings, key, progress, events ->
                 progress.accept('checking this computer')
                 throw new IOException('podman is not installed')
             } as Lighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -606,18 +605,14 @@ class KeepingAGenieAliveSpec extends Specification {
         genie.transcript().entries().findAll { it.kind() in [Entry.Kind.YOU, Entry.Kind.GENIE] }*.text()
     }
 
-    private Map piSettings() {
-        new JsonSlurper().parseText(Files.readString(home().resolve('.pi/agent/settings.json'))) as Map
-    }
-
     /**
      *  oillamp's engine in this JVM, through the Lamp API, except that a command run in the
      *  sandbox runs here, in the genie's home: the simulated machine has no sandbox to run it in.
      */
     private Lighter lighter() {
         var real = new LampLighter(host.launcher)
-        var light = { Path directory, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
-            here(real.light(directory, settings, key, progress, events))
+        var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
+            here(real.light(directory, name, settings, key, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events ->
             real.join(directory, events).map { here(it) }

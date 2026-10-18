@@ -37,10 +37,6 @@ public record Conversations(Tuple<Conversation> all, Here here, Fold chatsFold, 
 
     public Conversations(Tuple<Conversation> all, Here here) { this(all, here, Fold.CLOSED, Fold.CLOSED, false, Optional.empty()); }
 
-    /// Where pi keeps a genie's conversations, relative to its home. pi names the directory
-    /// after the directory it runs in, which for a genie is its home, `/home/agent`.
-    public static final String DIRECTORY = ".pi/agent/sessions/--home-agent--";
-
     /// The genie's home inside its sandbox.
     public static final String HOME = "/home/agent/";
 
