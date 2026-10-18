@@ -307,10 +307,14 @@ public final class GenieRunner {
         held.forEach(this::onLampEvent);
     }
 
+    /// `file`, if the genie still has that conversation; otherwise the user's most recent one.
+    /// A job's run is not the user's: it is listed with the scheduled runs, and the user's next
+    /// message must not land in it unasked. So with only job runs, the chat starts empty.
     private String fileOrMostRecent(String file) {
         List<Lamp.Conversation> all = Lamp.conversations(directory);
         if (all.stream().anyMatch(conversation -> conversation.file().equals(file))) return file;
-        return all.isEmpty() ? "" : all.getFirst().file();
+        return all.stream().filter(conversation -> conversation.job().isEmpty()).findFirst()
+                  .map(Lamp.Conversation::file).orElse("");
     }
 
     /// Shows the conversation `run` answers in, as it stood before its question.
