@@ -48,6 +48,9 @@ public final class GenieRunner {
     /// One reading after the other, so that an older reading never arrives after a newer one.
     private final ExecutorService conversationReader = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("conversations").factory());
     private volatile Optional<Lighter.Lit> lamp = Optional.empty();
+    /// What the lit lamp was lit with; empty while it is out, and for a lamp that was joined,
+    /// whose service and key Genies cannot know.
+    private volatile Optional<LitWith> litWith = Optional.empty();
     private volatile boolean sleeping;
 
     /// Where the next message goes: the conversation's file, relative to the genie's home, and
@@ -114,6 +117,7 @@ public final class GenieRunner {
                 Lighter.Lit lit = lighter.light(directory, settings, key,
                         what -> changes.accept(genie -> genie.lampSays(what)), this::onLampEvent);
                 lamp = Optional.of(lit);
+                litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays("waking the genie"));
                 GenieFileTransferUtil.makeDirectories(lit);
                 GeniePiSetupUtil.prepare(home().orElseThrow(() -> new IOException("the genie's lamp has no home")),
@@ -442,6 +446,45 @@ public final class GenieRunner {
         reloadConversations();
     }
 
+    /// What a lamp was lit with: the model service, the key and the model. The key stays in
+    /// memory, as it does in the lamp's engine, and is never shown.
+    private record LitWith(String service, String key, String model) {
+        LitWith withModel(String model) { return new LitWith(service, key, model); }
+        @Override public String toString() { return "LitWith[service=" + service + ", model=" + model + "]"; }
+    }
+
+    /// Has the genie answer with the model `settings` name from its next message on, without
+    /// putting its lamp out: whatever runs on its desktop goes on. A job that runs next uses it
+    /// too. pi's default in the genie's home follows, so that a new conversation starts on it.
+    ///
+    /// Only when the lamp reaches its model the way `settings` say, with `key`: its relay sends
+    /// every request to the service and with the key it was lit with, which may not know a
+    /// model from another place at all. Otherwise, and for a lamp that was joined, whose service
+    /// and key are not known, the genie keeps its model until it next wakes, with all the new
+    /// settings. Nothing happens while the genie sleeps either.
+    ///
+    /// @param key the key `settings` give, or empty when they give none
+    public void useModel(Settings settings, String key) {
+        work.execute(() -> {
+            String wanted = settings.model().strip();
+            Optional<Lighter.Lit> lit = lamp;
+            Optional<LitWith> was = litWith;
+            if (lit.isEmpty() || was.isEmpty() || wanted.isEmpty() || wanted.equals(was.get().model())) return;
+            if (!was.get().service().equals(settings.service().strip()) || !was.get().key().equals(key)) return;
+            try {
+                lit.get().useModel(wanted);
+                litWith = Optional.of(was.get().withModel(wanted));
+                Optional<Path> home = home();
+                if (home.isPresent()) GeniePiSetupUtil.useModel(home.get(), wanted);
+            } catch (IOException | Lamp.Failed | IllegalArgumentException failed) {
+                String why = failed instanceof Lamp.Failed refused ? refused.problem().whatHappened() : reasonOf(failed);
+                showProblem("The genie keeps answering with " + was.get().model() + " until it wakes again: " + why);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
     private void showProblem(String problem) {
         changes.accept(genie -> genie.withTranscript(genie.transcript().problem(problem)));
     }
@@ -476,6 +519,7 @@ public final class GenieRunner {
         sleeping = true;
         lamp.ifPresent(Lighter.Lit::close);
         lamp = Optional.empty();
+        litWith = Optional.empty();
         history.wentOut();
     }
 

@@ -77,7 +77,7 @@ public record Transcript(Tuple<Entry> entries) {
                 // The failed answer before a retry said why already.
                 String again = "Trying again, " + retry.attempt() + " of " + retry.attempts() + ".";
                 boolean told = !entries.isEmpty() && entries.last().kind() == Entry.Kind.NOTICE && entries.last().isFailed();
-                yield told ? notice(again) : problem(explained(retry.reason()) + " " + again);
+                yield told ? notice(again) : problem(explained(retry.reason(), "") + " " + again);
             }
             case PiEvent.Settled ignored -> settled();
             case PiEvent.Refused refused -> problem("The genie could not take that: " + refused.reason());
@@ -127,9 +127,9 @@ public record Transcript(Tuple<Entry> entries) {
         Transcript said = shared == 0 ? empty() : new Transcript(entries.slice(0, mine.get(shared)));
         for (int i = shared == 0 ? 0 : theirs.get(shared); i < history.lines().size(); i++) {
             PiEvent.History.Line line = history.lines().get(i);
-            said = line.failed() ? said.failed(line.text())
+            said = line.failed() ? said.failed(line.text(), line.model())
                  : said.add(Entry.of(line.fromUser() ? Entry.Kind.YOU : Entry.Kind.GENIE, line.text())
-                                 .withRef(line.id()).withBeforeTools(line.usedTools()));
+                                 .withRef(line.id()).withBeforeTools(line.usedTools()).withModel(line.model()));
         }
         return said;
     }
@@ -162,28 +162,31 @@ public record Transcript(Tuple<Entry> entries) {
     private Transcript answered(PiEvent.Answered answered) {
         Transcript result = doneThinking().answering()
                 .map(answer -> answered.text().isEmpty() ? doneThinking()
-                             : doneThinking().replace(answer.withText(answered.text())))
+                             : doneThinking().replace(answer.withText(answered.text()).withModel(answered.model())))
                 .orElseGet(() -> answered.text().isEmpty() ? doneThinking()
-                               : doneThinking().add(Entry.of(Entry.Kind.GENIE, answered.text())));
+                               : doneThinking().add(Entry.of(Entry.Kind.GENIE, answered.text()).withModel(answered.model())));
         result = result.withoutEmptyAnswers();
         result = new Transcript(result.entries.map(entry ->
                 entry.kind() == Entry.Kind.GENIE && entry.isWriting() ? entry.withState(Entry.State.DONE) : entry));
-        return answered.failed().isEmpty() ? result : result.failed(answered.failed());
+        return answered.failed().isEmpty() ? result : result.failed(answered.failed(), answered.model());
     }
 
     /// The model could not answer, and gave `error`: a problem, said plainly, or a notice when the
     /// genie was stopped, which is no problem.
-    private Transcript failed(String error) {
+    ///
+    /// @param model the model that was asked, or empty when not known
+    private Transcript failed(String error, String model) {
         String stripped = error.strip().toLowerCase(Locale.ROOT);
         return stripped.endsWith("aborted") || stripped.endsWith("aborted.")
                ? notice("Stopped before the answer was done.")
-               : problem(explained(error));
+               : problem(explained(error, model));
     }
 
     /// Why the model could not answer, said plainly. `error` is what pi got: oillamp's answer
     /// when it could not pass the request on, the SDK's word for a broken connection, or the
-    /// model service's status and message.
-    private static String explained(String error) {
+    /// model service's status and message. A request the service refused names the model it was
+    /// for, when `model` says which: the same request may well suit another model.
+    private static String explained(String error, String model) {
         String raw = error.strip();
         Matcher unreachable = UNREACHABLE.matcher(raw);
         if (unreachable.matches())
@@ -201,7 +204,8 @@ public record Transcript(Tuple<Entry> entries) {
             String who = code == 401 || code == 403 ? "The model service refused the key"
                        : code == 429 ? "The model service takes no more requests for now, or the key's credit ran out"
                        : code >= 500 ? "The model service had trouble of its own"
-                       : "The model service refused the request";
+                       : model.isBlank() ? "The model service refused the request"
+                       : model.strip() + " refused the request";
             // oillamp says plainly already what it refused.
             told = said.startsWith("oillamp:") ? said : who + " (" + code + "): " + said;
         }
