@@ -71,6 +71,9 @@ public interface Lighter {
         /// See [Lamp#useModel]: the genie answers with `model` from its next run on.
         void useModel(String model) throws IOException, InterruptedException, LampFailedException;
 
+        /// See [Lamp#decidePermission]: the user allows or refuses a request the lamp asked them about.
+        void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, LampFailedException;
+
         /// Ends the sandbox, and returns once it is gone.
         @Override void close();
 
