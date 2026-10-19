@@ -424,6 +424,48 @@ public final class Lamp implements AutoCloseable {
             throw new Failed(ran.status(), internal("the engine reported no restore"));
         }
 
+        /// Reads the values of `enabled` and `requirements` in the `[host_access]` table of this
+        /// lamp's `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads
+        /// them.
+        ///
+        /// Runs `oillamp host-access <dir>` as a short-lived engine process. It only reads the
+        /// file, so it works whether or not a session is running.
+        ///
+        /// @throws Failed      when the directory is not a lamp, or its configuration is not
+        ///                     valid; the problem says which
+        /// @throws IOException when the engine's process could not be started at all
+        public HostAccess hostAccess() throws IOException, InterruptedException, Failed {
+            return hostAccessOf(runToEnd(launcher, listeners, Map.of(), "host-access", directory.toString()));
+        }
+
+        /// Sets the values of `enabled` and `requirements` in the `[host_access]` table of this
+        /// lamp's `oillamp.toml`, and returns them as the file now has them.
+        ///
+        /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS`
+        /// as a short-lived engine process. The requirements are passed in that environment
+        /// variable, so that they do not appear in the process list. The engine replaces only
+        /// those two keys and keeps every other line of the file, comments included. It writes
+        /// the file only when the result is a valid configuration.
+        ///
+        /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+        /// reads the file only when it starts.
+        ///
+        /// @param enabled      the new value of `enabled`: whether the next session gives the
+        ///                     agent the host tools
+        /// @param requirements the new value of `requirements`: the text the checker model judges
+        ///                     every host request against. May be empty only when `enabled` is
+        ///                     false. Genies passes the JSON its settings page builds
+        /// @return the values as the file now has them
+        /// @throws Failed      when the sandbox is running, or the settings are not valid, such
+        ///                     as on with no requirements; the problem says which
+        /// @throws IOException when the engine's process could not be started at all
+        public HostAccess hostAccess(boolean enabled, String requirements)
+                throws IOException, InterruptedException, Failed {
+            return hostAccessOf(runToEnd(launcher, listeners, Map.of(SECURITY_REQUIREMENTS_VARIABLE, requirements),
+                    "host-access", directory.toString(), enabled ? "on" : "off",
+                    "--requirements-env", SECURITY_REQUIREMENTS_VARIABLE));
+        }
+
         /// This lamp's schedule: the jobs that wake the agent while a session runs.
         ///
         /// @throws Failed      when the schedule could not be read; the problem says why
@@ -561,11 +603,24 @@ public final class Lamp implements AutoCloseable {
         final List<Consumer<LampEvent>> listeners,
         final String... command
     ) throws IOException, InterruptedException {
+        return runToEnd(launcher, listeners, Map.of(), command);
+    }
+
+    /// Like [#runToEnd(Launcher, List, String...)], but also sets the environment variables in
+    /// `environment` for the engine process. Used to pass texts, such as host-access
+    /// requirements, that must not appear on the command line, where every user of the machine
+    /// can read them in the process list.
+    private static Ran runToEnd(
+        final Launcher launcher,
+        final List<Consumer<LampEvent>> listeners,
+        final Map<String, String> environment,
+        final String... command
+    ) throws IOException, InterruptedException {
         List<String> arguments = new ArrayList<>(List.of(command));
         // Before `--`, after which the engine takes every argument as text, such as a prompt.
         int literal = arguments.indexOf("--");
         arguments.add(literal < 0 ? arguments.size() : literal, "--embedded");
-        Process engine = launcher.launch(List.copyOf(arguments), Map.of());
+        Process engine = launcher.launch(List.copyOf(arguments), environment);
         engine.getOutputStream().close();
         List<LampEvent> events = new ArrayList<>();
         try (
@@ -595,6 +650,16 @@ public final class Lamp implements AutoCloseable {
             if (event instanceof LampEvent.Saved saved)
                 return Optional.of(saved.snapshot());
         return Optional.empty();
+    }
+
+    /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
+    /// they travel from the engine to here.
+    private static HostAccess hostAccessOf(Ran ran) throws Failed {
+        ran.orThrow();
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.HostAccessSettings settings)
+                return new HostAccess(settings.enabled(), settings.requirements());
+        throw new Failed(ran.status(), internal("the engine reported no host access settings"));
     }
 
     private static LampEvent.Schedule schedule(
@@ -628,6 +693,14 @@ public final class Lamp implements AutoCloseable {
             if (event instanceof LampEvent.JobAdded added) return added.job();
         throw new Failed(ran.status(), internal("the engine reported no job"));
     }
+
+    /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
+    /// `oillamp.toml`, as [Starting#hostAccess()] reads them and [Starting#hostAccess(boolean, String)]
+    /// writes them.
+    ///
+    /// @param enabled      whether a session gives the agent the host tools
+    /// @param requirements the text the checker model judges every host request against
+    public record HostAccess(boolean enabled, String requirements) {}
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 
@@ -941,6 +1014,18 @@ public final class Lamp implements AutoCloseable {
     /// Takes a job off the schedule, as [Starting#unschedule] does.
     public void unschedule(String job) throws IOException, InterruptedException, Failed {
         runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
+    }
+
+    /// Allows or refuses a host request the session asked the person about, with a
+    /// [LampEvent.HostAccessAsked]. Allowing lets that one request go on; it allows no other.
+    /// A request nobody decides about is refused after a minute.
+    ///
+    /// Runs `oillamp answer <dir> yes|no -- <request>` as a short-lived engine process.
+    ///
+    /// @param request the event's [what][LampEvent.HostAccessAsked#what()], as it was given
+    /// @throws Failed when the session waits on no such request, or is not running
+    public void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, Failed {
+        runToEnd(launcher, listeners, "answer", directory.toString(), allowed ? "yes" : "no", "--", request).orThrow();
     }
 
     /// Wakes the agent with `prompt`, and waits until it has answered.

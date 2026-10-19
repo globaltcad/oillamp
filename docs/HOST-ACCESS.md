@@ -273,7 +273,8 @@ interrupting for:
 
 The session reports `LampEvent.HostAccessAsked`, the terminal prints it, and an application shows
 it. The answer comes back on the session's control socket, as `{"op":"host-access-answer",
-"question":"<what the event said>","yes":"true"}`. The session asks one question at a time, and
+"question":"<what the event said>","yes":"true"}`; an application sends it with
+`Lamp.decidePermission(request, allowed)`, and a person with `oillamp answer <dir> yes|no "<question>"`. The session asks one question at a time, and
 only while it is running; a question that cannot be asked now is declined at once, with the
 reason, rather than left hanging. No answer within 60 s is a denial, and so is a session ending.
 Each question is its own: a yes once is not a yes for the next one.
@@ -309,6 +310,27 @@ try (Lamp lamp = Lamp.at(dir)
 - There is **no CLI flag for a person**, on purpose: a person who wants the feature writes it in
   `oillamp.toml`. The environment path exists for applications, and keeps the text off the process
   list.
+
+### Writing the file, for a settings page
+
+An application with a settings page of its own, such as Genies, writes the user's choice into the
+lamp's file instead, so the file stays what decides:
+
+```java
+Lamp.Starting lamp = Lamp.at(dir);
+Lamp.HostAccess now = lamp.hostAccess();   // enabled, requirements
+lamp.hostAccess(true, requirementsText);                // only while the lamp sleeps
+```
+
+- Only `enabled` and `requirements` under `[host_access]` change. Each line is replaced where it
+  is; every other line of the file, the user's comments too, stays as it was.
+- The changed file is read back as `at` reads it, and written only when it is valid and says
+  exactly what was asked. On with no requirements is refused, as it would be in the file.
+- A lamp whose sandbox runs is refused with `LAMP_BUSY` (OIL-LOCK-001): the session read the file
+  as it started.
+- The requirements stay free text. Genies writes the JSON its page builds there, and the checker
+  reads it like any other words.
+- The same from a terminal: `oillamp host-access <dir> [on|off] [--requirements-env <name>]`.
 
 ### Events
 

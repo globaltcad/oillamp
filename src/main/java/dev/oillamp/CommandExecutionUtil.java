@@ -1,6 +1,7 @@
 package dev.oillamp;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -153,6 +154,9 @@ final class CommandExecutionUtil {
             case Command.Ask ask       -> ask(machine, context, ask);
             case Command.Cancel cancel -> cancel(machine, context, cancel.lamp(), cancel.run());
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
+            case Command.HostAccess access -> hostAccess(machine, context, access.lamp(), access.enabled(),
+                                                          access.requirementsEnv());
+            case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
     }
 
@@ -1117,6 +1121,95 @@ final class CommandExecutionUtil {
         return askTheSession(machine, context, lampPath, "model", Control.Request.of("model").with("model", model),
                 reply -> context.sink().accept(new LampEvent.Ok("run",
                         "the agent answers with " + model + " from its next run on")));
+    }
+
+    /// `oillamp host-access <dir> [on|off] [--requirements-env <name>]`: what the lamp's file
+    /// says about host access, after writing what was given into it.
+    ///
+    /// Only `enabled` and `requirements` under `[host_access]` change; see [HostAccessFileUtil].
+    /// The changed file is read back as `at` would read it, and written only when it is valid
+    /// and says exactly what was asked, so a slip of that line editor never reaches the file.
+    /// Refused while a session runs, which read the file as it started and would not see the
+    /// change.
+    private static ExitStatus hostAccess(Machine machine, Context context, Path lampPath,
+                                         Optional<Boolean> enabled, Optional<String> requirementsEnv) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<LampConfig> before = loadConfig(machine, layout.root());
+        if (before instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampConfig.HostAccess now = ((Result.Ok<LampConfig>) before).value().hostAccess();
+        if (enabled.isEmpty() && requirementsEnv.isEmpty()) {
+            context.sink().accept(new LampEvent.HostAccessSettings(now.enabled(), now.requirements()));
+            return ExitStatus.SUCCESS;
+        }
+
+        Optional<String> requirements = requirementsEnv.map(name -> machine.environmentVariable(name).orElse(""));
+        if (requirements.isPresent() && requirements.get().getBytes(StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS) {
+            Tuple<Problem> tooLong = Tuple.of(Problem.class, ProblemCatalogUtil.usage("--requirements-env "
+                    + requirementsEnv.get() + ": more than " + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024
+                    + " KiB, far more than any useful rules", Command.usageOf("host-access")));
+            context.sinkAcceptProblems(tooLong);
+            return exitStatusFor(tooLong);
+        }
+        Optional<LampLock> lock;
+        try {
+            lock = LampLock.tryAcquire(layout.lockFile());
+        } catch (IOException e) {
+            context.sinkAcceptProblems(Tuple.of(Problem.class,
+                    ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
+            return ExitStatus.ERROR;
+        }
+        if (lock.isEmpty()) {
+            Tuple<Problem> busy = Tuple.of(Problem.class, busyProblem(layout));
+            context.sinkAcceptProblems(busy);
+            return exitStatusFor(busy);
+        }
+        try {
+            String file = FilesystemUtil.readString(layout.config()).orElse("");
+            String changed = HostAccessFileUtil.withHostAccess(file, enabled, requirements);
+            Tuple<ConfigSource> sources = LampPhase.configurationFiles(home(machine), layout.config())
+                    .retainIf(source -> source.kind() == ConfigSource.Kind.USER_GLOBAL)
+                    .add(ConfigSource.lamp(layout.config(), changed));
+            Result<LampConfig> after = ConfigLoadingUtil.load(sources);
+            if (after instanceof Result.Err<LampConfig> failure) {
+                context.sinkAcceptProblems(failure.problems());
+                return exitStatusFor(failure.problems());
+            }
+            LampConfig.HostAccess wanted = new LampConfig.HostAccess(enabled.orElse(now.enabled()),
+                    requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
+                    now.executables(), now.allowAdditive(), now.askTheUser());
+            LampConfig read = ((Result.Ok<LampConfig>) after).value();
+            if (!read.equals(((Result.Ok<LampConfig>) before).value().withHostAccess(wanted))) {
+                Tuple<Problem> wrong = Tuple.of(Problem.class, ProblemCatalogUtil.internal("writing [host_access]",
+                        "the changed oillamp.toml did not read back as what was asked, so it was left as it was"));
+                context.sinkAcceptProblems(wrong);
+                return exitStatusFor(wrong);
+            }
+            FilesystemUtil.writeFile(layout.config(), changed, PosixMode.PRIVATE_FILE);
+            context.sink().accept(new LampEvent.HostAccessSettings(wanted.enabled(), wanted.requirements()));
+            return ExitStatus.SUCCESS;
+        } catch (IOException e) {
+            context.sinkAcceptProblems(Tuple.of(Problem.class,
+                    ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
+            return ExitStatus.ERROR;
+        } finally {
+            release(lock.get());
+        }
+    }
+
+    /// `oillamp answer <dir> yes|no <question>`: the person's answer to a host-access question
+    /// the running session asked, named by its text.
+    private static ExitStatus answer(Machine machine, Context context, Path lampPath, boolean yes, String question) {
+        return askTheSession(machine, context, lampPath, "answer", Control.Request.of("host-access-answer")
+                        .with("question", question).with("yes", String.valueOf(yes)),
+                reply -> context.sink().accept(new LampEvent.Ok("host access", "answered " + (yes ? "yes" : "no"))));
     }
 
     /// `oillamp follow <dir>`: report everything a running session reports, as it happens,

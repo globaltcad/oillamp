@@ -57,6 +57,8 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
+| `oillamp host-access <dir> [on\|off] [--requirements-env <name>]` | Works in the scenarios: writes `enabled` and `requirements` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `Lamp.Starting.hostAccess`. |
+| `oillamp answer <dir> yes\|no "<question>"` | Works in the scenarios: answers a host-access question of a running session. Also `Lamp.decidePermission`. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
 | `oillamp completion bash` | Works. |

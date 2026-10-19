@@ -369,6 +369,14 @@ public sealed interface LampEvent {
     /// @param what what is about to happen, in words, and where
     record HostAccessAsked(String run, String tool, String what) implements LampEvent {}
 
+    /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
+    /// `oillamp.toml`. Reported by `oillamp host-access`, after reading them or after writing them.
+    ///
+    /// @param enabled      the value of `enabled`: whether a session gives the agent the host tools
+    /// @param requirements the value of `requirements`: the text the checker model judges every
+    ///                     host request against
+    record HostAccessSettings(boolean enabled, String requirements) implements LampEvent {}
+
     /// Something went wrong but oillamp carried on.
     record Warning(Problem problem)                     implements LampEvent {}
     /// Something went wrong and oillamp stopped.

@@ -76,6 +76,12 @@ sealed interface Command {
     /// `model` is the model the running session's agent answers with from its next run on, as
     /// the service names it.
     record Model(Path lamp, String model, Context.Options options) implements Command {}
+    /// `enabled` is `on` or `off`, and `requirementsEnv` the variable that holds the new
+    /// requirements; with neither, the command only says what the lamp's file has.
+    record HostAccess(Path lamp, Optional<Boolean> enabled, Optional<String> requirementsEnv,
+                      Context.Options options) implements Command {}
+    /// The person's answer to a host-access question, named by its text as the event gave it.
+    record Answer(Path lamp, boolean yes, String question, Context.Options options) implements Command {}
 
 
     /// Reads the command line into a [Command], or says what is wrong with it.
@@ -174,6 +180,8 @@ sealed interface Command {
             case "--security-requirements-env" -> ProblemCatalogUtil.usage(
                     "--security-requirements-env needs a value, for example --security-requirements-env MY_RULES",
                     usageOf("at"));
+            case "--requirements-env" -> ProblemCatalogUtil.usage(
+                    "--requirements-env needs a value, for example --requirements-env MY_RULES", usageOf("host-access"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -363,6 +371,23 @@ sealed interface Command {
             }
             case "cancel" -> Result.ok(new Cancel(Path.of(rest.first()),
                     rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty(), options));
+            case "host-access" -> {
+                Optional<String> rulesEnv = values.get("--requirements-env");
+                if (rulesEnv.isPresent() && !ConfigLoadingUtil.isVariableName(rulesEnv.get()))
+                    yield Result.err(ProblemCatalogUtil.usage("--requirements-env \"" + rulesEnv.get()
+                          + "\": expected the name of an environment variable, such as MY_RULES", usageOf("host-access")));
+                Optional<String> switched = rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty();
+                if (switched.isPresent() && !switched.get().equals("on") && !switched.get().equals("off"))
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "`oillamp host-access` \"" + switched.get() + "\": expected on or off", usageOf("host-access")));
+                yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv, options));
+            }
+            case "answer" -> {
+                if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "`oillamp answer` needs yes or no, and the question as the session asked it", usageOf("answer")));
+                yield Result.ok(new Answer(Path.of(rest.first()), rest.get(1).equals("yes"), rest.get(2), options));
+            }
             default -> Result.err(ProblemCatalogUtil.usage("'" + command + "' is not an oillamp command", usage()));
         };
     }
@@ -388,6 +413,8 @@ sealed interface Command {
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
                 .put("model",      ValueSet.of("--embedded"))
+                .put("host-access", ValueSet.of("--requirements-env", "--embedded"))
+                .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("restore",    ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of(String.class))
@@ -404,13 +431,14 @@ sealed interface Command {
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
-            "--security-requirements-env",
+            "--security-requirements-env", "--requirements-env",
             "--in", "--after", "--instead-of");
 
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
-            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "model", "update");
+            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "model", "update",
+            "host-access", "answer");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
@@ -420,7 +448,7 @@ sealed interface Command {
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("restore", 2).put("schedule", 3).put("ask", 2)
-                .put("conversations", 2).put("cancel", 2).put("model", 2)
+                .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
     /// The line of [#usage] that describes `command`, such as `oillamp stop <dir>`.
@@ -538,6 +566,14 @@ sealed interface Command {
                     as pi's default. A run in progress finishes on the model it started with.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
+              host-access <dir> [on | off] [--requirements-env <name>]
+                    Say whether the agent may ask to reach the host, and what the checker
+                    judges its requests against: `enabled` and `requirements` under
+                    [host_access] in oillamp.toml. With on or off, or the requirements this
+                    variable holds, write them there, and change nothing else in the file.
+                    Writing needs the session to be stopped.
+              answer <dir> (yes | no) "<question>"
+                    Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]
                     List this lamp's screen recordings. --open plays one, --prune
                     applies the configured retention now instead of at the next start.

@@ -314,6 +314,9 @@ final class ConsoleRenderer {
             case LampEvent.HostAccessAsked asked -> printLine(area("host access")
                     + colour(YELLOW, "◉ ") + "the agent asks you to allow " + asked.tool() + ": "
                     + shortened(NOT_PRINTABLE.matcher(asked.what()).replaceAll(" "), 120));
+            case LampEvent.HostAccessSettings settings -> printLine(area("host access")
+                    + (settings.enabled() ? "on" : "off") + ", judged against:\n"
+                    + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));
             case LampEvent.Warning warning -> problem(warning.problem());
             case LampEvent.Failure failure -> problem(failure.problem());
         }

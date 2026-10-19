@@ -80,8 +80,8 @@ whose file already turned it on.
 The engine runs in this JVM against the simulated machine, connected to the lamp by real pipes.
 A stand-in model service on loopback plays the checker: it records what it was shown, and
 answers with the verdict the scenario sets. The scenarios speak to the session's host-access
-socket exactly as the extension in the sandbox does, and answer the person's questions on the
-session's control socket as an application would. So what is checked is the real gate, from the
+socket exactly as the extension in the sandbox does, and give the person's decisions with
+`Lamp.decidePermission`, as an application would. So what is checked is the real gate, from the
 request's first byte to the file on the host.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
@@ -378,8 +378,8 @@ class ReachingTheHostSpec extends Specification {
         reportInfo """
             With `ask_the_user`, a request the checker allows that reaches past the roots goes to
             the person instead of being refused. The session shows the question as an event, and
-            the answer comes back on the session's control socket. Each question is its own: a
-            yes once is not a yes for the next one.
+            the application gives the person's decision with `Lamp.decidePermission`. Each question is its own: a yes once
+            is not a yes for the next one.
         """
         given:
             Files.createDirectories(host.home.resolve('Notes'))
@@ -456,6 +456,70 @@ class ReachingTheHostSpec extends Specification {
 
         cleanup:
             second?.close()
+    }
+
+    def 'An application writes the switch and the requirements into the lamp\'s file while it sleeps'() {
+        reportInfo """
+            An application with a settings page for this, such as Genies, writes the user's choices
+            into the lamp's own `oillamp.toml` through the Lamp API, so the file stays what decides.
+            Only `enabled` and `requirements` under `[host_access]` change; the rest of the file,
+            the user's comments too, stays as it was. The requirements are free text: Genies puts
+            the JSON its page builds there, and the checker reads it as it would any words.
+
+            A running session read the file as it started and would not see a change, so writing
+            is refused while the lamp is awake.
+        """
+        given: 'a lamp with host access off, and a comment of the user\'s'
+            Files.writeString(host.home.resolve('Documents/today.md'), 'today')
+            host.givenConfig(host.lampPath(), """\
+                schema_version = 1
+                # my own note
+                [host_access]
+                enabled = false
+                requirements = \'\'\'
+                \'\'\'
+                roots = ["${host.home.resolve('Documents')}"]
+                """.stripIndent())
+            var settings = Lamp.at(host.lampPath()).launchedBy(host.launcher)
+            var rules = '{\n  "may_read": ["~/Documents"],\n  "never": "anything with \'\'\' in it"\n}'
+            start()
+
+        when: 'the application writes while the lamp is awake'
+            settings.hostAccess(true, rules)
+
+        then: 'it is refused, and the file is as it was'
+            var busy = thrown(Lamp.Failed)
+            busy.status() == dev.lamp.ExitStatus.LAMP_BUSY
+            !settings.hostAccess().enabled()
+
+        when: 'the lamp sleeps, and the application writes again'
+            lamp.close()
+            lamp = null
+            var written = settings.hostAccess(true, rules)
+
+        then: 'the file says it, and nothing else in it changed'
+            written == new Lamp.HostAccess(true, rules)
+            settings.hostAccess() == written
+            var file = Files.readString(host.lampPath().resolve('oillamp.toml'))
+            file.startsWith('schema_version = 1\n# my own note\n[host_access]\nenabled = true\n')
+            file.contains("roots = [\"${host.home.resolve('Documents')}\"]")
+
+        when: 'the lamp wakes, and the agent reads a document'
+            start()
+            var reply = ask('host_read_file', [path: '~/Documents/today.md'])
+
+        then: 'the checker judged it against what the application wrote'
+            reply['ok']
+            judged(checked.first()).requirements.text == rules
+
+        when: 'the lamp sleeps, and the application turns it on with no requirements'
+            lamp.close()
+            lamp = null
+            settings.hostAccess(true, '')
+
+        then: 'that is refused as the file would be, and the file keeps its rules'
+            thrown(Lamp.Failed)
+            settings.hostAccess() == written
     }
 
     def 'The checker judges with the model the agent answers with, and follows it when it changes'() {
@@ -572,12 +636,9 @@ class ReachingTheHostSpec extends Specification {
         exchange(socket, request)
     }
 
-    /** The person's answer, as an application or a command gives it on the control socket. */
-    private void answer(String question, boolean yes) {
-        Path socket = sockets('run/control.sock').first()
-        var reply = exchange(socket, groovy.json.JsonOutput.toJson(
-                [op: 'host-access-answer', question: question, yes: String.valueOf(yes)]))
-        assert reply['ok']
+    /** The person's decision, as an application gives it. */
+    private void answer(String request, boolean allowed) {
+        lamp.decidePermission(request, allowed)
     }
 
     /** The sockets of that name the running lamps have, under the short runtime directory. */
