@@ -631,6 +631,7 @@ class KeepingAGenieAliveSpec extends Specification {
                 LampEvent.Run send(Lamp.Question question) { lit.send(question) }
                 void cancel(String run) { lit.cancel(run) }
                 void useModel(String model) { lit.useModel(model) }
+                void decidePermission(String request, boolean allowed) { lit.decidePermission(request, allowed) }
                 void close() { closed << 'closed'; lit.close() }
                 void leaveRunning() { lit.leaveRunning() }
             }

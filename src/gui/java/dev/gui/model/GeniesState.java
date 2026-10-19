@@ -59,7 +59,7 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     }
 
     /// The selected genie's chat, its schedule or its history, or the settings every genie shares.
-    public enum Page { CHAT, SCHEDULE, HISTORY, SETTINGS }
+    public enum Page { CHAT, SCHEDULE, HISTORY, HOST_ACCESS, SETTINGS }
 
     /// The selection when there is no genie.
     public static final UUID NONE = new UUID(0, 0);
@@ -130,11 +130,11 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
 
     /// Below this width of the conversation's area, the header's buttons do not fit with their
     /// words, and show only their signs.
-    static final int HEADER_WITH_WORDS_FROM = 780;
+    static final int HEADER_WITH_WORDS_FROM = 900;
 
     /// Below this width of the conversation's area, the header has no room for the switch between
     /// a genie's pages, even with signs alone; the pages are in the genie's menu then.
-    static final int HEADER_WITH_PAGES_FROM = 540;
+    static final int HEADER_WITH_PAGES_FROM = 580;
 
     /// Whether the header shows its buttons with words, which needs more room than a narrow
     /// window: the list of genies may take part of a window that is not narrow yet.
@@ -222,10 +222,11 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
         return withGenies(rest).withSelected(next).withPage(rest.isEmpty() ? Page.SETTINGS : page);
     }
 
-    /// Shows genie `id`: its schedule or its history when another genie's is on show, and its
-    /// chat otherwise.
+    /// Shows genie `id`: its schedule, its history or its host access when another genie's is on
+    /// show, and its chat otherwise.
     public GeniesState select(UUID id) {
-        return find(id).isPresent() ? withSelected(id).withPage(page == Page.SCHEDULE || page == Page.HISTORY ? page : Page.CHAT) : this;
+        boolean genies = page == Page.SCHEDULE || page == Page.HISTORY || page == Page.HOST_ACCESS;
+        return find(id).isPresent() ? withSelected(id).withPage(genies ? page : Page.CHAT) : this;
     }
 
     /// The selected genie's schedule, laid out around [#now].
