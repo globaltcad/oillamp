@@ -122,7 +122,7 @@ class KeepingManyGeniesSpec extends Specification {
     def 'The header makes room in steps: first its buttons drop their words, then the pages go into the menu'() {
         reportInfo """
             The header above a conversation holds the genie's name, the switch between its
-            pages (chat, schedule, history) and buttons such as Desktop and Sleep. Each button
+            pages (chat, schedule, history, host access) and buttons such as Desktop and Sleep. Each button
             has a sign beside its words. With the list of genies open, a window that is not
             narrow yet can still leave the header too little room for the words, and the last
             button would be cut off. So the buttons show only their signs whenever the

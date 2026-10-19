@@ -21,6 +21,8 @@ final class SignSvgUtil {
     static final String CHAT = "<path d='M3.5 3h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V12h-.5A1.5 1.5 0 0 1 2 10.5v-6A1.5 1.5 0 0 1 3.5 3z'/>";
     static final String SCHEDULE = "<rect x='2' y='3.5' width='12' height='10.5' rx='1.5'/><path d='M2 7h12M5.5 2v3M10.5 2v3'/>";
     static final String HISTORY = "<path d='M2.5 8a5.5 5.5 0 1 0 1.6-3.9'/><path d='M3.8 1.8v2.6h2.6'/><path d='M8 5v3.2l2.2 1.4'/>";
+    /// A house: the user's own computer, as the genie's host access reaches it.
+    static final String HOST_ACCESS = "<path d='M2.5 7.5L8 2.8l5.5 4.7'/><path d='M4 6.3V13.5h8V6.3'/><path d='M6.6 13.5v-3.6h2.8v3.6'/>";
     static final String DESKTOP = "<rect x='1.5' y='2.5' width='13' height='8.5' rx='1.5'/><path d='M8 11v3M5.5 14h5'/>";
     static final String KEYS = "<rect x='1.5' y='3.5' width='13' height='9' rx='1.5'/>"
                              + "<path d='M4.5 6.5h0M7 6.5h0M9.5 6.5h0M12 6.5h0M5 9.5h6'/>";
