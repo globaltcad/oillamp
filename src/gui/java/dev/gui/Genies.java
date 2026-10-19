@@ -91,6 +91,9 @@ public final class Genies implements Actions {
     /// The genie whose history is on show, or [GeniesState#NONE]. Kept as a field for the same
     /// reason: a history is read from its lamp when it comes on show.
     private final Val<UUID> historyShown;
+    /// The genie whose host access is on show, or [GeniesState#NONE]. Kept as a field for the
+    /// same reason: the host access is read from its lamp when it comes on show.
+    private final Val<UUID> hostAccessShown;
 
     Genies(Var<GeniesState> state, Shelf shelf, Lighter lighter, OllamaKeeper ollama) {
         this.state = state;
@@ -128,6 +131,11 @@ public final class Genies implements Actions {
                 runner(shown).schedule().read();
             }
         });
+        this.hostAccessShown = state.viewAs(UUID.class, it -> it.page() == GeniesState.Page.HOST_ACCESS ? it.selected() : GeniesState.NONE);
+        Viewable.cast(hostAccessShown).onChange(From.ALL, it -> {
+            UUID shown = it.currentValue().orElse(GeniesState.NONE);
+            if (!shown.equals(GeniesState.NONE)) runner(shown).hostAccess().read();
+        });
     }
 
     public static void main(String[] args) {
@@ -161,10 +169,12 @@ public final class Genies implements Actions {
         frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent event) { app.quit(frame, view); }
         });
-        // The tree of conversations under each genie is there before any genie wakes, and a genie
-        // left running when Genies last closed is awake again.
+        // The tree of conversations under each genie is there before any genie wakes, and so is
+        // whether it may reach this computer, which its card says. A genie left running when
+        // Genies last closed is awake again.
         app.state.get().genies().forEach(genie -> {
             app.runner(genie.id()).reloadConversations();
+            app.runner(genie.id()).hostAccess().read();
             app.rejoin(genie.id());
         });
         app.lookForOllama();
@@ -342,6 +352,17 @@ public final class Genies implements Actions {
         runner(id).goBackTo(target.get());
         if (genie.get().phase().isAwake()) wake(id);
     }
+
+    // ─── the host access ───────────────────────────────────────────────────────────────────
+
+    /// Not while the genie is awake or waking: its lamp read the file as it woke.
+    @Override public void saveHostAccess(UUID id) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty() || genie.get().phase().isAwake() || genie.get().phase() == Genie.Phase.WAKING) return;
+        runner(id).hostAccess().save(genie.get().hostAccess().draft());
+    }
+
+    @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }
 
     /// While the genie wakes, the chat stays where it is, as the tree does.
     @Override public void openConversation(UUID id, String conversation) {

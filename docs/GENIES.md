@@ -426,6 +426,51 @@ Undoing is itself a going back: it adds a moment "Undid going back to …", and 
 come back for it, since both ways are now moments to go back to. A going back counts as an undo
 when it goes to the moment the newest going back left.
 
+## Host access
+
+Experimental, like the feature in oillamp ([HOST-ACCESS.md](HOST-ACCESS.md)). Never turn it on on
+a computer with sensitive data.
+
+A genie may be let reach this computer: read a document, write a file, run a program. oillamp's
+checker model judges each request before it happens, against the user's own rules. Genies has no
+permission system of its own: the page only writes the rules down.
+
+**The page**, "Access" in the switch between a genie's pages, has the switch ("No" / "Yes"),
+with the note that the feature is experimental beside it, and three texts: the folders the genie
+may read, the folders it may read and change, one per line, and anything else in the user's own
+words. On a wide page the three stand side by side. What they say is only checked for a warning,
+such as a line that is not a path: the model that judges reads words, so "everything" is a rule
+it understands, and Save writes whatever they say. Save writes them into the genie's lamp with
+`LampDirectory.hostAccess(enabled, requirements)`: `enabled` and `requirements` under
+`[host_access]` in its `oillamp.toml`, nothing else. The requirements are the rules as JSON
+(`HostAccess.PermissionRules`, pure), which the checker reads as it reads any words:
+
+```json
+{
+  "written_by" : "Genies, from the genie's host access page",
+  "rule" : "Allow a request only when these settings allow it. Refuse everything else.",
+  "folders_it_may_read" : [ "~/Documents" ],
+  "folders_it_may_read_and_change" : [ "~/Notes" ],
+  "in_the_users_own_words" : "Never open my tax returns."
+}
+```
+
+Requirements that are not this JSON, such as rules a person wrote into the file by hand, show as
+the user's own words, so nothing of them is lost.
+
+**Only while it sleeps.** A lamp reads its file as it wakes, so while the genie is awake, or
+waking, the page shows the rules greyed and cannot change them, and a banner says to send it to
+sleep. A genie
+that never woke has no lamp yet, and the page says to wake it once first. `HostAccessKeeper`
+reads the rules when the page comes on show, and for every genie as Genies starts, so that a
+genie's card can say "may reach this computer".
+
+**Requests for permission.** Some requests the checker allowed need the user too, such as running
+a program. The lamp reports a `HostAccessAsked`; a banner under the header, on every page of that
+genie, shows the request with Allow and Refuse, which call `Lamp.decidePermission`. The card says
+"asks you to allow something" meanwhile. The lamp refuses a request nobody decided about within a
+minute, and the banner lets it go then.
+
 ## The desktop
 
 The desktop is served by wayvnc inside the sandbox, on a Unix socket that `Lamp.desktop()` names.
