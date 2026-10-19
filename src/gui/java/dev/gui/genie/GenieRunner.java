@@ -76,6 +76,7 @@ public final class GenieRunner {
     private volatile String conversationOfRuns = "";
     private final ScheduleKeeper schedule;
     private final HistoryKeeper history;
+    private final HostAccessKeeper hostAccess;
     /// The events of a lamp being joined, until the catch-up ends with the agent's status, so
     /// that the chat is set up before the run in progress is replayed into it. Empty otherwise.
     private volatile Optional<List<LampEvent>> heldWhileCatchingUp = Optional.empty();
@@ -91,6 +92,7 @@ public final class GenieRunner {
         this.changes = changes;
         this.schedule = new ScheduleKeeper(lighter.unlit(directory), changes);
         this.history = new HistoryKeeper(lighter.unlit(directory), changes);
+        this.hostAccess = new HostAccessKeeper(directory, lighter.unlit(directory), changes);
     }
 
     /// The genie's schedule, which can be read and changed awake or asleep.
@@ -98,6 +100,9 @@ public final class GenieRunner {
 
     /// The genie's history, which can be read and saved to awake or asleep.
     public HistoryKeeper history() { return history; }
+
+    /// The genie's host access, which can be read awake or asleep, and changed asleep.
+    public HostAccessKeeper hostAccess() { return hostAccess; }
 
     /// The genie's lamp directory.
     public Path directory() { return directory; }
@@ -162,6 +167,22 @@ public final class GenieRunner {
                 lit.get().cancel(run);
             } catch (IOException | LampFailedException failed) {
                 showProblem("The genie could not be stopped: " + reasonOf(failed));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
+    public void decidePermission(String request, boolean allowed) {
+        Optional<Lighter.Lit> lit = lamp;
+        changes.accept(genie -> genie.withHostAccess(genie.hostAccess().permissionDecided(request)));
+        if (lit.isEmpty()) return;
+        Thread.ofVirtual().name("permission").start(() -> {
+            try {
+                lit.get().decidePermission(request, allowed);
+            } catch (IOException | LampFailedException failed) {
+                showProblem("The decision did not reach the genie's lamp: " + reasonOf(failed));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -403,6 +424,7 @@ public final class GenieRunner {
         }
         schedule.onLampEvent(event, Instant.now());
         history.onLampEvent(event);
+        hostAccess.onLampEvent(event, Instant.now());
         switch (event) {
             case LampEvent.RunStarted started -> {
                 LampRun run = started.run();
@@ -420,6 +442,7 @@ public final class GenieRunner {
             case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
                 lamp = Optional.empty();
                 schedule.wentOut();
+                hostAccess.wentOut();
                 changes.accept(genie -> genie.broken("The genie's sandbox stopped: " + changed.status().detail()));
             }
             default -> { }
@@ -523,6 +546,7 @@ public final class GenieRunner {
         lamp = Optional.empty();
         litWith = Optional.empty();
         history.wentOut();
+        hostAccess.wentOut();
     }
 
     // ─── going back in time ────────────────────────────────────────────────────────────────

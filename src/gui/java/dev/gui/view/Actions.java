@@ -71,6 +71,12 @@ public interface Actions {
     /// meanwhile, and wakes again after. The window has asked the user already.
     void goBack(UUID genie, String moment);
 
+    /// Writes the rules the genie's host access page shows into its lamp. Only while it sleeps.
+    void saveHostAccess(UUID genie);
+
+    /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
+    void decidePermission(UUID genie, String request, boolean allowed);
+
     /// Shows the genie's chat at the conversation pi knows by `conversation`, such as the one a
     /// job's run had.
     void openConversation(UUID genie, String conversation);

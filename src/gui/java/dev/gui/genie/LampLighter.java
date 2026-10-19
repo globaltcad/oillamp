@@ -109,6 +109,8 @@ public final class LampLighter implements Lighter {
                     throws IOException, InterruptedException, LampFailedException { lamp.cancel(run); }
             @Override public void useModel(String model)
                     throws IOException, InterruptedException, LampFailedException { lamp.useModel(model); }
+            @Override public void decidePermission(String request, boolean allowed)
+                    throws IOException, InterruptedException, LampFailedException { lamp.decidePermission(request, allowed); }
             @Override public void close() {
                 if (lamp.holds()) {
                     lamp.close();

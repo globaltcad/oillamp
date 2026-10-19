@@ -86,6 +86,7 @@ public final class GeniesView extends JPanel {
     private final ChatRows rows;
     private final SchedulePage schedulePage;
     private final HistoryPage historyPage;
+    private final HostAccessPage hostAccessPage;
     /// Whether the draft is setting the composer's text, which then is not written back into it.
     private boolean settingDraft = false;
     /// Set once the conversation's scroll pane exists.
@@ -128,6 +129,7 @@ public final class GeniesView extends JPanel {
                            phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY), this::showLeaf);
         schedulePage = new SchedulePage(state, actions, look);
         historyPage = new HistoryPage(state, actions, look);
+        hostAccessPage = new HostAccessPage(state, actions);
 
         UI.use(look, () ->
             of(this).group(Skin.FRAME)
@@ -358,6 +360,19 @@ public final class GeniesView extends JPanel {
                         label(shown.viewAsString(Genie::status)).group(Skin.META),
                         shown
                     )
+                )
+                .add("growx, wmin 0",
+                     label(Viewable.of(String.class, shown, state, (it, s) -> !it.hostAccess().waitingAt(s.now()).isEmpty()
+                             ? "⌂  asks you to allow something" : "⌂  may reach this computer"))
+                     .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
+                             it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty()))
+                     .withStyle(it -> it
+                         .componentFont(f -> f
+                             .family(FONT)
+                             .size(11)
+                             .color(BRASS)
+                         )
+                     )
                 )
                 .add("growx, wmin 0",
                      label(shown.viewAsString(it -> "▣  shows you: " + it.showing()))
@@ -667,14 +682,17 @@ public final class GeniesView extends JPanel {
         Val<Boolean> onChat = page.viewAs(Boolean.class, it -> it == GeniesState.Page.CHAT);
         Val<Boolean> onSchedule = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SCHEDULE);
         Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
+        Val<Boolean> onHostAccess = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HOST_ACCESS);
         Val<Boolean> onSettings = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SETTINGS);
         Val<Boolean> hasGenies = state.viewAs(Boolean.class, GeniesState::hasGenies);
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
             .add("growx, wmin 0", header(Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> !a && b)))
+            .add("growx, wmin 0", requestForPermission(Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> !a && b)))
             .add("grow, push, wmin 0", conversation(Viewable.of(Boolean.class, onChat, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", schedulePage.view(Viewable.of(Boolean.class, onSchedule, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", historyPage.view(Viewable.of(Boolean.class, onHistory, hasGenies, (a, b) -> a && b)))
+            .add("grow, push, wmin 0", hostAccessPage.view(Viewable.of(Boolean.class, onHostAccess, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", SettingsPage.of(state, actions, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
     }
 
@@ -728,14 +746,38 @@ public final class GeniesView extends JPanel {
                  .onClick(it -> actions.sleep(genie.get().id())))
             .add(button("").group(Skin.ICON_BUTTON)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, SUBTEXT)))
-                 .withTooltip(roomForPages.viewAsString(it -> (it ? "" : "Chat, schedule or history; ")
+                 .withTooltip(roomForPages.viewAsString(it -> (it ? "" : "Chat, schedule, history or host access; ")
                          + "rename, save, wake or sleep, or delete this genie"))
                  .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id())))
                  .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id())))));
     }
 
-    /// The pages of a genie, its chat, its schedule and its history, as one switch of three
-    /// parts. The schedule's part says how many jobs it has, once they were read. The header
+    /// A request the selected genie's lamp asks the user to allow, such as running a program,
+    /// under the header on every page of the genie, with Allow and Refuse next to it. The oldest
+    /// first; the next one, if any, takes its place once the user decided. The lamp refuses a
+    /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then.
+    private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
+        Val<String> request = Viewable.of(String.class, genie, state, (it, s) ->
+                it.hostAccess().waitingAt(s.now()).stream().findFirst().map(HostAccess.RequestForPermission::what).orElse(""));
+        Val<Boolean> shown = Viewable.of(Boolean.class, visible, request, (on, what) -> on && !what.isEmpty());
+        return
+            panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[grow][][]")
+            .isVisibleIf(shown)
+            .withStyle(it -> it.backgroundColor(YOURS).borderAt(UI.Edge.LEFT, 3, BRASS).borderAt(UI.Edge.BOTTOM, 1, BORDER))
+            .add("growx, wmin 0",
+                box("fill, wrap 1, ins 0, gap 2", "[grow]")
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(Viewable.of(String.class, name, request,
+                        (who, what) -> who + " asks you to allow: " + what), TEXT, Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.note("A model allowed it already; this one needs you too. "
+                        + "Nothing happens until you decide, and after a minute it is refused.", Val.of(true))))
+            .add(button("Refuse").group(Skin.QUIET_BUTTON)
+                 .onClick(it -> actions.decidePermission(genie.get().id(), request.get(), false)))
+            .add(button("Allow").group(Skin.FLAME_BUTTON)
+                 .onClick(it -> actions.decidePermission(genie.get().id(), request.get(), true)));
+    }
+
+    /// The pages of a genie, its chat, its schedule, its history and its host access, as one
+    /// switch of four parts. The schedule's part says how many jobs it has, once they were read. The header
     /// makes room in steps as it narrows: first the parts drop their words and keep their signs,
     /// as the header's other buttons do; then the switch steps aside for the menu behind "⋯",
     /// which has the pages too.
@@ -743,6 +785,7 @@ public final class GeniesView extends JPanel {
         Val<Boolean> onChat = page.viewAs(Boolean.class, it -> it == GeniesState.Page.CHAT);
         Val<Boolean> onSchedule = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SCHEDULE);
         Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
+        Val<Boolean> onHostAccess = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HOST_ACCESS);
         Val<Boolean> wide = state.viewAs(Boolean.class, GeniesState::roomForWords);
         Val<String> scheduleWords = Viewable.of(String.class, genie, wide, (shown, words) -> {
             int jobs = shown.schedule().jobs().size();
@@ -757,7 +800,10 @@ public final class GeniesView extends JPanel {
             .add(half(scheduleWords, SignSvgUtil.SCHEDULE, onSchedule).withTooltip("Schedule: when jobs wake the genie, and what they did")
                  .onClick(it -> page.set(From.VIEW, GeniesState.Page.SCHEDULE)))
             .add(half(worded("History"), SignSvgUtil.HISTORY, onHistory).withTooltip("History: the moments the genie's home was saved at, and going back to one")
-                 .onClick(it -> page.set(From.VIEW, GeniesState.Page.HISTORY)));
+                 .onClick(it -> page.set(From.VIEW, GeniesState.Page.HISTORY)))
+            .add(half(worded("Access"), SignSvgUtil.HOST_ACCESS, onHostAccess)
+                 .withTooltip("Host access: whether the genie may reach this computer, and its rules")
+                 .onClick(it -> page.set(From.VIEW, GeniesState.Page.HOST_ACCESS)));
     }
 
     /// One part of the switch between pages: its sign, and its words while there is room.
@@ -1181,6 +1227,7 @@ public final class GeniesView extends JPanel {
                 .add(ViewPartsUtil.choice("Chat", SignSvgUtil.sign(SignSvgUtil.CHAT, on == GeniesState.Page.CHAT ? TEXT : SUBTEXT), on == GeniesState.Page.CHAT, () -> page.set(From.VIEW, GeniesState.Page.CHAT)))
                 .add(ViewPartsUtil.choice("Schedule", SignSvgUtil.sign(SignSvgUtil.SCHEDULE, on == GeniesState.Page.SCHEDULE ? TEXT : SUBTEXT), on == GeniesState.Page.SCHEDULE, () -> page.set(From.VIEW, GeniesState.Page.SCHEDULE)))
                 .add(ViewPartsUtil.choice("History", SignSvgUtil.sign(SignSvgUtil.HISTORY, on == GeniesState.Page.HISTORY ? TEXT : SUBTEXT), on == GeniesState.Page.HISTORY, () -> page.set(From.VIEW, GeniesState.Page.HISTORY)))
+                .add(ViewPartsUtil.choice("Host access", SignSvgUtil.sign(SignSvgUtil.HOST_ACCESS, on == GeniesState.Page.HOST_ACCESS ? TEXT : SUBTEXT), on == GeniesState.Page.HOST_ACCESS, () -> page.set(From.VIEW, GeniesState.Page.HOST_ACCESS)))
                 .peek(JPopupMenu::addSeparator))
                 .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
                 .add(ViewPartsUtil.item("New conversation", idle, () -> actions.startAfresh(id)))
