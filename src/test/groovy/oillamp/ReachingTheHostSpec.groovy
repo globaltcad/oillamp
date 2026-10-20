@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer
 import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
+import dev.lamp.LampFailedException
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
@@ -12,7 +13,6 @@ import spock.lang.TempDir
 import spock.lang.Timeout
 import spock.lang.Title
 
-import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import java.nio.channels.SocketChannel
@@ -488,7 +488,7 @@ class ReachingTheHostSpec extends Specification {
             settings.hostAccess(true, rules)
 
         then: 'it is refused, and the file is as it was'
-            var busy = thrown(Lamp.Failed)
+            var busy = thrown(LampFailedException)
             busy.status() == dev.lamp.ExitStatus.LAMP_BUSY
             !settings.hostAccess().enabled()
 
@@ -518,7 +518,7 @@ class ReachingTheHostSpec extends Specification {
             settings.hostAccess(true, '')
 
         then: 'that is refused as the file would be, and the file keeps its rules'
-            thrown(Lamp.Failed)
+            thrown(LampFailedException)
             settings.hostAccess() == written
     }
 

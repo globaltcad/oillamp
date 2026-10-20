@@ -141,44 +141,16 @@ public final class Lamp implements AutoCloseable {
         Process launch(List<String> arguments, Map<String, String> environment) throws IOException;
     }
 
-    /// The engine said no, or could not do what was asked. [#problem()] says why, in full.
-    public static final class Failed extends Exception {
-
-        private static final long serialVersionUID = 1L;
-
-        private final transient Problem problem;
-        private final ExitStatus status;
-
-        Failed(ExitStatus status, Problem problem) {
-            super(problem.code() + " " + problem.title() + ": " + problem.whatHappened());
-            this.problem = problem;
-            this.status = status;
-        }
-
-        public Problem problem() { return problem; }
-
-        /// The engine's exit status: [ExitStatus#LAMP_BUSY] for a lamp whose sandbox is running,
-        /// [ExitStatus#USAGE] for a snapshot that does not exist.
-        public ExitStatus status() { return status; }
-    }
-
     /// Everything an engine said, and how it ended.
     record Ran(ExitStatus status, List<LampEvent> events) {
 
         /// Throws the first error the engine reported, if it did not succeed.
-        void orThrow() throws Failed {
+        void orThrow() throws LampFailedException {
             if (status.isSuccess()) return;
             for (LampEvent event : events)
-                if (event instanceof LampEvent.Failure failure) throw new Failed(status, failure.problem());
-            throw new Failed(status, internal("the engine exited with " + status + " without saying why"));
+                if (event instanceof LampEvent.Failure(Problem problem)) throw new LampFailedException(status, problem);
+            throw new LampFailedException(status, InternalLampUtil.internal("the engine exited with " + status + " without saying why"));
         }
-    }
-
-    static Problem internal(String what) {
-        return new Problem(new Problem.Code("OIL-INTERNAL-001"), Problem.Severity.ERROR,
-                "Unexpected internal error (please report)", what,
-                "this is a bug in oillamp, not something you did wrong",
-                Tuple.of(Problem.Evidence.class), Tuple.of(Problem.Fix.class), Optional.empty());
     }
 
     /// Runs the engine for one command that ends by itself, passes each event to the listeners,
@@ -188,37 +160,7 @@ public final class Lamp implements AutoCloseable {
         final List<Consumer<LampEvent>> listeners,
         final String... command
     ) throws IOException, InterruptedException {
-        return runToEnd(launcher, listeners, Map.of(), command);
-    }
-
-    /// Like [#runToEnd(Launcher, List, String...)], but also sets the environment variables in
-    /// `environment` for the engine process. Used to pass texts, such as host-access
-    /// requirements, that must not appear on the command line, where every user of the machine
-    /// can read them in the process list.
-    static Ran runToEnd(
-        final Launcher launcher,
-        final List<Consumer<LampEvent>> listeners,
-        final Map<String, String> environment,
-        final String... command
-    ) throws IOException, InterruptedException {
-        List<String> arguments = new ArrayList<>(List.of(command));
-        // Before `--`, after which the engine takes every argument as text, such as a prompt.
-        int literal = arguments.indexOf("--");
-        arguments.add(literal < 0 ? arguments.size() : literal, "--embedded");
-        Process engine = launcher.launch(List.copyOf(arguments), environment);
-        engine.getOutputStream().close();
-        List<LampEvent> events = new ArrayList<>();
-        try (
-            var output = new BufferedReader(new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))
-        ) {
-            String line;
-            while ((line = output.readLine()) != null)
-                LampEvent.fromJson(line).ifPresent(event -> {
-                    events.add(event);
-                    passToListeners(listeners, event);
-                });
-        }
-        return new Ran(ExitStatus.ofCode(engine.waitFor()).orElse(ExitStatus.ERROR), List.copyOf(events));
+        return InternalLampUtil.runToEnd(launcher, listeners, Map.of(), command);
     }
 
     static Optional<LampEvent.Snapshot> save(
@@ -226,7 +168,7 @@ public final class Lamp implements AutoCloseable {
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
         final String message
-    ) throws IOException, InterruptedException, Failed {
+    ) throws IOException, InterruptedException, LampFailedException {
         Ran ran = message.isBlank()
                 ? runToEnd(launcher, listeners, "save", directory.toString())
                 : runToEnd(launcher, listeners, "save", directory.toString(), "--message", message);
@@ -239,21 +181,23 @@ public final class Lamp implements AutoCloseable {
 
     /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
     /// they travel from the engine to here.
-    static HostAccess hostAccessOf(Ran ran) throws Failed {
+    static HostAccess hostAccessOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.HostAccessSettings settings)
-                return new HostAccess(settings.enabled(), settings.requirements());
-        throw new Failed(ran.status(), internal("the engine reported no host access settings"));
+            if (event instanceof LampEvent.HostAccessSettings(boolean enabled, String requirements))
+                return new HostAccess(enabled, requirements);
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no host access settings"));
     }
 
     /// The values the engine reported as a [LampEvent.AutosaveSettings].
-    static Autosave autosaveOf(Ran ran) throws Failed {
+    static Autosave autosaveOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.AutosaveSettings settings)
-                return new Autosave(settings.startup(), settings.shutdown(), settings.beforeRun(), settings.afterRun());
-        throw new Failed(ran.status(), internal("the engine reported no autosave settings"));
+            if (event instanceof LampEvent.AutosaveSettings(
+                    boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun
+            ))
+                return new Autosave(startup, shutdown, beforeRun, afterRun);
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no autosave settings"));
     }
 
     static String onOff(boolean on) { return on ? "on" : "off"; }
@@ -262,12 +206,12 @@ public final class Lamp implements AutoCloseable {
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory
-    ) throws IOException, InterruptedException, Failed {
+    ) throws IOException, InterruptedException, LampFailedException {
         Ran ran = runToEnd(launcher, listeners, "schedule", directory.toString());
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.Schedule schedule) return schedule;
-        throw new Failed(ran.status(), internal("the engine reported no schedule"));
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no schedule"));
     }
 
     static LampEvent.Job addJob(
@@ -278,7 +222,7 @@ public final class Lamp implements AutoCloseable {
         final String when,
         final String prompt,
         final String... more
-    ) throws IOException, InterruptedException, Failed
+    ) throws IOException, InterruptedException, LampFailedException
     {
         List<String> command = new ArrayList<>(List.of("schedule", directory.toString(), "add", option, when));
         command.addAll(List.of(more));
@@ -286,8 +230,8 @@ public final class Lamp implements AutoCloseable {
         Ran ran = runToEnd(launcher, listeners, command.toArray(String[]::new));
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.JobAdded added) return added.job();
-        throw new Failed(ran.status(), internal("the engine reported no job"));
+            if (event instanceof LampEvent.JobAdded(LampEvent.Job job)) return job;
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no job"));
     }
 
     /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
@@ -590,24 +534,24 @@ public final class Lamp implements AutoCloseable {
     /// Blocks until it is done. What the engine reports goes to this lamp's listeners.
     ///
     /// @return the snapshot, or empty when nothing changed since the last one
-    /// @throws Failed      when the lamp could not be saved; the problem says why
+    /// @throws LampFailedException      when the lamp could not be saved; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, Failed {
+    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, LampFailedException {
         return save(launcher, listeners, directory, message);
     }
 
     /// This lamp's schedule, as [LampStartupConf#schedule] reads it.
-    public LampEvent.Schedule schedule() throws IOException, InterruptedException, Failed {
+    public LampEvent.Schedule schedule() throws IOException, InterruptedException, LampFailedException {
         return schedule(launcher, listeners, directory);
     }
 
     /// Adds a repeating job, as [LampStartupConf#repeat] does. The running session sees it at once.
-    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, Failed {
+    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
     /// Adds a job that runs once, as [LampStartupConf#once] does. The running session sees it at once.
-    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, Failed {
+    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--at", at, prompt);
     }
 
@@ -621,7 +565,7 @@ public final class Lamp implements AutoCloseable {
     public void forget(String conversation) throws IOException { forget(directory, conversation); }
 
     /// Takes a job off the schedule, as [LampStartupConf#unschedule] does.
-    public void unschedule(String job) throws IOException, InterruptedException, Failed {
+    public void unschedule(String job) throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
     }
 
@@ -632,8 +576,8 @@ public final class Lamp implements AutoCloseable {
     /// Runs `oillamp answer <dir> yes|no -- <request>` as a short-lived engine process.
     ///
     /// @param request the event's [what][LampEvent.HostAccessAsked#what()], as it was given
-    /// @throws Failed when the session waits on no such request, or is not running
-    public void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when the session waits on no such request, or is not running
+    public void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "answer", directory.toString(), allowed ? "yes" : "no", "--", request).orThrow();
     }
 
@@ -647,9 +591,9 @@ public final class Lamp implements AutoCloseable {
     /// this lamp's listeners.
     ///
     /// @return how it ended, and what the agent said at the end
-    /// @throws Failed      when the session is not running or is ending; the problem says why
+    /// @throws LampFailedException      when the session is not running or is ending; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public LampEvent.RunFinished ask(String prompt) throws IOException, InterruptedException, Failed {
+    public LampEvent.RunFinished ask(String prompt) throws IOException, InterruptedException, LampFailedException {
         return ask(Question.fresh(prompt));
     }
 
@@ -657,9 +601,9 @@ public final class Lamp implements AutoCloseable {
     /// conversations, where it stands, after one of its entries, or instead of one of its
     /// questions. Otherwise as [#ask(String)].
     ///
-    /// @throws Failed when the conversation or the entry is not there, or the session is not
+    /// @throws LampFailedException when the conversation or the entry is not there, or the session is not
     ///                running; the problem says which
-    public LampEvent.RunFinished ask(Question question) throws IOException, InterruptedException, Failed {
+    public LampEvent.RunFinished ask(Question question) throws IOException, InterruptedException, LampFailedException {
         return ask(launcher, listeners, directory, question);
     }
 
@@ -670,14 +614,15 @@ public final class Lamp implements AutoCloseable {
     /// arrive at this lamp's listeners, with the returned run's id. When the agent is busy, the
     /// run waits its turn, and [LampEvent.RunQueued] says so.
     ///
-    /// @throws Failed when the conversation or the entry is not there, or the session is ending
-    public LampEvent.Run send(Question question) throws IOException, InterruptedException, Failed {
-        Ran ran = runToEnd(launcher, listeners, askCommand(directory, question, "--no-wait"));
+    /// @throws LampFailedException when the conversation or the entry is not there, or the session is ending
+    public LampEvent.Run send(Question question) throws IOException, InterruptedException, LampFailedException {
+        var command = InternalLampUtil.askCommand(directory, question, "--no-wait");
+        Ran ran = runToEnd(launcher, listeners, command);
         for ( LampEvent event : ran.events() )
             if (event instanceof LampEvent.RunAccepted(LampEvent.Run run))
                 return run;
         ran.orThrow();
-        throw new Failed(ran.status(), internal("the engine reported no run"));
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no run"));
     }
 
     /// Has the agent answer with `id`, a model as the service names it, from its next run on, as
@@ -688,8 +633,8 @@ public final class Lamp implements AutoCloseable {
     ///
     /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
     ///                                  model has
-    /// @throws Failed when the session is not running
-    public void useModel(String id) throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when the session is not running
+    public void useModel(String id) throws IOException, InterruptedException, LampFailedException {
         if (!id.matches(MODEL_ID))
             throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
         runToEnd(launcher, listeners, "model", directory.toString(), id).orThrow();
@@ -698,51 +643,27 @@ public final class Lamp implements AutoCloseable {
     /// Stops the run the agent is working on. What it did until then is saved, as for any run,
     /// and its [LampEvent.RunFinished] says it was [cancelled][LampEvent.RunOutcome#CANCELLED].
     ///
-    /// @throws Failed when the agent is not working on anything
-    public void cancel() throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when the agent is not working on anything
+    public void cancel() throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "cancel", directory.toString()).orThrow();
     }
 
     /// Stops `run`: the one in progress, or one still waiting, which then never starts.
     ///
-    /// @throws Failed when no such run is in progress or waiting
-    public void cancel(String run) throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when no such run is in progress or waiting
+    public void cancel(String run) throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "cancel", directory.toString(), run).orThrow();
     }
 
     /// What the agent is doing: the run in progress, if any, and the runs waiting.
     ///
-    /// @throws Failed when the session is not running
-    public LampEvent.AgentStatus agentStatus() throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when the session is not running
+    public LampEvent.AgentStatus agentStatus() throws IOException, InterruptedException, LampFailedException {
         Ran ran = runToEnd(launcher, listeners, "status", directory.toString());
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.AgentStatus status) return status;
-        throw new Failed(ran.status(), internal("the engine reported no status of the agent"));
-    }
-
-    private static String[] askCommand(Path directory, Question question, String... options) {
-        List<String> command = new ArrayList<>(List.of("ask", directory.toString()));
-        question.conversation().ifPresent(id -> command.addAll(List.of("--in", id)));
-        question.after().ifPresent(id -> command.addAll(List.of("--after", id)));
-        question.insteadOf().ifPresent(id -> command.addAll(List.of("--instead-of", id)));
-        command.addAll(List.of(options));
-        command.addAll(List.of("--", question.prompt()));
-        return command.toArray(String[]::new);
-    }
-
-    static LampEvent.RunFinished ask(
-        final Launcher launcher,
-        final List<Consumer<LampEvent>> listeners,
-        final Path directory,
-        final Question question
-    ) throws IOException, InterruptedException, Failed
-    {
-        Ran ran = runToEnd(launcher, listeners, askCommand(directory, question));
-        for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.RunFinished finished) return finished;
-        ran.orThrow();
-        throw new Failed(ran.status(), internal("the engine reported no answer"));
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no status of the agent"));
     }
 
     /// Waits until the session is running, the engine has ended, or `limit` has passed.
@@ -855,8 +776,8 @@ public final class Lamp implements AutoCloseable {
     /// Ends the session, whoever started it, and waits until it has ended: the sandbox is
     /// shut down and the lamp saved.
     ///
-    /// @throws Failed when no session is running
-    public void stop() throws IOException, InterruptedException, Failed {
+    /// @throws LampFailedException when no session is running
+    public void stop() throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "stop", directory.toString()).orThrow();
         ended.await();
     }
@@ -874,7 +795,7 @@ public final class Lamp implements AutoCloseable {
                 try {
                     LampEvent.fromJson(line).ifPresent(this::deliver);
                 } catch (RuntimeException unexpected) {
-                    report(unexpected);
+                    InternalLampUtil.reportToThreadExceptionHandler(unexpected);
                 }
             }
         } catch (IOException ended) {
@@ -904,25 +825,21 @@ public final class Lamp implements AutoCloseable {
             opened = Optional.of(session);
             runningOrEnded.countDown();
         }
-        passToListeners(listeners, event);
+        InternalLampUtil.passToListeners(listeners, event);
     }
 
-    /// Gives `event` to each listener. One that throws does not keep it from the others.
-    private static void passToListeners(List<Consumer<LampEvent>> listeners, LampEvent event) {
-        for (Consumer<LampEvent> listener : listeners) {
-            try {
-                listener.accept(event);
-            } catch (RuntimeException failed) {
-                report(failed);
-            }
-        }
-    }
-
-    /// Hands `failed` to this thread's uncaught exception handler, where the application sees
-    /// it as it sees any other, and goes on.
-    private static void report(RuntimeException failed) {
-        Thread thread = Thread.currentThread();
-        thread.getUncaughtExceptionHandler().uncaughtException(thread, failed);
+    static LampEvent.RunFinished ask(
+            final Launcher launcher,
+            final List<Consumer<LampEvent>> listeners,
+            final Path directory,
+            final Question question
+    ) throws IOException, InterruptedException, LampFailedException
+    {
+        Ran ran = runToEnd(launcher, listeners, InternalLampUtil.askCommand(directory, question));
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.RunFinished finished) return finished;
+        ran.orThrow();
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no answer"));
     }
 
     /// Starts the engine with this process's own Java runtime and classpath, so that the

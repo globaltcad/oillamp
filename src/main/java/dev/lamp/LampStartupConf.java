@@ -179,10 +179,10 @@ public final class LampStartupConf {
     public Lamp start() throws IOException {
         List<String> arguments = new ArrayList<>(List.of("at", directory.toString(), "--embedded"));
         modelService.ifPresent(service -> arguments.addAll(List.of("--model-service", service.toString())));
-        modelKey.ifPresent(key -> arguments.addAll(List.of("--model-key-env", Lamp.MODEL_KEY_VARIABLE)));
+        modelKey.ifPresent(_ -> arguments.addAll(List.of("--model-key-env", Lamp.MODEL_KEY_VARIABLE)));
         model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
-        instructions.ifPresent(text -> arguments.addAll(List.of("--instructions-env", Lamp.INSTRUCTIONS_VARIABLE)));
-        security.ifPresent(rules -> arguments.addAll(List.of("--security-requirements-env",
+        instructions.ifPresent(_ -> arguments.addAll(List.of("--instructions-env", Lamp.INSTRUCTIONS_VARIABLE)));
+        security.ifPresent(_ -> arguments.addAll(List.of("--security-requirements-env",
                 Lamp.SECURITY_REQUIREMENTS_VARIABLE)));
         if (scheduling) arguments.add("--enable-scheduling");
         Map<String, String> environment = new HashMap<>();
@@ -251,23 +251,23 @@ public final class LampStartupConf {
     ///
     /// @param message what to remember the snapshot by; may be empty
     /// @return the snapshot, or empty when nothing changed since the last one
-    /// @throws Lamp.Failed when the lamp could not be saved; the problem says why
+    /// @throws LampFailedException when the lamp could not be saved; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, Lamp.Failed {
+    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, LampFailedException {
         return Lamp.save(launcher, listeners, directory, message);
     }
 
     /// Every snapshot of this lamp, newest first.
     ///
-    /// @throws Lamp.Failed when the lamp's history could not be read; the problem says why
+    /// @throws LampFailedException when the lamp's history could not be read; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public List<LampEvent.Snapshot> history() throws IOException, InterruptedException, Lamp.Failed {
+    public List<LampEvent.Snapshot> history() throws IOException, InterruptedException, LampFailedException {
         Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString());
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.History history) {
+            if (event instanceof LampEvent.History(sprouts.Tuple<LampEvent.Snapshot> snapshots1)) {
                 List<LampEvent.Snapshot> snapshots = new ArrayList<>();
-                for (LampEvent.Snapshot snapshot : history.snapshots()) snapshots.add(snapshot);
+                for (LampEvent.Snapshot snapshot : snapshots1) snapshots.add(snapshot);
                 return List.copyOf(snapshots);
             }
         return List.of();
@@ -281,15 +281,15 @@ public final class LampStartupConf {
     ///                 it of at least four characters
     /// @return the snapshot that records the restore, or the one restored when the lamp
     ///         already was in that state
-    /// @throws Lamp.Failed when there is no such snapshot, the sandbox is running, or the
+    /// @throws LampFailedException when there is no such snapshot, the sandbox is running, or the
     ///                     restore did not finish; the problem says which
     /// @throws IOException when the engine's process could not be started at all
-    public LampEvent.Snapshot restore(String snapshot) throws IOException, InterruptedException, Lamp.Failed {
+    public LampEvent.Snapshot restore(String snapshot) throws IOException, InterruptedException, LampFailedException {
         Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "restore", directory.toString(), snapshot);
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.Restored restored) return restored.result();
-        throw new Lamp.Failed(ran.status(), Lamp.internal("the engine reported no restore"));
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no restore"));
     }
 
     /// Reads the values of `enabled` and `requirements` in the `[host_access]` table of this
@@ -299,11 +299,11 @@ public final class LampStartupConf {
     /// Runs `oillamp host-access <dir>` as a short-lived engine process. It only reads the
     /// file, so it works whether or not a session is running.
     ///
-    /// @throws Lamp.Failed when the directory is not a lamp, or its configuration is not
+    /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
     ///                     valid; the problem says which
     /// @throws IOException when the engine's process could not be started at all
-    public Lamp.HostAccess hostAccess() throws IOException, InterruptedException, Lamp.Failed {
-        return Lamp.hostAccessOf(Lamp.runToEnd(launcher, listeners, Map.of(), "host-access", directory.toString()));
+    public Lamp.HostAccess hostAccess() throws IOException, InterruptedException, LampFailedException {
+        return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners, Map.of(), "host-access", directory.toString()));
     }
 
     /// Sets the values of `enabled` and `requirements` in the `[host_access]` table of this
@@ -324,12 +324,12 @@ public final class LampStartupConf {
     ///                     every host request against. May be empty only when `enabled` is
     ///                     false. Genies passes the JSON its settings page builds
     /// @return the values as the file now has them
-    /// @throws Lamp.Failed when the sandbox is running, or the settings are not valid, such
+    /// @throws LampFailedException when the sandbox is running, or the settings are not valid, such
     ///                     as on with no requirements; the problem says which
     /// @throws IOException when the engine's process could not be started at all
     public Lamp.HostAccess hostAccess(boolean enabled, String requirements)
-            throws IOException, InterruptedException, Lamp.Failed {
-        return Lamp.hostAccessOf(Lamp.runToEnd(launcher, listeners, Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, requirements),
+            throws IOException, InterruptedException, LampFailedException {
+        return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners, Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, requirements),
                 "host-access", directory.toString(), enabled ? "on" : "off",
                 "--requirements-env", Lamp.SECURITY_REQUIREMENTS_VARIABLE));
     }
@@ -340,10 +340,10 @@ public final class LampStartupConf {
     /// Runs `oillamp autosave <dir>` as a short-lived engine process. It only reads the file,
     /// so it works whether or not a session is running.
     ///
-    /// @throws Lamp.Failed when the directory is not a lamp, or its configuration is not
+    /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
     ///                     valid; the problem says which
     /// @throws IOException when the engine's process could not be started at all
-    public Lamp.Autosave autosave() throws IOException, InterruptedException, Lamp.Failed {
+    public Lamp.Autosave autosave() throws IOException, InterruptedException, LampFailedException {
         return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "autosave", directory.toString()));
     }
 
@@ -357,10 +357,10 @@ public final class LampStartupConf {
     /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
     /// reads the file only when it starts.
     ///
-    /// @throws Lamp.Failed when the sandbox is running, or the lamp's file is not valid; the
+    /// @throws LampFailedException when the sandbox is running, or the lamp's file is not valid; the
     ///                     problem says which
     /// @throws IOException when the engine's process could not be started at all
-    public Lamp.Autosave autosave(Lamp.Autosave wanted) throws IOException, InterruptedException, Lamp.Failed {
+    public Lamp.Autosave autosave(Lamp.Autosave wanted) throws IOException, InterruptedException, LampFailedException {
         return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "autosave", directory.toString(),
                 "startup", Lamp.onOff(wanted.startup()), "shutdown", Lamp.onOff(wanted.shutdown()),
                 "before-run", Lamp.onOff(wanted.beforeRun()), "after-run", Lamp.onOff(wanted.afterRun())));
@@ -368,9 +368,9 @@ public final class LampStartupConf {
 
     /// This lamp's schedule: the jobs that wake the agent while a session runs.
     ///
-    /// @throws Lamp.Failed when the schedule could not be read; the problem says why
+    /// @throws LampFailedException when the schedule could not be read; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public LampEvent.Schedule schedule() throws IOException, InterruptedException, Lamp.Failed {
+    public LampEvent.Schedule schedule() throws IOException, InterruptedException, LampFailedException {
         return Lamp.schedule(launcher, listeners, directory);
     }
 
@@ -379,13 +379,13 @@ public final class LampStartupConf {
     /// @param cron   five fields, as cron has them, on this machine's clock, such as
     ///               `0 9 * * 1-5` for nine on every weekday
     /// @param prompt what the agent is asked each time
-    /// @throws Lamp.Failed when the expression cannot be read; the problem says why
-    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when the expression cannot be read; the problem says why
+    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
     /// The same, taken off the schedule at `until`.
-    public LampEvent.Job repeat(String cron, String prompt, Instant until) throws IOException, InterruptedException, Lamp.Failed {
+    public LampEvent.Job repeat(String cron, String prompt, Instant until) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt, "--expires", until.toString());
     }
 
@@ -393,39 +393,39 @@ public final class LampStartupConf {
     ///
     /// @param at when: `2026-10-01 09:00` on this machine's clock, `2026-10-01T07:00Z`, or
     ///           `in 2h`
-    /// @throws Lamp.Failed when the time cannot be read or has passed; the problem says why
-    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when the time cannot be read or has passed; the problem says why
+    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--at", at, prompt);
     }
 
     /// Adds a job that wakes the agent once, at `at`.
     ///
-    /// @throws Lamp.Failed when `at` has passed
-    public LampEvent.Job once(Instant at, String prompt) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when `at` has passed
+    public LampEvent.Job once(Instant at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return once(at.toString(), prompt);
     }
 
     /// Switches a job back on. A repeating job then runs at its next time from now, not once
     /// for each time it was off.
     ///
-    /// @throws Lamp.Failed when there is no such job
-    public void enable(String job) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when there is no such job
+    public void enable(String job) throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "enable", job).orThrow();
     }
 
     /// Switches a job off. It stays on the schedule, and does not run until it is switched on.
     ///
-    /// @throws Lamp.Failed when there is no such job
-    public void disable(String job) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when there is no such job
+    public void disable(String job) throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "disable", job).orThrow();
     }
 
     /// Pauses the whole schedule: no job runs until [#resume].
-    public void pause() throws IOException, InterruptedException, Lamp.Failed {
+    public void pause() throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "pause").orThrow();
     }
 
-    public void resume() throws IOException, InterruptedException, Lamp.Failed {
+    public void resume() throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "resume").orThrow();
     }
 
@@ -448,16 +448,16 @@ public final class LampStartupConf {
     /// Asks the agent `question` in the session that is running this lamp, whoever started it,
     /// and waits for the answer. See [Lamp#ask(Lamp.Question)].
     ///
-    /// @throws Lamp.Failed when no session is running, or the question has no place to go
-    public LampEvent.RunFinished ask(Lamp.Question question) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when no session is running, or the question has no place to go
+    public LampEvent.RunFinished ask(Lamp.Question question) throws IOException, InterruptedException, LampFailedException {
         return Lamp.ask(launcher, listeners, directory, question);
     }
 
     /// Takes a job off the schedule, whoever added it.
     ///
     /// @param job such as `job-3`
-    /// @throws Lamp.Failed when there is no such job
-    public void unschedule(String job) throws IOException, InterruptedException, Lamp.Failed {
+    /// @throws LampFailedException when there is no such job
+    public void unschedule(String job) throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
     }
 }

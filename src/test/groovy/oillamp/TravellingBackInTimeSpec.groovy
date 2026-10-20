@@ -4,6 +4,7 @@ import dev.lamp.ExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.SaveKind
+import dev.lamp.LampFailedException
 import spock.lang.IgnoreIf
 import spock.lang.Specification
 import spock.lang.Subject
@@ -425,7 +426,7 @@ class TravellingBackInTimeSpec extends Specification {
             lamps.restore('deadbeef')
 
         then:
-            var failed = thrown(Lamp.Failed)
+            var failed = thrown(LampFailedException)
             failed.problem().code().value() == 'OIL-HISTORY-001'
             failed.status() == ExitStatus.USAGE
     }
@@ -485,7 +486,7 @@ class TravellingBackInTimeSpec extends Specification {
             settings.autosave(new Lamp.Autosave(true, true, true, true))
 
         then:
-            var busy = thrown(Lamp.Failed)
+            var busy = thrown(LampFailedException)
             busy.status() == ExitStatus.LAMP_BUSY
             settings.autosave() == new Lamp.Autosave(false, false, true, true)
     }

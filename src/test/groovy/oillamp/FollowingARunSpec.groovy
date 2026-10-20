@@ -5,6 +5,7 @@ import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.Progress
 import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampFailedException
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -148,7 +149,7 @@ class FollowingARunSpec extends Specification {
             held.cancel()
 
         then:
-            var failed = thrown(Lamp.Failed)
+            var failed = thrown(LampFailedException)
             failed.problem().whatHappened().contains('the agent is not working on anything')
     }
 
