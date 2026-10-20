@@ -253,7 +253,7 @@ public final class LampStartupConf {
     /// @return the snapshot, or empty when nothing changed since the last one
     /// @throws LampFailedException when the lamp could not be saved; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, LampFailedException {
+    public Optional<LampSave> save(String message) throws IOException, InterruptedException, LampFailedException {
         return Lamp.save(launcher, listeners, directory, message);
     }
 
@@ -261,13 +261,13 @@ public final class LampStartupConf {
     ///
     /// @throws LampFailedException when the lamp's history could not be read; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public List<LampEvent.Snapshot> history() throws IOException, InterruptedException, LampFailedException {
+    public List<LampSave> history() throws IOException, InterruptedException, LampFailedException {
         Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString());
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.History(sprouts.Tuple<LampEvent.Snapshot> snapshots1)) {
-                List<LampEvent.Snapshot> snapshots = new ArrayList<>();
-                for (LampEvent.Snapshot snapshot : snapshots1) snapshots.add(snapshot);
+            if (event instanceof LampEvent.History(sprouts.Tuple<LampSave> snapshots1)) {
+                List<LampSave> snapshots = new ArrayList<>();
+                for (LampSave snapshot : snapshots1) snapshots.add(snapshot);
                 return List.copyOf(snapshots);
             }
         return List.of();
@@ -277,14 +277,14 @@ public final class LampStartupConf {
     /// they were when it was saved. The lamp is saved first, so a restore can be undone by
     /// restoring that save. A lamp whose sandbox is running is refused: close it first.
     ///
-    /// @param snapshot a snapshot's [id][LampEvent.Snapshot#id()], or a unique beginning of
+    /// @param snapshot a snapshot's [id][LampSave#id()], or a unique beginning of
     ///                 it of at least four characters
     /// @return the snapshot that records the restore, or the one restored when the lamp
     ///         already was in that state
     /// @throws LampFailedException when there is no such snapshot, the sandbox is running, or the
     ///                     restore did not finish; the problem says which
     /// @throws IOException when the engine's process could not be started at all
-    public LampEvent.Snapshot restore(String snapshot) throws IOException, InterruptedException, LampFailedException {
+    public LampSave restore(String snapshot) throws IOException, InterruptedException, LampFailedException {
         Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "restore", directory.toString(), snapshot);
         ran.orThrow();
         for (LampEvent event : ran.events())

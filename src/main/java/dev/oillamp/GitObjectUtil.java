@@ -15,7 +15,7 @@ import java.util.Optional;
 
 import dev.lamp.LampEvent.RunOutcome;
 import dev.lamp.LampEvent.SaveKind;
-import dev.lamp.LampEvent.Snapshot;
+import dev.lamp.LampSave;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -217,7 +217,7 @@ final class GitObjectUtil {
     /// A commit read back.
     ///
     /// @param trailers the trailers at the end of its message, by name, such as `Oillamp-Job`
-    record Commit(String id, String tree, Optional<String> parent, Snapshot snapshot,
+    record Commit(String id, String tree, Optional<String> parent, LampSave snapshot,
                   Association<String, String> trailers) {}
 
     /// Reads a commit this format wrote.
@@ -240,7 +240,7 @@ final class GitObjectUtil {
                 .orElseThrow(() -> new IllegalArgumentException("a commit names no tree"));
         Split split = split(message);
         return new Commit(id, treeId, parent,
-                new Snapshot(id, at.orElse(Instant.EPOCH), kindIn(split.trailers()), writtenIn(split.text()),
+                new LampSave(id, at.orElse(Instant.EPOCH), kindIn(split.trailers()), writtenIn(split.text()),
                         split.trailers().get(SESSION_TRAILER), split.trailers().get(RUN_TRAILER),
                         split.trailers().get(JOB_TRAILER), split.trailers().get(OUTCOME_TRAILER).flatMap(GitObjectUtil::outcome),
                         split.trailers().get(CONVERSATION_TRAILER)),
@@ -313,14 +313,14 @@ final class GitObjectUtil {
     ///
     /// @return the snapshot, or why there is none: too short, not hexadecimal, no match, or
     ///         several matches
-    static Result<Snapshot> find(Tuple<Snapshot> snapshots, String prefix, Path lamp) {
+    static Result<LampSave> find(Tuple<LampSave> snapshots, String prefix, Path lamp) {
         String wanted = prefix.strip().toLowerCase(Locale.ROOT);
         if (wanted.length() < 4 || wanted.length() > 40
                 || !wanted.chars().allMatch(c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
             return Result.err(ProblemCatalogUtil.noSuchSnapshot(prefix, lamp,
                     "a snapshot is named by at least the first four characters of its id, "
                   + "such as the eight `oillamp history` shows"));
-        Tuple<Snapshot> matching = snapshots.retainIf(s -> s.id().startsWith(wanted));
+        Tuple<LampSave> matching = snapshots.retainIf(s -> s.id().startsWith(wanted));
         if (matching.isEmpty())
             return Result.err(ProblemCatalogUtil.noSuchSnapshot(prefix, lamp, "no snapshot of this lamp has an id starting with it"));
         if (matching.size() > 1)

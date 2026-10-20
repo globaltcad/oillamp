@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import dev.lamp.LampEvent;
+import dev.lamp.LampSave;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -413,12 +414,12 @@ final class ConsoleRenderer {
     }
 
     /// The snapshots `oillamp history` lists, as a table, newest first.
-    private static String describe(Tuple<LampEvent.Snapshot> snapshots) {
+    private static String describe(Tuple<LampSave> snapshots) {
         if (snapshots.isEmpty())
             return "no snapshots yet — oillamp saves when a session starts and ends, "
                  + "or run `oillamp save <dir>`";
         StringBuilder out = new StringBuilder("SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE");
-        for (LampEvent.Snapshot snapshot : snapshots) {
+        for (LampSave snapshot : snapshots) {
             String note = !snapshot.message().isBlank() ? snapshot.message().lines().findFirst().orElse("")
                         : snapshot.session().map(session -> "session " + session).orElse("");
             out.append('\n').append(snapshot.shortId()).append("  ")

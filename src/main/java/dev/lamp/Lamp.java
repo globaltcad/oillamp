@@ -163,7 +163,7 @@ public final class Lamp implements AutoCloseable {
         return InternalLampUtil.runToEnd(launcher, listeners, Map.of(), command);
     }
 
-    static Optional<LampEvent.Snapshot> save(
+    static Optional<LampSave> save(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
@@ -536,7 +536,7 @@ public final class Lamp implements AutoCloseable {
     /// @return the snapshot, or empty when nothing changed since the last one
     /// @throws LampFailedException      when the lamp could not be saved; the problem says why
     /// @throws IOException when the engine's process could not be started at all
-    public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, LampFailedException {
+    public Optional<LampSave> save(String message) throws IOException, InterruptedException, LampFailedException {
         return save(launcher, listeners, directory, message);
     }
 

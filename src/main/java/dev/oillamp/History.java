@@ -35,7 +35,7 @@ import java.util.zip.InflaterInputStream;
 
 import dev.lamp.LampEvent.SaveKind;
 import dev.lamp.Problem;
-import dev.lamp.LampEvent.Snapshot;
+import dev.lamp.LampSave;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -83,7 +83,7 @@ final class History {
     ///                Empty only for a lamp that has never been saved and holds nothing
     /// @param files   how many files the snapshot holds
     /// @param skipped paths left out, because they could not be read or kept changing
-    record Saving(Optional<Snapshot> made, Optional<Snapshot> latest, int files, Tuple<String> skipped) {}
+    record Saving(Optional<LampSave> made, Optional<LampSave> latest, int files, Tuple<String> skipped) {}
 
     /// What a restore did.
     ///
@@ -91,7 +91,7 @@ final class History {
     ///               had not changed since its last snapshot, which is then the way back
     /// @param result the snapshot that records the restore; empty when the lamp already was as
     ///               `target` holds it
-    record Restoring(Snapshot target, Optional<Snapshot> safety, Optional<Snapshot> result,
+    record Restoring(LampSave target, Optional<LampSave> safety, Optional<LampSave> result,
                      Tuple<String> skipped) {}
 
     // ─── the three operations ──────────────────────────────────────────────────────────────
@@ -181,9 +181,9 @@ final class History {
     }
 
     /// Every snapshot, newest first. Empty for a lamp that has never been saved.
-    Result<Tuple<Snapshot>> snapshots() {
+    Result<Tuple<LampSave>> snapshots() {
         try {
-            Tuple<Snapshot> found = Tuple.of(Snapshot.class);
+            Tuple<LampSave> found = Tuple.of(LampSave.class);
             for (GitObjectUtil.Commit commit : commits()) found = found.add(commit.snapshot());
             return Result.ok(found);
         } catch (IOException | RuntimeException e) {
@@ -203,11 +203,11 @@ final class History {
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
             }
-            Tuple<Snapshot> snapshots = Tuple.of(Snapshot.class);
+            Tuple<LampSave> snapshots = Tuple.of(LampSave.class);
             for (GitObjectUtil.Commit commit : commits) snapshots = snapshots.add(commit.snapshot());
-            Result<Snapshot> found = GitObjectUtil.find(snapshots, prefix, layout.root());
-            if (!(found instanceof Result.Ok<Snapshot> ok)) return Result.err(found.problems());
-            Snapshot target = ok.value();
+            Result<LampSave> found = GitObjectUtil.find(snapshots, prefix, layout.root());
+            if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
+            LampSave target = ok.value();
             GitObjectUtil.Commit wanted = commits.stream().filter(c -> c.id().equals(target.id())).findFirst().orElseThrow();
 
             Saving safety;
@@ -233,7 +233,7 @@ final class History {
                 bringBack(wanted.tree(), current.tree());
                 String message = GitObjectUtil.message(SaveKind.RESTORE, "back to " + target.shortId()
                         + " (" + target.kind().label() + ", " + target.at() + ")", Optional.empty());
-                Snapshot result = commit(wanted.tree(), Optional.of(current.id()), now, message);
+                LampSave result = commit(wanted.tree(), Optional.of(current.id()), now, message);
                 return Result.ok(new Restoring(target, safety.made(), Optional.of(result), safety.skipped()), warnings);
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.restoreFailed(layout.root(), ProblemCatalogUtil.reason(e),
@@ -279,7 +279,7 @@ final class History {
         Optional<GitObjectUtil.Commit> head = headCommit();
         if (!always && head.isPresent() && head.get().tree().equals(tree))
             return new Saving(Optional.empty(), head.map(GitObjectUtil.Commit::snapshot), tally.files, tally.skipped);
-        Snapshot made = commit(tree, head.map(GitObjectUtil.Commit::id), now,
+        LampSave made = commit(tree, head.map(GitObjectUtil.Commit::id), now,
                 GitObjectUtil.message(kind, message, session, trailers));
         return new Saving(Optional.of(made), Optional.of(made), tally.files, tally.skipped);
     }
@@ -425,7 +425,7 @@ final class History {
         Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
-    private Snapshot commit(String tree, Optional<String> parent, Instant now, String message) throws IOException {
+    private LampSave commit(String tree, Optional<String> parent, Instant now, String message) throws IOException {
         String id = storeSmall("commit", GitObjectUtil.commit(tree, parent, now, message));
         moveBranch(parent, id);
         return GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();

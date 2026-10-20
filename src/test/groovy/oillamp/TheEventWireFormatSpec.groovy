@@ -1,6 +1,7 @@
 package oillamp
 
 import dev.lamp.LampEvent
+import dev.lamp.LampSave
 import dev.lamp.Problem
 import spock.lang.Specification
 import sprouts.Tuple
@@ -40,7 +41,7 @@ class TheEventWireFormatSpec extends Specification {
 
     /** One of every kind of event, with every optional part both present and absent somewhere. */
     /** A snapshot with every part present, a message with a line break in it among them. */
-    static final LampEvent.Snapshot SNAPSHOT = new LampEvent.Snapshot(
+    static final LampSave SNAPSHOT = new LampSave(
             '3f2a9c1d00000000000000000000000000000000', Instant.parse('2026-09-29T18:14:03Z'),
             LampEvent.SaveKind.BEFORE_RESTORE, 'before the upgrade\nand the "migration"',
             Optional.of('20260929-181200'), Optional.of('run-12'), Optional.of('job-3'),
@@ -84,11 +85,11 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.WindowOpened('the desktop viewer', Tuple.of(String, 'vncviewer', '/run/x.sock')),
             new LampEvent.Summary('session 20260928-120000', Tuple.of(String)),
             new LampEvent.Saved(SNAPSHOT, 1234),
-            new LampEvent.History(Tuple.of(LampEvent.Snapshot, SNAPSHOT,
-                    new LampEvent.Snapshot('0123456789abcdef0123456789abcdef01234567', Instant.EPOCH,
+            new LampEvent.History(Tuple.of(LampSave, SNAPSHOT,
+                    new LampSave('0123456789abcdef0123456789abcdef01234567', Instant.EPOCH,
                                            LampEvent.SaveKind.IDLE, '', Optional.empty(), Optional.empty(),
                                            Optional.empty(), Optional.empty(), Optional.empty()))),
-            new LampEvent.Restored(SNAPSHOT, new LampEvent.Snapshot('fedcba9876543210fedcba9876543210fedcba98',
+            new LampEvent.Restored(SNAPSHOT, new LampSave('fedcba9876543210fedcba9876543210fedcba98',
                     Instant.parse('2026-09-29T19:00:00Z'), LampEvent.SaveKind.RESTORE, 'back to 3f2a9c1d',
                     Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())),
             new LampEvent.Schedule(true, false, 'Europe/Berlin', Tuple.of(LampEvent.Job, JOB,

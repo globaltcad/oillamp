@@ -111,29 +111,6 @@ public sealed interface LampEvent {
     /// A block of lines with a title, such as the briefing when a session starts or the summary when it ends.
     record Summary(String title, Tuple<String> lines) implements LampEvent {}
 
-    /// One saved state of a lamp: the agent's home and the lamp's `oillamp.toml`, as they were
-    /// at one moment. `oillamp restore` brings a lamp back to it.
-    ///
-    /// @param id      the snapshot's name, 40 hexadecimal characters. Any unique beginning of it
-    ///                of at least four characters names it too, such as the eight `oillamp
-    ///                history` shows
-    /// @param at      when it was saved
-    /// @param kind    what made it
-    /// @param message what the person who saved it wrote, or empty
-    /// @param session the session running at the time, such as `20260928-120000`, or empty
-    /// @param run     for a snapshot made as a run began or ended, the run, such as `run-12`
-    /// @param job     for a snapshot made as a job's run ended, the job, such as `job-3`
-    /// @param outcome for a snapshot made as a run ended, how it ended
-    /// @param conversation for a snapshot made as a run ended, the id of the conversation the run
-    ///                had; empty when the agent did not get as far as opening one
-    record Snapshot(String id, Instant at, SaveKind kind, String message, Optional<String> session,
-                    Optional<String> run, Optional<String> job, Optional<RunOutcome> outcome,
-                    Optional<String> conversation) {
-
-        /// The first eight characters of [#id()], which is how oillamp shows a snapshot.
-        public String shortId() { return id.substring(0, Math.min(8, id.length())); }
-    }
-
     /// What made a snapshot.
     enum SaveKind {
         /// oillamp saved as a session started, before the sandbox ran.
@@ -167,14 +144,14 @@ public sealed interface LampEvent {
     /// [Info] instead.
     ///
     /// @param files how many files the snapshot holds; 0 where that was not counted
-    record Saved(Snapshot snapshot, int files)          implements LampEvent {}
+    record Saved(LampSave snapshot, int files)          implements LampEvent {}
 
     /// A lamp's snapshots, newest first. What `oillamp history` answers.
-    record History(Tuple<Snapshot> snapshots) implements LampEvent {}
+    record History(Tuple<LampSave> snapshots) implements LampEvent {}
 
     /// The lamp was brought back to `target`, and `result` is the snapshot that records it.
     /// When the lamp already was as `target` holds it, nothing changed and `result` is `target`.
-    record Restored(Snapshot target, Snapshot result)   implements LampEvent {}
+    record Restored(LampSave target, LampSave result)   implements LampEvent {}
 
     // ─── the schedule, and the runs that wake the agent ───────────────────────────────────
 
@@ -240,7 +217,7 @@ public sealed interface LampEvent {
     /// @param conversation the conversation the run happened in; empty when pi failed before it
     ///                     opened one
     record RunFinished(Run run, RunOutcome outcome, String answer,
-                       Optional<Snapshot> snapshot, Duration took,
+                       Optional<LampSave> snapshot, Duration took,
                        Optional<String> conversation) implements LampEvent {}
 
     /// The session queued a question as `run`. What `oillamp ask --no-wait` and [Lamp#send] report.

@@ -15,6 +15,7 @@ import dev.lamp.LampEvent.JobAuthor;
 import dev.lamp.LampEvent.RunOutcome;
 import dev.lamp.LampEvent.SaveKind;
 
+import dev.lamp.LampSave;
 import sprouts.Association;
 import sprouts.Tuple;
 
@@ -340,11 +341,11 @@ final class AgentRunner {
                     trailers, false, started);
             if (before instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
                 saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
-                base = saving.latest().map(LampEvent.Snapshot::id);
+                base = saving.latest().map(LampSave::id);
             } else {
                 context.sinkAcceptProblems(before.problems().map(ProblemCatalogUtil::asWarning));
             }
-        } else if (history.snapshots() instanceof Result.Ok<Tuple<LampEvent.Snapshot>>(Tuple<LampEvent.Snapshot> all, var _)
+        } else if (history.snapshots() instanceof Result.Ok<Tuple<LampSave>>(Tuple<LampSave> all, var _)
                    && !all.isEmpty()) {
             // Without a save just before, the newest snapshot is the nearest to where the run
             // began, and what the run changed then also holds what changed since that snapshot.
@@ -377,7 +378,7 @@ final class AgentRunner {
         if (conversation.isPresent()) after = after.put(GitObjectUtil.CONVERSATION_TRAILER, conversation.get());
         String message = run.id() + " (" + run.job().map(job -> "job " + job).orElse("asked") + ") " + outcome
                 + (said.isEmpty() ? "" : "\n\n" + said);
-        Optional<LampEvent.Snapshot> snapshot = Optional.empty();
+        Optional<LampSave> snapshot = Optional.empty();
         if (autosave.afterRun()) {
             Result<History.Saving> saved = history.save(SaveKind.RUN, message, Optional.of(session), after, true, ended);
             if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {

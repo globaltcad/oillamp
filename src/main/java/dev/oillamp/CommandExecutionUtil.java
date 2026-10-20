@@ -16,6 +16,7 @@ import java.util.function.Function;
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSave;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -843,12 +844,12 @@ final class CommandExecutionUtil {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
-        Result<Tuple<LampEvent.Snapshot>> snapshots = new History(((Result.Ok<LampLayout>) found).value()).snapshots();
-        if (snapshots instanceof Result.Err<Tuple<LampEvent.Snapshot>> failure) {
+        Result<Tuple<LampSave>> snapshots = new History(((Result.Ok<LampLayout>) found).value()).snapshots();
+        if (snapshots instanceof Result.Err<Tuple<LampSave>> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
-        context.sink().accept(new LampEvent.History(((Result.Ok<Tuple<LampEvent.Snapshot>>) snapshots).value()));
+        context.sink().accept(new LampEvent.History(((Result.Ok<Tuple<LampSave>>) snapshots).value()));
         return ExitStatus.SUCCESS;
     }
 
@@ -1071,10 +1072,10 @@ final class CommandExecutionUtil {
         }
         Control.Reply answer = ((Result.Ok<Control.Reply>) reply).value();
         LampEvent.RunOutcome outcome = LampEvent.RunOutcome.valueOf(answer.values().get("outcome").orElse("FAILED"));
-        Optional<LampEvent.Snapshot> snapshot = Optional.empty();
+        Optional<LampSave> snapshot = Optional.empty();
         Optional<String> saved = answer.values().get("snapshot");
-        if (saved.isPresent() && new History(layout).snapshots() instanceof Result.Ok<Tuple<LampEvent.Snapshot>>(
-                Tuple<LampEvent.Snapshot> all, var _))
+        if (saved.isPresent() && new History(layout).snapshots() instanceof Result.Ok<Tuple<LampSave>>(
+                Tuple<LampSave> all, var _))
             snapshot = all.stream().filter(s -> s.id().equals(saved.get())).findFirst();
         context.sink().accept(new LampEvent.RunFinished(
                 new LampEvent.Run(answer.values().get("run").orElse("run"), Optional.empty(), prompt, ask.conversation()),
