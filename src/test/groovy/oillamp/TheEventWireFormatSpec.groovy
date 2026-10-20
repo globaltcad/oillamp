@@ -2,6 +2,7 @@ package oillamp
 
 import dev.lamp.JobAuthor
 import dev.lamp.LampEvent
+import dev.lamp.LampPhase
 import dev.lamp.LampSave
 import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
@@ -71,8 +72,8 @@ class TheEventWireFormatSpec extends Specification {
     static final LampEvent.Run RUN = new LampEvent.Run('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
     static final List<LampEvent> EXAMPLES = [
-            new LampEvent.PhaseStarted(LampEvent.Phase.SESSION),
-            new LampEvent.PhaseFinished(LampEvent.Phase.IMAGE, Duration.ofSeconds(3)),
+            new LampEvent.PhaseStarted(LampPhase.SESSION),
+            new LampEvent.PhaseFinished(LampPhase.IMAGE, Duration.ofSeconds(3)),
             new LampEvent.Ok('host', 'podman 4.9.3, rootless, crun'),
             new LampEvent.Info('network', 'denied 10.0.0.1:5432 — "block private"'),
             new LampEvent.StepPlanned(STEP),

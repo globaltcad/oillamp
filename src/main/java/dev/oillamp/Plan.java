@@ -1,14 +1,13 @@
 package dev.oillamp;
 
-import dev.lamp.LampEvent;
-
+import dev.lamp.LampPhase;
 import sprouts.Tuple;
 
 /// The ordered list of changes one phase intends to make. [StepRunner] carries it out, or,
 /// in a dry run, only prints it.
-record Plan(LampEvent.Phase phase, Tuple<Step> steps) {
+record Plan(LampPhase phase, Tuple<Step> steps) {
 
-    public static Plan of(LampEvent.Phase phase, Tuple<Step> steps) { return new Plan(phase, steps); }
+    public static Plan of(LampPhase phase, Tuple<Step> steps) { return new Plan(phase, steps); }
 
     public boolean isEmpty() { return steps.isEmpty(); }
 

@@ -25,18 +25,6 @@ public sealed interface LampEvent {
     /// newer version, so that a reader can skip it rather than fail.
     static Optional<LampEvent> fromJson(String line) { return Wire.read(line); }
 
-    /// The phases of `oillamp at`, in order.
-    enum Phase {
-        /// Check and repair the host itself: packages, subuid ranges, a working rootless podman.
-        HOST,
-        /// Create or load the lamp: config, identity, lock, keys, per-session files.
-        LAMP,
-        /// Make sure a sandbox image matching the current configuration exists.
-        IMAGE,
-        /// Start the container, the relays and the windows, then supervise.
-        SESSION
-    }
-
     /// A planned or executed unit of work, projected for display.
     ///
     /// @param kind     the step's type name, for example `"InstallPackages"`; safe to match on
@@ -44,8 +32,8 @@ public sealed interface LampEvent {
     /// @param detail   the full story, for the session log
     record StepInfo(String kind, String describe, String detail) {}
 
-    record PhaseStarted(Phase phase)                    implements LampEvent {}
-    record PhaseFinished(Phase phase, Duration took)    implements LampEvent {}
+    record PhaseStarted(LampPhase phase)                    implements LampEvent {}
+    record PhaseFinished(LampPhase phase, Duration took)    implements LampEvent {}
 
     /// A check that passed, e.g. `[host] ✓ podman 5.4.2, rootless, crun`.
     record Ok(String area, String text)                 implements LampEvent {}

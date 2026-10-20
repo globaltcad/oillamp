@@ -4,7 +4,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.lamp.LampEvent;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -159,7 +158,7 @@ final class LampPlanUtil {
         steps = steps.add(new Step.CreateDirectory(layout.runDir(), PosixMode.PRIVATE_DIR));
         steps = steps.add(new Step.CreateSymlink(layout.shortSockets(), layout.socketsDir()));
 
-        return Result.ok(Plan.of(LampEvent.Phase.LAMP, steps), warnings);
+        return Result.ok(Plan.of(dev.lamp.LampPhase.LAMP, steps), warnings);
     }
 
     /// What `oillamp remove` found in a lamp directory.
@@ -176,10 +175,10 @@ final class LampPlanUtil {
     /// The plan for `oillamp recordings --prune`: delete the recordings [RecordingRetentionUtil]
     /// selected. It is the same decision the next session start would make, done now.
     public static Plan planPrune(Tuple<RecordingFile> doomed, LampConfig.Recording policy) {
-        if (doomed.isEmpty()) return Plan.of(LampEvent.Phase.LAMP, Tuple.of(Step.class));
+        if (doomed.isEmpty()) return Plan.of(dev.lamp.LampPhase.LAMP, Tuple.of(Step.class));
         Tuple<Path> paths = Tuple.of(Path.class);
         for (RecordingFile file : doomed) paths = paths.add(file.path());
-        return Plan.of(LampEvent.Phase.LAMP, Tuple.of(Step.class,
+        return Plan.of(dev.lamp.LampPhase.LAMP, Tuple.of(Step.class,
                 new Step.DeleteContainerOwnedFiles(paths,
                         "beyond the configured retention of " + policy.maxAgeDays()
                       + " days / " + policy.maxTotalGb() + " GB")));
@@ -207,7 +206,7 @@ final class LampPlanUtil {
         for (Path agentDir : found.agentDirs())
             steps = steps.add(new Step.RemoveTree(agentDir,
                     "the agent's home, and everything it did here"));
-        return Plan.of(LampEvent.Phase.LAMP, steps);
+        return Plan.of(dev.lamp.LampPhase.LAMP, steps);
     }
 
     /// Plans the per-session files under `.oillamp/session/`, which are mounted read-only
@@ -270,6 +269,6 @@ final class LampPlanUtil {
         steps = steps.add(new Step.WriteFile(layout.knownHosts(), SandboxSshUtil.renderKnownHosts(layout, hostPublicKey),
                 PosixMode.PUBLIC_FILE, Step.WritePolicy.ALWAYS));
 
-        return Result.ok(Plan.of(LampEvent.Phase.LAMP, steps));
+        return Result.ok(Plan.of(dev.lamp.LampPhase.LAMP, steps));
     }
 }
