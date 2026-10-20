@@ -3,6 +3,7 @@ package oillamp
 import dev.lamp.LampEvent
 import dev.lamp.LampSave
 import dev.lamp.LampSaveKind
+import dev.lamp.LampJob
 import dev.lamp.Problem
 import spock.lang.Specification
 import sprouts.Tuple
@@ -48,7 +49,7 @@ class TheEventWireFormatSpec extends Specification {
             Optional.of('20260929-181200'), Optional.of('run-12'), Optional.of('job-3'),
             Optional.of(LampEvent.RunOutcome.TIMED_OUT), Optional.of('0199a3f0-7c1e-7d2b-9a41-5c3e2f1d0b9a'))
 
-    static final LampEvent.Job JOB = new LampEvent.Job('job-3', '0 9 * * 1-5',
+    static final LampJob JOB = new LampJob('job-3', '0 9 * * 1-5',
             Optional.of(Instant.parse('2026-09-30T07:00:00Z')), 'Check the build\nand say "why"',
             LampEvent.JobAuthor.AGENT, Instant.parse('2026-09-29T18:14:03Z'),
             Optional.of(Instant.parse('2026-10-13T18:14:03Z')), true,
@@ -93,8 +94,8 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.Restored(SNAPSHOT, new LampSave('fedcba9876543210fedcba9876543210fedcba98',
                     Instant.parse('2026-09-29T19:00:00Z'), LampSaveKind.RESTORE, 'back to 3f2a9c1d',
                     Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())),
-            new LampEvent.Schedule(true, false, 'Europe/Berlin', Tuple.of(LampEvent.Job, JOB,
-                    new LampEvent.Job('job-4', 'once at 2026-10-01 09:00', Optional.empty(), 'x',
+            new LampEvent.Schedule(true, false, 'Europe/Berlin', Tuple.of(LampJob, JOB,
+                    new LampJob('job-4', 'once at 2026-10-01 09:00', Optional.empty(), 'x',
                                       LampEvent.JobAuthor.USER, Instant.EPOCH, Optional.empty(), false, Tuple.of(Instant)))),
             new LampEvent.JobAdded(JOB),
             new LampEvent.JobRemoved(JOB, 'it expired'),

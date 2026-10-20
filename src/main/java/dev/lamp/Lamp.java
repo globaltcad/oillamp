@@ -214,7 +214,7 @@ public final class Lamp implements AutoCloseable {
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no schedule"));
     }
 
-    static LampEvent.Job addJob(
+    static LampJob addJob(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
@@ -230,7 +230,7 @@ public final class Lamp implements AutoCloseable {
         Ran ran = runToEnd(launcher, listeners, command.toArray(String[]::new));
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.JobAdded(LampEvent.Job job)) return job;
+            if (event instanceof LampEvent.JobAdded(LampJob job)) return job;
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no job"));
     }
 
@@ -546,12 +546,12 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Adds a repeating job, as [LampStartupConf#repeat] does. The running session sees it at once.
-    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
+    public LampJob repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
     /// Adds a job that runs once, as [LampStartupConf#once] does. The running session sees it at once.
-    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
+    public LampJob once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--at", at, prompt);
     }
 

@@ -5,9 +5,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 
-import dev.lamp.LampEvent;
 import dev.lamp.LampEvent.JobAuthor;
 
+import dev.lamp.LampJob;
 import sprouts.Tuple;
 
 /// One job on a lamp's schedule: a prompt, and when it wakes the agent with it.
@@ -106,8 +106,8 @@ record ScheduledJob(String id, When when, String prompt, JobAuthor author, Insta
     }
 
     /// How it is shown to the user, to an application, and to the agent.
-    LampEvent.Job describe(ZoneId zone, Instant now) {
-        return new LampEvent.Job(id, describeWhen(zone), enabled ? next(zone) : Optional.empty(), prompt,
+    LampJob describe(ZoneId zone, Instant now) {
+        return new LampJob(id, describeWhen(zone), enabled ? next(zone) : Optional.empty(), prompt,
                 author, created, expires, enabled, upcoming(zone, now));
     }
 }

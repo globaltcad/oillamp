@@ -380,12 +380,12 @@ public final class LampStartupConf {
     ///               `0 9 * * 1-5` for nine on every weekday
     /// @param prompt what the agent is asked each time
     /// @throws LampFailedException when the expression cannot be read; the problem says why
-    public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
+    public LampJob repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
     /// The same, taken off the schedule at `until`.
-    public LampEvent.Job repeat(String cron, String prompt, Instant until) throws IOException, InterruptedException, LampFailedException {
+    public LampJob repeat(String cron, String prompt, Instant until) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt, "--expires", until.toString());
     }
 
@@ -394,14 +394,14 @@ public final class LampStartupConf {
     /// @param at when: `2026-10-01 09:00` on this machine's clock, `2026-10-01T07:00Z`, or
     ///           `in 2h`
     /// @throws LampFailedException when the time cannot be read or has passed; the problem says why
-    public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
+    public LampJob once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return Lamp.addJob(launcher, listeners, directory, "--at", at, prompt);
     }
 
     /// Adds a job that wakes the agent once, at `at`.
     ///
     /// @throws LampFailedException when `at` has passed
-    public LampEvent.Job once(Instant at, String prompt) throws IOException, InterruptedException, LampFailedException {
+    public LampJob once(Instant at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return once(at.toString(), prompt);
     }
 

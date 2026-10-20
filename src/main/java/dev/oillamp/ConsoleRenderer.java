@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampSave;
+import dev.lamp.LampJob;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -402,7 +403,7 @@ final class ConsoleRenderer {
         out.append("\n\n").append(String.format("%-8s %-18s %-17s %-6s %s", "JOB", "WHEN", "NEXT", "BY", "PROMPT"));
         DateTimeFormatter shown = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                 .withZone(zone);
-        for (LampEvent.Job job : schedule.jobs()) {
+        for (LampJob job : schedule.jobs()) {
             String when = job.when().startsWith("once at ") ? "once" : job.when();
             String next = !job.enabled() ? "(switched off)" : job.next().map(shown::format).orElse("—");
             out.append('\n').append(String.format("%-8s %-18s %-17s %-6s %s", job.id(), when, next,

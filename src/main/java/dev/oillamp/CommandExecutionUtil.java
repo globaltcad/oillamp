@@ -13,11 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import dev.lamp.ExitStatus;
-import dev.lamp.LampEvent;
-import dev.lamp.LampSaveKind;
-import dev.lamp.LampSave;
-import dev.lamp.Problem;
+import dev.lamp.*;
 
 import sprouts.Tuple;
 
@@ -993,7 +989,7 @@ final class CommandExecutionUtil {
 
     private static LampEvent describe(Schedule schedule, LampConfig.Schedule limits, ZoneId zone,
                                       Instant now) {
-        Tuple<LampEvent.Job> jobs = Tuple.of(LampEvent.Job.class);
+        Tuple<LampJob> jobs = Tuple.of(LampJob.class);
         for (ScheduledJob job : schedule.jobs()) jobs = jobs.add(job.describe(zone, now));
         return new LampEvent.Schedule(limits.enabled(), schedule.paused(), zone.getId(), jobs);
     }
