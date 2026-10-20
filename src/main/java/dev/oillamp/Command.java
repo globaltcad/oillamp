@@ -80,6 +80,11 @@ sealed interface Command {
     /// requirements; with neither, the command only says what the lamp's file has.
     record HostAccess(Path lamp, Optional<Boolean> enabled, Optional<String> requirementsEnv,
                       Context.Options options) implements Command {}
+    /// The moments to switch on or off, each on or off; with none, the command only says what
+    /// the lamp's file has.
+    record Autosave(Path lamp, Optional<Boolean> startup, Optional<Boolean> shutdown,
+                    Optional<Boolean> beforeRun, Optional<Boolean> afterRun,
+                    Context.Options options) implements Command {}
     /// The person's answer to a host-access question, named by its text as the event gave it.
     record Answer(Path lamp, boolean yes, String question, Context.Options options) implements Command {}
 
@@ -382,6 +387,24 @@ sealed interface Command {
                             "`oillamp host-access` \"" + switched.get() + "\": expected on or off", usageOf("host-access")));
                 yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv, options));
             }
+            case "autosave" -> {
+                java.util.Map<String, Boolean> moments = new java.util.HashMap<>();
+                for (int i = 1; i < rest.size(); i += 2) {
+                    String moment = rest.get(i);
+                    if (!AUTOSAVE_MOMENTS.contains(moment))
+                        yield Result.err(ProblemCatalogUtil.usage("`oillamp autosave` \"" + moment
+                                + "\": expected startup, shutdown, before-run or after-run", usageOf("autosave")));
+                    String switched = i + 1 < rest.size() ? rest.get(i + 1) : "";
+                    if (!switched.equals("on") && !switched.equals("off"))
+                        yield Result.err(ProblemCatalogUtil.usage("`oillamp autosave` " + moment
+                                + " needs on or off after it", usageOf("autosave")));
+                    moments.put(moment, switched.equals("on"));
+                }
+                yield Result.ok(new Autosave(Path.of(rest.first()),
+                        Optional.ofNullable(moments.get("startup")), Optional.ofNullable(moments.get("shutdown")),
+                        Optional.ofNullable(moments.get("before-run")), Optional.ofNullable(moments.get("after-run")),
+                        options));
+            }
             case "answer" -> {
                 if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
                     yield Result.err(ProblemCatalogUtil.usage(
@@ -415,6 +438,7 @@ sealed interface Command {
                 .put("model",      ValueSet.of("--embedded"))
                 .put("host-access", ValueSet.of("--requirements-env", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
+                .put("autosave",   ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("restore",    ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of(String.class))
@@ -434,11 +458,14 @@ sealed interface Command {
             "--security-requirements-env", "--requirements-env",
             "--in", "--after", "--instead-of");
 
+    /// What `oillamp autosave` switches: the moments oillamp saves a lamp by itself.
+    ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
+
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
             "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "model", "update",
-            "host-access", "answer");
+            "host-access", "answer", "autosave");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
@@ -449,6 +476,7 @@ sealed interface Command {
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("restore", 2).put("schedule", 3).put("ask", 2)
                 .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
+                .put("autosave", 1 + 2 * AUTOSAVE_MOMENTS.size())
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
     /// The line of [#usage] that describes `command`, such as `oillamp stop <dir>`.
@@ -572,6 +600,10 @@ sealed interface Command {
                     [host_access] in oillamp.toml. With on or off, or the requirements this
                     variable holds, write them there, and change nothing else in the file.
                     Writing needs the session to be stopped.
+              autosave <dir> [(startup | shutdown | before-run | after-run) (on | off)]...
+                    Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
+                    With moments and on or off, write those there, and change nothing else
+                    in the file. Writing needs the session to be stopped.
               answer <dir> (yes | no) "<question>"
                     Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]

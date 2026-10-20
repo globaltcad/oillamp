@@ -141,7 +141,8 @@ final class Supervisor {
         this.state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
         // What each run does is kept only for the host-access gate, so a lamp without it keeps
         // nothing, and its event loop is not handed every piece of the agent's thinking.
-        this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(), prepared.session(),
+        this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(),
+                                    prepared.config().autosave(), prepared.session(),
                                     instructions,
                                     prepared.config().hostAccess().enabled() ? this::post : event -> { });
     }
@@ -588,11 +589,12 @@ final class Supervisor {
         }
         problems = problems.addAll(recordLastSession());
 
-        // 6. Save the lamp as the session left it. The container is gone, so nothing is writing.
-        //    Here rather than after the session, because after Ctrl-C this sequence is the last
-        //    thing that runs before the JVM exits.
-        problems = problems.addAll(CommandExecutionUtil.saveLamp(context, prepared.layout(),
-                dev.lamp.LampEvent.SaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now()));
+        // 6. Save the lamp as the session left it, when `autosave.shutdown` is on. The container
+        //    is gone, so nothing is writing. Here rather than after the session, because after
+        //    Ctrl-C this sequence is the last thing that runs before the JVM exits.
+        if (prepared.config().autosave().shutdown())
+            problems = problems.addAll(CommandExecutionUtil.saveLamp(context, prepared.layout(),
+                    dev.lamp.LampEvent.SaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now()));
         return problems;
     }
 

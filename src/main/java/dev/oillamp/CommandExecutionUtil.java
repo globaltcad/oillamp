@@ -156,6 +156,7 @@ final class CommandExecutionUtil {
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
             case Command.HostAccess access -> hostAccess(machine, context, access.lamp(), access.enabled(),
                                                           access.requirementsEnv());
+            case Command.Autosave asked -> autosave(machine, context, asked);
             case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
     }
@@ -270,11 +271,12 @@ final class CommandExecutionUtil {
 
         LampLock held = lock.get();
         // Before the sandbox runs, so the snapshot holds the lamp exactly as the last session
-        // left it, and this session can always be undone. A save that fails is a warning: the
-        // session is still worth having.
-        for (Problem problem : saveLamp(context, prepared.layout(), SaveKind.STARTUP, "",
-                                        Optional.of(prepared.session()), machine.now()))
-            context.sink().accept(new LampEvent.Warning(problem));
+        // left it, and this session can always be undone; when `autosave.startup` is on. A save
+        // that fails is a warning: the session is still worth having.
+        if (prepared.config().autosave().startup())
+            for (Problem problem : saveLamp(context, prepared.layout(), SaveKind.STARTUP, "",
+                                            Optional.of(prepared.session()), machine.now()))
+                context.sink().accept(new LampEvent.Warning(problem));
         // Until the supervisor takes over, nothing else would remove a container this run started:
         // not a failed start, and not a Ctrl-C while the image builds or the desktop comes up.
         ContainerName container = prepared.layout().containerName();
@@ -1126,11 +1128,8 @@ final class CommandExecutionUtil {
     /// `oillamp host-access <dir> [on|off] [--requirements-env <name>]`: what the lamp's file
     /// says about host access, after writing what was given into it.
     ///
-    /// Only `enabled` and `requirements` under `[host_access]` change; see [HostAccessFileUtil].
-    /// The changed file is read back as `at` would read it, and written only when it is valid
-    /// and says exactly what was asked, so a slip of that line editor never reaches the file.
-    /// Refused while a session runs, which read the file as it started and would not see the
-    /// change.
+    /// Only `enabled` and `requirements` under `[host_access]` change; see [ConfigFileEditUtil]
+    /// and [#changeConfig].
     private static ExitStatus hostAccess(Machine machine, Context context, Path lampPath,
                                          Optional<Boolean> enabled, Optional<String> requirementsEnv) {
         Result<LampLayout> found = layoutOf(machine, lampPath);
@@ -1158,6 +1157,68 @@ final class CommandExecutionUtil {
             context.sinkAcceptProblems(tooLong);
             return exitStatusFor(tooLong);
         }
+        LampConfig.HostAccess wanted = new LampConfig.HostAccess(enabled.orElse(now.enabled()),
+                requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
+                now.executables(), now.allowAdditive(), now.askTheUser());
+        return changeConfig(machine, context, layout, "[host_access]",
+                file -> ConfigFileEditUtil.withHostAccess(file, enabled, requirements),
+                ((Result.Ok<LampConfig>) before).value().withHostAccess(wanted),
+                () -> context.sink().accept(new LampEvent.HostAccessSettings(wanted.enabled(), wanted.requirements())));
+    }
+
+    /// `oillamp autosave <dir> [<moment> on|off]...`: when the lamp's file says oillamp saves the
+    /// lamp by itself, after writing what was given into it. Only those keys under `[autosave]`
+    /// change, as with [#hostAccess].
+    private static ExitStatus autosave(Machine machine, Context context, Command.Autosave asked) {
+        Result<LampLayout> found = layoutOf(machine, asked.lamp());
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<LampConfig> before = loadConfig(machine, layout.root());
+        if (before instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampConfig.Autosave now = ((Result.Ok<LampConfig>) before).value().autosave();
+        if (asked.startup().isEmpty() && asked.shutdown().isEmpty()
+                && asked.beforeRun().isEmpty() && asked.afterRun().isEmpty()) {
+            context.sink().accept(autosaveSettings(now));
+            return ExitStatus.SUCCESS;
+        }
+
+        LampConfig.Autosave wanted = new LampConfig.Autosave(asked.startup().orElse(now.startup()),
+                asked.shutdown().orElse(now.shutdown()), asked.beforeRun().orElse(now.beforeRun()),
+                asked.afterRun().orElse(now.afterRun()));
+        java.util.SequencedMap<String, String> values = new java.util.LinkedHashMap<>();
+        asked.startup().ifPresent(on -> values.put("startup", on.toString()));
+        asked.shutdown().ifPresent(on -> values.put("shutdown", on.toString()));
+        asked.beforeRun().ifPresent(on -> values.put("before_run", on.toString()));
+        asked.afterRun().ifPresent(on -> values.put("after_run", on.toString()));
+        return changeConfig(machine, context, layout, "[autosave]",
+                file -> ConfigFileEditUtil.withValues(file, "autosave", values),
+                ((Result.Ok<LampConfig>) before).value().withAutosave(wanted),
+                () -> context.sink().accept(autosaveSettings(wanted)));
+    }
+
+    private static LampEvent.AutosaveSettings autosaveSettings(LampConfig.Autosave autosave) {
+        return new LampEvent.AutosaveSettings(autosave.startup(), autosave.shutdown(),
+                                              autosave.beforeRun(), autosave.afterRun());
+    }
+
+    /// Writes `edit` of a lamp's `oillamp.toml`, while no session runs, and then reports.
+    ///
+    /// The changed file is read back as `at` would read it, and written only when it is valid
+    /// and reads as `wanted`, so a slip of the line editor never reaches the file. Refused
+    /// while a session runs, which read the file as it started and would not see the change.
+    ///
+    /// @param table    the table that changes, such as `[autosave]`, for the problem if it went wrong
+    /// @param wanted   the whole configuration as the changed file must read
+    /// @param reported reports what the file now says, once it is written
+    private static ExitStatus changeConfig(Machine machine, Context context, LampLayout layout, String table,
+                                           java.util.function.UnaryOperator<String> edit, LampConfig wanted,
+                                           Runnable reported) {
         Optional<LampLock> lock;
         try {
             lock = LampLock.tryAcquire(layout.lockFile());
@@ -1173,7 +1234,7 @@ final class CommandExecutionUtil {
         }
         try {
             String file = FilesystemUtil.readString(layout.config()).orElse("");
-            String changed = HostAccessFileUtil.withHostAccess(file, enabled, requirements);
+            String changed = edit.apply(file);
             Tuple<ConfigSource> sources = LampPhase.configurationFiles(home(machine), layout.config())
                     .retainIf(source -> source.kind() == ConfigSource.Kind.USER_GLOBAL)
                     .add(ConfigSource.lamp(layout.config(), changed));
@@ -1182,18 +1243,14 @@ final class CommandExecutionUtil {
                 context.sinkAcceptProblems(failure.problems());
                 return exitStatusFor(failure.problems());
             }
-            LampConfig.HostAccess wanted = new LampConfig.HostAccess(enabled.orElse(now.enabled()),
-                    requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
-                    now.executables(), now.allowAdditive(), now.askTheUser());
-            LampConfig read = ((Result.Ok<LampConfig>) after).value();
-            if (!read.equals(((Result.Ok<LampConfig>) before).value().withHostAccess(wanted))) {
-                Tuple<Problem> wrong = Tuple.of(Problem.class, ProblemCatalogUtil.internal("writing [host_access]",
+            if (!((Result.Ok<LampConfig>) after).value().equals(wanted)) {
+                Tuple<Problem> wrong = Tuple.of(Problem.class, ProblemCatalogUtil.internal("writing " + table,
                         "the changed oillamp.toml did not read back as what was asked, so it was left as it was"));
                 context.sinkAcceptProblems(wrong);
                 return exitStatusFor(wrong);
             }
             FilesystemUtil.writeFile(layout.config(), changed, PosixMode.PRIVATE_FILE);
-            context.sink().accept(new LampEvent.HostAccessSettings(wanted.enabled(), wanted.requirements()));
+            reported.run();
             return ExitStatus.SUCCESS;
         } catch (IOException e) {
             context.sinkAcceptProblems(Tuple.of(Problem.class,

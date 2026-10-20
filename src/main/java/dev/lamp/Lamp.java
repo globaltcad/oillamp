@@ -466,6 +466,38 @@ public final class Lamp implements AutoCloseable {
                     "--requirements-env", SECURITY_REQUIREMENTS_VARIABLE));
         }
 
+        /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of
+        /// its `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads them.
+        ///
+        /// Runs `oillamp autosave <dir>` as a short-lived engine process. It only reads the file,
+        /// so it works whether or not a session is running.
+        ///
+        /// @throws Failed      when the directory is not a lamp, or its configuration is not
+        ///                     valid; the problem says which
+        /// @throws IOException when the engine's process could not be started at all
+        public Autosave autosave() throws IOException, InterruptedException, Failed {
+            return autosaveOf(runToEnd(launcher, listeners, "autosave", directory.toString()));
+        }
+
+        /// Sets when oillamp saves this lamp by itself: all four values in the `[autosave]` table
+        /// of its `oillamp.toml`. Returns them as the file now has them.
+        ///
+        /// Runs `oillamp autosave <dir> startup on|off shutdown on|off before-run on|off
+        /// after-run on|off` as a short-lived engine process. The engine replaces only those
+        /// keys and keeps every other line of the file, comments included.
+        ///
+        /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+        /// reads the file only when it starts.
+        ///
+        /// @throws Failed      when the sandbox is running, or the lamp's file is not valid; the
+        ///                     problem says which
+        /// @throws IOException when the engine's process could not be started at all
+        public Autosave autosave(Autosave wanted) throws IOException, InterruptedException, Failed {
+            return autosaveOf(runToEnd(launcher, listeners, "autosave", directory.toString(),
+                    "startup", onOff(wanted.startup()), "shutdown", onOff(wanted.shutdown()),
+                    "before-run", onOff(wanted.beforeRun()), "after-run", onOff(wanted.afterRun())));
+        }
+
         /// This lamp's schedule: the jobs that wake the agent while a session runs.
         ///
         /// @throws Failed      when the schedule could not be read; the problem says why
@@ -662,6 +694,17 @@ public final class Lamp implements AutoCloseable {
         throw new Failed(ran.status(), internal("the engine reported no host access settings"));
     }
 
+    /// The values the engine reported as a [LampEvent.AutosaveSettings].
+    private static Autosave autosaveOf(Ran ran) throws Failed {
+        ran.orThrow();
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.AutosaveSettings settings)
+                return new Autosave(settings.startup(), settings.shutdown(), settings.beforeRun(), settings.afterRun());
+        throw new Failed(ran.status(), internal("the engine reported no autosave settings"));
+    }
+
+    private static String onOff(boolean on) { return on ? "on" : "off"; }
+
     private static LampEvent.Schedule schedule(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
@@ -701,6 +744,19 @@ public final class Lamp implements AutoCloseable {
     /// @param enabled      whether a session gives the agent the host tools
     /// @param requirements the text the checker model judges every host request against
     public record HostAccess(boolean enabled, String requirements) {}
+
+    /// When oillamp saves a lamp by itself, so that it can go back there: the `[autosave]` table
+    /// of its `oillamp.toml`, as [Starting#autosave()] reads it and [Starting#autosave(Autosave)]
+    /// writes it. A save someone asks for, with [Starting#save(String)], happens whatever these say.
+    ///
+    /// @param startup   as a session starts, before the sandbox runs. Off unless switched on
+    /// @param shutdown  as a session ends, after the sandbox has stopped. Off unless switched on
+    /// @param beforeRun just before a run wakes the agent, so that what the person changed and
+    ///                  what the run changed are separate snapshots. On unless switched off
+    /// @param afterRun  as a run ends, with the agent's last message. A job's prompt tells the
+    ///                  agent what its last runs said and changed from these, so without them it
+    ///                  is told nothing about them. On unless switched off
+    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun) {}
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 

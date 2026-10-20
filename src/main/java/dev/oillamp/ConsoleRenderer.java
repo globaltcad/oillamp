@@ -317,6 +317,9 @@ final class ConsoleRenderer {
             case LampEvent.HostAccessSettings settings -> printLine(area("host access")
                     + (settings.enabled() ? "on" : "off") + ", judged against:\n"
                     + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));
+            case LampEvent.AutosaveSettings settings -> printLine(area("autosave")
+                    + "startup " + onOff(settings.startup()) + ", shutdown " + onOff(settings.shutdown())
+                    + ", before a run " + onOff(settings.beforeRun()) + ", after a run " + onOff(settings.afterRun()));
             case LampEvent.Warning warning -> problem(warning.problem());
             case LampEvent.Failure failure -> problem(failure.problem());
         }
@@ -373,6 +376,8 @@ final class ConsoleRenderer {
 
     /// One line of text someone wrote, such as a job's prompt, which the agent may have written:
     /// without control characters, and at most `most` characters long.
+    private static String onOff(boolean on) { return on ? "on" : "off"; }
+
     private static String shortened(String text, int most) {
         String line = printable(text.replaceAll("\\s+", " "));
         return line.length() <= most ? line : line.substring(0, most - 1) + "…";

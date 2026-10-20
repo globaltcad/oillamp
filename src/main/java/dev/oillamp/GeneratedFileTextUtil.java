@@ -154,6 +154,15 @@ final class GeneratedFileTextUtil {
             max_run_minutes            = 30   # any run that takes longer is stopped, yours included
             notes_max_kb               = 8    # how large the agent's ~/workspace/NOTES.md may grow
 
+            # When oillamp saves the lamp by itself, so that `oillamp restore` can go back there.
+            # `oillamp save` works whatever these say. The next job's prompt tells the agent what
+            # its last runs said and changed, from the saves after them.
+            [autosave]
+            startup    = false   # as a session starts, before the sandbox runs
+            shutdown   = false   # as a session ends, after the sandbox has stopped
+            before_run = true    # just before a run wakes the agent
+            after_run  = true    # as a run ends, with the agent's last message
+
             # Let the agent reach this machine - read a document, put a file where you will find
             # it, open a page - always through oillamp, which asks a model about every request
             # first. That model sees your requirements below, the request, and what the agent was
@@ -192,7 +201,7 @@ final class GeneratedFileTextUtil {
             # For this shell only:      eval "$(oillamp completion bash)"
             # For every future shell:   echo 'eval "$(oillamp completion bash)"' >> ~/.bashrc
             _oillamp() {
-                local commands='at update view shell stop status follow list remove save history restore schedule ask cancel model host-access answer conversations recordings doctor config completion guide about version help'
+                local commands='at update view shell stop status follow list remove save history restore schedule ask cancel model host-access autosave answer conversations recordings doctor config completion guide about version help'
                 local current="${COMP_WORDS[COMP_CWORD]}"
                 local before=""
                 [ "$COMP_CWORD" -ge 2 ] && before="${COMP_WORDS[COMP_CWORD-2]}"

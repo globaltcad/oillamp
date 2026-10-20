@@ -50,17 +50,42 @@ class TravellingBackInTimeSpec extends Specification {
         }
     }
 
-    def 'A session saves the lamp as it starts'() {
+    def 'By default a session saves nothing as it starts or ends'() {
         reportInfo """
-            Nobody remembers to save before the thing that goes wrong. So every session begins
+            Saving a large home takes time and space at every start and every stop, and most
+            sessions are not worth going back to. So the saves at the start and the end of a
+            session are off unless `autosave.startup` and `autosave.shutdown` are on. A person
+            still saves by hand whenever they want to.
+        """
+        given: 'a new lamp whose agent writes a file during the session'
+            var lamp = host.lampPath()
+            var oillamp = host.oillamp.observedBy { event ->
+                if (event instanceof LampEvent.Summary && event.title() == 'your session is up')
+                    Files.writeString(home(lamp).resolve('workspace/notes.txt'), 'done for today\n')
+            }
+
+        when:
+            var ran = oillamp.run('at', lamp.toString())
+
+        then: 'nothing was saved, and the history is empty'
+            ran.succeeded()
+            !ran.events().any { it instanceof LampEvent.Saved }
+            !ran.events().any { it instanceof LampEvent.StepStarted && it.step().kind() == 'SaveLamp' }
+            host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots().isEmpty()
+    }
+
+    def 'With autosave.startup on, a session saves the lamp as it starts'() {
+        reportInfo """
+            Nobody remembers to save before the thing that goes wrong. So a session can begin
             with a save, taken before the sandbox runs, and whatever the agent does in that
             session can be undone by going back to it. The snapshot says it is a startup save,
             and which session it began, so a person reading the history knows what it is.
             Saving a large home can take time, so the CLI explains what is happening before
             reading the files and starts its activity line rather than appearing stuck.
         """
-        given: 'a new lamp'
-            var lamp = host.lampPath()
+        given: 'a new lamp that saves as its sessions start and end'
+            var lamp = aLampThatSavesAtStartAndEnd()
             boolean announcedBeforeSaving = false
             var oillamp = host.oillamp.observedBy { event ->
                 if (event instanceof LampEvent.StepStarted && event.step().kind() == 'SaveLamp'
@@ -94,14 +119,14 @@ class TravellingBackInTimeSpec extends Specification {
             snapshots*.kind() == [SaveKind.STARTUP]
     }
 
-    def 'A session that changed the lamp is saved again as it ends'() {
+    def 'With autosave.shutdown on, a session that changed the lamp is saved again as it ends'() {
         reportInfo """
             The end of a session is the other moment worth keeping: it is the work the agent did.
             The save runs after the container has stopped, so nothing is writing while it reads.
             It is part of the shutdown itself, which is also what runs after Ctrl-C.
         """
-        given: 'a lamp whose agent writes a file during the session'
-            var lamp = host.lampPath()
+        given: 'a lamp that saves as its sessions start and end, whose agent writes a file during the session'
+            var lamp = aLampThatSavesAtStartAndEnd()
             var oillamp = host.oillamp.observedBy { event ->
                 if (event instanceof LampEvent.Summary && event.title() == 'your session is up')
                     Files.writeString(home(lamp).resolve('workspace/notes.txt'), 'done for today\n')
@@ -327,11 +352,10 @@ class TravellingBackInTimeSpec extends Specification {
             runs, just before they let the agent try something risky. That save is marked as a
             running save, because a program writing at that moment may leave a file half written.
         """
-        given: 'a running session'
+        given: 'a running session, on a lamp saved earlier'
             var lamp = aLampThatHasRun()
-            var listed = host.oillamp.run('history', lamp.toString())
-            assert listed.succeeded()
-            var earlier = listed.events().find { it instanceof LampEvent.History }.snapshots().first()
+            var earlier = host.oillamp.run('save', lamp.toString()).events()
+                    .find { it instanceof LampEvent.Saved }.snapshot()
             startASession(lamp)
             write(home(lamp), 'workspace/risky.txt', 'about to try something\n')
 
@@ -406,6 +430,66 @@ class TravellingBackInTimeSpec extends Specification {
             failed.status() == ExitStatus.USAGE
     }
 
+    def 'An application switches the saves on and off, and only those lines of the file change'() {
+        reportInfo """
+            An application's settings page shows when the lamp saves itself, and changes it. It
+            reads and writes the four values under [autosave] through the Lamp API, which runs
+            `oillamp autosave`. The file is also the user's, so their comments and the alignment
+            of the values stay. A session reads the file only as it starts, so writing is refused
+            while one runs.
+        """
+        given: 'a lamp with the file a new lamp gets'
+            var lamp = aLampThatHasRun()
+            var settings = Lamp.at(lamp).launchedBy(host.launcher)
+
+        expect: 'the defaults: no saves at the start or end of a session, but around every run'
+            settings.autosave() == new Lamp.Autosave(false, false, true, true)
+
+        when: 'the application switches every one of them the other way'
+            var written = settings.autosave(new Lamp.Autosave(true, true, false, false))
+
+        then: 'the file says it, with the comments it had'
+            written == new Lamp.Autosave(true, true, false, false)
+            settings.autosave() == written
+            var file = Files.readString(lamp.resolve('oillamp.toml'))
+            file.contains('startup    = true   # as a session starts, before the sandbox runs\n')
+            file.contains('after_run  = false    # as a run ends, with the agent\'s last message\n')
+
+        and: 'the command line says the same'
+            var shown = host.oillamp.run('autosave', lamp.toString())
+            shown.succeeded()
+            shown.console().contains('startup on, shutdown on, before a run off, after a run off')
+
+        when: 'one moment is switched on the command line'
+            var one = host.oillamp.run('autosave', lamp.toString(), 'after-run', 'on')
+
+        then: 'only that one changed'
+            one.succeeded()
+            settings.autosave() == new Lamp.Autosave(true, true, false, true)
+
+        when: 'a moment oillamp does not know is given'
+            var wrong = host.oillamp.run('autosave', lamp.toString(), 'lunch', 'on')
+
+        then:
+            wrong.status() == ExitStatus.USAGE
+            wrong.console().contains('expected startup, shutdown, before-run or after-run')
+    }
+
+    def 'Switching the saves is refused while a session runs'() {
+        given:
+            var lamp = aLampThatHasRun()
+            var settings = Lamp.at(lamp).launchedBy(host.launcher)
+            startASession(lamp)
+
+        when:
+            settings.autosave(new Lamp.Autosave(true, true, true, true))
+
+        then:
+            var busy = thrown(Lamp.Failed)
+            busy.status() == ExitStatus.LAMP_BUSY
+            settings.autosave() == new Lamp.Autosave(false, false, true, true)
+    }
+
     @IgnoreIf({ !['/usr/bin/git', '/bin/git', '/usr/local/bin/git'].any { Files.isExecutable(Path.of(it)) } })
     def 'git itself can read the history'() {
         reportInfo """
@@ -436,10 +520,17 @@ class TravellingBackInTimeSpec extends Specification {
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
-    /** A lamp that exists, has run one session, and so has its first snapshot. */
+    /** A lamp that exists and has run one session, with the file a new lamp gets. */
     private Path aLampThatHasRun() {
         var lamp = host.lampPath()
         assert host.oillamp.run('at', lamp.toString()).succeeded()
+        lamp
+    }
+
+    /** A lamp that does not exist yet, whose sessions save as they start and as they end. */
+    private Path aLampThatSavesAtStartAndEnd() {
+        var lamp = host.lampPath()
+        host.givenConfig(lamp, 'schema_version = 1\n[autosave]\nstartup = true\nshutdown = true\n')
         lamp
     }
 

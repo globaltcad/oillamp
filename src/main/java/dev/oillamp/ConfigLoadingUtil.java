@@ -84,7 +84,7 @@ final class ConfigLoadingUtil {
         LampConfig defaults = ConfigDefaultsUtil.lampConfig();
         root.allowOnly("schema_version", "display", "viewer", "terminal", "recording",
                        "limits", "network", "llm", "model", "git", "agent_tools", "image", "host", "timeouts",
-                       "schedule", "host_access");
+                       "schedule", "host_access", "autosave");
 
         LampConfig.Display display   = readDisplay(root.table("display"), defaults.display());
         LampConfig.Viewer viewer     = readViewer(root.table("viewer"), defaults.viewer());
@@ -106,10 +106,11 @@ final class ConfigLoadingUtil {
         LampConfig.Timeouts timeouts = readTimeouts(root.table("timeouts"), defaults.timeouts());
         LampConfig.Schedule schedule = readSchedule(root.table("schedule"), defaults.schedule());
         LampConfig.HostAccess hostAccess = readHostAccess(root.table("host_access"), defaults.hostAccess());
+        LampConfig.Autosave autosave = readAutosave(root.table("autosave"), defaults.autosave());
 
         return new LampConfig(display, viewer, terminal, recording, limits,
                               network, forwards, llm, model, git, tools, image, host, timeouts, schedule,
-                              hostAccess);
+                              hostAccess, autosave);
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {
@@ -431,6 +432,15 @@ final class ConfigLoadingUtil {
                 bounded(s, "max_run_minutes", fallback.maxRunMinutes(), 1, 24 * 60,
                         "a number of minutes from 1 to 1440"),
                 bounded(s, "notes_max_kb", fallback.notesMaxKb(), 1, 1024, "a size in kilobytes from 1 to 1024"));
+    }
+
+    private static LampConfig.Autosave readAutosave(ConfigSection s, LampConfig.Autosave fallback) {
+        s.allowOnly("startup", "shutdown", "before_run", "after_run");
+        return new LampConfig.Autosave(
+                s.bool("startup", fallback.startup()),
+                s.bool("shutdown", fallback.shutdown()),
+                s.bool("before_run", fallback.beforeRun()),
+                s.bool("after_run", fallback.afterRun()));
     }
 
     private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {

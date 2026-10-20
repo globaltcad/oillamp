@@ -377,6 +377,16 @@ public sealed interface LampEvent {
     ///                     host request against
     record HostAccessSettings(boolean enabled, String requirements) implements LampEvent {}
 
+    /// The values under `[autosave]` in a lamp's `oillamp.toml`: when oillamp saves the lamp by
+    /// itself. Reported by `oillamp autosave`, after reading them or after writing them.
+    ///
+    /// @param startup   as a session starts
+    /// @param shutdown  as a session ends
+    /// @param beforeRun just before a run wakes the agent
+    /// @param afterRun  as a run ends
+    record AutosaveSettings(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun)
+            implements LampEvent {}
+
     /// Something went wrong but oillamp carried on.
     record Warning(Problem problem)                     implements LampEvent {}
     /// Something went wrong and oillamp stopped.

@@ -46,6 +46,7 @@ final class AgentRunner {
     private final Context context;
     private final LampLayout layout;
     private final LampConfig.Schedule config;
+    private final LampConfig.Autosave autosave;
     private final SessionId session;
     private final ScheduleBook book;
     private final Harness harness;
@@ -74,14 +75,17 @@ final class AgentRunner {
 
     /// @param instructions what the agent is told in addition to pi's own instructions, for the
     ///                     whole session; empty to leave pi's instructions as they are
+    /// @param autosave     whether a run is saved just before it begins and as it ends
     /// @param post         puts a run's activity on the session's queue, so that the one event loop
     ///                     keeps it in the state; the host-access gate reads it from there
-    AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config, SessionId session,
+    AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config,
+                LampConfig.Autosave autosave, SessionId session,
                 Optional<String> instructions, java.util.function.Consumer<SessionEvent> post) {
         this.machine = machine;
         this.context = context;
         this.layout = layout;
         this.config = config;
+        this.autosave = autosave;
         this.session = session;
         this.book = new ScheduleBook(layout);
         this.post = post;
@@ -330,14 +334,21 @@ final class AgentRunner {
         History history = new History(layout);
         Association<String, String> trailers = Association.between(String.class, String.class)
                 .put(GitObjectUtil.RUN_TRAILER, run.id());
-        Result<History.Saving> before = history.save(SaveKind.BEFORE_RUN, "before " + run.id(), Optional.of(session),
-                trailers, false, started);
         Optional<String> base = Optional.empty();
-        if (before instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
-            saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
-            base = saving.latest().map(LampEvent.Snapshot::id);
-        } else {
-            context.sinkAcceptProblems(before.problems().map(ProblemCatalogUtil::asWarning));
+        if (autosave.beforeRun()) {
+            Result<History.Saving> before = history.save(SaveKind.BEFORE_RUN, "before " + run.id(), Optional.of(session),
+                    trailers, false, started);
+            if (before instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
+                saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
+                base = saving.latest().map(LampEvent.Snapshot::id);
+            } else {
+                context.sinkAcceptProblems(before.problems().map(ProblemCatalogUtil::asWarning));
+            }
+        } else if (history.snapshots() instanceof Result.Ok<Tuple<LampEvent.Snapshot>>(Tuple<LampEvent.Snapshot> all, var _)
+                   && !all.isEmpty()) {
+            // Without a save just before, the newest snapshot is the nearest to where the run
+            // began, and what the run changed then also holds what changed since that snapshot.
+            base = Optional.of(all.first().id());
         }
 
         // A job wakes an agent that knows nothing of why, so its prompt carries the agent's notes
@@ -366,15 +377,17 @@ final class AgentRunner {
         if (conversation.isPresent()) after = after.put(GitObjectUtil.CONVERSATION_TRAILER, conversation.get());
         String message = run.id() + " (" + run.job().map(job -> "job " + job).orElse("asked") + ") " + outcome
                 + (said.isEmpty() ? "" : "\n\n" + said);
-        Result<History.Saving> saved = history.save(SaveKind.RUN, message, Optional.of(session), after, true, ended);
         Optional<LampEvent.Snapshot> snapshot = Optional.empty();
-        if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
-            snapshot = saving.made();
-            if (!saving.skipped().isEmpty())
-                context.sink().accept(new LampEvent.Warning(
-                        ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped())));
-        } else {
-            context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
+        if (autosave.afterRun()) {
+            Result<History.Saving> saved = history.save(SaveKind.RUN, message, Optional.of(session), after, true, ended);
+            if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
+                snapshot = saving.made();
+                if (!saving.skipped().isEmpty())
+                    context.sink().accept(new LampEvent.Warning(
+                            ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped())));
+            } else {
+                context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
+            }
         }
         return new LampEvent.RunFinished(run, answer.outcome(), answer.text().strip(),
                 snapshot, Duration.between(started, ended), conversation);
@@ -401,7 +414,8 @@ final class AgentRunner {
         Tuple<WakePromptUtil.Described> recent = recentRuns(history, WakePromptUtil.RECENT_RUNS);
         WakePromptUtil.Reason reason = pending.job().<WakePromptUtil.Reason>map(WakePromptUtil.Reason.ByJob::new)
                 .orElseGet(WakePromptUtil.Reason.Asked::new);
-        return WakePromptUtil.render(reason, pending.run().prompt(), notes, config.notesMaxKb() * 1024, recent, now, zone);
+        return WakePromptUtil.render(reason, pending.run().prompt(), notes, config.notesMaxKb() * 1024, recent,
+                                     autosave.afterRun(), now, zone);
     }
 
     /// The last `count` runs, newest first, with what each changed.

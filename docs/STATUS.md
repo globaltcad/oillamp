@@ -58,6 +58,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
 | `oillamp host-access <dir> [on\|off] [--requirements-env <name>]` | Works in the scenarios: writes `enabled` and `requirements` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `Lamp.Starting.hostAccess`. |
+| `oillamp autosave <dir> [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `Lamp.Starting.autosave`. |
 | `oillamp answer <dir> yes\|no "<question>"` | Works in the scenarios: answers a host-access question of a running session. Also `Lamp.decidePermission`. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
@@ -423,7 +424,7 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Not yet tested
 
-- The startup and shutdown saves in a real session with podman. Scenarios cover both with a
+- The startup and shutdown saves (off by default, `[autosave]`) in a real session with podman. Scenarios cover both with a
   simulated container, ending the session with `oillamp stop`. After Ctrl-C the same shutdown
   sequence runs, with the save in it; that was checked by reading the code, not by a test.
   `save`, `history` and `restore` were tried on a lamp directory made by hand, with a JDK

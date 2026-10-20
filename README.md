@@ -141,8 +141,9 @@ agent put in its home directory.
 
 ### 6. Go back in time ⏪
 
-oillamp saves the agent's home and the lamp's `oillamp.toml` every time a session starts and ends,
-if anything changed. Save by hand whenever you like, even while the session runs:
+Save the agent's home and the lamp's `oillamp.toml` whenever you like, even while the session runs.
+oillamp can also save by itself as each session starts and ends, if anything changed: switch that on
+with `oillamp autosave ~/lamps/first startup on shutdown on`, or under `[autosave]` in `oillamp.toml`.
 
 ```sh
 oillamp save ~/lamps/first -m "before the big refactor"
@@ -221,7 +222,8 @@ The session writes the text to `~/.pi/agent/APPEND_SYSTEM.md` in the sandbox, wh
 system prompt in every conversation. A session started without it leaves that file as it is.
 
 Every run is saved just before and just after, so `oillamp history` reads as a log of what the agent
-did, and `oillamp restore` undoes any run:
+did, and `oillamp restore` undoes any run. `oillamp autosave <dir> before-run off after-run off`
+switches that off; the agent's next prompt then says nothing about its earlier runs:
 
 ```
 SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE

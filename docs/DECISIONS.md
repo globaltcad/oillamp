@@ -233,13 +233,30 @@ as data means adding one is a new table row. *(D-22)*
 ### A lamp keeps a history, and goes back to it
 
 A lamp can be saved (`oillamp save`), listed (`oillamp history`) and brought back to an earlier
-snapshot (`oillamp restore`). oillamp also saves as each session starts and as it ends, when
-anything changed. A snapshot holds the agent directory and `oillamp.toml`, never `.oillamp/`.
+snapshot (`oillamp restore`). oillamp can also save by itself as each session starts and as it
+ends, when anything changed. A snapshot holds the agent directory and `oillamp.toml`, never
+`.oillamp/`.
 
 *Why:* the sandbox keeps an agent away from the host, but inside its home an agent can still
 delete a project or break its tools, and that work is lost. Nobody remembers to save before the
-mistake, so the saves at the start and end of a session happen by themselves. *(added on
-2026-09-29)*
+mistake, so oillamp can save by itself. *(added on 2026-09-29)*
+
+### When oillamp saves by itself is the user's choice
+
+Four switches under `[autosave]` say whether oillamp saves as a session starts, as it ends, just
+before a run and as a run ends. The first two are off and the last two on unless the lamp says
+otherwise. `oillamp autosave` and `Lamp.Starting.autosave` read and write them, and nothing else in
+the file, only while the lamp sleeps. `oillamp save` and the save before a restore happen whatever
+they say.
+
+*Why:* saving a large home at every start and stop costs time and disk, and most sessions are not
+worth going back to; a person saves by hand before the moments that matter. The saves around runs
+are different: no person is watching a job run, and they are what the next run's prompt is made
+of. An application can still turn them off.
+
+*Given up:* with `after_run` off the agent is told nothing of its earlier runs but its notes, and
+`schedule.max_agent_runs_per_day` counts only the runs of the session in progress, because the
+history is where earlier ones are counted. *(added on 2026-10-20)*
 
 ### The history is a git repository that oillamp writes itself
 
@@ -294,7 +311,7 @@ Each run is a new pi conversation. Its prompt carries what the agent needs from 
 notes in `~/workspace/NOTES.md`, which files the last three runs changed, and what the last run
 said at its end. `AGENTS.md` tells the agent to keep the notes short and current. The lamp is saved
 just before and just after every run, the run's snapshot always, with the agent's last message in
-its commit message.
+its commit message, unless `autosave.before_run` or `autosave.after_run` is off.
 
 *Why:* a conversation that goes on across runs grows without end, costs more with every run, and
 fills with detail that no longer matters. Notes the agent rewrites stay small, and they are in its

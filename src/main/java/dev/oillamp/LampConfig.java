@@ -32,26 +32,33 @@ record LampConfig(
     Host host,
     Timeouts timeouts,
     Schedule schedule,
-    HostAccess hostAccess
+    HostAccess hostAccess,
+    Autosave autosave
 ) {
     /// The same configuration with other `[model]` settings, such as those an application gave
     /// on the command line for one session.
     public LampConfig withModel(Model changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              changed, git, agentTools, image, host, timeouts, schedule, hostAccess);
+                              changed, git, agentTools, image, host, timeouts, schedule, hostAccess, autosave);
     }
 
     /// The same configuration with other `[schedule]` settings.
     public LampConfig withSchedule(Schedule changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, changed, hostAccess);
+                              model, git, agentTools, image, host, timeouts, changed, hostAccess, autosave);
     }
 
     /// The same configuration with other `[host_access]` settings, such as the requirements an
     /// application gave for one session.
     public LampConfig withHostAccess(HostAccess changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, schedule, changed);
+                              model, git, agentTools, image, host, timeouts, schedule, changed, autosave);
+    }
+
+    /// The same configuration with other `[autosave]` settings.
+    public LampConfig withAutosave(Autosave changed) {
+        return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
+                              model, git, agentTools, image, host, timeouts, schedule, hostAccess, changed);
     }
 
     /// The version of the config schema this build writes and understands.
@@ -193,6 +200,17 @@ record LampConfig(
         public Duration maxAgentLife()     { return Duration.ofDays(maxAgentDays); }
         public Duration maxRun()           { return Duration.ofMinutes(maxRunMinutes); }
     }
+
+    /// `[autosave]`: the moments oillamp saves the lamp by itself. `oillamp save` and the save
+    /// before a restore happen whatever these say.
+    ///
+    /// @param startup   as a session starts, before the sandbox runs
+    /// @param shutdown  as a session ends, after the sandbox has stopped
+    /// @param beforeRun just before a run wakes the agent, so that what the user changed and what
+    ///                  the run changed are separate snapshots
+    /// @param afterRun  as a run ends. The next job's prompt tells the agent what its last runs
+    ///                  said and changed from these snapshots, so without them it is told nothing
+    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun) {}
 
     public Optional<Forward> forwardNamed(String name) {
         for (Forward forward : forwards)

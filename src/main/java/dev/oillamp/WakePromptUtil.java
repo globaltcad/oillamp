@@ -69,8 +69,10 @@ final class WakePromptUtil {
     /// @param notes     the agent's notes, or empty when it has none yet
     /// @param notesMost how large the notes may be, in bytes
     /// @param recent    the last few runs, newest first
+    /// @param runsKept  whether runs are saved as they end (`autosave.after_run`); without, no
+    ///                  run is ever recent, and the first is not the only reason
     static String render(Reason reason, String task, Optional<String> notes, int notesMost,
-                         Tuple<Described> recent, Instant now, ZoneId zone) {
+                         Tuple<Described> recent, boolean runsKept, Instant now, ZoneId zone) {
         StringBuilder out = new StringBuilder();
         out.append("[oillamp] It is ").append(TimeNotationUtil.show(now, zone)).append(" (").append(zone.getId()).append("). ");
         switch (reason) {
@@ -103,7 +105,10 @@ final class WakePromptUtil {
         }
 
         out.append("\n## Recent runs\n\n");
-        if (recent.isEmpty()) {
+        if (recent.isEmpty() && !runsKept) {
+            out.append("The user has switched off the saves after runs, so oillamp keeps no record of earlier runs. ")
+               .append("Your notes are all you know of them.\n");
+        } else if (recent.isEmpty()) {
             out.append("This is the first run.\n");
         } else {
             out.append("Newest first. The run_history tool shows more about any run.\n");

@@ -41,7 +41,7 @@ class WritingTheHostAccessSwitchSpec extends Specification {
                 '''.stripIndent()
 
         when:
-            var written = HostAccessFileUtil.withHostAccess(file, Optional.of(true), Optional.of('{"may_read": ["~/Documents"]}'))
+            var written = ConfigFileEditUtil.withHostAccess(file, Optional.of(true), Optional.of('{"may_read": ["~/Documents"]}'))
 
         then: 'the old value is gone, the line in it that looked like a table with it'
             written == '''\
@@ -69,19 +69,41 @@ class WritingTheHostAccessSwitchSpec extends Specification {
 
     def 'A file without the table gets one, and without a key gets it under the header'() {
         expect:
-            HostAccessFileUtil.withHostAccess('schema_version = 1\n', Optional.of(false), Optional.of('x')) ==
+            ConfigFileEditUtil.withHostAccess('schema_version = 1\n', Optional.of(false), Optional.of('x')) ==
                     'schema_version = 1\n\n[host_access]\nenabled = false\nrequirements = \'\'\'\nx\'\'\'\n'
-            HostAccessFileUtil.withHostAccess('schema_version = 1\n[host_access]\nroots = []\n', Optional.of(true), Optional.empty()) ==
+            ConfigFileEditUtil.withHostAccess('schema_version = 1\n[host_access]\nroots = []\n', Optional.of(true), Optional.empty()) ==
                     'schema_version = 1\n[host_access]\nenabled = true\nroots = []\n'
+    }
+
+    def 'Any table\'s keys are written the same way, and a bare value keeps its alignment and comment'() {
+        given:
+            var file = '''\
+                schema_version = 1
+                [autosave]
+                startup    = false   # as a session starts
+                after_run  = true    # as a run ends
+                '''.stripIndent()
+            var values = new LinkedHashMap<String, String>()
+            values.put('startup', 'true')
+            values.put('before_run', 'false')
+
+        expect:
+            ConfigFileEditUtil.withValues(file, 'autosave', values) == '''\
+                schema_version = 1
+                [autosave]
+                before_run = false
+                startup    = true   # as a session starts
+                after_run  = true    # as a run ends
+                '''.stripIndent()
     }
 
     def 'Requirements come back exactly, whatever they hold'() {
         expect:
-            var written = HostAccessFileUtil.withHostAccess('schema_version = 1\n', Optional.of(false), Optional.of(requirements))
+            var written = ConfigFileEditUtil.withHostAccess('schema_version = 1\n', Optional.of(false), Optional.of(requirements))
             read(written).requirements() == requirements
 
         and: 'and again when they are written over themselves'
-            read(HostAccessFileUtil.withHostAccess(written, Optional.of(false), Optional.of(requirements))).requirements() == requirements
+            read(ConfigFileEditUtil.withHostAccess(written, Optional.of(false), Optional.of(requirements))).requirements() == requirements
 
         where:
             requirements << [

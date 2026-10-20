@@ -383,6 +383,45 @@ class WakingTheAgentSpec extends Specification {
             prompts[1].contains('<last-message>\nCollected the data.\n</last-message>')
     }
 
+    def 'With the saves around runs switched off, a run makes no snapshot, and the next is told nothing of it'() {
+        reportInfo """
+            The saves just before and just after every run are on unless `autosave.before_run`
+            and `autosave.after_run` are off. Off, the history holds no runs, so the next job's
+            prompt cannot say what the last run changed or said. The agent still has its notes.
+        """
+        given: 'two jobs, one after the other, on a lamp that does not save around runs'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nbefore_run = false\nafter_run = false\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Do the first task')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2m', 'Do the second task')
+            anAgent { prompt ->
+                if (prompt.contains('Do the first task')) {
+                    Files.writeString(home(lamp).resolve('workspace/NOTES.md'), 'Next: add the chart.\n')
+                    return 'Collected the data.'
+                }
+                'Added the chart.'
+            }
+
+        when: 'a session runs once both are due'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            var finished = waitFor(LampEvent.RunFinished) { it.run().id() == 'run-2' }
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+            assert !session.alive
+
+        then: 'neither run was saved'
+            finished.snapshot().isEmpty()
+            !reported.any { it instanceof LampEvent.Saved }
+            host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots().isEmpty()
+
+        and: 'the second run was given the notes, but nothing of the first run'
+            prompts.size() == 2
+            prompts[1].contains('<notes>\nNext: add the chart.\n</notes>')
+            !prompts[1].contains('Collected the data.')
+            prompts[1].contains('The user has switched off the saves after runs')
+    }
+
     def 'What a person asks goes to the agent exactly as they wrote it'() {
         reportInfo """
             A question someone asks is what a chat shows as their message, so it is never wrapped

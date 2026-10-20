@@ -323,8 +323,8 @@ Oillamp-Session: 20260929-181200
 
 | Kind | Made by |
 |---|---|
-| `startup` | `CommandExecutionUtil.at`, after taking the lock and before the sandbox starts |
-| `shutdown` | `Supervisor.shutDown`, after the container is removed; also after Ctrl-C |
+| `startup` | `CommandExecutionUtil.at`, after taking the lock and before the sandbox starts, with `autosave.startup` on |
+| `shutdown` | `Supervisor.shutDown`, after the container is removed, also after Ctrl-C, with `autosave.shutdown` on |
 | `running` | `oillamp save` while a session runs; a program may have been writing |
 | `idle` | `oillamp save` while no session runs |
 | `before-restore` | `oillamp restore`, just before it changes anything |
@@ -466,7 +466,7 @@ sequenceDiagram
     L-->>O: skeleton + session files written
     Note over O: --dry-run stops here
     O->>O: take .oillamp/lock
-    O->>O: startup save, if anything changed
+    O->>O: startup save, if on and anything changed
     O->>S: image and container
     S->>P: podman build (only if tag missing)
     S->>P: podman rm -f leftover, podman run
@@ -480,7 +480,7 @@ sequenceDiagram
     W->>V: primary SSH connection arrives
     Note over V: Running, until Ctrl-C, closed terminal or oillamp stop
     V->>P: podman stop, podman rm
-    V->>V: shutdown save, if anything changed
+    V->>V: shutdown save, if on and anything changed
     V-->>O: exit status
     O->>O: release lock
 ```
@@ -520,8 +520,8 @@ The same, step by step:
 6. **Lock.** `LampLock.tryAcquire` takes an exclusive OS file lock on `.oillamp/lock`. If another
    session holds it, oillamp reports `OIL-LOCK-001` and exits with code 4. The OS releases the lock
    when the process dies, however it dies.
-   Then the lamp is saved, if anything changed since its last snapshot (a startup save). A save
-   that fails is a warning, and the session starts anyway.
+   Then, with `autosave.startup` on, the lamp is saved, if anything changed since its last
+   snapshot (a startup save). A save that fails is a warning, and the session starts anyway.
 7. **Image and sandbox phase (`SandboxPhase`).**
    - Computes the image tag. If podman does not have it, extracts the image files from the jar and
      runs `podman build`, showing its output on the activity line.
@@ -827,7 +827,7 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
    information. If both failed, `OIL-SANDBOX-005`.
 4. Close the egress proxy, the control socket and the windows oillamp opened.
 5. Delete `session.json` and update `lastSessionAt` in `lamp.json`.
-6. Save the lamp, if anything changed (a shutdown save; see "The history").
+6. With `autosave.shutdown` on, save the lamp, if anything changed (a shutdown save; see "The history").
 7. Print the summary: why it ended, how long it ran, the session id, the recording path.
 
 ### Crash recovery
@@ -948,15 +948,17 @@ set, empty, or longer than 64 KiB (`OIL-USAGE-001`).
 **A run**, on the `oillamp-runs` thread, one at a time:
 
 1. A job's `last_run` is set to now (a `once` job is removed instead), so it is not due again.
-2. `before-run` save, if anything changed.
+2. `before-run` save, if anything changed and `autosave.before_run` is on. Off, the run's
+   `Oillamp-Base` is the newest snapshot there is.
 3. The prompt. For a job's run, `WakePromptUtil` writes it: why the agent was woken (and,
    for its own job, that it wrote the task itself), the task, `NOTES.md` (cut at
    `schedule.notes_max_kb`), the last three runs with the files each changed (diffing the `run`
    snapshot's tree against its `Oillamp-Base`), the last run's final message, and a reminder to
-   rewrite the notes. A question someone asked is sent as they wrote it, because it is what a
+   rewrite the notes. With `autosave.after_run` off and no run in the history, it says that no
+   record of runs is kept, rather than that this is the first. A question someone asked is sent as they wrote it, because it is what a
    chat shows as their message.
 4. `Harness.run`, for at most `schedule.max_run_minutes`.
-5. `run` save, always, with the answer (cut at 16 KB) and the trailers above.
+5. `run` save, always while `autosave.after_run` is on, with the answer (cut at 16 KB) and the trailers above.
 6. `RunFinished` is reported, with the conversation it happened in, and handed to `oillamp ask`
    if it asked and waits.
 
@@ -1667,6 +1669,10 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `host_access.executables` | `[]` | programs the agent may ask to run on the host; empty closes the executing tier | yes |
 | `host_access.allow_additive` | true | offer writing, copying out, opening pages and notifications at all | yes |
 | `host_access.ask_the_user` | false | ask the user, rather than refuse, about an allowed request outside `roots` | yes |
+| `autosave.startup` | false | save the lamp as a session starts, before the sandbox runs | yes |
+| `autosave.shutdown` | false | save the lamp as a session ends, after the sandbox has stopped | yes |
+| `autosave.before_run` | true | save the lamp just before a run wakes the agent | yes |
+| `autosave.after_run` | true | save the lamp as a run ends; the next job's prompt reads the runs from these | yes |
 
 `oillamp config <dir> check` validates, `show-effective` prints a summary of the merged result,
 `path` prints the file's path. `check` and `show-effective` merge the global file and the lamp's,
