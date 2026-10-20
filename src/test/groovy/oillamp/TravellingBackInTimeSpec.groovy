@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.ExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.SaveKind
+import dev.lamp.LampSaveKind
 import dev.lamp.LampFailedException
 import spock.lang.IgnoreIf
 import spock.lang.Specification
@@ -109,7 +109,7 @@ class TravellingBackInTimeSpec extends Specification {
             }
             startingSave < ran.events().findIndexOf { it instanceof LampEvent.Saved }
             var saved = ran.events().findAll { it instanceof LampEvent.Saved }*.snapshot()
-            saved*.kind() == [SaveKind.STARTUP]
+            saved*.kind() == [LampSaveKind.STARTUP]
             saved[0].session().isPresent()
 
         and: 'nothing had changed when it ended, so there was no second save'
@@ -117,7 +117,7 @@ class TravellingBackInTimeSpec extends Specification {
             var listed = host.oillamp.run('history', lamp.toString())
             listed.succeeded()
             var snapshots = listed.events().find { it instanceof LampEvent.History }.snapshots()
-            snapshots*.kind() == [SaveKind.STARTUP]
+            snapshots*.kind() == [LampSaveKind.STARTUP]
     }
 
     def 'With autosave.shutdown on, a session that changed the lamp is saved again as it ends'() {
@@ -141,7 +141,7 @@ class TravellingBackInTimeSpec extends Specification {
             var listed = host.oillamp.run('history', lamp.toString())
             listed.succeeded()
             var snapshots = listed.events().find { it instanceof LampEvent.History }.snapshots()
-            snapshots*.kind() == [SaveKind.SHUTDOWN, SaveKind.STARTUP]
+            snapshots*.kind() == [LampSaveKind.SHUTDOWN, LampSaveKind.STARTUP]
     }
 
     def 'A save by hand keeps what the person wrote, and saves nothing when nothing changed'() {
@@ -161,7 +161,7 @@ class TravellingBackInTimeSpec extends Specification {
         then: 'the first made a snapshot, marked as saved while no session ran'
             first.succeeded()
             var made = first.events().find { it instanceof LampEvent.Saved }.snapshot()
-            made.kind() == SaveKind.IDLE
+            made.kind() == LampSaveKind.IDLE
             made.message() == 'before the upgrade'
             first.console().contains('saved ' + made.shortId())
             first.console().contains('saving lamp state now — this may take a while (idle save)')
@@ -302,7 +302,7 @@ class TravellingBackInTimeSpec extends Specification {
         then: 'the lamp was saved first, and the way back is printed'
             restored.succeeded()
             var safety = restored.events().find { it instanceof LampEvent.Saved }.snapshot()
-            safety.kind() == SaveKind.BEFORE_RESTORE
+            safety.kind() == LampSaveKind.BEFORE_RESTORE
             restored.console().contains('oillamp restore ' + lamp + ' ' + safety.shortId())
             Files.readString(home.resolve('workspace/story.txt')) == 'chapter one\n'
 
@@ -317,7 +317,7 @@ class TravellingBackInTimeSpec extends Specification {
             var listed = host.oillamp.run('history', lamp.toString())
             listed.succeeded()
             var snapshots = listed.events().find { it instanceof LampEvent.History }.snapshots()
-            snapshots*.kind().take(4) == [SaveKind.RESTORE, SaveKind.RESTORE, SaveKind.BEFORE_RESTORE, SaveKind.IDLE]
+            snapshots*.kind().take(4) == [LampSaveKind.RESTORE, LampSaveKind.RESTORE, LampSaveKind.BEFORE_RESTORE, LampSaveKind.IDLE]
     }
 
     def 'A restore brings back the configuration too'() {
@@ -374,7 +374,7 @@ class TravellingBackInTimeSpec extends Specification {
         then:
             save.succeeded()
             var made = save.events().find { it instanceof LampEvent.Saved }.snapshot()
-            made.kind() == SaveKind.RUNNING
+            made.kind() == LampSaveKind.RUNNING
             made.session().isPresent()
     }
 
@@ -419,7 +419,7 @@ class TravellingBackInTimeSpec extends Specification {
         then:
             saved.message() == 'first draft'
             listed.first().id() == saved.id()
-            restored.kind() == SaveKind.RESTORE
+            restored.kind() == LampSaveKind.RESTORE
             Files.readString(home(lamp).resolve('workspace/draft.txt')) == 'first draft\n'
 
         when: 'it asks for a snapshot that is not there'

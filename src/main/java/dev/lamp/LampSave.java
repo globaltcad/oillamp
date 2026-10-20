@@ -21,7 +21,7 @@ import java.util.Optional;
 public record LampSave(
         String id,
         Instant at,
-        LampEvent.SaveKind kind,
+        LampSaveKind kind,
         String message,
         Optional<String> session,
         Optional<String> run,

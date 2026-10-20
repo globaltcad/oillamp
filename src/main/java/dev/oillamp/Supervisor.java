@@ -20,6 +20,7 @@ import java.util.function.IntFunction;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
+import dev.lamp.LampSaveKind;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -594,7 +595,7 @@ final class Supervisor {
         //    Ctrl-C this sequence is the last thing that runs before the JVM exits.
         if (prepared.config().autosave().shutdown())
             problems = problems.addAll(CommandExecutionUtil.saveLamp(context, prepared.layout(),
-                    dev.lamp.LampEvent.SaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now()));
+                    LampSaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now()));
         return problems;
     }
 

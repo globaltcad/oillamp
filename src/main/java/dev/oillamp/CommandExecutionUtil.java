@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
-import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSaveKind;
 import dev.lamp.LampSave;
 import dev.lamp.Problem;
 
@@ -275,7 +275,7 @@ final class CommandExecutionUtil {
         // left it, and this session can always be undone; when `autosave.startup` is on. A save
         // that fails is a warning: the session is still worth having.
         if (prepared.config().autosave().startup())
-            for (Problem problem : saveLamp(context, prepared.layout(), SaveKind.STARTUP, "",
+            for (Problem problem : saveLamp(context, prepared.layout(), LampSaveKind.STARTUP, "",
                                             Optional.of(prepared.session()), machine.now()))
                 context.sink().accept(new LampEvent.Warning(problem));
         // Until the supervisor takes over, nothing else would remove a container this run started:
@@ -829,7 +829,7 @@ final class CommandExecutionUtil {
                         "a session is running, so programs in the sandbox may be "
                         + "writing while this saves; the snapshot is marked as a running save"));
             Tuple<Problem> problems = saveLamp(context, layout,
-                    idle.isPresent() ? SaveKind.IDLE : SaveKind.RUNNING, message, session, machine.now());
+                    idle.isPresent() ? LampSaveKind.IDLE : LampSaveKind.RUNNING, message, session, machine.now());
             context.sinkAcceptProblems(problems);
             return exitStatusFor(problems);
         } finally {
@@ -899,7 +899,7 @@ final class CommandExecutionUtil {
 
     /// Saves a lamp, reports the snapshot or that nothing changed, and returns the problems to
     /// report. Also used by `at` as a session starts and by the supervisor as it ends.
-    static Tuple<Problem> saveLamp(Context context, LampLayout layout, SaveKind kind, String message,
+    static Tuple<Problem> saveLamp(Context context, LampLayout layout, LampSaveKind kind, String message,
                                    Optional<SessionId> session, Instant now) {
         String activity = "saving lamp state now — this may take a while";
         context.sink().accept(new LampEvent.StepStarted(new LampEvent.StepInfo(

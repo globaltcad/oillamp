@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import dev.lamp.LampEvent.RunOutcome;
-import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSaveKind;
 import dev.lamp.LampSave;
 
 import sprouts.Association;
@@ -190,14 +190,14 @@ final class GitObjectUtil {
 
     /// The message of a commit that records a save. The first line is what `git log --oneline`
     /// shows, so it says the kind of save and what the person wrote.
-    static String message(SaveKind kind, String written, Optional<SessionId> session) {
+    static String message(LampSaveKind kind, String written, Optional<SessionId> session) {
         return message(kind, written, session, Association.between(String.class, String.class));
     }
 
     /// The same, with more trailers, such as the run a snapshot belongs to.
     ///
     /// @param more trailer names and values; a value is one line
-    static String message(SaveKind kind, String written, Optional<SessionId> session,
+    static String message(LampSaveKind kind, String written, Optional<SessionId> session,
                           Association<String, String> more) {
         String subject = written.isBlank() ? kind.label() : kind.label() + ": " + firstLine(written);
         StringBuilder text = new StringBuilder(subject).append("\n\n");
@@ -285,11 +285,11 @@ final class GitObjectUtil {
     }
 
     /// A commit made by hand with git, without the trailer, counts as a save made while no session ran.
-    private static SaveKind kindIn(Association<String, String> trailers) {
+    private static LampSaveKind kindIn(Association<String, String> trailers) {
         String name = trailers.get(KIND_TRAILER).orElse("")
                 .toUpperCase(Locale.ROOT).replace('-', '_');
-        for (SaveKind kind : SaveKind.values()) if (kind.name().equals(name)) return kind;
-        return SaveKind.IDLE;
+        for (LampSaveKind kind : LampSaveKind.values()) if (kind.name().equals(name)) return kind;
+        return LampSaveKind.IDLE;
     }
 
     /// What the person wrote: the message without the kind in front of it.
@@ -297,7 +297,7 @@ final class GitObjectUtil {
         String text = message.strip();
         String subject = text.lines().findFirst().orElse("");
         String rest = text.substring(subject.length()).strip();
-        for (SaveKind kind : SaveKind.values()) {
+        for (LampSaveKind kind : LampSaveKind.values()) {
             if (subject.equals(kind.label())) return rest;
             if (subject.startsWith(kind.label() + ": ")) {
                 String written = subject.substring(kind.label().length() + 2);

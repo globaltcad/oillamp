@@ -6,7 +6,7 @@ import java.time.ZoneId;
 import java.util.Optional;
 
 import dev.lamp.LampEvent.JobAuthor;
-import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSaveKind;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -47,7 +47,7 @@ final class WakePromptUtil {
 
         /// Reads a run's last snapshot, or empty for any other commit.
         static Optional<Past> of(GitObjectUtil.Commit commit) {
-            if (commit.snapshot().kind() != SaveKind.RUN) return Optional.empty();
+            if (commit.snapshot().kind() != LampSaveKind.RUN) return Optional.empty();
             Association<String, String> trailers = commit.trailers();
             Optional<String> run = trailers.get(GitObjectUtil.RUN_TRAILER);
             if (run.isEmpty()) return Optional.empty();

@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 import dev.lamp.LampEvent;
 import dev.lamp.LampEvent.JobAuthor;
 import dev.lamp.LampEvent.RunOutcome;
-import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSaveKind;
 
 import dev.lamp.LampSave;
 import sprouts.Association;
@@ -337,7 +337,7 @@ final class AgentRunner {
                 .put(GitObjectUtil.RUN_TRAILER, run.id());
         Optional<String> base = Optional.empty();
         if (autosave.beforeRun()) {
-            Result<History.Saving> before = history.save(SaveKind.BEFORE_RUN, "before " + run.id(), Optional.of(session),
+            Result<History.Saving> before = history.save(LampSaveKind.BEFORE_RUN, "before " + run.id(), Optional.of(session),
                     trailers, false, started);
             if (before instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
                 saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
@@ -380,7 +380,7 @@ final class AgentRunner {
                 + (said.isEmpty() ? "" : "\n\n" + said);
         Optional<LampSave> snapshot = Optional.empty();
         if (autosave.afterRun()) {
-            Result<History.Saving> saved = history.save(SaveKind.RUN, message, Optional.of(session), after, true, ended);
+            Result<History.Saving> saved = history.save(LampSaveKind.RUN, message, Optional.of(session), after, true, ended);
             if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
                 snapshot = saving.made();
                 if (!saving.skipped().isEmpty())

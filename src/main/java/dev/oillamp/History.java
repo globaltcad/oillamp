@@ -33,7 +33,7 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import dev.lamp.LampEvent.SaveKind;
+import dev.lamp.LampSaveKind;
 import dev.lamp.Problem;
 import dev.lamp.LampSave;
 
@@ -97,7 +97,7 @@ final class History {
     // ─── the three operations ──────────────────────────────────────────────────────────────
 
     /// Saves the lamp as it is now, unless nothing changed since the last snapshot.
-    Result<Saving> save(SaveKind kind, String message, Optional<SessionId> session, Instant now) {
+    Result<Saving> save(LampSaveKind kind, String message, Optional<SessionId> session, Instant now) {
         return save(kind, message, session, Association.between(String.class, String.class), false, now);
     }
 
@@ -106,7 +106,7 @@ final class History {
     /// @param trailers more trailers for the commit's message, such as the run it belongs to
     /// @param always   whether to make a snapshot even when nothing changed. A run's last
     ///                 snapshot is made either way, because it records what the agent said
-    Result<Saving> save(SaveKind kind, String message, Optional<SessionId> session,
+    Result<Saving> save(LampSaveKind kind, String message, Optional<SessionId> session,
                         Association<String, String> trailers, boolean always, Instant now) {
         return locked(() -> {
             try {
@@ -212,7 +212,7 @@ final class History {
 
             Saving safety;
             try {
-                safety = saveUnlocked(SaveKind.BEFORE_RESTORE, "before restoring " + target.shortId(),
+                safety = saveUnlocked(LampSaveKind.BEFORE_RESTORE, "before restoring " + target.shortId(),
                                       Optional.empty(), now);
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.saveFailed(layout.root(),
@@ -231,7 +231,7 @@ final class History {
                 return Result.ok(new Restoring(target, safety.made(), Optional.empty(), safety.skipped()), warnings);
             try {
                 bringBack(wanted.tree(), current.tree());
-                String message = GitObjectUtil.message(SaveKind.RESTORE, "back to " + target.shortId()
+                String message = GitObjectUtil.message(LampSaveKind.RESTORE, "back to " + target.shortId()
                         + " (" + target.kind().label() + ", " + target.at() + ")", Optional.empty());
                 LampSave result = commit(wanted.tree(), Optional.of(current.id()), now, message);
                 return Result.ok(new Restoring(target, safety.made(), Optional.of(result), safety.skipped()), warnings);
@@ -253,12 +253,12 @@ final class History {
         final StringBuilder modes = new StringBuilder();
     }
 
-    private Saving saveUnlocked(SaveKind kind, String message, Optional<SessionId> session, Instant now)
+    private Saving saveUnlocked(LampSaveKind kind, String message, Optional<SessionId> session, Instant now)
             throws IOException {
         return saveUnlocked(kind, message, session, Association.between(String.class, String.class), false, now);
     }
 
-    private Saving saveUnlocked(SaveKind kind, String message, Optional<SessionId> session,
+    private Saving saveUnlocked(LampSaveKind kind, String message, Optional<SessionId> session,
                                 Association<String, String> trailers, boolean always, Instant now)
             throws IOException {
         ensureRepository();

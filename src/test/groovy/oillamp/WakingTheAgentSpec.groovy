@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.RunOutcome
-import dev.lamp.LampEvent.SaveKind
+import dev.lamp.LampSaveKind
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Specification
@@ -323,7 +323,7 @@ class WakingTheAgentSpec extends Specification {
 
         and: 'the run is a snapshot, named after it and holding the agent\'s words'
             var snapshot = finished.snapshot().orElseThrow()
-            snapshot.kind() == SaveKind.RUN
+            snapshot.kind() == LampSaveKind.RUN
             snapshot.run() == Optional.of('run-1')
             snapshot.message().contains('I wrote the weekly report')
             var history = host.oillamp.run('history', lamp.toString())
@@ -506,7 +506,7 @@ class WakingTheAgentSpec extends Specification {
         and: 'the half-done work is in the run\'s snapshot'
             var history = host.oillamp.run('history', lamp.toString())
             var snapshot = history.events().find { it instanceof LampEvent.History }.snapshots().first()
-            snapshot.kind() == SaveKind.RUN
+            snapshot.kind() == LampSaveKind.RUN
             snapshot.message().contains('timed out')
     }
 
@@ -538,7 +538,7 @@ class WakingTheAgentSpec extends Specification {
             finished.outcome() == RunOutcome.INTERRUPTED
             var history = host.oillamp.run('history', lamp.toString())
             var snapshots = history.events().find { it instanceof LampEvent.History }.snapshots()
-            var run = snapshots.find { it.kind() == SaveKind.RUN }
+            var run = snapshots.find { it.kind() == LampSaveKind.RUN }
             run.message().contains('interrupted')
             !reported.any { it instanceof LampEvent.Failure }
     }
