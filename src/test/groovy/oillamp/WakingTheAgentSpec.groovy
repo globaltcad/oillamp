@@ -1,5 +1,6 @@
 package oillamp
 
+import dev.lamp.JobAuthor
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.RunOutcome
@@ -77,7 +78,7 @@ class WakingTheAgentSpec extends Specification {
             added.succeeded()
             var job = added.events().find { it instanceof LampEvent.JobAdded }.job()
             job.id() == 'job-1'
-            job.author() == LampEvent.JobAuthor.USER
+            job.author() == JobAuthor.USER
             job.next() == Optional.of(Instant.parse('2026-09-23T07:00:00Z'))
             job.expires().isEmpty()
 
@@ -693,7 +694,7 @@ class WakingTheAgentSpec extends Specification {
             var listing = host.oillamp.run('schedule', lamp.toString())
             var jobs = listing.events().find { it instanceof LampEvent.Schedule }.jobs()
             var job = jobs.find { it.id() == 'job-2' }
-            job.author() == LampEvent.JobAuthor.AGENT
+            job.author() == JobAuthor.AGENT
             job.expires() == Optional.of(NOW.plus(Duration.ofDays(14)))
 
         and: 'the session reported the new job'

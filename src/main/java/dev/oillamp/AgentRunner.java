@@ -11,7 +11,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import dev.lamp.LampEvent;
-import dev.lamp.LampEvent.JobAuthor;
+import dev.lamp.JobAuthor;
 import dev.lamp.LampEvent.RunOutcome;
 import dev.lamp.LampSaveKind;
 

@@ -125,10 +125,6 @@ public sealed interface LampEvent {
 
     // ─── the schedule, and the runs that wake the agent ───────────────────────────────────
 
-    /// Who added a job. The user's jobs are theirs alone: the agent may read them but not change
-    /// or remove them.
-    enum JobAuthor { USER, AGENT }
-
     /// A lamp's schedule. What `oillamp schedule` answers.
     ///
     /// @param enabled whether `schedule.enabled` is on in `oillamp.toml`. When it is off, no job runs

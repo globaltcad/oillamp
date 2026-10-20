@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 
-import dev.lamp.LampEvent.JobAuthor;
+import dev.lamp.JobAuthor;
 import dev.lamp.LampSaveKind;
 
 import sprouts.Association;

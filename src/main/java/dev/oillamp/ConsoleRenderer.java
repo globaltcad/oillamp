@@ -12,10 +12,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.lamp.LampEvent;
-import dev.lamp.LampSave;
-import dev.lamp.LampJob;
-import dev.lamp.Problem;
+import dev.lamp.*;
 
 import sprouts.Tuple;
 
@@ -407,7 +404,7 @@ final class ConsoleRenderer {
             String when = job.when().startsWith("once at ") ? "once" : job.when();
             String next = !job.enabled() ? "(switched off)" : job.next().map(shown::format).orElse("—");
             out.append('\n').append(String.format("%-8s %-18s %-17s %-6s %s", job.id(), when, next,
-                    job.author() == LampEvent.JobAuthor.AGENT ? "agent" : "you", shortened(job.prompt(), 60)));
+                    job.author() == JobAuthor.AGENT ? "agent" : "you", shortened(job.prompt(), 60)));
             job.expires().ifPresent(end -> out.append('\n').append(" ".repeat(53))
                     .append("(until ").append(shown.format(end)).append(')'));
         }

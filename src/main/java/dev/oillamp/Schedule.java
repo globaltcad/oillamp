@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import dev.lamp.LampEvent.JobAuthor;
+import dev.lamp.JobAuthor;
 
 import sprouts.Tuple;
 
