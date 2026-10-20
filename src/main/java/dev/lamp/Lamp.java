@@ -56,10 +56,10 @@ import sprouts.Tuple;
 /// The key goes to the engine in its environment, which only this user can read, and never onto
 /// its command line or into the lamp.
 ///
-/// An application that lets its user choose the model also gives that, with [Starting#model]. The
+/// An application that lets its user choose the model also gives that, with [LampStartupConf#model(String)]. The
 /// agent then answers every question with it, in old conversations too. And an application that
 /// has something to tell the agent about the world it lives in, such as how the user talks to it,
-/// gives that with [Starting#instructions]. The engine writes both into pi's own files in the
+/// gives that with [LampStartupConf#instructions(String)]. The engine writes both into pi's own files in the
 /// agent's home, so the application never needs to know where pi keeps them, or what they look
 /// like.
 ///
@@ -71,13 +71,13 @@ public final class Lamp implements AutoCloseable {
     /// What [#leaveRunning()] writes on the engine's standard input. Named as text for the same
     /// reason as [#ENGINE].
     static final String LEAVE_RUNNING = "leave-running";
-    /// The variable in the engine's environment that holds a key given with [Starting#modelKey].
+    /// The variable in the engine's environment that holds a key given with [LampStartupConf#modelKey(String)].
     static final String MODEL_KEY_VARIABLE = "OILLAMP_MODEL_KEY";
     /// The variable in the engine's environment that holds instructions given with
-    /// [Starting#instructions].
+    /// [LampStartupConf#instructions(String)].
     static final String INSTRUCTIONS_VARIABLE = "OILLAMP_INSTRUCTIONS";
     /// The variable in the engine's environment that holds the host-access requirements given
-    /// with [Starting#security].
+    /// with [LampStartupConf#security(String)].
     static final String SECURITY_REQUIREMENTS_VARIABLE = "OILLAMP_SECURITY_REQUIREMENTS";
     /// The longest instructions, in bytes of UTF-8. The engine checks the same.
     static final int LONGEST_INSTRUCTIONS = 64 * 1024;
@@ -110,12 +110,12 @@ public final class Lamp implements AutoCloseable {
     /// started, until it is left running; false for one it joined.
     private volatile boolean holding;
 
-    private Lamp(
-        final Path directory,
-        final Launcher launcher,
-        final Process engine,
-        final List<Consumer<LampEvent>> listeners,
-        final boolean holding
+    Lamp(
+            final Path directory,
+            final Launcher launcher,
+            final Process engine,
+            final List<Consumer<LampEvent>> listeners,
+            final boolean holding
     ) {
         this.directory = directory;
         this.launcher = launcher;
@@ -125,8 +125,8 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
-    public static Starting at(Path directory) {
-        return new Starting(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
+    public static LampStartupConf at(Path directory) {
+        return new LampStartupConf(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
                             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false,
                             Optional.empty());
     }
@@ -134,458 +134,11 @@ public final class Lamp implements AutoCloseable {
     /// Starts the engine as a separate process, with `arguments` after the engine's main class
     /// and `environment` added to the environment it inherits.
     ///
-    /// Given a replacement with [Starting#launchedBy], for tests, or for an application that
+    /// Given a replacement with [LampStartupConf#launchedBy], for tests, or for an application that
     /// runs the engine some other way.
     @FunctionalInterface
     public interface Launcher {
         Process launch(List<String> arguments, Map<String, String> environment) throws IOException;
-    }
-
-    /// A lamp that has been described but not started yet.
-    public static final class Starting {
-
-        private final Path directory;
-        private final List<Consumer<LampEvent>> listeners;
-        private final Launcher launcher;
-        private final Optional<URI> modelService;
-        private final Optional<String> modelKey;
-        private final Optional<String> model;
-        private final Optional<String> instructions;
-        private final boolean scheduling;
-        private final Optional<Security> security;
-
-        /// What the agent may do on the host, and what it is judged against.
-        ///
-        /// @param requirements the user's own words: what the agent may not see, change or run.
-        ///                     Handed to the checking model with every request, and to no one else
-        public record Security(String requirements) {
-            public Security {
-                if (requirements == null || requirements.isBlank())
-                    throw new IllegalArgumentException("the host-access requirements cannot be blank");
-                if (requirements.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
-                    throw new IllegalArgumentException("the host-access requirements cannot be longer than "
-                                                       + LONGEST_INSTRUCTIONS / 1024 + " KiB");
-            }
-        }
-
-        private Starting(
-            final Path directory,
-            final List<Consumer<LampEvent>> listeners,
-            final Launcher launcher,
-            final Optional<URI> modelService,
-            final Optional<String> modelKey,
-            final Optional<String> model,
-            final Optional<String> instructions,
-            final boolean scheduling,
-            final Optional<Security> security
-        ) {
-            this.directory = directory;
-            this.listeners = listeners;
-            this.launcher = launcher;
-            this.modelService = modelService;
-            this.modelKey = modelKey;
-            this.model = model;
-            this.instructions = instructions;
-            this.scheduling = scheduling;
-            this.security = security;
-        }
-
-        /// Receives every event the engine reports, in order, from the moment it starts.
-        ///
-        /// Called on one thread that reads the engine's output. A listener that takes long holds
-        /// up the ones after it, so a Swing application hands the event over to its event thread.
-        ///
-        /// A listener that throws misses nothing else: the exception goes to the reading thread's
-        /// uncaught exception handler, and the other listeners, and the lamp itself, still get
-        /// this event and every one after it.
-        public Starting onEvent(Consumer<LampEvent> listener) {
-            List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
-            more.add(listener);
-            return new Starting(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
-        }
-
-        public Starting launchedBy(Launcher launcher) {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
-        }
-
-        /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
-        /// `https://api.eu.edenai.run`, say, or a model server on this machine with the path of
-        /// its API, such as `http://127.0.0.1:11434/v1` for Ollama. It must be `https`, unless it
-        /// is on this machine's loopback; the engine refuses anything else, and the events say why.
-        ///
-        /// Only Eden AI's models are filtered to those served in the EU. Any other service's
-        /// models are all offered, since its model list names no regions.
-        public Starting modelService(URI service) {
-            return new Starting(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security);
-        }
-
-        /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
-        /// lamp's `model.key_env` names. The sandbox never sees it.
-        ///
-        /// @throws IllegalArgumentException when `key` is blank, which would only fail later
-        public Starting modelKey(String key) {
-            if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-            return new Starting(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security);
-        }
-
-        /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
-        /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
-        /// changed.
-        public Starting enableScheduling() {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security);
-        }
-
-        /// Has the agent answer every question with `id`, a model as the service names it, such
-        /// as `azure/gpt-6.1-sol` from [Lamp#models]. It applies to new conversations and to old
-        /// ones alike: a question in a conversation that was on another model is answered by this
-        /// one, and the earlier answers keep the model that gave them.
-        ///
-        /// The engine also writes it as pi's default model into pi's settings in the agent's home,
-        /// keeping the rest of them, so that pi starts a new conversation on it by itself.
-        ///
-        /// Without it, a new conversation gets whatever default model pi's settings name, and an
-        /// old one stays on the model it was last on.
-        ///
-        /// A model the service does not offer fails each run that needs it, and the run's answer
-        /// names the model.
-        ///
-        /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
-        ///                                  model has
-        public Starting model(String id) {
-            if (!id.matches(MODEL_ID))
-                throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-            return new Starting(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security);
-        }
-
-        /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
-        /// what it is, how the user reaches it, where it hands over files. pi adds it to its
-        /// system prompt, in every conversation, old and new.
-        ///
-        /// The engine writes it into the agent's home, where pi reads it, once the sandbox is up
-        /// and before pi starts; that is `~/.pi/agent/APPEND_SYSTEM.md`, replacing what was
-        /// there. Without this, that file stays as it is, with whatever an earlier session, the
-        /// agent or a person put there.
-        ///
-        /// The text goes to the engine in its environment, like the key: it can be long and run
-        /// over many lines, which a command line is poor at, and it is nobody else's business.
-        ///
-        /// @throws IllegalArgumentException when `text` is blank, or longer than 64 KiB, far more
-        ///                                  than any useful instructions
-        public Starting instructions(String text) {
-            if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
-            if (text.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
-                throw new IllegalArgumentException("instructions cannot be longer than " + LONGEST_INSTRUCTIONS / 1024 + " KiB");
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security);
-        }
-
-        /// Lets the agent reach the host machine through oillamp, as `[host_access]` in the lamp's
-        /// file would, and says what it is judged against.
-        ///
-        /// Every request from the sandbox to the host is first judged by a model, in a
-        /// conversation of its own that never sees the agent's messages: it sees the requirements,
-        /// the request, and what the run was asked to do and did just before. A refusal is final
-        /// for that request. The gate judges by your text and nothing else, so it is the text that
-        /// matters: say what must not happen.
-        ///
-        /// The feature must be on in the lamp's `oillamp.toml` already: an application gives the
-        /// rules, it does not open a door the user never asked for. The roots, the executable
-        /// allowlist and the rest stay as the file has them.
-        ///
-        /// The model that judges is the one the agent answers with, from [#model] and later
-        /// [Lamp#useModel], unless the lamp's file names a `checker_model` of its own. A lamp with
-        /// neither does not start: there is no model to judge with.
-        ///
-        /// The requirements go to the engine in its environment, like [Starting#instructions], so
-        /// that they are not on a command line any user of the machine can read.
-        ///
-        /// @throws IllegalArgumentException when the requirements are blank or longer than 64 KiB
-        public Starting security(String requirements) {
-            return new Starting(directory, listeners, launcher, modelService, modelKey, model,
-                                instructions, scheduling, Optional.of(new Security(requirements)));
-        }
-
-        /// Starts the engine, and returns at once. The sandbox is running when
-        /// [Lamp#awaitRunning] says so; building its image the first time takes several minutes.
-        ///
-        /// @throws IOException when the engine's process could not be started at all
-        public Lamp start() throws IOException {
-            List<String> arguments = new ArrayList<>(List.of("at", directory.toString(), "--embedded"));
-            modelService.ifPresent(service -> arguments.addAll(List.of("--model-service", service.toString())));
-            modelKey.ifPresent(key -> arguments.addAll(List.of("--model-key-env", MODEL_KEY_VARIABLE)));
-            model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
-            instructions.ifPresent(text -> arguments.addAll(List.of("--instructions-env", INSTRUCTIONS_VARIABLE)));
-            security.ifPresent(rules -> arguments.addAll(List.of("--security-requirements-env",
-                    SECURITY_REQUIREMENTS_VARIABLE)));
-            if (scheduling) arguments.add("--enable-scheduling");
-            Map<String, String> environment = new HashMap<>();
-            modelKey.ifPresent(key -> environment.put(MODEL_KEY_VARIABLE, key));
-            instructions.ifPresent(text -> environment.put(INSTRUCTIONS_VARIABLE, text));
-            security.ifPresent(rules -> environment.put(SECURITY_REQUIREMENTS_VARIABLE, rules.requirements()));
-            Process engine = launcher.launch(List.copyOf(arguments), Map.copyOf(environment));
-            Lamp lamp = new Lamp(directory, launcher, engine, listeners, true);
-            Thread.ofVirtual().name("lamp-events-" + directory.getFileName()).start(lamp::readEvents);
-            return lamp;
-        }
-
-        /// Joins the session already running this lamp, whoever started it: this application
-        /// before it was closed and [left it running][Lamp#leaveRunning()], another application,
-        /// or a person at a terminal. Returns at once.
-        ///
-        /// The lamp returned is used as one this application started. Its listeners first hear
-        /// what the session is doing now: [LampEvent.SessionOpened], after which
-        /// [Lamp#awaitRunning] is true; the session's state; the run in progress, from its
-        /// [LampEvent.RunStarted], with what the agent wrote so far; a [LampEvent.RunQueued]
-        /// for each run waiting; and last a [LampEvent.AgentStatus], which marks the end of the
-        /// catching up. Then they hear every event as it happens. The model settings are
-        /// those the session was started with.
-        ///
-        /// Closing it only stops following; the session goes on. [Lamp#stop()] ends it.
-        ///
-        /// Where no session runs, [Lamp#awaitRunning] is false, and a [LampEvent.Failure]
-        /// with problem `OIL-SESSION-001` says so.
-        ///
-        /// @throws IOException when the engine's process could not be started at all
-        public Lamp join() throws IOException {
-            Process follower = launcher.launch(List.of("follow", directory.toString(), "--embedded"), Map.of());
-            Lamp lamp = new Lamp(directory, launcher, follower, listeners, false);
-            Thread.ofVirtual().name("lamp-events-" + directory.getFileName()).start(lamp::readEvents);
-            return lamp;
-        }
-
-        /// Whether a session is running this lamp, so that [#join] finds it. Looks only at the
-        /// record a session keeps while it runs; a session whose engine was killed leaves that
-        /// record behind, and [#join] then says it cannot reach it.
-        public boolean isRunning() {
-            return Files.exists(directory.resolve(".oillamp").resolve("session.json"));
-        }
-
-        /// Deletes this lamp for good: the agent's home with everything the agent made in it,
-        /// the lamp's state and its configuration. Files in the directory that oillamp did not
-        /// make are left, and so is the directory then.
-        ///
-        /// Part of a lamp belongs to the sandbox's own users, so neither the application nor
-        /// `rm -rf` can delete it; the engine can, as `oillamp remove <dir> --yes`. A lamp whose
-        /// sandbox is still running is refused: close it first.
-        ///
-        /// Blocks until the engine is done. What it reports goes to the listeners.
-        ///
-        /// @return [ExitStatus#SUCCESS] once the lamp is gone; otherwise the events said why
-        /// @throws IOException when the engine's process could not be started at all
-        public ExitStatus remove() throws IOException, InterruptedException {
-            return runToEnd(launcher, listeners, "remove", directory.toString(), "--yes").status();
-        }
-
-        /// Takes a snapshot of this lamp: the agent's home and its `oillamp.toml`, as they are
-        /// now. [#restore] brings the lamp back to it later. Works whether or not the lamp's
-        /// sandbox is running; see [Lamp#save] for one this application holds.
-        ///
-        /// Blocks until the engine is done. What it reports goes to the listeners.
-        ///
-        /// @param message what to remember the snapshot by; may be empty
-        /// @return the snapshot, or empty when nothing changed since the last one
-        /// @throws Failed      when the lamp could not be saved; the problem says why
-        /// @throws IOException when the engine's process could not be started at all
-        public Optional<LampEvent.Snapshot> save(String message) throws IOException, InterruptedException, Failed {
-            return Lamp.save(launcher, listeners, directory, message);
-        }
-
-        /// Every snapshot of this lamp, newest first.
-        ///
-        /// @throws Failed      when the lamp's history could not be read; the problem says why
-        /// @throws IOException when the engine's process could not be started at all
-        public List<LampEvent.Snapshot> history() throws IOException, InterruptedException, Failed {
-            Ran ran = runToEnd(launcher, listeners, "history", directory.toString());
-            ran.orThrow();
-            for (LampEvent event : ran.events())
-                if (event instanceof LampEvent.History history) {
-                    List<LampEvent.Snapshot> snapshots = new ArrayList<>();
-                    for (LampEvent.Snapshot snapshot : history.snapshots()) snapshots.add(snapshot);
-                    return List.copyOf(snapshots);
-                }
-            return List.of();
-        }
-
-        /// Brings this lamp back to `snapshot`: the agent's home and `oillamp.toml` become what
-        /// they were when it was saved. The lamp is saved first, so a restore can be undone by
-        /// restoring that save. A lamp whose sandbox is running is refused: close it first.
-        ///
-        /// @param snapshot a snapshot's [id][LampEvent.Snapshot#id()], or a unique beginning of
-        ///                 it of at least four characters
-        /// @return the snapshot that records the restore, or the one restored when the lamp
-        ///         already was in that state
-        /// @throws Failed      when there is no such snapshot, the sandbox is running, or the
-        ///                     restore did not finish; the problem says which
-        /// @throws IOException when the engine's process could not be started at all
-        public LampEvent.Snapshot restore(String snapshot) throws IOException, InterruptedException, Failed {
-            Ran ran = runToEnd(launcher, listeners, "restore", directory.toString(), snapshot);
-            ran.orThrow();
-            for (LampEvent event : ran.events())
-                if (event instanceof LampEvent.Restored restored) return restored.result();
-            throw new Failed(ran.status(), internal("the engine reported no restore"));
-        }
-
-        /// Reads the values of `enabled` and `requirements` in the `[host_access]` table of this
-        /// lamp's `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads
-        /// them.
-        ///
-        /// Runs `oillamp host-access <dir>` as a short-lived engine process. It only reads the
-        /// file, so it works whether or not a session is running.
-        ///
-        /// @throws Failed      when the directory is not a lamp, or its configuration is not
-        ///                     valid; the problem says which
-        /// @throws IOException when the engine's process could not be started at all
-        public HostAccess hostAccess() throws IOException, InterruptedException, Failed {
-            return hostAccessOf(runToEnd(launcher, listeners, Map.of(), "host-access", directory.toString()));
-        }
-
-        /// Sets the values of `enabled` and `requirements` in the `[host_access]` table of this
-        /// lamp's `oillamp.toml`, and returns them as the file now has them.
-        ///
-        /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS`
-        /// as a short-lived engine process. The requirements are passed in that environment
-        /// variable, so that they do not appear in the process list. The engine replaces only
-        /// those two keys and keeps every other line of the file, comments included. It writes
-        /// the file only when the result is a valid configuration.
-        ///
-        /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
-        /// reads the file only when it starts.
-        ///
-        /// @param enabled      the new value of `enabled`: whether the next session gives the
-        ///                     agent the host tools
-        /// @param requirements the new value of `requirements`: the text the checker model judges
-        ///                     every host request against. May be empty only when `enabled` is
-        ///                     false. Genies passes the JSON its settings page builds
-        /// @return the values as the file now has them
-        /// @throws Failed      when the sandbox is running, or the settings are not valid, such
-        ///                     as on with no requirements; the problem says which
-        /// @throws IOException when the engine's process could not be started at all
-        public HostAccess hostAccess(boolean enabled, String requirements)
-                throws IOException, InterruptedException, Failed {
-            return hostAccessOf(runToEnd(launcher, listeners, Map.of(SECURITY_REQUIREMENTS_VARIABLE, requirements),
-                    "host-access", directory.toString(), enabled ? "on" : "off",
-                    "--requirements-env", SECURITY_REQUIREMENTS_VARIABLE));
-        }
-
-        /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of
-        /// its `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads them.
-        ///
-        /// Runs `oillamp autosave <dir>` as a short-lived engine process. It only reads the file,
-        /// so it works whether or not a session is running.
-        ///
-        /// @throws Failed      when the directory is not a lamp, or its configuration is not
-        ///                     valid; the problem says which
-        /// @throws IOException when the engine's process could not be started at all
-        public Autosave autosave() throws IOException, InterruptedException, Failed {
-            return autosaveOf(runToEnd(launcher, listeners, "autosave", directory.toString()));
-        }
-
-        /// Sets when oillamp saves this lamp by itself: all four values in the `[autosave]` table
-        /// of its `oillamp.toml`. Returns them as the file now has them.
-        ///
-        /// Runs `oillamp autosave <dir> startup on|off shutdown on|off before-run on|off
-        /// after-run on|off` as a short-lived engine process. The engine replaces only those
-        /// keys and keeps every other line of the file, comments included.
-        ///
-        /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
-        /// reads the file only when it starts.
-        ///
-        /// @throws Failed      when the sandbox is running, or the lamp's file is not valid; the
-        ///                     problem says which
-        /// @throws IOException when the engine's process could not be started at all
-        public Autosave autosave(Autosave wanted) throws IOException, InterruptedException, Failed {
-            return autosaveOf(runToEnd(launcher, listeners, "autosave", directory.toString(),
-                    "startup", onOff(wanted.startup()), "shutdown", onOff(wanted.shutdown()),
-                    "before-run", onOff(wanted.beforeRun()), "after-run", onOff(wanted.afterRun())));
-        }
-
-        /// This lamp's schedule: the jobs that wake the agent while a session runs.
-        ///
-        /// @throws Failed      when the schedule could not be read; the problem says why
-        /// @throws IOException when the engine's process could not be started at all
-        public LampEvent.Schedule schedule() throws IOException, InterruptedException, Failed {
-            return Lamp.schedule(launcher, listeners, directory);
-        }
-
-        /// Adds a job that wakes the agent again and again, as `cron` says.
-        ///
-        /// @param cron   five fields, as cron has them, on this machine's clock, such as
-        ///               `0 9 * * 1-5` for nine on every weekday
-        /// @param prompt what the agent is asked each time
-        /// @throws Failed when the expression cannot be read; the problem says why
-        public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, Failed {
-            return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt);
-        }
-
-        /// The same, taken off the schedule at `until`.
-        public LampEvent.Job repeat(String cron, String prompt, Instant until) throws IOException, InterruptedException, Failed {
-            return Lamp.addJob(launcher, listeners, directory, "--cron", cron, prompt, "--expires", until.toString());
-        }
-
-        /// Adds a job that wakes the agent once.
-        ///
-        /// @param at when: `2026-10-01 09:00` on this machine's clock, `2026-10-01T07:00Z`, or
-        ///           `in 2h`
-        /// @throws Failed when the time cannot be read or has passed; the problem says why
-        public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, Failed {
-            return Lamp.addJob(launcher, listeners, directory, "--at", at, prompt);
-        }
-
-        /// Adds a job that wakes the agent once, at `at`.
-        ///
-        /// @throws Failed when `at` has passed
-        public LampEvent.Job once(Instant at, String prompt) throws IOException, InterruptedException, Failed {
-            return once(at.toString(), prompt);
-        }
-
-        /// Switches a job back on. A repeating job then runs at its next time from now, not once
-        /// for each time it was off.
-        ///
-        /// @throws Failed when there is no such job
-        public void enable(String job) throws IOException, InterruptedException, Failed {
-            runToEnd(launcher, listeners, "schedule", directory.toString(), "enable", job).orThrow();
-        }
-
-        /// Switches a job off. It stays on the schedule, and does not run until it is switched on.
-        ///
-        /// @throws Failed when there is no such job
-        public void disable(String job) throws IOException, InterruptedException, Failed {
-            runToEnd(launcher, listeners, "schedule", directory.toString(), "disable", job).orThrow();
-        }
-
-        /// Pauses the whole schedule: no job runs until [#resume].
-        public void pause() throws IOException, InterruptedException, Failed {
-            runToEnd(launcher, listeners, "schedule", directory.toString(), "pause").orThrow();
-        }
-
-        public void resume() throws IOException, InterruptedException, Failed {
-            runToEnd(launcher, listeners, "schedule", directory.toString(), "resume").orThrow();
-        }
-
-        /// Every conversation the agent had in this lamp, the most recent first. See
-        /// [Lamp#conversations(Path)].
-        public List<Conversation> conversations() { return Lamp.conversations(directory); }
-
-        /// The conversation named by `id` or a unique beginning of it.
-        public Optional<Conversation> conversation(String id) { return Lamp.conversation(directory, id); }
-
-        /// Deletes a conversation for good. See [Lamp#forget(Path, String)].
-        public void forget(String conversation) throws IOException { Lamp.forget(directory, conversation); }
-
-        /// Asks the agent `question` in the session that is running this lamp, whoever started it,
-        /// and waits for the answer. See [Lamp#ask(Question)].
-        ///
-        /// @throws Failed when no session is running, or the question has no place to go
-        public LampEvent.RunFinished ask(Question question) throws IOException, InterruptedException, Failed {
-            return Lamp.ask(launcher, listeners, directory, question);
-        }
-
-        /// Takes a job off the schedule, whoever added it.
-        ///
-        /// @param job such as `job-3`
-        /// @throws Failed when there is no such job
-        public void unschedule(String job) throws IOException, InterruptedException, Failed {
-            runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
-        }
     }
 
     /// The engine said no, or could not do what was asked. [#problem()] says why, in full.
@@ -610,7 +163,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Everything an engine said, and how it ended.
-    private record Ran(ExitStatus status, List<LampEvent> events) {
+    record Ran(ExitStatus status, List<LampEvent> events) {
 
         /// Throws the first error the engine reported, if it did not succeed.
         void orThrow() throws Failed {
@@ -621,7 +174,7 @@ public final class Lamp implements AutoCloseable {
         }
     }
 
-    private static Problem internal(String what) {
+    static Problem internal(String what) {
         return new Problem(new Problem.Code("OIL-INTERNAL-001"), Problem.Severity.ERROR,
                 "Unexpected internal error (please report)", what,
                 "this is a bug in oillamp, not something you did wrong",
@@ -630,7 +183,7 @@ public final class Lamp implements AutoCloseable {
 
     /// Runs the engine for one command that ends by itself, passes each event to the listeners,
     /// and waits for it to exit.
-    private static Ran runToEnd(
+    static Ran runToEnd(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final String... command
@@ -642,7 +195,7 @@ public final class Lamp implements AutoCloseable {
     /// `environment` for the engine process. Used to pass texts, such as host-access
     /// requirements, that must not appear on the command line, where every user of the machine
     /// can read them in the process list.
-    private static Ran runToEnd(
+    static Ran runToEnd(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Map<String, String> environment,
@@ -668,7 +221,7 @@ public final class Lamp implements AutoCloseable {
         return new Ran(ExitStatus.ofCode(engine.waitFor()).orElse(ExitStatus.ERROR), List.copyOf(events));
     }
 
-    private static Optional<LampEvent.Snapshot> save(
+    static Optional<LampEvent.Snapshot> save(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
@@ -686,7 +239,7 @@ public final class Lamp implements AutoCloseable {
 
     /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
     /// they travel from the engine to here.
-    private static HostAccess hostAccessOf(Ran ran) throws Failed {
+    static HostAccess hostAccessOf(Ran ran) throws Failed {
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.HostAccessSettings settings)
@@ -695,7 +248,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// The values the engine reported as a [LampEvent.AutosaveSettings].
-    private static Autosave autosaveOf(Ran ran) throws Failed {
+    static Autosave autosaveOf(Ran ran) throws Failed {
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.AutosaveSettings settings)
@@ -703,9 +256,9 @@ public final class Lamp implements AutoCloseable {
         throw new Failed(ran.status(), internal("the engine reported no autosave settings"));
     }
 
-    private static String onOff(boolean on) { return on ? "on" : "off"; }
+    static String onOff(boolean on) { return on ? "on" : "off"; }
 
-    private static LampEvent.Schedule schedule(
+    static LampEvent.Schedule schedule(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory
@@ -717,7 +270,7 @@ public final class Lamp implements AutoCloseable {
         throw new Failed(ran.status(), internal("the engine reported no schedule"));
     }
 
-    private static LampEvent.Job addJob(
+    static LampEvent.Job addJob(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
@@ -738,7 +291,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
-    /// `oillamp.toml`, as [Starting#hostAccess()] reads them and [Starting#hostAccess(boolean, String)]
+    /// `oillamp.toml`, as [LampStartupConf#hostAccess()] reads them and [LampStartupConf#hostAccess(boolean, String)]
     /// writes them.
     ///
     /// @param enabled      whether a session gives the agent the host tools
@@ -746,8 +299,8 @@ public final class Lamp implements AutoCloseable {
     public record HostAccess(boolean enabled, String requirements) {}
 
     /// When oillamp saves a lamp by itself, so that it can go back there: the `[autosave]` table
-    /// of its `oillamp.toml`, as [Starting#autosave()] reads it and [Starting#autosave(Autosave)]
-    /// writes it. A save someone asks for, with [Starting#save(String)], happens whatever these say.
+    /// of its `oillamp.toml`, as [LampStartupConf#autosave()] reads it and [LampStartupConf#autosave(Autosave)]
+    /// writes it. A save someone asks for, with [LampStartupConf#save(String)], happens whatever these say.
     ///
     /// @param startup   as a session starts, before the sandbox runs. Off unless switched on
     /// @param shutdown  as a session ends, after the sandbox has stopped. Off unless switched on
@@ -1005,8 +558,8 @@ public final class Lamp implements AutoCloseable {
         }
     }
 
-    /// The models the agent of a lamp given `service` and `key` with [Starting#modelService] and
-    /// [Starting#modelKey] is offered, in the service's order. Asked on this machine, without the
+    /// The models the agent of a lamp given `service` and `key` with [LampStartupConf#modelService(URI)] and
+    /// [LampStartupConf#modelKey(String)] is offered, in the service's order. Asked on this machine, without the
     /// engine, so an application can offer them in its settings before any lamp runs.
     ///
     /// The service is asked where the engine's relay asks it: under its own path, such as
@@ -1031,7 +584,7 @@ public final class Lamp implements AutoCloseable {
     /// The lamp directory.
     public Path directory() { return directory; }
 
-    /// Takes a snapshot of this lamp while its sandbox runs, as [Starting#save] does. Programs in
+    /// Takes a snapshot of this lamp while its sandbox runs, as [LampStartupConf#save] does. Programs in
     /// the sandbox may be writing at that moment, so the snapshot is marked as a running save.
     ///
     /// Blocks until it is done. What the engine reports goes to this lamp's listeners.
@@ -1043,17 +596,17 @@ public final class Lamp implements AutoCloseable {
         return save(launcher, listeners, directory, message);
     }
 
-    /// This lamp's schedule, as [Starting#schedule] reads it.
+    /// This lamp's schedule, as [LampStartupConf#schedule] reads it.
     public LampEvent.Schedule schedule() throws IOException, InterruptedException, Failed {
         return schedule(launcher, listeners, directory);
     }
 
-    /// Adds a repeating job, as [Starting#repeat] does. The running session sees it at once.
+    /// Adds a repeating job, as [LampStartupConf#repeat] does. The running session sees it at once.
     public LampEvent.Job repeat(String cron, String prompt) throws IOException, InterruptedException, Failed {
         return addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
-    /// Adds a job that runs once, as [Starting#once] does. The running session sees it at once.
+    /// Adds a job that runs once, as [LampStartupConf#once] does. The running session sees it at once.
     public LampEvent.Job once(String at, String prompt) throws IOException, InterruptedException, Failed {
         return addJob(launcher, listeners, directory, "--at", at, prompt);
     }
@@ -1067,7 +620,7 @@ public final class Lamp implements AutoCloseable {
     /// Deletes a conversation for good. See [Lamp#forget(Path, String)].
     public void forget(String conversation) throws IOException { forget(directory, conversation); }
 
-    /// Takes a job off the schedule, as [Starting#unschedule] does.
+    /// Takes a job off the schedule, as [LampStartupConf#unschedule] does.
     public void unschedule(String job) throws IOException, InterruptedException, Failed {
         runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
     }
@@ -1128,7 +681,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Has the agent answer with `id`, a model as the service names it, from its next run on, as
-    /// [Starting#model] would have had it from the start: in new conversations and in old ones,
+    /// [LampStartupConf#model(String)] would have had it from the start: in new conversations and in old ones,
     /// for questions and scheduled jobs alike, and as pi's default. A run in progress finishes on
     /// the model it started with. The session's service and key stay as they are; changing those
     /// needs a new session.
@@ -1178,7 +731,7 @@ public final class Lamp implements AutoCloseable {
         return command.toArray(String[]::new);
     }
 
-    private static LampEvent.RunFinished ask(
+    static LampEvent.RunFinished ask(
         final Launcher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
@@ -1281,7 +834,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Lets the session go on after this application is gone, until [#stop()] or
-    /// `oillamp stop <dir>` ends it. [Starting#join] finds it again.
+    /// `oillamp stop <dir>` ends it. [LampStartupConf#join] finds it again.
     ///
     /// For an application that closes while the agent should keep working: on its schedule, say.
     /// The engine is told on its standard input, which is closed after. Its events keep coming
@@ -1312,7 +865,7 @@ public final class Lamp implements AutoCloseable {
     /// started, until it was left running.
     public boolean holds() { return holding; }
 
-    private void readEvents() {
+    void readEvents() {
         try (
             var output = new BufferedReader(new InputStreamReader(engine.getInputStream(), StandardCharsets.UTF_8))
         ) {
