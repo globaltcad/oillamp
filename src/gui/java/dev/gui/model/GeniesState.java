@@ -1,0 +1,305 @@
+package dev.gui.model;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.UnaryOperator;
+
+import sprouts.Tuple;
+
+/// Everything the Genies window shows, as one value.
+///
+/// The window is a function of this value. Every change, whether the user clicked something or
+/// a genie said something, is a method that returns a new one, and the window follows.
+///
+/// @param genies   every genie, in the order they were made
+/// @param selected the genie the chat shows. Refers to no genie while there are none
+/// @param settings the model settings every genie uses when it wakes
+/// @param page     what the main area shows
+/// @param environmentKey the key in `EDENAI_API_KEY` where Genies started, if any; kept here so
+///                 the settings can say whether it is there, and never shown
+/// @param genieList whether the list of genies is shown, hidden to make room in a narrow window;
+///                 and how tall it is in a narrow window, where it is above the genie
+/// @param narrow   whether the window is too narrow for the list and a conversation side by side
+/// @param lookUp   the models the service in the settings offered when last asked
+/// @param zoom     how large a genie's desktop is shown
+/// @param split    how the chat and a genie's desktop share the area
+/// @param area     the room the conversation, and the desktop beside it, have in the window
+/// @param now      the time the window shows things relative to, such as the schedule's timeline;
+///                 moved on every half minute
+/// @param troubles what went wrong unexpectedly since the user last looked, oldest first; at most
+///                 [#MOST_TROUBLES], the rest is in the error log
+/// @param ollama   Ollama on this computer, as Genies found it, and setting it up
+/// @param advanced whether the settings show the advanced way to a model: Eden AI, a server
+///                 elsewhere, or any model server on this computer. Otherwise they show the simple
+///                 way, Ollama set up by Genies
+public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings, Page page,
+                          Optional<String> environmentKey, Fold genieList, boolean narrow,
+                          ModelLookUp lookUp, DesktopZoom zoom, Split split, Area area, Instant now, Tuple<Trouble> troubles,
+                          OllamaSetup ollama, boolean advanced) {
+
+    /// A width and a height, in the window's own units.
+    public record Area(int width, int height) {}
+
+    /// What asking a model service for its models found.
+    ///
+    /// @param place   the place in the settings it was asked for
+    /// @param service the address it was asked at
+    /// @param models  the models it offers, by the names genies use for them, in alphabetical order
+    /// @param note    what happened, in a few words, such as how many were found or why none were
+    public record ModelLookUp(Settings.Place place, String service, Tuple<String> models, String note) {
+        public static final ModelLookUp NOT_YET = new ModelLookUp(Settings.Place.EDEN_AI, "", Tuple.of(String.class), "");
+
+        /// Whether this is the answer for the service the settings name now. After the place or
+        /// the address changed, it is not, and the settings do not offer its models.
+        public boolean isFor(Settings settings) {
+            return place == settings.place() && service.equals(settings.service());
+        }
+    }
+
+    /// The selected genie's chat, its schedule or its history, or the settings every genie shares.
+    public enum Page { CHAT, SCHEDULE, HISTORY, HOST_ACCESS, SETTINGS }
+
+    /// The selection when there is no genie.
+    public static final UUID NONE = new UUID(0, 0);
+
+    /// Without genies, the window starts with the settings, which welcome the user then. The
+    /// settings show the advanced way at first when that is what the genies use.
+    public static GeniesState of(Tuple<Genie> genies, Settings settings, Optional<String> environmentKey) {
+        return new GeniesState(genies, genies.isEmpty() ? NONE : genies.first().id(), settings,
+                               genies.isEmpty() ? Page.SETTINGS : Page.CHAT, environmentKey, new Fold(true, Fold.CLOSED.height()), false,
+                               ModelLookUp.NOT_YET, DesktopZoom.FIT, Split.PICKED, new Area(1030, 760), Instant.now(), Tuple.of(Trouble.class),
+                               OllamaSetup.NOT_YET, !settings.usesOllama());
+    }
+
+    public GeniesState withGenies(Tuple<Genie> genies) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withSelected(UUID selected)     { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withSettings(Settings settings) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withPage(Page page)             { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withGenieList(Fold genieList)   { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withZoom(DesktopZoom zoom)      { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withSplit(Split split)          { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withLookUp(ModelLookUp lookUp)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withNow(Instant now)            { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withOllama(OllamaSetup ollama)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+    public GeniesState withAdvanced(boolean advanced)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
+
+    /// How many troubles the window keeps.
+    public static final int MOST_TROUBLES = 20;
+
+    /// With `trouble` added, and the oldest gone once there are more than [#MOST_TROUBLES].
+    public GeniesState withTrouble(Trouble trouble) {
+        Tuple<Trouble> more = troubles.add(trouble);
+        Tuple<Trouble> kept = more.size() > MOST_TROUBLES ? more.removeFirst(more.size() - MOST_TROUBLES) : more;
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, kept, ollama, advanced);
+    }
+
+    /// Without the troubles the user has `seen`; the error log still has them. One that came
+    /// while they looked stays.
+    public GeniesState withoutTroubles(Tuple<Trouble> seen) {
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles.removeAll(seen), ollama, advanced);
+    }
+
+    /// Below this width, in the window's own units, the list of genies and a conversation do not
+    /// both fit.
+    static final int NARROW = 820;
+
+    /// Folds the window's width into the state, the only place a pixel enters it. Crossing into
+    /// narrow hides the list of genies, crossing back shows it; in between, the user shows and
+    /// hides it as they like. Leaving a width takes a margin of a tenth, so that dragging the
+    /// window's edge across the line does not flicker.
+    public GeniesState withViewWidth(int width) {
+        boolean nowNarrow = narrow ? width < NARROW * 1.1 : width < NARROW / 1.1;
+        if (nowNarrow == narrow) return this;
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList.withShown(!nowNarrow), nowNarrow, lookUp, zoom, split, area, now, troubles, ollama, advanced);
+    }
+
+    /// From this width of the conversation's area, a genie's desktop is shown beside the chat;
+    /// below it, under the chat.
+    public static final int SIDE_BY_SIDE_FROM = 660;
+
+    /// Folds the size of the conversation's area into the state, the only place a pixel of it
+    /// enters. Rounded to tens, so that dragging a window edge is a handful of changes, not one
+    /// per pixel.
+    public GeniesState withArea(int width, int height) {
+        Area rounded = new Area(width / 10 * 10, height / 10 * 10);
+        return rounded.equals(area) ? this : new GeniesState(genies, selected, settings, page, environmentKey,
+                                                            genieList, narrow, lookUp, zoom, split, rounded, now, troubles, ollama, advanced);
+    }
+
+    /// Below this width of the conversation's area, the header's buttons do not fit with their
+    /// words, and show only their signs.
+    static final int HEADER_WITH_WORDS_FROM = 900;
+
+    /// Below this width of the conversation's area, the header has no room for the switch between
+    /// a genie's pages, even with signs alone; the pages are in the genie's menu then.
+    static final int HEADER_WITH_PAGES_FROM = 580;
+
+    /// Whether the header shows its buttons with words, which needs more room than a narrow
+    /// window: the list of genies may take part of a window that is not narrow yet.
+    public boolean roomForWords() { return !narrow && area.width() >= HEADER_WITH_WORDS_FROM; }
+
+    /// Whether the header shows the switch between a genie's pages.
+    public boolean roomForPages() { return area.width() >= HEADER_WITH_PAGES_FROM; }
+
+    /// Whether the chat and the desktop fit side by side.
+    public boolean sideBySide() { return area.width() >= SIDE_BY_SIDE_FROM; }
+
+    /// Whether the selected genie's desktop is on screen: it is awake, and the user asked for it.
+    public boolean desktopOnScreen() { return genie().phase().isAwake() && genie().desktopShown(); }
+
+    /// How tall the chat is, and the desktop beside it: the area's height, but at least what the
+    /// chat needs, below which the area scrolls.
+    public int height() { return Math.max(Split.LEAST_CHAT, area.height()); }
+
+    /// How long the area is along the split between the chat and the desktop: its width with the
+    /// two side by side, its height with one under the other. A shorter area scrolls.
+    private int splitLength() { return Math.max(Split.SHORTEST, sideBySide() ? area.width() : area.height()); }
+
+    /// How long the chat is along the split: its width beside the desktop, its height above it.
+    public int chatPart() { return split.chat(splitLength(), sideBySide()); }
+
+    /// How long the desktop is along the split: what the chat and the grip leave of the area.
+    public int desktopPart() { return splitLength() - Split.GRIP - chatPart(); }
+
+    /// The user drags the grip between the chat and the desktop, to give the chat `part` of the
+    /// area's length. While they hold it, the desktop may get less than it needs.
+    public GeniesState withChatPart(int part) {
+        double share = part / (double) splitLength();
+        return withSplit(sideBySide() ? new Split(share, split.aboveShare(), true) : new Split(split.besideShare(), share, true));
+    }
+
+    /// The user let go of the grip between the chat and the desktop. With less than half the room
+    /// it needs, the desktop closes, and opens again as large as it was before that drag.
+    /// Otherwise the chat keeps the share the drag gave it, and Genies no longer picks one; a
+    /// desktop with less than it needs gets that much.
+    ///
+    /// @param before the split when the drag began
+    public GeniesState splitReleased(Split before) {
+        if (desktopPart() < Split.LEAST_DESKTOP / 2) return withSplit(before).withGenie(genie().withDesktopShown(false));
+        return withSplit(new Split(split.besideShare(), split.aboveShare(), false));
+    }
+
+    /// The genie the chat shows, or an empty stand-in when there is none, so the window always
+    /// has something to bind to.
+    public Genie genie() {
+        return find(selected).orElse(STAND_IN);
+    }
+
+    /// Writes the selected genie back. For the window's lenses; changes to a genie by id go
+    /// through [#update].
+    public GeniesState withGenie(Genie changed) {
+        return find(changed.id()).isPresent() ? update(changed.id(), ignored -> changed) : this;
+    }
+
+    public boolean hasGenies() { return !genies.isEmpty(); }
+
+    public Optional<Genie> find(UUID id) {
+        for (Genie genie : genies) if (genie.id().equals(id)) return Optional.of(genie);
+        return Optional.empty();
+    }
+
+    /// Changes one genie, if it still exists. Events from a genie's lamp arrive by id, and may
+    /// arrive after the user deleted it.
+    public GeniesState update(UUID id, UnaryOperator<Genie> change) {
+        return withGenies(genies.map(genie -> genie.id().equals(id) ? change.apply(genie) : genie));
+    }
+
+    /// Adds a genie and shows its chat.
+    public GeniesState add(Genie genie) {
+        return withGenies(genies.add(genie)).withSelected(genie.id()).withPage(Page.CHAT);
+    }
+
+    /// Removes a genie. The chat then shows the one before it; after the last, the settings
+    /// welcome the user again.
+    public GeniesState remove(UUID id) {
+        int index = indexOf(id);
+        if (index < 0) return this;
+        Tuple<Genie> rest = genies.removeAt(index);
+        UUID next = !selected.equals(id) ? selected
+                  : rest.isEmpty() ? NONE : rest.get(Math.max(0, index - 1)).id();
+        return withGenies(rest).withSelected(next).withPage(rest.isEmpty() ? Page.SETTINGS : page);
+    }
+
+    /// Shows genie `id`: its schedule, its history or its host access when another genie's is on
+    /// show, and its chat otherwise.
+    public GeniesState select(UUID id) {
+        boolean genies = page == Page.SCHEDULE || page == Page.HISTORY || page == Page.HOST_ACCESS;
+        return find(id).isPresent() ? withSelected(id).withPage(genies ? page : Page.CHAT) : this;
+    }
+
+    /// The selected genie's schedule, laid out around [#now].
+    public Timeline timeline() {
+        return Timeline.of(genie().schedule(), now);
+    }
+
+    /// [#now] on the clock of the selected genie's schedule.
+    public LocalDateTime localNow() {
+        return LocalDateTime.ofInstant(now, genie().schedule().zone());
+    }
+
+    /// What the settings say while genies are awake: which of their changes reach those genies
+    /// now, and which only when they next wake. Nothing when every genie sleeps.
+    public Optional<String> noteForAwakeGenies() {
+        if (!genies.any(genie -> genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) return Optional.empty();
+        return Optional.of("Genies that are awake answer with a new model from their next message on. "
+                         + "A new place, address or key reaches them when they next wake, and so does "
+                         + "everything for a genie that kept running while Genies was closed.");
+    }
+
+    /// The settings are asking the service they name for its models.
+    public GeniesState askingForModels() {
+        Tuple<String> known = lookUp.isFor(settings) ? lookUp.models() : Tuple.of(String.class);
+        return withLookUp(new ModelLookUp(settings.place(), settings.service(), known, "Asking for the models…"));
+    }
+
+    /// The models the service at `service`, for `place`, offered. If that is still the service
+    /// the settings name, and no model was chosen there yet, the first one is.
+    public GeniesState modelsFound(Settings.Place place, String service, Tuple<String> found) {
+        Tuple<String> models = found.sort(String.CASE_INSENSITIVE_ORDER);
+        String note = models.isEmpty()
+                        ? (place == Settings.Place.EDEN_AI ? "Eden AI offers no models in the EU just now."
+                           : "The model server offers no models yet; pull one first, such as `ollama pull qwen2.5:7b`.")
+                    : place == Settings.Place.EDEN_AI ? "Eden AI offers " + models.size() + " models in the EU."
+                    : models.size() == 1 ? "The model server offers one model."
+                    : "The model server offers " + models.size() + " models.";
+        ModelLookUp answer = new ModelLookUp(place, service, models, note);
+        Settings chosen = answer.isFor(settings) && settings.model().isBlank() && !models.isEmpty()
+                ? settings.withModel(models.first()) : settings;
+        return withSettings(chosen).withLookUp(answer);
+    }
+
+    /// Asking the service at `service`, for `place`, for its models failed, for the reason given.
+    public GeniesState modelsNotFound(Settings.Place place, String service, String why) {
+        return withLookUp(new ModelLookUp(place, service, Tuple.of(String.class), why));
+    }
+
+    /// Ollama is set up with the model `model`, as Ollama names it, and the genies use it from
+    /// now on, as Genies prepared it for them.
+    public GeniesState usingOllama(String model) {
+        return withSettings(settings.withPlace(Settings.Place.THIS_MACHINE)
+                                    .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, OllamaSetup.PREFIX + model)))
+              .withOllama(ollama.at(OllamaSetup.Step.IDLE, 0, ""));
+    }
+
+    /// Why genies cannot reach their model with the current settings, or nothing.
+    public Optional<String> settingsProblem() {
+        return settings.problem(environmentKey);
+    }
+
+    /// A name for a new genie that no other genie has yet.
+    public String freshName() {
+        for (int number = genies.size() + 1; ; number++) {
+            String name = "Genie " + number;
+            if (genies.stream().noneMatch(genie -> genie.name().equals(name))) return name;
+        }
+    }
+
+    private int indexOf(UUID id) {
+        for (int i = 0; i < genies.size(); i++) if (genies.get(i).id().equals(id)) return i;
+        return -1;
+    }
+
+    private static final Genie STAND_IN = Genie.asleep(NONE, "");
+}

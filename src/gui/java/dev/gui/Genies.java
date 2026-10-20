@@ -1,0 +1,572 @@
+package dev.gui;
+
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import dev.gui.desktop.Desktop;
+import dev.gui.genie.GenieRunner;
+import dev.gui.genie.LampLighter;
+import dev.gui.genie.Lighter;
+import dev.gui.genie.OllamaKeeper;
+import dev.gui.genie.Shelf;
+import dev.gui.model.Conversation;
+import dev.gui.model.Conversations;
+import dev.gui.model.Genie;
+import dev.gui.model.GeniesState;
+import dev.gui.model.History;
+import dev.gui.model.OllamaSetup;
+import dev.gui.model.Settings;
+import dev.gui.view.Actions;
+import dev.gui.view.GeniesView;
+import dev.lamp.ExitStatus;
+import dev.lamp.Lamp;
+import dev.lamp.LampEvent;
+
+import sprouts.From;
+import sprouts.Tuple;
+import sprouts.Val;
+import sprouts.Var;
+import sprouts.Viewable;
+
+import swingtree.UI;
+import swingtree.components.JGlassPane;
+import swingtree.dialogs.ConfirmAnswer;
+
+/// Genies: a chat app whose every conversation partner is an AI agent with a sandboxed Linux
+/// desktop of its own, a "genie" living in an oillamp lamp.
+///
+/// It is also what oillamp's embedding API, [Lamp], was made for, used the way any application
+/// would use it: this package imports `dev.lamp` and never `dev.oillamp`.
+///
+/// This class holds the app together. The window ([GeniesView]) draws one [GeniesState] and
+/// asks for everything else through [Actions]; each genie's [GenieRunner] reports what happens
+/// as changes to its genie, which are applied here, on Swing's event thread, one at a time.
+public final class Genies implements Actions {
+
+    /// How long closing or deleting waits for a genie's lamp to go out or be let go.
+    private static final long SECONDS_TO_LET_GO_OF_A_LAMP = 180;
+
+    /// What setting up Ollama says once the user stopped it.
+    private static final String STOPPED = "Stopped. What was downloaded of a model is kept, and getting it again goes on from there.";
+
+    private final Var<GeniesState> state;
+    private final Shelf shelf;
+    private final Lighter lighter;
+    private final OllamaKeeper ollama;
+    private final Map<UUID, GenieRunner> runners = new ConcurrentHashMap<>();
+    /// The thread setting up Ollama, while one does; only touched on Swing's event thread.
+    private Optional<Thread> settingUp = Optional.empty();
+    /// Whether the user stopped setting up Ollama. A download that is cut short may fail rather
+    /// than notice that it was interrupted, and is no failure then.
+    private volatile boolean stopping = false;
+    /// Each genie's id and name. Kept as a field: when it changes, the genies are put on the
+    /// shelf, and a view nobody holds would be forgotten.
+    private final Val<Tuple<String>> names;
+    /// The page on show. Kept as a field for the same reason: leaving the settings keeps them.
+    private final Val<GeniesState.Page> page;
+    /// The place the settings on show name, or nothing while they are not on show. Kept as a
+    /// field for the same reason: opening the settings, or choosing another place, asks that
+    /// place for its models.
+    private final Val<String> placeShown;
+    /// The genie whose schedule is on show, or [GeniesState#NONE]. Kept as a field for the same
+    /// reason: a schedule is read from its lamp when it comes on show.
+    private final Val<UUID> scheduleShown;
+    /// The genie whose history is on show, or [GeniesState#NONE]. Kept as a field for the same
+    /// reason: a history is read from its lamp when it comes on show.
+    private final Val<UUID> historyShown;
+    /// The genie whose host access is on show, or [GeniesState#NONE]. Kept as a field for the
+    /// same reason: the host access is read from its lamp when it comes on show.
+    private final Val<UUID> hostAccessShown;
+
+    Genies(Var<GeniesState> state, Shelf shelf, Lighter lighter, OllamaKeeper ollama) {
+        this.state = state;
+        this.shelf = shelf;
+        this.lighter = lighter;
+        this.ollama = ollama;
+        this.names = state.viewAs(Tuple.classTyped(String.class),
+                it -> it.genies().mapTo(String.class, genie -> genie.id() + " " + genie.name()));
+        Viewable.cast(names).onChange(From.ALL, it -> keepGenies());
+        // The settings are kept however the user leaves them: with Done, or by clicking a genie.
+        this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
+        // Shown, they look again whether Ollama is there, and what it has.
+        Viewable.cast(page).onChange(From.ALL, it -> {
+            if (it.currentValue().orElseNull() != GeniesState.Page.SETTINGS) {
+                keepSettings();
+                useTheSettingsModel();
+            }
+            else lookForOllama();
+        });
+        this.placeShown = state.viewAsString(it -> it.page() == GeniesState.Page.SETTINGS ? it.settings().place().name() : "");
+        Viewable.cast(placeShown).onChange(From.ALL, it -> {
+            if (!it.currentValue().orElse("").isEmpty()) lookUpModels();
+        });
+        this.scheduleShown = state.viewAs(UUID.class, it -> it.page() == GeniesState.Page.SCHEDULE ? it.selected() : GeniesState.NONE);
+        Viewable.cast(scheduleShown).onChange(From.ALL, it -> {
+            UUID shown = it.currentValue().orElse(GeniesState.NONE);
+            if (!shown.equals(GeniesState.NONE)) runner(shown).schedule().read();
+        });
+        this.historyShown = state.viewAs(UUID.class, it -> it.page() == GeniesState.Page.HISTORY ? it.selected() : GeniesState.NONE);
+        Viewable.cast(historyShown).onChange(From.ALL, it -> {
+            UUID shown = it.currentValue().orElse(GeniesState.NONE);
+            // The schedule too, whose jobs give their runs' moments their titles.
+            if (!shown.equals(GeniesState.NONE)) {
+                runner(shown).history().read();
+                runner(shown).schedule().read();
+            }
+        });
+        this.hostAccessShown = state.viewAs(UUID.class, it -> it.page() == GeniesState.Page.HOST_ACCESS ? it.selected() : GeniesState.NONE);
+        Viewable.cast(hostAccessShown).onChange(From.ALL, it -> {
+            UUID shown = it.currentValue().orElse(GeniesState.NONE);
+            if (!shown.equals(GeniesState.NONE)) runner(shown).hostAccess().read();
+        });
+    }
+
+    public static void main(String[] args) {
+        // Before anything logs, so that SwingTree's errors reach the error log too.
+        System.setProperty("slf4j.provider", LoggedErrors.class.getName());
+        Shelf shelf = Shelf.standard(name -> Optional.ofNullable(System.getenv(name)));
+        ErrorLog errors = new ErrorLog(shelf.errorLog());
+        Thread.setDefaultUncaughtExceptionHandler(errors);
+        GeniesView.setUpLook();
+        SwingUtilities.invokeLater(() -> open(shelf, errors));
+    }
+
+    private static void open(Shelf shelf, ErrorLog errors) {
+        Optional<String> environmentKey = Optional.ofNullable(System.getenv(Settings.KEY_VARIABLE)).filter(key -> !key.isBlank());
+        OllamaKeeper ollama = new OllamaKeeper(shelf.ollama());
+        // The first time, the genies' model is where this computer has one: Ollama, if it is
+        // installed; otherwise Eden AI, if a key for it was found; otherwise Ollama, which
+        // Genies installs then.
+        Settings settings = shelf.hasSettings() ? shelf.settings()
+                : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
+                                             ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
+        Genies app = new Genies(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
+                                shelf, new LampLighter(), ollama);
+        JFrame frame = new JFrame("Genies");
+        new JGlassPane(frame.getRootPane());
+        GeniesView view = new GeniesView(app.state, app);
+        errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
+        frame.setContentPane(view);
+        frame.setIconImage(GeniesView.windowIcon());
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent event) { app.quit(frame, view); }
+        });
+        // The tree of conversations under each genie is there before any genie wakes, and so is
+        // whether it may reach this computer, which its card says. A genie left running when
+        // Genies last closed is awake again.
+        app.state.get().genies().forEach(genie -> {
+            app.runner(genie.id()).reloadConversations();
+            app.runner(genie.id()).hostAccess().read();
+            app.rejoin(genie.id());
+        });
+        app.lookForOllama();
+        // The timeline, and anything else said relative to now, moves on with the clock.
+        new Timer(30_000, tick -> app.state.update(it -> it.withNow(Instant.now()))).start();
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+    }
+
+    /// What the user is asked on closing Genies with `awake`, the names of the genies awake. On two
+    /// lines, since a dialog does not wrap its text.
+    static String awakeQuestion(List<String> awake) {
+        boolean one = awake.size() == 1;
+        String names = one ? awake.getFirst()
+                : String.join(", ", awake.subList(0, awake.size() - 1)) + " and " + awake.getLast();
+        String them = one ? "it" : "them";
+        return names + (one ? " is" : " are") + " awake. Put " + them + " to sleep, or keep " + them
+                + " running in the background?\nKept running, "
+                + (one ? "it finishes what it is doing and keeps to its" : "they finish what they are doing and keep to their")
+                + " schedule, and Genies finds " + them + " again when it opens.";
+    }
+
+    // ─── actions ───────────────────────────────────────────────────────────────────────────
+
+    @Override public Path errorLog() { return shelf.errorLog(); }
+
+    /// A new genie wakes at once, as a new chat is ready at once elsewhere.
+    @Override public void newGenie() {
+        Genie genie = Genie.named(state.get().freshName());
+        state.update(From.VIEW, it -> it.add(genie));
+        wake(genie.id());
+    }
+
+    @Override public void wake(UUID id) {
+        GeniesState now = state.get();
+        Optional<String> problem = now.settingsProblem();
+        Optional<String> key = now.settings().keyFrom(now.environmentKey());
+        if (problem.isPresent() || key.isEmpty()) {
+            String why = problem.orElse("There is no model key.");
+            state.update(From.VIEW, it -> it.update(id, genie -> genie.withTranscript(genie.transcript().problem(why)))
+                                             .withPage(GeniesState.Page.SETTINGS));
+            return;
+        }
+        // Ollama may have ended since, as when the computer restarted. It starts in less time
+        // than a lamp does.
+        if (now.settings().usesOllama()) Thread.ofVirtual().name("start ollama").start(() -> {
+            try {
+                ollama.start();
+            } catch (IOException failed) {
+                report(new IOException("could not start Ollama for the genies", failed));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        now.find(id).ifPresent(genie -> runner(id).wake(genie.name(), now.settings(), key.get(),
+                conversationShown(genie), leafShown(genie)));
+    }
+
+    @Override public void goTo(UUID id, String conversation, String leaf) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty()) return;
+        state.update(From.VIEW, it -> it.select(id));
+        switch (genie.get().phase()) {
+            // Conversations are read from the lamp, so a sleeping genie's can be read too, and a
+            // working genie's answer is kept aside while the user reads another.
+            case READY, WORKING, ASLEEP, BROKEN -> runner(id).goToConversation(conversation, leaf);
+            case WAKING -> { }   // The tree does not move while the genie wakes.
+        }
+    }
+
+    @Override public void startAfresh(UUID id) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty()) return;
+        state.update(From.VIEW, it -> it.select(id));
+        if (genie.get().phase() != Genie.Phase.WORKING) runner(id).startAfresh();
+    }
+
+    @Override public void forget(UUID id, String conversation) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty()) return;
+        // A sleeping genie that was in it wakes in its newest conversation instead; an awake one
+        // is moved to a new conversation by its runner first.
+        if (!genie.get().phase().isAwake() && genie.get().conversations().here().file().equals(conversation))
+            state.update(From.VIEW, it -> it.update(id, sleeping -> sleeping.withConversations(
+                    sleeping.conversations().withHere(Conversations.Here.UNKNOWN))));
+        runner(id).forgetConversation(conversation);
+    }
+
+    @Override public void askInstead(String question, String text) {
+        Genie genie = state.get().genie();
+        if (text.isBlank() || genie.phase() != Genie.Phase.READY) return;
+        state.update(From.VIEW, it -> it.update(genie.id(), g -> g.askInstead(question, text)));
+        runner(genie.id()).askInstead(question, text.strip());
+    }
+
+    @Override public void sleep(UUID id) {
+        Optional.ofNullable(runners.get(id)).ifPresent(GenieRunner::sleep);
+    }
+
+    /// Waits one turn of Swing's event thread first: a text field hands its latest text to the
+    /// draft on the next turn, so a message sent in the same turn as the last keystroke or a
+    /// paste would lose it.
+    @Override public void send() {
+        SwingUtilities.invokeLater(this::sendDraft);
+    }
+
+    private void sendDraft() {
+        Genie genie = state.get().genie();
+        if (!genie.canSend()) return;
+        String text = genie.draft().strip();
+        state.update(From.VIEW, it -> it.update(genie.id(), Genie::send));
+        runner(genie.id()).sendMessage(text);
+    }
+
+    @Override public void stop(UUID id) {
+        Optional.ofNullable(runners.get(id)).ifPresent(GenieRunner::stopAnswering);
+    }
+
+    /// The genie leaves the window at once; its lamp is put out and removed in the background.
+    @Override public void delete(UUID id) {
+        GenieRunner runner = runners.remove(id);
+        state.update(From.VIEW, it -> it.remove(id));
+        Path lamp = shelf.lampOf(id);
+        Thread.ofVirtual().name("delete genie").start(() -> {
+            try {
+                if (runner != null) runner.sleepAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                if (!Files.exists(lamp)) return;
+                StringBuilder why = new StringBuilder();
+                ExitStatus removed = Lamp.at(lamp).onEvent(event -> {
+                    if (event instanceof LampEvent.Failure failure) why.append(failure.problem().whatHappened());
+                }).remove();
+                if (removed != ExitStatus.SUCCESS)
+                    report(new IOException("could not remove the lamp at " + lamp + ": " + why));
+            } catch (IOException | InterruptedException failed) {
+                report(new IOException("could not remove the lamp at " + lamp, failed));
+            }
+        });
+    }
+
+    @Override public void giveFile(UUID id, Path file) { runner(id).giveFile(file); }
+
+    @Override public void saveOutboxFile(UUID id, String name, Path target) { runner(id).saveOutboxFile(name, target); }
+
+    // ─── the schedule ──────────────────────────────────────────────────────────────────────
+
+    @Override public void saveJob(UUID id) {
+        state.get().find(id).ifPresent(genie -> genie.schedule().draft().ifPresent(draft -> {
+            ZoneId zone = genie.schedule().zone();
+            runner(id).schedule().save(draft, LocalDateTime.now(zone), zone);
+        }));
+    }
+
+    @Override public void removeJob(UUID id, String job) { runner(id).schedule().remove(job); }
+
+    @Override public void switchJob(UUID id, String job, boolean on) { runner(id).schedule().switchJob(job, on); }
+
+    @Override public void pauseSchedule(UUID id, boolean paused) { runner(id).schedule().pause(paused); }
+
+    @Override public void stopRun(UUID id, String run) {
+        Optional.ofNullable(runners.get(id)).ifPresent(runner -> runner.stopRun(run));
+    }
+
+    // ─── the history ───────────────────────────────────────────────────────────────────────
+
+    @Override public void save(UUID id, String message) { runner(id).history().save(message); }
+
+    /// Not while the genie wakes or works, which going back would cut short. Waking it again
+    /// afterwards waits until it went back: the runner does one thing after the other.
+    @Override public void goBack(UUID id, String moment) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty() || genie.get().phase() == Genie.Phase.WAKING || genie.get().phase() == Genie.Phase.WORKING) return;
+        Optional<History.Moment> target = genie.get().history().find(moment);
+        if (target.isEmpty()) return;
+        runner(id).goBackTo(target.get());
+        if (genie.get().phase().isAwake()) wake(id);
+    }
+
+    // ─── the host access ───────────────────────────────────────────────────────────────────
+
+    /// Not while the genie is awake or waking: its lamp read the file as it woke.
+    @Override public void saveHostAccess(UUID id) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty() || genie.get().phase().isAwake() || genie.get().phase() == Genie.Phase.WAKING) return;
+        runner(id).hostAccess().save(genie.get().hostAccess().draft());
+    }
+
+    @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }
+
+    /// While the genie wakes, the chat stays where it is, as the tree does.
+    @Override public void openConversation(UUID id, String conversation) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty()) return;
+        state.update(From.VIEW, it -> it.select(id).withPage(GeniesState.Page.CHAT));
+        if (genie.get().phase() != Genie.Phase.WAKING) runner(id).openConversation(conversation);
+    }
+
+    /// Leaving the page keeps the settings.
+    @Override public void settingsDone() {
+        state.update(From.VIEW, it -> it.withPage(GeniesState.Page.CHAT));
+    }
+
+    /// Asks the service the settings name for its models, off Swing's event thread, the way the
+    /// genies' lamps will ask it, with the same key.
+    @Override public void lookUpModels() {
+        Settings settings = state.get().settings();
+        Settings.Place place = settings.place();
+        String service = settings.service();
+        Optional<String> key = settings.listingKeyFrom(state.get().environmentKey());
+        state.update(From.VIEW, GeniesState::askingForModels);
+        Thread.ofVirtual().name("look up models").start(() -> {
+            try {
+                List<String> found = key.isPresent() ? Lamp.models(URI.create(service), key.get())
+                                                     : Lamp.models(URI.create(service));
+                SwingUtilities.invokeLater(() -> state.update(it -> it.modelsFound(place, service, Tuple.of(String.class, found))));
+            } catch (IOException | IllegalArgumentException failed) {
+                String why = Optional.ofNullable(failed.getMessage()).orElse(failed.toString());
+                SwingUtilities.invokeLater(() -> state.update(it -> it.modelsNotFound(place, service, why)));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// Sets up Ollama with the model wanted, off Swing's event thread: whatever is left of
+    /// installing Ollama, starting it, downloading the model, preparing it for genies and trying
+    /// it. Then the genies use it, and the settings are kept.
+    @Override public void setUpOllama() {
+        String model = state.get().ollama().wanted().strip();
+        if (model.isEmpty() || state.get().ollama().step().isBusy()) return;
+        stopping = false;
+        state.update(From.VIEW, it -> it.withOllama(it.ollama().at(OllamaSetup.Step.STARTING, 0, "Looking at what is left to do…")));
+        settingUp = Optional.of(Thread.ofVirtual().name("set up ollama").start(() -> {
+            try {
+                OllamaSetup.Found found = ollama.look();
+                if (!found.isInstalled() && !found.isRunning()) {
+                    step(OllamaSetup.Step.INSTALLING, 0, "Downloading Ollama…");
+                    ollama.install((done, says) -> step(OllamaSetup.Step.INSTALLING, done, says));
+                }
+                if (!found.isRunning()) {
+                    step(OllamaSetup.Step.STARTING, 0, "Starting Ollama…");
+                    ollama.start();
+                }
+                if (!found.has(model)) {
+                    step(OllamaSetup.Step.DOWNLOADING, 0, "Downloading " + model + "…");
+                    ollama.pull(model, (done, says) -> step(OllamaSetup.Step.DOWNLOADING, done, says));
+                }
+                step(OllamaSetup.Step.PREPARING, 0, "Preparing " + model + " for genies…");
+                ollama.prepare(model);
+                step(OllamaSetup.Step.TRYING, 0, "Trying " + model + ". Its first answer loads it, which can take a few minutes…");
+                ollama.tryOut(OllamaSetup.PREFIX + model);
+                SwingUtilities.invokeLater(() -> {
+                    state.update(it -> it.usingOllama(model));
+                    keepSettings();
+                });
+            } catch (IOException failed) {
+                if (stopping) step(OllamaSetup.Step.IDLE, 0, STOPPED);
+                else step(OllamaSetup.Step.FAILED, 0, Optional.ofNullable(failed.getMessage()).orElse(failed.toString()));
+            } catch (InterruptedException stopped) {
+                step(OllamaSetup.Step.IDLE, 0, STOPPED);
+            }
+            SwingUtilities.invokeLater(() -> {
+                settingUp = Optional.empty();
+                lookForOllama();
+            });
+        }));
+    }
+
+    @Override public void stopSettingUp() {
+        stopping = true;
+        settingUp.ifPresent(Thread::interrupt);
+    }
+
+    @Override public Optional<Desktop> desktopOf(UUID id) {
+        return Optional.ofNullable(runners.get(id)).flatMap(GenieRunner::desktop);
+    }
+
+    // ─── the rest ──────────────────────────────────────────────────────────────────────────
+
+    /// Looks, off Swing's event thread, whether Ollama is installed and runs, and what it and the
+    /// computer have.
+    private void lookForOllama() {
+        Thread.ofVirtual().name("look for ollama").start(() -> {
+            try {
+                OllamaSetup.Found found = ollama.look();
+                SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().found(found, it.settings()))));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// Shows how far setting up Ollama is.
+    private void step(OllamaSetup.Step step, double done, String says) {
+        SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().at(step, done, says))));
+    }
+
+    private GenieRunner runner(UUID id) {
+        return runners.computeIfAbsent(id, genie -> new GenieRunner(shelf.lampOf(genie), lighter,
+                change -> SwingUtilities.invokeLater(() -> state.update(it -> it.update(genie, change)))));
+    }
+
+    /// Hands `failed` to the error log, which is this thread's uncaught exception handler, so the
+    /// user sees it, and goes on.
+    private static void report(Exception failed) {
+        Thread thread = Thread.currentThread();
+        thread.getUncaughtExceptionHandler().uncaughtException(thread, failed);
+    }
+
+    private void keepSettings() {
+        try {
+            shelf.keep(state.get().settings());
+        } catch (IOException failed) {
+            report(new IOException("could not keep the settings in " + shelf.root(), failed));
+        }
+    }
+
+    private void keepGenies() {
+        try {
+            shelf.keep(state.get().genies());
+        } catch (IOException failed) {
+            report(new IOException("could not keep the genies in " + shelf.root(), failed));
+        }
+    }
+
+    /// Joins the genie's lamp if it was left running, and shows it where it was. The lamp keeps
+    /// the model it was lit with until the genie next wakes: Genies cannot know which service
+    /// and key it was lit with, and a model from another place would fail there.
+    private void rejoin(UUID id) {
+        state.get().find(id).ifPresent(genie -> runner(id).rejoin(conversationShown(genie), leafShown(genie)));
+    }
+
+    /// Every awake genie whose lamp reaches the settings' service with their key answers with
+    /// the settings' model from its next message on, in whatever conversation, without its lamp
+    /// going out. Any other awake genie gets all the new settings when it next wakes; the
+    /// settings say so.
+    private void useTheSettingsModel() {
+        GeniesState now = state.get();
+        String key = now.settings().keyFrom(now.environmentKey()).orElse("");
+        for (GenieRunner runner : runners.values()) runner.useModel(now.settings(), key);
+    }
+
+    /// The file of the conversation the genie was last in, or empty for its most recent one.
+    private static String conversationShown(Genie genie) {
+        return genie.conversations().current().map(Conversation::file).orElse("");
+    }
+
+    /// The entry the genie's chat was last at, or empty for where its conversation stands.
+    private static String leafShown(Genie genie) {
+        return genie.conversations().current().isPresent() ? genie.conversations().here().leaf() : "";
+    }
+
+    /// Asks the user what becomes of the genies that are awake, then puts them to sleep or leaves
+    /// them running, before the window goes. Without an answer, nothing closes. (If Genies is
+    /// killed instead, the lamps end by themselves: each notices its application is gone.)
+    private void quit(JFrame frame, GeniesView view) {
+        List<String> awake = new ArrayList<>();
+        for (Genie genie : state.get().genies())
+            if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING) awake.add(genie.name());
+        boolean leaveRunning = false;
+        if (!awake.isEmpty()) {
+            ConfirmAnswer answer = UI.confirmation(awakeQuestion(awake))
+                    .titled("Genies are awake").yesOption("Put to sleep").noOption("Keep running")
+                    .cancelOption("Cancel").parent(frame).show();
+            if (answer.isCancelOrClose()) return;
+            leaveRunning = answer.isNo();
+        }
+        boolean keep = leaveRunning;
+        frame.setTitle(keep ? "Genies — leaving the genies running…" : "Genies — putting the genies to sleep…");
+        keepGenies();
+        keepSettings();
+        // A desktop shown at the size of the panel gets its own size back, for the genie that
+        // goes on without the panel. A genie put to sleep takes its desktop with it.
+        Optional<Thread> givingBack = keep ? view.letGoOfTheDesktop() : Optional.empty();
+        Thread.ofVirtual().name("quit").start(() -> {
+            try {
+                if (givingBack.isPresent()) givingBack.get().join();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            for (GenieRunner runner : runners.values()) {
+                try {
+                    if (keep) runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                    else runner.sleepAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            SwingUtilities.invokeLater(() -> {
+                frame.dispose();
+                System.exit(0);
+            });
+        });
+    }
+}

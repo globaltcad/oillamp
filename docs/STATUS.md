@@ -1,6 +1,6 @@
 # Status
 
-Version 0.2.0, as of 29 September 2026.
+Version 0.3.0, as of 8 October 2026.
 
 This page says what works, what has been checked on a real machine, and where the code and the
 configuration do not yet match. Keep it current: when you close a gap, remove it here; when you
@@ -36,7 +36,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp at <dir> --no-install` | Works. Reports missing packages instead of installing them. |
 | `oillamp at <dir> --no-viewer` | Works. |
 | `oillamp at <dir> --no-windows` | Works in the simulated scenarios. No window opens and no display is needed; the session ends as usual. Not yet tried under a real tmux. |
-| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does, and the harness's commands were checked against real pi 1.3.0 with a stand-in model service (see "Runs and the schedule"). Not yet tried in a real session. Also `Lamp.Starting.model`. |
+| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does; the harness's commands were checked against real pi 1.3.0 with a stand-in model service, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `Lamp.Starting.model`. |
 | `oillamp at <dir> --embedded` | Works in the simulated scenarios, also driven through `dev.lamp.Lamp`. No window opens; the session ends when standard input closes, unless the application wrote `leave-running` first. Not yet tried with a real application. |
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
@@ -273,6 +273,39 @@ started as a separate process from the test's own classpath, as an application w
 | one lamp closed | it ends cleanly; the other keeps running and answering |
 | the same lamp opened a second time | refused with `OIL-LOCK-001` and exit 4; the running one is unaffected |
 
+### Genies, a chat app on lamps
+
+`RunningARealGenieSpec` and `UsingGeniesForRealSpec` (spikes) run [Genies](GENIES.md) without its
+window against real lamps, with a real Eden AI key (checked on 2026-09-28):
+
+| Check | Result |
+|---|---|
+| a new genie wakes by itself: its lamp is lit through `dev.lamp`, pi starts in RPC mode | yes; the image was already built, so waking took seconds |
+| its desktop over its own VNC client, against the real wayvnc | no password asked, full screen drawn |
+| a file given to the genie | arrives in `~/inbox` |
+| a message, answered through the model relay; a tool call writing `~/outbox/hello.txt` | the answer streams in; the file is announced and saved on the host where asked, unchanged |
+| the genie put to sleep and woken again | the conversation comes back from pi |
+| a conversation that forked, put into the genie's home; the genie sent to one branch, then the other (checked on 2026-09-29) | pi 0.87.1 starts with Genies' extension and moves; the chat shows the way to each branch, and the tree marks it. The image rebuilt itself with the extension in seconds |
+| deleting the genie | its lamp is removed through the engine; nothing left |
+| the key in the spikes' output | never |
+
+The window was driven for real on 2026-09-28: a small program clicked its buttons, typed into it
+and painted it into images, against a real lamp. A new genie woke from one click; a message typed
+and sent with return was answered, and the file the genie wrote was announced with a Save button;
+with Desktop pressed, the genie opened a terminal running `htop` on its desktop and the window showed
+it live; Sleep and Delete left no container and no lamp. That run found three bugs the scenarios had
+not, all fixed: rows in the list and the chat were not redrawn when their genie or answer changed; a
+message sent right after typing could go out before the draft had the last keystroke; and a message
+sent while pi was still starting was replaced by the conversation pi sent back late. The window has
+not yet been used by a person.
+
+The desktop at the size of its panel was checked the same way on 2026-10-02, against a real lamp
+with Firefox in kiosk mode on its desktop: the page filled the panel exactly (it said 644 × 728,
+the size the bar showed), a narrow window gave it 614 × 328, Fit and closing the panel gave the
+desktop its own 1920 × 1080 back, and so did closing Genies with the genie kept running. On a
+recorded lamp, the bar said the desktop keeps its size, the desktop was drawn fitted, and the
+recorder logged no error.
+
 ### Desktop, recording, GPU
 
 - `lamp info`, `screenshot`, `type`, `key` and `wait-stable` work against the real desktop.
@@ -294,6 +327,11 @@ started as a separate process from the test's own classpath, as an application w
 - Recording: `wf-recorder --framerate=10 -p crf=30` produced a 10 fps file (checked with
   `ffprobe`), and its duration matched the session within 1.6 s.
 - `oillamp recordings`, `--open` (played in VLC) and `--prune` work on real infra-owned files.
+- The desktop takes the size a viewer asks for. The desktop spike asks wayvnc for 640 × 400:
+  `lamp info` says so, a fullscreen window has that size, and a floating window near the corner is
+  moved onto the smaller screen at the size it had; asked for 1280 × 720 again, the floating window
+  is back exactly where it was. On a recorded desktop wayvnc answers "not allowed", keeps serving
+  the viewer, and the recorder logs nothing (checked on 2026-10-01).
 
 ### Packaging
 
@@ -327,6 +365,9 @@ design prepared was needed.
 | pi and opencode reach Eden AI only through its EU endpoint | confirmed in a real sandbox, with the host pointing `EDENAI_BASE_URL` at the global endpoint: both answered through `api.eu.edenai.run`, offered its 270 models, and the proxy refused `api.edenai.run` |
 | Terminal argument templates | confirmed only for the terminals on the development machine |
 | wayvnc can set the viewer's window title | not checked; cosmetic |
+| wayvnc 0.9.1 gives a headless screen the size a viewer asks for (RFB's ExtendedDesktopSize) | confirmed: it answers "passed on to the compositor", and reports the new size once sway has made it, while a viewer is connected |
+| wf-recorder survives a change of the screen's size | **refuted**; see the lessons below |
+| wayvnc reads a "set desktop size" message that arrives in pieces | **refuted**: it dropped the viewer ("uninterpretable qemu message"), and on a recorded desktop the whole desktop crashed. Genies sends it in one write |
 
 ---
 
@@ -434,10 +475,10 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - Saving or restoring a home with hundreds of thousands of files, such as several `node_modules`.
 - The Genies app has no buttons for the history yet; `dev.lamp.Lamp` offers `save`, `history` and
   `restore`.
-- Genies still starts its own pi, and does not use the session's. A lamp that Genies holds and
-  that has jobs on its schedule runs two pis in one home. The Lamp API now has what Genies needs
-  (`conversations`, `send` with a `Question`, `RunProgress`, `cancel`, `agentStatus`); Genies does
-  not use it yet.
+- Genies now goes through the Lamp API only; that is tested against the engine on a simulated
+  machine, with a stand-in pi. Not yet tried in the real app with a real lamp.
+- Genies' schedule page was checked by drawing it offscreen at several window widths, and its
+  reading and changing against the engine on a simulated machine; not yet used in the real app.
 - The scheduling tools are pi's only. Another harness in the sandbox, such as opencode, has none.
 - The session writes its model and instructions into pi's files without following links, through
   Java's `SecureDirectoryStream`. That is tested on Linux, the only system oillamp runs on; a
@@ -445,10 +486,13 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - A session started without `--model` leaves the model to pi: its default for a new
   conversation, and the conversation's own model for an old one. A lamp whose pi has no default
   model, or one the model service refuses, fails every run, and says so. With `--model`, every run
-  is answered by that model; that is tested against a stand-in pi, and pi's side of it against
-  real pi, but not yet in a real session. Genies does not give its lamps a model this way yet; it
-  still writes the model into pi's settings only, so its old conversations stay on their first
-  model.
+  is answered by that model; that is tested against a stand-in pi, against real pi, and once in a
+  real sandbox with Eden AI (see "Runs and the schedule"). `oillamp model` and `Lamp.useModel` on a
+  running session are tested against a stand-in pi only.
+- Genies gives its lamps the settings' model and the genie's instructions through the Lamp API
+  only, changes the model on awake genies with `Lamp.useModel`, and shows which model wrote an
+  answer on hover. That is tested against the engine on a simulated machine, with a stand-in pi,
+  not yet in the real app with a real lamp.
 
 - Ubuntu 26.04, and any distribution other than Ubuntu 24.04.
 - A Java Swing modal dialog on the sandbox desktop. (A Swing window works; see the lessons table.)
@@ -496,6 +540,7 @@ the code that would otherwise look unnecessary.
 | `lamp click` never clicked where it was told, and its clicks reached no window, in Swing or anywhere else. `lamp type` lost the first key in X11 applications. | `wlrctl pointer move` is relative, and each `wlrctl` call's virtual mouse disappears when it exits, taking pointer focus with it. Each `wtype` call sends a new keyboard layout, and Xwayland drops the key that comes with it. The earlier check only confirmed that `wlrctl` accepted the commands. | Pointer input goes through the desktop's VNC server (`lamp-pointer`), keyboard input waits 150 ms before the first key. A spike clicks and types into a real X11 application and checks what it received. |
 | The new click-and-type spike failed on its first run although `lamp` worked. | The scenario before it leaves a terminal open, sway tiles the windows side by side, and the fixed click position was on the terminal. | The scenario asks X11 where the test window is and clicks its centre. |
 | A 403 sometimes arrived without the sentence naming the rule. | Head and body were written separately; some clients read once. | One write. |
+| After a viewer changed the desktop's size, the recording froze on its last picture, the recorder used four cores, and the file grew to 5,800 seconds of video in two minutes. The session reported itself healthy. | wf-recorder loses the screen at a change of size ("invalid buffer dimensions") and stays alive. wayvnc accepted size changes from any viewer, the agent included. | With recording on, wayvnc runs with `--disable-resizing`. A spike asks a recorded desktop for another size and checks that it says no. |
 | A lamp could not be deleted. | Infra-owned files are a subordinate id on the host. | `oillamp remove`. |
 | `oillamp remove` deleted a lamp whose container was still running, when `lamp.json` was already gone. | It looked for the container by a name derived from `lamp.json`. | It asks podman for a container labelled with the lamp's path. |
 | The first real run failed with a 403: "Model(s) 'vertex/claude-sonnet-5-5' not allowed by your guardrail policy". | pi's default model, in a lamp whose pi had no model set, was one the account's Eden AI policy refuses. | Not a bug in oillamp: the run reported it, with the service's message. Set `defaultProvider` and `defaultModel` in the agent's `~/.pi/agent/settings.json`. |

@@ -369,7 +369,7 @@ cannot take the primary SSH slot or send commands to the supervisor.
   "schemaVersion": 1,
   "agentId": "v4elchzj",
   "createdAt": "2026-09-22T14:15:03Z",
-  "createdBy": "oillamp 0.2.0",
+  "createdBy": "oillamp 0.3.0",
   "lastSessionAt": "2026-09-22T16:40:10Z"
 }
 ```
@@ -1415,7 +1415,7 @@ application that embeds oillamp needs.
 | `LampEvent` | `dev.lamp` | The stream of things oillamp reports. An application renders these itself. |
 | `Problem` | `dev.lamp` | Structured errors, so a caller can inspect them rather than parse text. |
 | `ExitStatus` | `dev.lamp` | The process exit codes, by name. |
-| `Lamp` | `dev.lamp` | An application's handle on a lamp: starts the engine as `oillamp at <dir> --embedded` in a separate process, reads its events, and ends the session on `close()`, unless it was left running (`leaveRunning()`). `Lamp.at(dir).join()` returns the same handle on a session that is already running, through `oillamp follow <dir> --embedded`; closing that one ends nothing, and `stop()` ends the session for either. |
+| `Lamp` | `dev.lamp` | An application's handle on a lamp: starts the engine as `oillamp at <dir> --embedded` in a separate process, reads its events, runs commands in the sandbox (`exec`), names the desktop's VNC socket (`desktop()`), and ends the session on `close()`, unless it was left running (`leaveRunning()`). `Lamp.at(dir).join()` returns the same handle on a session that is already running, through `oillamp follow <dir> --embedded`; closing that one ends nothing, and `stop()` ends the session for either. `Lamp.at(dir).remove()` deletes a lamp through the engine. |
 
 `LampEvent`, `Problem` and `ExitStatus` are in `dev.lamp` because both the engine and an
 application embedding it use them.
@@ -1750,6 +1750,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-TERM-002` | The terminal window never connected. |
 | `OIL-TERM-003` | The terminal emulator would not start. |
 | `OIL-VIEW-001` | Warning: the viewer closed immediately. |
+| `OIL-GENIES-001` | Genies, opened by `oillamp genies`, would not start. |
 | `OIL-NET-001` | Socket path longer than 107 bytes. |
 | `OIL-NET-002` | Cannot listen on a socket. |
 | `OIL-NET-010` | Warning: a forward's target is unreachable. |

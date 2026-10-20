@@ -7,9 +7,12 @@ import com.tngtech.archunit.core.importer.ImportOption
 import spock.lang.Shared
 import spock.lang.Specification
 
+import java.nio.file.Files
+import java.nio.file.Path
+
 /**
- *  Two structural promises that are easy to break by accident and expensive to notice late.
- *  They are checked here rather than left to review, because both are about what is *absent*,
+ *  Structural promises that are easy to break by accident and expensive to notice late.
+ *  They are checked here rather than left to review, because they are about what is *absent*,
  *  and absences are exactly what review misses.
  */
 class TheShapeOfTheCodeSpec extends Specification {
@@ -87,6 +90,69 @@ class TheShapeOfTheCodeSpec extends Specification {
 
         then:
             reaching.isEmpty()
+    }
+
+    def 'Genies uses oillamp the way any application must: through dev.lamp alone'() {
+        reportInfo """
+            Genies, the chat app in `dev.gui`, is the test of the embedding API on a real
+            application, so it may use only what any other application can: `dev.lamp`. If it
+            reached into the engine, the API could be missing something without anyone noticing.
+            And the engine knows nothing of Genies.
+        """
+        given:
+            JavaClasses genies = new ClassFileImporter()
+                    .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                    .importPackages('dev.gui')
+
+        when:
+            var intoTheEngine = [] as Set
+            genies.each { type ->
+                type.directDependenciesFromSelf.each { dependency ->
+                    if (dependency.targetClass.packageName.startsWith('dev.oillamp'))
+                        intoTheEngine << "${type.simpleName} -> ${dependency.targetClass.simpleName}"
+                }
+            }
+            var intoGenies = [] as Set
+            code.each { type ->
+                type.directDependenciesFromSelf.each { dependency ->
+                    if (dependency.targetClass.packageName.startsWith('dev.gui'))
+                        intoGenies << "${type.simpleName} -> ${dependency.targetClass.simpleName}"
+                }
+            }
+
+        then:
+            genies.size() > 20
+            intoTheEngine.isEmpty()
+            intoGenies.isEmpty()
+    }
+
+    def 'Genies leaves the agent\'s own files to the engine'() {
+        reportInfo """
+            Which agent runs in a lamp, and where it keeps its settings and instructions, is the
+            engine's business. Genies gives the lamp the model and the genie's instructions with
+            `Lamp.Starting.model` and `Lamp.Starting.instructions`, and the engine writes them
+            into pi's files in the agent's home, never through a link the agent may have planted
+            there. A Genies that wrote those files itself would break when pi changes its layout,
+            and would have to be as careful with links as the engine is.
+
+            Writing a file is no dependency between classes, so this rule is checked in the
+            source: no file of Genies names pi's directory, its instructions file, or the keys of
+            its default model.
+        """
+        given: 'what only code that knows pi\'s files would write'
+            var piOwn = ['.pi/', 'APPEND_SYSTEM', 'defaultModel', 'defaultProvider']
+
+        when:
+            var naming = []
+            Files.walk(Path.of('src/gui/java')).withCloseable { files ->
+                files.filter { it.toString().endsWith('.java') }.each { file ->
+                    var text = Files.readString(file)
+                    piOwn.findAll { text.contains(it) }.each { naming << "${file.fileName} names ${it}" }
+                }
+            }
+
+        then:
+            naming.isEmpty()
     }
 
     def 'Nothing internal leaks out through the types that are public'() {
