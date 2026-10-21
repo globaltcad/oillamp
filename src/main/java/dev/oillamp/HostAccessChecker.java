@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
-import dev.lamp.LampEvent;
+import dev.lamp.LampHostVerdict;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -119,7 +119,7 @@ final class HostAccessChecker {
     /// Asks, and reads the answer. Never throws for a model that misbehaves: that is a refusal.
     ///
     /// @param activity what the run was asked to do and has done, from the host's records
-    Result<LampEvent.Verdict> check(HostTool.Call call, Activity activity, Tuple<HostPaths.ResolvedPath> resolved) {
+    Result<LampHostVerdict> check(HostTool.Call call, Activity activity, Tuple<HostPaths.ResolvedPath> resolved) {
         Optional<String> wrong = ConfigLoadingUtil.serviceProblem(service.service().toString());
         if (wrong.isPresent())
             return Result.err(HostAccessProblems.checkerUnreachable(wrong.get()));

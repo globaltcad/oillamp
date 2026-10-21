@@ -13,6 +13,7 @@ import dev.lamp.LampRun
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
 import dev.lamp.LampHostRisk
+import dev.lamp.LampHostVerdict
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -131,10 +132,10 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.HostAccessEnabled(Tuple.of(String), Optional.empty()),
             new LampEvent.HostAccessRequested('run-12', 'host_read_file', '~/Documents/a.md'),
             new LampEvent.HostAccessDecided('run-12', 'host_read_file',
-                    new LampEvent.Verdict(true, LampHostRisk.PASSIVE, 'The user asked about this document.'),
+                    new LampHostVerdict(true, LampHostRisk.PASSIVE, 'The user asked about this document.'),
                     Duration.ofMillis(812)),
             new LampEvent.HostAccessDecided('run-12', 'host_write_file',
-                    new LampEvent.Verdict(false, LampHostRisk.ADDITIVE, 'Writes outside the allowed root.'),
+                    new LampHostVerdict(false, LampHostRisk.ADDITIVE, 'Writes outside the allowed root.'),
                     Duration.ofSeconds(2)),
             new LampEvent.HostAccessRefused('run-12', 'host_read_file', 'that path is outside the lamp\'s roots'),
             new LampEvent.HostAccessAsked('run-12', 'host_run', 'run `inkscape report.svg`, in ~/Documents'),

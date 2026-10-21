@@ -301,7 +301,7 @@ final class ConsoleRenderer {
                     + dim("· " + (requested.run().isEmpty() ? "" : requested.run() + " ") + requested.tool() + " "
                           + shortened(NOT_PRINTABLE.matcher(requested.said()).replaceAll(" "), 90)));
             case LampEvent.HostAccessDecided decided -> {
-                LampEvent.Verdict verdict = decided.verdict();
+                LampHostVerdict verdict = decided.verdict();
                 printLine(area("host access")
                         + (verdict.allowed() ? colour(GREEN, "✓ allowed ") : colour(YELLOW, "✗ refused "))
                         + decided.tool() + " (" + verdict.risk().name().toLowerCase(Locale.ROOT) + ", "

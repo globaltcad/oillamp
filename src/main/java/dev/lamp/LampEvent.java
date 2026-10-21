@@ -160,9 +160,6 @@ public sealed interface LampEvent {
 
     // ─── host access ───────────────────────────────────────────────────────────────────────
 
-    /// What the checker decided about one host request, and why.
-    record Verdict(boolean allowed, LampHostRisk risk, String reason) {}
-
     /// The session has the host tools, and the agent can see them.
     ///
     /// @param tools   the tool names the agent is offered, such as `["host_read_file", …]`
@@ -185,7 +182,7 @@ public sealed interface LampEvent {
     ///
     /// @param verdict what it decided, its risk tier and its reason in its own words
     /// @param took    from the request arriving to this event
-    record HostAccessDecided(String run, String tool, Verdict verdict, Duration took) implements LampEvent {}
+    record HostAccessDecided(String run, String tool, LampHostVerdict verdict, Duration took) implements LampEvent {}
 
     /// A request was refused other than by the checker's own decision: before the checker was
     /// asked, because it broke a rule that needs no judgement (a path outside the lamp's roots, a

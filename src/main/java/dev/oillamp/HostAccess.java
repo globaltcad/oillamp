@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import dev.lamp.LampEvent;
 import dev.lamp.Problem;
 import dev.lamp.LampRun;
+import dev.lamp.LampHostVerdict;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -230,15 +231,15 @@ final class HostAccess implements AutoCloseable {
         sink.accept(new LampEvent.HostAccessRequested(run, attempt.tool(), HostTool.describe(call.tool())));
 
         // 4. The checker.
-        Result<LampEvent.Verdict> verdict;
+        Result<LampHostVerdict> verdict;
         try {
             verdict = checker.check(call, activityOf(working), resolved);
         } catch (RuntimeException bug) {
             verdict = Result.err(HostAccessProblems.checkerUnreachable(ProblemCatalogUtil.reason(bug)));
         }
-        if (verdict instanceof Result.Err<LampEvent.Verdict> noVerdict)
+        if (verdict instanceof Result.Err<LampHostVerdict> noVerdict)
             return refuse(attempt, resolved, noVerdict.problems().first().whatHappened());
-        LampEvent.Verdict decided = ((Result.Ok<LampEvent.Verdict>) verdict).value();
+        LampHostVerdict decided = ((Result.Ok<LampHostVerdict>) verdict).value();
         String risk = decided.risk().name().toLowerCase(Locale.ROOT);
         // The checker's own refusal is reported once, as its decision; it is not a second event.
         sink.accept(new LampEvent.HostAccessDecided(run, attempt.tool(), decided,

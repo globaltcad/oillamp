@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.LampEvent;
 import dev.lamp.LampHostRisk;
+import dev.lamp.LampHostVerdict;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import sprouts.Association;
@@ -20,7 +20,7 @@ import sprouts.Tuple;
 /// with them.
 ///
 /// Everything here decides and nothing does. [HostAccess] carries the decisions out, after the
-/// checks in [HostPaths] and the checker's [Verdict][dev.lamp.LampEvent.Verdict].
+/// checks in [HostPaths] and the checker's [Verdict][dev.lamp.LampHostVerdict].
 ///
 /// Adding a tool means adding a case to every `switch` over it, which the compiler insists on.
 sealed interface HostTool {
@@ -250,7 +250,7 @@ sealed interface HostTool {
 
     /// Reads the checker's reply. Anything that is not exactly a verdict is a refusal: an answer
     /// oillamp cannot read is not permission, and a model that rambles is not asked twice.
-    static Result<LampEvent.Verdict> verdict(String answered) {
+    static Result<LampHostVerdict> verdict(String answered) {
         // Models like to wrap JSON in a code fence now and then, and that is the one decoration
         // worth forgiving: the answer is still one object, and refusing it would deny everything.
         String text = answered.strip();
@@ -277,7 +277,7 @@ sealed interface HostTool {
         // and the user reads it in the terminal and the log.
         String reason = node.path("reason").isTextual() ? node.path("reason").asText().strip() : "";
         if (reason.isEmpty()) return Result.err(HostAccessProblems.unreadableVerdict(answered));
-        return Result.ok(new LampEvent.Verdict(decision.equals("allow"), tier.get(), reason));
+        return Result.ok(new LampHostVerdict(decision.equals("allow"), tier.get(), reason));
     }
 
     /// A URL the agent may ask to open: a web page, over http or https, and nothing else. A

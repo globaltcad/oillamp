@@ -1,7 +1,7 @@
 package dev.oillamp
 
-import dev.lamp.LampEvent
 import dev.lamp.LampHostRisk
+import dev.lamp.LampHostVerdict
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Title
@@ -153,7 +153,7 @@ class ReadingHostRequestsSpec extends Specification {
         expect:
             var allowed = HostTool.verdict('{"decision":"allow","risk":"passive","reason":"The user asked for it.","concerns":[]}')
             allowed instanceof Result.Ok
-            ((allowed as Result.Ok).value() as LampEvent.Verdict).allowed()
+            ((allowed as Result.Ok).value() as LampHostVerdict).allowed()
 
         and: 'a fenced answer is read, since it is still one object'
             HostTool.verdict('```json\n{"decision":"deny","risk":"additive","reason":"outside the notes"}\n```') instanceof Result.Ok
@@ -168,7 +168,7 @@ class ReadingHostRequestsSpec extends Specification {
             HostTool.verdict('') instanceof Result.Err
 
         and: 'a refusal keeps the reason, because the agent is told it and the user reads it'
-            var denied = (HostTool.verdict('{"decision":"deny","risk":"additive","reason":"This writes outside ~/Notes."}') as Result.Ok).value() as LampEvent.Verdict
+            var denied = (HostTool.verdict('{"decision":"deny","risk":"additive","reason":"This writes outside ~/Notes."}') as Result.Ok).value() as LampHostVerdict
             !denied.allowed()
             denied.reason() == 'This writes outside ~/Notes.'
     }
