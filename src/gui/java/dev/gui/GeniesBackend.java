@@ -33,7 +33,6 @@ import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Settings;
-import dev.gui.view.Genies;
 import dev.gui.view.GeniesView;
 import dev.lamp.LampExitStatus;
 import dev.lamp.Lamp;

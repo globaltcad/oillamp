@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
+import dev.gui.Genies;
 import dev.gui.model.DateWordingUtil;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
