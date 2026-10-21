@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampRunOutcome
 import spock.lang.Narrative
 import spock.lang.Rollup
 import spock.lang.Specification
@@ -127,7 +127,7 @@ class GivingTheAgentInstructionsSpec extends Specification {
             host.engines.first().environment == [OILLAMP_INSTRUCTIONS: INSTRUCTIONS]
 
         and: 'pi\'s instructions file held the text when pi was given the first question'
-            answer.outcome() == RunOutcome.FINISHED
+            answer.outcome() == LampRunOutcome.FINISHED
             instructionsWhenAsked == [INSTRUCTIONS]
     }
 

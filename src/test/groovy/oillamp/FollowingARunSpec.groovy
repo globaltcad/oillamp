@@ -4,7 +4,7 @@ import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.Progress
-import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampRunOutcome
 import dev.lamp.LampFailedException
 import spock.lang.Specification
 import spock.lang.Subject
@@ -93,7 +93,7 @@ class FollowingARunSpec extends Specification {
             steps.last().text() == 'There are two files here.'
 
         and: 'the run ends with the same answer, and a snapshot with the agent\'s file'
-            finished.outcome() == RunOutcome.FINISHED
+            finished.outcome() == LampRunOutcome.FINISHED
             finished.answer() == 'There are two files here.'
             finished.snapshot().isPresent()
     }
@@ -138,11 +138,11 @@ class FollowingARunSpec extends Specification {
 
         then: 'the waiting one ended without the agent seeing it'
             var skipped = heard.find { it instanceof LampEvent.RunFinished && it.run().id() == waiting.id() }
-            skipped.outcome() == RunOutcome.CANCELLED
+            skipped.outcome() == LampRunOutcome.CANCELLED
             !prompts.contains('never asked')
 
         and: 'the one in progress stopped, and was saved'
-            stopped.outcome() == RunOutcome.CANCELLED
+            stopped.outcome() == LampRunOutcome.CANCELLED
             stopped.snapshot().map { it.message().contains('cancelled') } == Optional.of(true)
 
         when: 'nothing runs any more'

@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import dev.lamp.LampEvent;
 import dev.lamp.JobAuthor;
-import dev.lamp.LampEvent.RunOutcome;
+import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSaveKind;
 
 import dev.lamp.LampSave;
@@ -145,7 +145,7 @@ final class AgentRunner {
         if (run.isEmpty()) return Result.err(ProblemCatalogUtil.runRefused("the agent is not working on anything"));
         for (Pending waiting : queue)
             if (waiting.run().id().equals(run.get()) && queue.remove(waiting)) {
-                LampEvent.RunFinished finished = new LampEvent.RunFinished(waiting.run(), RunOutcome.CANCELLED,
+                LampEvent.RunFinished finished = new LampEvent.RunFinished(waiting.run(), LampRunOutcome.CANCELLED,
                         "cancelled before the agent got to it", Optional.empty(), Duration.ZERO, waiting.run().conversation());
                 context.sink().accept(finished);
                 waiting.done().complete(finished);
@@ -200,7 +200,7 @@ final class AgentRunner {
             }
         });
         for (Pending left; (left = queue.poll()) != null; ) {
-            LampEvent.RunFinished finished = new LampEvent.RunFinished(left.run(), RunOutcome.INTERRUPTED,
+            LampEvent.RunFinished finished = new LampEvent.RunFinished(left.run(), LampRunOutcome.INTERRUPTED,
                     "the session ended before the agent got to it", Optional.empty(), Duration.ZERO,
                     left.run().conversation());
             // An application that sent the question waits for this event, not for the future.
@@ -307,7 +307,7 @@ final class AgentRunner {
             } catch (RuntimeException bug) {
                 crashed = Optional.of(bug);
                 // Whoever heard the run start must hear it end, or it seems to go on for ever.
-                finished = new LampEvent.RunFinished(next.run(), RunOutcome.FAILED,
+                finished = new LampEvent.RunFinished(next.run(), LampRunOutcome.FAILED,
                         ProblemCatalogUtil.reason(bug), Optional.empty(), Duration.ZERO, next.run().conversation());
             }
             // Reported here, once, and outside the catch above: a listener that fails on this
@@ -363,7 +363,7 @@ final class AgentRunner {
         Harness.Answer answer = harness.run(name, prompt, config.maxRun(), pending.where(),
                 () -> cancelled.equals(Optional.of(run.id())),
                 progress -> remember(progress, run.id()));
-        if (answer.outcome() == RunOutcome.FAILED && !answer.text().isBlank() && answer.text().startsWith("pi "))
+        if (answer.outcome() == LampRunOutcome.FAILED && !answer.text().isBlank() && answer.text().startsWith("pi "))
             context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.runFailed(run.id(), answer.text())));
         Instant ended = machine.now();
 

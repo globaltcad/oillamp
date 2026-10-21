@@ -252,7 +252,7 @@ final class ConsoleRenderer {
                     + started.run().id() + " (" + describe(started.run()) + "): "
                     + shortened(started.run().prompt(), 100));
             case LampEvent.RunFinished finished -> {
-                boolean fine = finished.outcome() == LampEvent.RunOutcome.FINISHED;
+                boolean fine = finished.outcome() == LampRunOutcome.FINISHED;
                 printLine(area("run") + (fine ? colour(GREEN, "✓ ") : colour(YELLOW, "! ")) + finished.run().id() + " "
                         + switch (finished.outcome()) {
                               case FINISHED -> "finished";

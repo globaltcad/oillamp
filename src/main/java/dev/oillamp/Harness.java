@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.lamp.LampEvent;
-import dev.lamp.LampEvent.RunOutcome;
+import dev.lamp.LampRunOutcome;
 import dev.lamp.Problem;
 
 /// The agent, as a running session holds it: pi in RPC mode, in the sandbox, reached through ssh.
@@ -102,8 +102,8 @@ final class Harness implements AutoCloseable {
     /// How a run ended, the agent's last message, and the conversation it happened in.
     ///
     /// @param conversation pi's id for the conversation, when pi said which it was
-    record Answer(RunOutcome outcome, String text, Optional<String> conversation) {
-        Answer(RunOutcome outcome, String text) { this(outcome, text, Optional.empty()); }
+    record Answer(LampRunOutcome outcome, String text, Optional<String> conversation) {
+        Answer(LampRunOutcome outcome, String text) { this(outcome, text, Optional.empty()); }
         Answer in(Optional<String> conversation) { return new Answer(outcome, text, conversation); }
     }
 
@@ -131,7 +131,7 @@ final class Harness implements AutoCloseable {
     /// @param progress told what the agent does, as it does it
     Answer run(Optional<String> name, String prompt, Duration limit, Optional<Target> target,
                BooleanSupplier cancelled, Consumer<LampEvent.Progress> progress) {
-        if (stopping) return new Answer(RunOutcome.INTERRUPTED, "the session was ending, so the agent was not woken");
+        if (stopping) return new Answer(LampRunOutcome.INTERRUPTED, "the session was ending, so the agent was not woken");
         try {
             Machine.Conversation agent = started();
             if (target.isEmpty()) {
@@ -156,7 +156,7 @@ final class Harness implements AutoCloseable {
                 if (couldNot.isPresent())
                     return failed("pi could not switch to the model " + wanted.get() + ": " + couldNot.get()).in(conversation);
             }
-            if (cancelled.getAsBoolean()) return new Answer(RunOutcome.CANCELLED, "").in(conversation);
+            if (cancelled.getAsBoolean()) return new Answer(LampRunOutcome.CANCELLED, "").in(conversation);
             ObjectNode ask = command("prompt").put("message", prompt);
             if (!accepted(answer(agent, ask))) return failed("pi did not accept the prompt").in(conversation);
             return follow(agent, machine.now().plus(limit), cancelled, progress).in(conversation);
@@ -166,7 +166,7 @@ final class Harness implements AutoCloseable {
             return failed("pi could not be reached: " + ProblemCatalogUtil.reason(e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new Answer(RunOutcome.INTERRUPTED, "");
+            return new Answer(LampRunOutcome.INTERRUPTED, "");
         }
     }
 
@@ -177,14 +177,14 @@ final class Harness implements AutoCloseable {
         String said = "";
         String stopReason = "";
         String error = "";
-        Optional<RunOutcome> stoppedBecause = Optional.empty();
+        Optional<LampRunOutcome> stoppedBecause = Optional.empty();
         Instant giveUp = Instant.MAX;
         while (true) {
             Instant now = machine.now();
             boolean cancel = cancelled.getAsBoolean();
             if (stoppedBecause.isEmpty() && (stopping || cancel || now.isAfter(deadline))) {
-                stoppedBecause = Optional.of(stopping ? RunOutcome.INTERRUPTED
-                                           : cancel ? RunOutcome.CANCELLED : RunOutcome.TIMED_OUT);
+                stoppedBecause = Optional.of(stopping ? LampRunOutcome.INTERRUPTED
+                                           : cancel ? LampRunOutcome.CANCELLED : LampRunOutcome.TIMED_OUT);
                 send(agent, command("abort"));
                 giveUp = now.plus(ABORT_TIME);
             }
@@ -239,11 +239,11 @@ final class Harness implements AutoCloseable {
         return answer(stoppedBecause, stopReason, said, error);
     }
 
-    private static Answer answer(Optional<RunOutcome> stoppedBecause, String stopReason, String said, String error) {
+    private static Answer answer(Optional<LampRunOutcome> stoppedBecause, String stopReason, String said, String error) {
         if (stoppedBecause.isPresent()) return new Answer(stoppedBecause.get(), said);
         if (stopReason.equals("error") || stopReason.equals("aborted"))
-            return new Answer(RunOutcome.FAILED, error.isBlank() ? said : said.isBlank() ? error : said + "\n\n" + error);
-        return new Answer(RunOutcome.FINISHED, said);
+            return new Answer(LampRunOutcome.FAILED, error.isBlank() ? said : said.isBlank() ? error : said + "\n\n" + error);
+        return new Answer(LampRunOutcome.FINISHED, said);
     }
 
     /// An extension in the sandbox asked a question, such as "allow this command?". Nobody is
@@ -435,8 +435,8 @@ final class Harness implements AutoCloseable {
     /// pi failed, unless the session is ending: then it stopped waiting for pi, and pi did not fail.
     private Answer failed(String why) {
         close();
-        if (stopping) return new Answer(RunOutcome.INTERRUPTED, "the session ended before pi was ready");
-        return new Answer(RunOutcome.FAILED, why);
+        if (stopping) return new Answer(LampRunOutcome.INTERRUPTED, "the session ended before pi was ready");
+        return new Answer(LampRunOutcome.FAILED, why);
     }
 
     /// The text of a message's content: a string, or a list of blocks of which only the text ones count.

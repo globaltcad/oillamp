@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.JobAuthor
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampRunOutcome
 import dev.lamp.LampSaveKind
 import dev.lamp.LampRun
 import groovy.json.JsonOutput
@@ -265,7 +265,7 @@ class WakingTheAgentSpec extends Specification {
 
         then: 'the job ran'
             finished.run().job() == Optional.of('job-1')
-            finished.outcome() == RunOutcome.FINISHED
+            finished.outcome() == LampRunOutcome.FINISHED
 
         and: 'the schedule was on while the session ran, and is off again after it'
             during.events().find { it instanceof LampEvent.Schedule }.enabled()
@@ -320,7 +320,7 @@ class WakingTheAgentSpec extends Specification {
             prompts[0].contains('This is the first run.')
 
         and: 'it finished, and said what it did'
-            finished.outcome() == RunOutcome.FINISHED
+            finished.outcome() == LampRunOutcome.FINISHED
             finished.answer() == 'I wrote the weekly report to ~/workspace/report.md.'
 
         and: 'the run is a snapshot, named after it and holding the agent\'s words'
@@ -335,7 +335,7 @@ class WakingTheAgentSpec extends Specification {
         and: 'the history says which job it was, how it ended, and where its conversation is'
             with (newest) {
                 job() == Optional.of('job-1')
-                outcome() == Optional.of(RunOutcome.FINISHED)
+                outcome() == Optional.of(LampRunOutcome.FINISHED)
                 conversation().isPresent()
                 conversation() == finished.conversation()
             }
@@ -502,7 +502,7 @@ class WakingTheAgentSpec extends Specification {
         then:
             !asked.succeeded()
             var finished = asked.events().find { it instanceof LampEvent.RunFinished }
-            finished.outcome() == RunOutcome.TIMED_OUT
+            finished.outcome() == LampRunOutcome.TIMED_OUT
             asked.console().contains('ran out of time')
 
         and: 'the half-done work is in the run\'s snapshot'
@@ -537,7 +537,7 @@ class WakingTheAgentSpec extends Specification {
 
         then:
             var finished = reported.find { it instanceof LampEvent.RunFinished }
-            finished.outcome() == RunOutcome.INTERRUPTED
+            finished.outcome() == LampRunOutcome.INTERRUPTED
             var history = host.oillamp.run('history', lamp.toString())
             var snapshots = history.events().find { it instanceof LampEvent.History }.snapshots()
             var run = snapshots.find { it.kind() == LampSaveKind.RUN }
@@ -560,7 +560,7 @@ class WakingTheAgentSpec extends Specification {
 
         then:
             !asked.succeeded()
-            asked.events().find { it instanceof LampEvent.RunFinished }.outcome() == RunOutcome.FAILED
+            asked.events().find { it instanceof LampEvent.RunFinished }.outcome() == LampRunOutcome.FAILED
             reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-SCHEDULE-005'
                            && it.problem().whatHappened().contains('pi: command not found') }
             session.alive
@@ -798,7 +798,7 @@ class WakingTheAgentSpec extends Specification {
             !switchedOff.enabled()
             paused
             !lamps.schedule().paused()
-            answer.outcome() == RunOutcome.FINISHED
+            answer.outcome() == LampRunOutcome.FINISHED
             answer.answer() == 'Hello from the sandbox.'
             answer.snapshot().isPresent()
 

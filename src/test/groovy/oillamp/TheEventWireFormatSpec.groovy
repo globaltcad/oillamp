@@ -10,6 +10,7 @@ import dev.lamp.Problem
 import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
 import dev.lamp.LampRun
+import dev.lamp.LampRunOutcome
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -52,7 +53,7 @@ class TheEventWireFormatSpec extends Specification {
             '3f2a9c1d00000000000000000000000000000000', Instant.parse('2026-09-29T18:14:03Z'),
             LampSaveKind.BEFORE_RESTORE, 'before the upgrade\nand the "migration"',
             Optional.of('20260929-181200'), Optional.of('run-12'), Optional.of('job-3'),
-            Optional.of(LampEvent.RunOutcome.TIMED_OUT), Optional.of('0199a3f0-7c1e-7d2b-9a41-5c3e2f1d0b9a'))
+            Optional.of(LampRunOutcome.TIMED_OUT), Optional.of('0199a3f0-7c1e-7d2b-9a41-5c3e2f1d0b9a'))
 
     static final LampJob JOB = new LampJob('job-3', '0 9 * * 1-5',
             Optional.of(Instant.parse('2026-09-30T07:00:00Z')), 'Check the build\nand say "why"',
@@ -107,9 +108,9 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.ScheduleChanged('the schedule is paused'),
             new LampEvent.RunQueued(new LampRun('run-13', Optional.empty(), 'what now?', Optional.of('01a0ec69-de1c')), 0),
             new LampEvent.RunStarted(RUN),
-            new LampEvent.RunFinished(RUN, LampEvent.RunOutcome.FINISHED, 'All green.\n\nNothing to do.',
+            new LampEvent.RunFinished(RUN, LampRunOutcome.FINISHED, 'All green.\n\nNothing to do.',
                     Optional.of(SNAPSHOT), Duration.ofSeconds(95), Optional.of('01a0ec69-de1c')),
-            new LampEvent.RunFinished(RUN, LampEvent.RunOutcome.TIMED_OUT, '', Optional.empty(), Duration.ofMinutes(30), Optional.empty()),
+            new LampEvent.RunFinished(RUN, LampRunOutcome.TIMED_OUT, '', Optional.empty(), Duration.ofMinutes(30), Optional.empty()),
             new LampEvent.RunAccepted(RUN),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Opened('01a0ec69-de1c')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Said('Hel')),

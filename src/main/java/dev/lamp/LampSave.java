@@ -26,7 +26,7 @@ public record LampSave(
         Optional<String> session,
         Optional<String> run,
         Optional<String> job,
-        Optional<LampEvent.RunOutcome> outcome,
+        Optional<LampRunOutcome> outcome,
         Optional<String> conversation
 ) {
     /// The first eight characters of [#id()], which is how oillamp shows a snapshot.

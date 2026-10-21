@@ -4,7 +4,7 @@ import dev.lamp.Lamp
 import dev.lamp.Lamp.Conversation.Kind
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampRunOutcome
 import dev.lamp.LampStartupConf
 import spock.lang.Specification
 import spock.lang.Subject
@@ -79,7 +79,7 @@ class AskingInAConversationSpec extends Specification {
         then:
             colourAsked.succeeded()
             var asked = colourAsked.events().find { it instanceof LampEvent.RunFinished }
-            asked.outcome() == RunOutcome.FINISHED
+            asked.outcome() == LampRunOutcome.FINISHED
             var conversation = Lamp.conversation(lamp, asked.conversation().orElseThrow()).orElseThrow()
             conversation.title() == 'Name a colour'
             questionsAndAnswers(conversation.line()) == ['Name a colour', 'Blue.']
@@ -129,7 +129,7 @@ class AskingInAConversationSpec extends Specification {
             var asked = running().ask(Question.insteadOf(conversation, fruit.id(), 'Name an animal'))
 
         then:
-            asked.outcome() == RunOutcome.FINISHED
+            asked.outcome() == LampRunOutcome.FINISHED
             var tree = Lamp.conversation(lamp, conversation).orElseThrow()
             questionsAndAnswers(tree.line()) == ['Name a colour', 'Blue.', 'Name an animal', 'A fox.']
 

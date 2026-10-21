@@ -129,7 +129,7 @@ public sealed interface LampEvent {
     /// @param took         from [RunStarted] to this event
     /// @param conversation the conversation the run happened in; empty when pi failed before it
     ///                     opened one
-    record RunFinished(LampRun run, RunOutcome outcome, String answer,
+    record RunFinished(LampRun run, LampRunOutcome outcome, String answer,
                        Optional<LampSave> snapshot, Duration took,
                        Optional<String> conversation) implements LampEvent {}
 
@@ -182,20 +182,6 @@ public sealed interface LampEvent {
     /// @param waiting the runs waiting, in the order they will run
     record AgentStatus(Optional<LampRun> current, Tuple<LampRun> waiting) implements LampEvent {
         public boolean busy() { return current.isPresent() || !waiting.isEmpty(); }
-    }
-
-    /// How a run ended.
-    enum RunOutcome {
-        /// The agent finished and said so.
-        FINISHED,
-        /// The agent, or the model behind it, failed. The answer says why.
-        FAILED,
-        /// The run took longer than `schedule.max_run_minutes` and was stopped.
-        TIMED_OUT,
-        /// The session ended while the agent was working.
-        INTERRUPTED,
-        /// Someone stopped it, with `oillamp cancel` or [Lamp#cancel()].
-        CANCELLED
     }
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────

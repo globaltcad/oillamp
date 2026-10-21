@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.LampEvent.RunOutcome;
+import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSaveKind;
 import dev.lamp.LampSave;
 
@@ -248,9 +248,9 @@ final class GitObjectUtil {
     }
 
     /// The outcome an `Oillamp-Outcome` trailer names, as [AgentRunner] writes it: `timed out` for
-    /// [RunOutcome#TIMED_OUT]. Empty for anything else.
-    private static Optional<RunOutcome> outcome(String written) {
-        for (RunOutcome outcome : RunOutcome.values())
+    /// [LampRunOutcome#TIMED_OUT]. Empty for anything else.
+    private static Optional<LampRunOutcome> outcome(String written) {
+        for (LampRunOutcome outcome : LampRunOutcome.values())
             if (outcome.name().toLowerCase(Locale.ROOT).replace('_', ' ').equals(written.strip())) return Optional.of(outcome);
         return Optional.empty();
     }

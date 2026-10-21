@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.RunOutcome
+import dev.lamp.LampRunOutcome
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Narrative
@@ -312,7 +312,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
             var finished = waitFor(LampEvent.RunFinished)
 
         then: 'GPT wrote the report'
-            finished.outcome() == RunOutcome.FINISHED
+            finished.outcome() == LampRunOutcome.FINISHED
             answeredBy(finished.conversation().orElseThrow()) == [GPT]
     }
 
@@ -336,7 +336,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
             host.engines.first().arguments == ['at', lamp.toString(), '--embedded', '--model', GPT]
 
         and: 'GPT answered'
-            answer.outcome() == RunOutcome.FINISHED
+            answer.outcome() == LampRunOutcome.FINISHED
             answeredBy(answer.conversation().orElseThrow()) == [GPT]
     }
 
@@ -478,7 +478,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
         then: 'the run failed, naming the model and pi\'s reason'
             !asked.succeeded()
             var finished = asked.events().find { it instanceof LampEvent.RunFinished }
-            finished.outcome() == RunOutcome.FAILED
+            finished.outcome() == LampRunOutcome.FAILED
             finished.answer() == 'pi could not switch to the model azure/gpt-0-retired: Model not found: edenai/azure/gpt-0-retired'
 
         and: 'the agent never got the question, and the conversation has no trace of the model'

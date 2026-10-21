@@ -641,7 +641,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Stops the run the agent is working on. What it did until then is saved, as for any run,
-    /// and its [LampEvent.RunFinished] says it was [cancelled][LampEvent.RunOutcome#CANCELLED].
+    /// and its [LampEvent.RunFinished] says it was [cancelled][LampRunOutcome#CANCELLED].
     ///
     /// @throws LampFailedException when the agent is not working on anything
     public void cancel() throws IOException, InterruptedException, LampFailedException {

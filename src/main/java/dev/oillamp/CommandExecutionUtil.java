@@ -1067,7 +1067,7 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         Control.Reply answer = ((Result.Ok<Control.Reply>) reply).value();
-        LampEvent.RunOutcome outcome = LampEvent.RunOutcome.valueOf(answer.values().get("outcome").orElse("FAILED"));
+        LampRunOutcome outcome = LampRunOutcome.valueOf(answer.values().get("outcome").orElse("FAILED"));
         Optional<LampSave> snapshot = Optional.empty();
         Optional<String> saved = answer.values().get("snapshot");
         if (saved.isPresent() && new History(layout).snapshots() instanceof Result.Ok<Tuple<LampSave>>(
@@ -1078,7 +1078,7 @@ final class CommandExecutionUtil {
                 outcome, answer.values().get("answer").orElse(""), snapshot,
                 Duration.ofSeconds(Long.parseLong(answer.values().get("seconds").orElse("0"))),
                 answer.values().get("conversation")));
-        return outcome == LampEvent.RunOutcome.FINISHED ? ExitStatus.SUCCESS : ExitStatus.ERROR;
+        return outcome == LampRunOutcome.FINISHED ? ExitStatus.SUCCESS : ExitStatus.ERROR;
     }
 
     /// The request to the session, with the conversation found and the entry checked, so that a
