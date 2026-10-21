@@ -2,7 +2,7 @@ package gui
 
 import dev.gui.desktop.RfbConnection
 import dev.gui.genie.GenieRunner
-import dev.gui.genie.LampLighter
+import dev.gui.genie.LampLighterImpl
 import dev.gui.model.Conversations
 import dev.gui.model.Entry
 import dev.gui.model.Genie
@@ -49,7 +49,7 @@ class RunningARealGenieSpec extends Specification {
     @Shared Path lamp = RealLamps.newLampPath('genie')
     @Shared Genie genie = Genie.named('Spike')
     @Shared List<String> activities = new CopyOnWriteArrayList<>()
-    @Shared GenieRunner runner = new GenieRunner(lamp, new LampLighter(), { UnaryOperator<Genie> change ->
+    @Shared GenieRunner runner = new GenieRunner(lamp, new LampLighterImpl(), { UnaryOperator<Genie> change ->
         synchronized (RunningARealGenieSpec) {
             genie = change.apply(genie)
             if (activities.isEmpty() || activities.last() != genie.activity()) activities << genie.activity()

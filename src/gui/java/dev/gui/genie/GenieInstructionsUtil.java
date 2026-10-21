@@ -4,7 +4,7 @@ package dev.gui.genie;
 ///
 /// The sandbox's own guide, `~/AGENTS.md`, explains the sandbox: what lasts, the desktop, the
 /// network. This explains the app around it: that the user talks to the genie in a chat, how files
-/// go back and forth, and how to show the user something. [LampLighter] gives it to the genie's
+/// go back and forth, and how to show the user something. [LampLighterImpl] gives it to the genie's
 /// lamp with [dev.lamp.LampDirectory#instructions] at every wake, and the lamp's engine puts it
 /// where the genie's agent reads it. Genies never writes into the genie's home itself.
 final class GenieInstructionsUtil {
