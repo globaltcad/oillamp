@@ -64,16 +64,16 @@ class TheEventWireFormatSpec extends Specification {
             Optional.of(Instant.parse('2026-10-13T18:14:03Z')), true,
             Tuple.of(Instant, Instant.parse('2026-09-30T07:00:00Z'), Instant.parse('2026-10-01T07:00:00Z')))
 
-    static final dev.lamp.Lamp.Conversation CONVERSATION = new dev.lamp.Lamp.Conversation(
+    static final dev.lamp.LampConversation CONVERSATION = new dev.lamp.LampConversation(
             '01a0ec69-de1c-7234-914c-b970a862c13e', 'run-12 (job-3)', '.pi/agent/sessions/--home-agent--/x.jsonl',
             Instant.parse('2026-09-29T18:14:03Z'), Instant.parse('2026-09-29T18:15:00Z'),
-            Tuple.of(dev.lamp.Lamp.Conversation.Entry,
-                new dev.lamp.Lamp.Conversation.Entry('q1', Optional.empty(), Instant.parse('2026-09-29T18:14:03Z'),
-                        dev.lamp.Lamp.Conversation.Kind.MESSAGE_TO_AGENT, 'What "now"?\nTell me.', '',
-                        Tuple.of(dev.lamp.Lamp.Conversation.ToolCall), Optional.empty(), false, Optional.empty()),
-                new dev.lamp.Lamp.Conversation.Entry('a1', Optional.of('q1'), Instant.parse('2026-09-29T18:15:00Z'),
-                        dev.lamp.Lamp.Conversation.Kind.MESSAGE_FROM_AGENT, '', 'thinking…',
-                        Tuple.of(dev.lamp.Lamp.Conversation.ToolCall, new dev.lamp.Lamp.Conversation.ToolCall('c1', 'bash', 'ls')),
+            Tuple.of(dev.lamp.LampConversation.Entry,
+                new dev.lamp.LampConversation.Entry('q1', Optional.empty(), Instant.parse('2026-09-29T18:14:03Z'),
+                        dev.lamp.LampConversation.Kind.MESSAGE_TO_AGENT, 'What "now"?\nTell me.', '',
+                        Tuple.of(dev.lamp.LampConversation.ToolCall), Optional.empty(), false, Optional.empty()),
+                new dev.lamp.LampConversation.Entry('a1', Optional.of('q1'), Instant.parse('2026-09-29T18:15:00Z'),
+                        dev.lamp.LampConversation.Kind.MESSAGE_FROM_AGENT, '', 'thinking…',
+                        Tuple.of(dev.lamp.LampConversation.ToolCall, new dev.lamp.LampConversation.ToolCall('c1', 'bash', 'ls')),
                         Optional.of('bash'), true, Optional.of('azure/gpt-6.1-sol'))))
 
     static final LampRun RUN = new LampRun('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
@@ -125,7 +125,7 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.RunProgress('run-12', new LampAgentProgress.Retrying(2, 3, '529 overloaded')),
             new LampEvent.AgentStatus(Optional.of(RUN), Tuple.of(LampRun, RUN)),
             new LampEvent.AgentStatus(Optional.empty(), Tuple.of(LampRun)),
-            new LampEvent.Conversations(Tuple.of(dev.lamp.Lamp.Conversation, CONVERSATION)),
+            new LampEvent.Conversations(Tuple.of(dev.lamp.LampConversation, CONVERSATION)),
             new LampEvent.ConversationShown(CONVERSATION),
             new LampEvent.HostAccessEnabled(Tuple.of(String, 'host_read_file', 'host_list_dir'),
                                              Optional.of('azure/gpt-6.1-sol')),

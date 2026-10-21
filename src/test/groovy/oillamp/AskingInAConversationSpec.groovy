@@ -1,11 +1,12 @@
 package oillamp
 
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Conversation.Kind
+import dev.lamp.LampConversation.Kind
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampStartupConf
+import dev.lamp.LampConversation
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -227,16 +228,16 @@ class AskingInAConversationSpec extends Specification {
         Lamp.at(lamp).launchedBy(host.launcher)
     }
 
-    private Lamp.Conversation.Entry question(String conversation, String text) {
+    private LampConversation.Entry question(String conversation, String text) {
         Lamp.conversation(lamp, conversation).orElseThrow().entries().find { it.kind() == Kind.MESSAGE_TO_AGENT && it.text() == text }
     }
 
-    private Lamp.Conversation.Entry answerTo(String conversation, String text) {
+    private LampConversation.Entry answerTo(String conversation, String text) {
         var tree = Lamp.conversation(lamp, conversation).orElseThrow()
         tree.children(question(conversation, text).id()).first()
     }
 
-    private static List<String> questionsAndAnswers(Iterable<Lamp.Conversation.Entry> line) {
+    private static List<String> questionsAndAnswers(Iterable<LampConversation.Entry> line) {
         line.findAll { it.kind() in [Kind.MESSAGE_TO_AGENT, Kind.MESSAGE_FROM_AGENT] }*.text()
     }
 

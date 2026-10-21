@@ -431,12 +431,12 @@ public final class LampStartupConf {
 
     /// Every conversation the agent had in this lamp, the most recent first. See
     /// [Lamp#conversations(Path)].
-    public List<Lamp.Conversation> conversations() {
+    public List<LampConversation> conversations() {
         return Lamp.conversations(directory);
     }
 
     /// The conversation named by `id` or a unique beginning of it.
-    public Optional<Lamp.Conversation> conversation(String id) {
+    public Optional<LampConversation> conversation(String id) {
         return Lamp.conversation(directory, id);
     }
 

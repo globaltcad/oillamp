@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import sprouts.Tuple;
 
-/// Reads one of pi's session files into a [Lamp.Conversation].
+/// Reads one of pi's session files into a [LampConversation].
 ///
 /// pi keeps each conversation in a file of its own, one JSON object per line: a header with the
 /// conversation's id, then every entry as it happened. Each entry names the one before it, which
@@ -36,12 +36,12 @@ final class PiSessionFile {
     ///
     /// @param file where the file is, relative to the agent's home
     /// @return the conversation, or empty when the lines have no header
-    static Optional<Lamp.Conversation> parse(String file, Iterable<String> lines) {
+    static Optional<LampConversation> parse(String file, Iterable<String> lines) {
         String id = "";
         String name = "";
         Instant started = Instant.EPOCH;
         Instant modified = Instant.EPOCH;
-        List<Lamp.Conversation.Entry> entries = new ArrayList<>();
+        List<LampConversation.Entry> entries = new ArrayList<>();
         for (String line : lines) {
             Optional<JsonNode> read = readLine(line);
             if (read.isEmpty()) continue;
@@ -61,46 +61,46 @@ final class PiSessionFile {
             entries.add(entry(record, type, at));
         }
         if (id.isBlank()) return Optional.empty();
-        return Optional.of(new Lamp.Conversation(id, name, file, started, modified,
-                Tuple.of(Lamp.Conversation.Entry.class, entries)));
+        return Optional.of(new LampConversation(id, name, file, started, modified,
+                Tuple.of(LampConversation.Entry.class, entries)));
     }
 
-    private static Lamp.Conversation.Entry entry(JsonNode record, String type, Instant at) {
+    private static LampConversation.Entry entry(JsonNode record, String type, Instant at) {
         String id = record.path("id").asText();
         Optional<String> parent = record.path("parentId").isTextual()
                 ? Optional.of(record.path("parentId").asText()) : Optional.empty();
         JsonNode message = record.path("message");
-        Tuple<Lamp.Conversation.ToolCall> none = Tuple.of(Lamp.Conversation.ToolCall.class);
+        Tuple<LampConversation.ToolCall> none = Tuple.of(LampConversation.ToolCall.class);
         return switch (type) {
             case "message" -> switch (message.path("role").asText()) {
-                case "user" -> new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.MESSAGE_TO_AGENT,
+                case "user" -> new LampConversation.Entry(id, parent, at, LampConversation.Kind.MESSAGE_TO_AGENT,
                         text(message.path("content")), "", none, Optional.empty(), false, Optional.empty());
                 case "assistant" -> {
                     String stop = message.path("stopReason").asText();
                     boolean failed = stop.equals("error") || stop.equals("aborted");
                     String said = text(message.path("content"));
                     String error = message.path("errorMessage").asText("");
-                    yield new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.MESSAGE_FROM_AGENT,
+                    yield new LampConversation.Entry(id, parent, at, LampConversation.Kind.MESSAGE_FROM_AGENT,
                             failed && !error.isBlank() ? (said.isBlank() ? error : said + "\n\n" + error) : said,
                             thinking(message.path("content")), calls(message.path("content")), Optional.empty(), failed,
                             Optional.of(message.path("model").asText("")).filter(model -> !model.isBlank()));
                 }
-                case "toolResult" -> new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.TOOL_OUTPUT,
+                case "toolResult" -> new LampConversation.Entry(id, parent, at, LampConversation.Kind.TOOL_OUTPUT,
                         text(message.path("content")), "", none,
                         Optional.of(message.path("toolName").asText("")), message.path("isError").asBoolean(false), Optional.empty());
                 default -> other(id, parent, at, "");
             };
-            case "compaction", "branch_summary" -> new Lamp.Conversation.Entry(id, parent, at,
-                    Lamp.Conversation.Kind.SUMMARY, record.path("summary").asText(""), "", none, Optional.empty(), false, Optional.empty());
+            case "compaction", "branch_summary" -> new LampConversation.Entry(id, parent, at,
+                    LampConversation.Kind.SUMMARY, record.path("summary").asText(""), "", none, Optional.empty(), false, Optional.empty());
             case "custom_message" -> other(id, parent, at,
                     record.path("display").asBoolean(false) ? text(record.path("content")) : "");
             default -> other(id, parent, at, "");
         };
     }
 
-    private static Lamp.Conversation.Entry other(String id, Optional<String> parent, Instant at, String text) {
-        return new Lamp.Conversation.Entry(id, parent, at, Lamp.Conversation.Kind.OTHER, text, "",
-                Tuple.of(Lamp.Conversation.ToolCall.class), Optional.empty(), false, Optional.empty());
+    private static LampConversation.Entry other(String id, Optional<String> parent, Instant at, String text) {
+        return new LampConversation.Entry(id, parent, at, LampConversation.Kind.OTHER, text, "",
+                Tuple.of(LampConversation.ToolCall.class), Optional.empty(), false, Optional.empty());
     }
 
     private static Optional<JsonNode> readLine(String line) {
@@ -136,11 +136,11 @@ final class PiSessionFile {
         return text.toString();
     }
 
-    private static Tuple<Lamp.Conversation.ToolCall> calls(JsonNode content) {
-        Tuple<Lamp.Conversation.ToolCall> calls = Tuple.of(Lamp.Conversation.ToolCall.class);
+    private static Tuple<LampConversation.ToolCall> calls(JsonNode content) {
+        Tuple<LampConversation.ToolCall> calls = Tuple.of(LampConversation.ToolCall.class);
         for (JsonNode block : content)
             if (block.path("type").asText().equals("toolCall"))
-                calls = calls.add(new Lamp.Conversation.ToolCall(block.path("id").asText(""),
+                calls = calls.add(new LampConversation.ToolCall(block.path("id").asText(""),
                         block.path("name").asText(""), summary(block.path("arguments"))));
         return calls;
     }

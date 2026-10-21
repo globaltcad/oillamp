@@ -153,10 +153,10 @@ public sealed interface LampEvent {
 
     /// The conversations the agent had in a lamp, the most recent first. What
     /// `oillamp conversations <dir>` answers.
-    record Conversations(Tuple<Lamp.Conversation> conversations) implements LampEvent {}
+    record Conversations(Tuple<LampConversation> conversations) implements LampEvent {}
 
     /// One conversation, in full. What `oillamp conversations <dir> <conversation>` answers.
-    record ConversationShown(Lamp.Conversation conversation) implements LampEvent {}
+    record ConversationShown(LampConversation conversation) implements LampEvent {}
 
     // ─── host access ───────────────────────────────────────────────────────────────────────
 

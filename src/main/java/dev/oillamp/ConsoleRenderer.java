@@ -325,13 +325,13 @@ final class ConsoleRenderer {
     }
 
     /// The conversations `oillamp conversations` lists, the most recent first.
-    private static String listing(Tuple<dev.lamp.Lamp.Conversation> conversations) {
+    private static String listing(Tuple<dev.lamp.LampConversation> conversations) {
         if (conversations.isEmpty())
             return "no conversations yet — they appear once the agent is asked something";
         StringBuilder out = new StringBuilder(String.format("%-20s %-19s %-9s %s", "CONVERSATION", "LAST (UTC)", "QUESTIONS", "TITLE"));
-        for (dev.lamp.Lamp.Conversation conversation : conversations) {
+        for (dev.lamp.LampConversation conversation : conversations) {
             long questions = conversation.entries().stream()
-                    .filter(entry -> entry.kind() == dev.lamp.Lamp.Conversation.Kind.MESSAGE_TO_AGENT).count();
+                    .filter(entry -> entry.kind() == dev.lamp.LampConversation.Kind.MESSAGE_TO_AGENT).count();
             out.append('\n').append(String.format("%-20s %-19s %-9d %s", conversation.shortId(),
                     when(conversation.modified()), questions, shortened(conversation.title(), 60)));
         }
@@ -341,10 +341,10 @@ final class ConsoleRenderer {
     /// One conversation: the line it stands on, with the ids of its questions and answers, which
     /// `oillamp ask --after` and `--instead-of` take, and where it forks. The agent wrote all of
     /// it, so nothing in it may reach the terminal as a control sequence.
-    private static String describe(dev.lamp.Lamp.Conversation conversation) {
+    private static String describe(dev.lamp.LampConversation conversation) {
         StringBuilder out = new StringBuilder(printable(conversation.title())).append("  (")
                 .append(conversation.id()).append(")\n");
-        for (dev.lamp.Lamp.Conversation.Entry entry : conversation.line()) {
+        for (dev.lamp.LampConversation.Entry entry : conversation.line()) {
             String text = NOT_PRINTABLE.matcher(entry.text().strip()).replaceAll(" ");
             switch (entry.kind()) {
                 case MESSAGE_TO_AGENT -> out.append('\n').append(entry.id()).append("  you:   ")
@@ -353,7 +353,7 @@ final class ConsoleRenderer {
                     if (!text.isEmpty())
                         out.append(entry.id()).append("  agent: ").append(entry.failed() ? "(failed) " : "")
                            .append(text.replace("\n", "\n" + " ".repeat(18))).append('\n');
-                    for (dev.lamp.Lamp.Conversation.ToolCall call : entry.calls())
+                    for (dev.lamp.LampConversation.ToolCall call : entry.calls())
                         out.append(" ".repeat(18)).append("⚙ ").append(printable(call.name())).append(": ")
                            .append(printable(call.summary())).append('\n');
                 }
@@ -361,7 +361,7 @@ final class ConsoleRenderer {
                 case TOOL_OUTPUT, OTHER -> { }
             }
             int others = conversation.children(entry.parent().orElse("")).size();
-            if (entry.parent().isPresent() && others > 1 && entry.kind() == dev.lamp.Lamp.Conversation.Kind.MESSAGE_TO_AGENT)
+            if (entry.parent().isPresent() && others > 1 && entry.kind() == dev.lamp.LampConversation.Kind.MESSAGE_TO_AGENT)
                 out.append(" ".repeat(18)).append("(").append(others - 1).append(others == 2 ? " other question was" : " other questions were")
                    .append(" asked here instead)\n");
         }

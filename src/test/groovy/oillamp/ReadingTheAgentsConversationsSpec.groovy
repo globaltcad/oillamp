@@ -1,7 +1,7 @@
 package oillamp
 
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Conversation.Kind
+import dev.lamp.LampConversation.Kind
 import groovy.json.JsonOutput
 import spock.lang.Specification
 import spock.lang.Subject

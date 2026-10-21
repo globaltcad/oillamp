@@ -359,7 +359,7 @@ final class AgentRunner {
         // their message, and AGENTS.md already tells the agent to read its notes.
         String prompt = pending.job().isPresent() ? wakePrompt(pending, history, started, zone) : run.prompt();
         // A job's conversation is named after its run; a question someone asked is known by itself.
-        // Lamp.Conversation#job reads the job back from this name, so the two change together.
+        // LampConversation#job reads the job back from this name, so the two change together.
         Optional<String> name = run.job().map(job -> run.id() + " (" + job + ")");
         Harness.Answer answer = harness.run(name, prompt, config.maxRun(), pending.where(),
                 () -> cancelled.equals(Optional.of(run.id())),

@@ -1005,11 +1005,11 @@ final class CommandExecutionUtil {
         }
         Path root = ((Result.Ok<LampLayout>) found).value().root();
         if (which.isEmpty()) {
-            context.sink().accept(new LampEvent.Conversations(Tuple.of(dev.lamp.Lamp.Conversation.class,
+            context.sink().accept(new LampEvent.Conversations(Tuple.of(dev.lamp.LampConversation.class,
                     dev.lamp.Lamp.conversations(root))));
             return ExitStatus.SUCCESS;
         }
-        Optional<dev.lamp.Lamp.Conversation> conversation = dev.lamp.Lamp.conversation(root, which.get());
+        Optional<dev.lamp.LampConversation> conversation = dev.lamp.Lamp.conversation(root, which.get());
         if (conversation.isEmpty()) {
             Tuple<Problem> missing = Tuple.of(Problem.class, ProblemCatalogUtil.noSuchConversation(which.get(), root));
             context.sinkAcceptProblems(missing);
@@ -1086,13 +1086,13 @@ final class CommandExecutionUtil {
     private static Result<Control.Request> requestFor(Command.Ask ask, Path lamp) {
         Control.Request request = Control.Request.of("ask").with("prompt", ask.prompt());
         if (ask.conversation().isEmpty()) return Result.ok(request);
-        Optional<dev.lamp.Lamp.Conversation> found = dev.lamp.Lamp.conversation(lamp, ask.conversation().get());
+        Optional<dev.lamp.LampConversation> found = dev.lamp.Lamp.conversation(lamp, ask.conversation().get());
         if (found.isEmpty()) return Result.err(ProblemCatalogUtil.noSuchConversation(ask.conversation().get(), lamp));
         request = request.with("conversation", found.get().id()).with("file", found.get().file());
         Optional<String> entry = ask.after().or(ask::insteadOf);
         if (entry.isEmpty()) return Result.ok(request);
-        Optional<dev.lamp.Lamp.Conversation.Entry> at = found.get().entry(entry.get());
-        boolean question = at.filter(e -> e.kind() == dev.lamp.Lamp.Conversation.Kind.MESSAGE_TO_AGENT).isPresent();
+        Optional<dev.lamp.LampConversation.Entry> at = found.get().entry(entry.get());
+        boolean question = at.filter(e -> e.kind() == dev.lamp.LampConversation.Kind.MESSAGE_TO_AGENT).isPresent();
         if (at.isEmpty())
             return Result.err(ProblemCatalogUtil.noSuchConversation(entry.get(), lamp));
         if (ask.after().isPresent() && question)
