@@ -5,7 +5,9 @@ import java.util.Optional;
 /// The process exit codes. Scripts depend on them, so a code's meaning never changes: `4`
 /// always means "that lamp is already running".
 ///
-/// Public so that a caller can act on how the process ended by name rather than by number.
+/// [LampDirectory#remove] and [Lamp#exitStatus()] report one, so that an application acts on how
+/// an engine process ended by name rather than by number. A script reads the same codes from
+/// `oillamp`.
 public enum LampExitStatus {
     /// Success, or a session that ended cleanly.
     SUCCESS(0),
