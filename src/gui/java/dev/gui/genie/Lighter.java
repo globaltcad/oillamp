@@ -16,7 +16,7 @@ import dev.lamp.LampDirectory;
 
 /// Lights a genie's lamp: starts its sandbox and waits until it runs.
 ///
-/// [LampLighter] does this with oillamp's [dev.lamp.Lamp].
+/// [LampLighterImpl] does this with oillamp's [dev.lamp.Lamp].
 @FunctionalInterface
 public interface Lighter {
 
