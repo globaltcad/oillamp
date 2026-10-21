@@ -8,11 +8,14 @@ import sprouts.Tuple;
 
 /// Everything oillamp reports, as values.
 ///
-/// oillamp never writes to the console directly. It emits these events, and the console
-/// renderer prints them. Tests inspect them, and a future graphical front end could display them
-/// its own way.
+/// The engine never writes to the console directly. It emits these events: the command line
+/// prints them, tests inspect them, and an application receives them through the listeners it
+/// gives [LampDirectory#onEvent], after they crossed from the engine's process as one line of
+/// JSON each ([#toJson], [#fromJson]).
 ///
-/// Public because any caller that wants to show progress, including a GUI, needs to see them.
+/// Most events report progress. Some are the answer to a command, such as [History] for
+/// [LampDirectory#history] or [Schedule] for [LampDirectory#schedule]; the methods that wait for
+/// such an answer return what it carries.
 public sealed interface LampEvent {
 
     /// This event as one line of JSON, the form in which an embedded oillamp reports it to the
