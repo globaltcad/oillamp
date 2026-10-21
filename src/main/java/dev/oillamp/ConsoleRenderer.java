@@ -520,7 +520,7 @@ final class ConsoleRenderer {
 
     // ─── the live activity line ─────────────────────────────────────────────────────────────
 
-    private void startActivity(LampEvent.StepInfo step) {
+    private void startActivity(LampStep step) {
         if (!live || !echoToTerminal || STEPS_THAT_PROMPT.contains(step.kind())) {
             stopActivity();
             return;
@@ -534,7 +534,7 @@ final class ConsoleRenderer {
     }
 
     /// What the user is told a step is doing. Plainer than the step's own description.
-    private static String activityText(LampEvent.StepInfo step) {
+    private static String activityText(LampStep step) {
         return switch (step.kind()) {
             case "BuildImage"          -> "building the sandbox image, the first build takes minutes";
             case "ExtractImageContext" -> "preparing the image build";

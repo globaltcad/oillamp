@@ -25,13 +25,6 @@ public sealed interface LampEvent {
     /// newer version, so that a reader can skip it rather than fail.
     static Optional<LampEvent> fromJson(String line) { return Wire.read(line); }
 
-    /// A planned or executed unit of work, projected for display.
-    ///
-    /// @param kind     the step's type name, for example `"InstallPackages"`; safe to match on
-    /// @param describe one line, for the console and for `--dry-run`
-    /// @param detail   the full story, for the session log
-    record StepInfo(String kind, String describe, String detail) {}
-
     record PhaseStarted(LampStartupPhase phase)         implements LampEvent {}
     record PhaseFinished(LampStartupPhase phase, Duration took) implements LampEvent {}
 
@@ -41,10 +34,10 @@ public sealed interface LampEvent {
     record Info(String area, String text)               implements LampEvent {}
 
     /// Emitted instead of performing a step when `--dry-run` is given.
-    record StepPlanned(StepInfo step)                   implements LampEvent {}
-    record StepStarted(StepInfo step)                   implements LampEvent {}
-    record StepSucceeded(StepInfo step, Duration took)  implements LampEvent {}
-    record StepSkipped(StepInfo step, String why)       implements LampEvent {}
+    record StepPlanned(LampStep step)                   implements LampEvent {}
+    record StepStarted(LampStep step)                   implements LampEvent {}
+    record StepSucceeded(LampStep step, Duration took)  implements LampEvent {}
+    record StepSkipped(LampStep step, String why)       implements LampEvent {}
 
     /// A line of output from a subprocess, tagged with its source (e.g. `"image"`, `"sway"`).
     record Output(String sourceTag, String line)        implements LampEvent {}

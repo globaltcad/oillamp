@@ -7,6 +7,7 @@ import dev.lamp.LampSave
 import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
 import dev.lamp.Problem
+import dev.lamp.LampStep
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -41,7 +42,7 @@ class TheEventWireFormatSpec extends Specification {
                                   Problem.Fix.run('stop it', 'oillamp stop /tmp/lamp')),
             Optional.of(Path.of('/tmp/lamp/.oillamp/logs/x.log')))
 
-    static final LampEvent.StepInfo STEP = new LampEvent.StepInfo('WriteFile', 'write a file', 'because')
+    static final LampStep STEP = new LampStep('WriteFile', 'write a file', 'because')
 
     /** One of every kind of event, with every optional part both present and absent somewhere. */
     /** A snapshot with every part present, a message with a line break in it among them. */

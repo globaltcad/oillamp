@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import dev.lamp.LampEvent;
+import dev.lamp.LampStep;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -226,8 +226,8 @@ sealed interface Step {
         };
     }
 
-    default LampEvent.StepInfo info() {
-        return new LampEvent.StepInfo(kind(), describe(), detail());
+    default LampStep info() {
+        return new LampStep(kind(), describe(), detail());
     }
 
     private static String joined(ValueSet<String> values) {

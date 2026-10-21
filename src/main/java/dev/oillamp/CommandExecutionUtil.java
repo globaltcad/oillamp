@@ -898,7 +898,7 @@ final class CommandExecutionUtil {
     static Tuple<Problem> saveLamp(Context context, LampLayout layout, LampSaveKind kind, String message,
                                    Optional<SessionId> session, Instant now) {
         String activity = "saving lamp state now — this may take a while";
-        context.sink().accept(new LampEvent.StepStarted(new LampEvent.StepInfo(
+        context.sink().accept(new LampEvent.StepStarted(new LampStep(
                 "SaveLamp", activity + " (" + kind.label() + ")",
                 "save " + layout.root() + " (" + kind.label() + ")")));
         // Saved, Info (nothing changed), or the caller's Warning/Failure ends the activity line.
