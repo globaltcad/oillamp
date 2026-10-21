@@ -214,6 +214,31 @@ class HoldingALampSpec extends Specification {
             lamp?.close()
     }
 
+    def 'A command run in the sandbox gets its input, and gives its output, byte for byte'() {
+        reportInfo """
+            An application runs a command in the sandbox to move files in and out, or to speak a
+            protocol with a program there, over the command's standard input and output. The
+            lamp starts it with its launcher, as it starts the engine, so a lamp launched some
+            other way, as this one is on a simulated machine, runs it there too.
+        """
+        given:
+            var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
+            lamp.awaitRunning(Duration.ofSeconds(30))
+
+        when: 'it writes what it is given to a file in the agent\'s home, and says where'
+            Process writing = lamp.exec('sh', '-c', 'cat > "$1"; echo "$HOME/$1"', 'sh', 'it\'s here.txt')
+            writing.outputStream.withCloseable { it.write('hello\nworld'.bytes) }
+            var said = writing.inputStream.text.trim()
+
+        then:
+            writing.waitFor() == 0
+            Files.readString(Path.of(said)) == 'hello\nworld'
+            Lamp.agentHome(host.lampPath()).get().resolve('it\'s here.txt') == Path.of(said)
+
+        cleanup:
+            lamp?.close()
+    }
+
     def 'An application can show the sandbox\'s desktop, through the socket the lamp names'() {
         reportInfo """
             An application that wants the player to watch the agent work draws the sandbox's

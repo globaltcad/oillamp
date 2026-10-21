@@ -160,6 +160,14 @@ final class RealMachine implements Machine {
         return new ProcessWindow(process, stdio);
     }
 
+    @Override public Process exec(Command command) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder(asList(command.argv()));
+        for (Pair<String, String> variable : command.environment())
+            builder.environment().put(variable.first(), variable.second());
+        command.workingDirectory().ifPresent(directory -> builder.directory(directory.toFile()));
+        return builder.start();
+    }
+
     @Override public Conversation converse(Command command) {
         ProcessBuilder builder = new ProcessBuilder(shield(command));
         for (Pair<String, String> variable : command.environment())

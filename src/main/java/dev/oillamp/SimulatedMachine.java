@@ -472,6 +472,35 @@ final class SimulatedMachine implements Machine {
         return new SimulatedPi(agent.get(), agentHome(command), modelsOffered);
     }
 
+    /// A command run in a lamp's sandbox through ssh runs here instead, in the agent's home, as
+    /// the user, with `HOME` there: ssh joins what follows the host with spaces and gives it to
+    /// the sandbox's shell, and so does this, to `sh -c`. Any other command runs as it is, if the
+    /// scenario lets it really run.
+    @Override public Process exec(Command command) throws IOException {
+        if (passThrough.contains(command.executable())) return realMachine.exec(command);
+        Optional<Path> home = agentHome(command);
+        if (!command.executable().equals("ssh") || home.isEmpty())
+            throw new IOException("not simulated: " + command.commandLine());
+        ProcessBuilder builder = new ProcessBuilder("sh", "-c", String.join(" ", remoteCommand(command)));
+        builder.environment().put("HOME", home.get().toString());
+        builder.directory(home.get().toFile());
+        return builder.start();
+    }
+
+    /// What an ssh command line runs on the other side: everything after its options and the
+    /// host.
+    private static List<String> remoteCommand(Command command) {
+        List<String> argv = command.argv().toList();
+        int at = 1;
+        while (at < argv.size() && argv.get(at).startsWith("-")) {
+            String option = argv.get(at);
+            // ssh's options that take a value, given as the next argument.
+            boolean valued = option.length() == 2 && "BbcDEeFIiJLlmOoPpRSWw".indexOf(option.charAt(1)) >= 0;
+            at += valued ? 2 : 1;
+        }
+        return argv.subList(Math.min(at + 1, argv.size()), argv.size());
+    }
+
     /// The agent's home of the lamp an ssh command reaches, found from the `ssh_config` it names,
     /// which is in the lamp's state directory.
     private static Optional<Path> agentHome(Command command) {

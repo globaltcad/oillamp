@@ -58,14 +58,20 @@ class ScenarioHost {
 
     /**
      * Starts the engine the way a {@link dev.lamp.Lamp} does, but on this machine: in this JVM,
-     * against the simulation. Each engine started is kept in {@link #engines}.
+     * against the simulation. Each engine started is kept in {@link #engines}. A command the lamp
+     * runs in its sandbox, with {@link dev.lamp.Lamp#exec}, runs in the simulated sandbox too.
      */
     dev.lamp.LampLauncher getLauncher() {
-        return { List<String> arguments, Map<String, String> environment ->
-            var engine = new EngineInThisProcess(simulation, arguments, environment)
-            engines << engine
-            engine
-        } as dev.lamp.LampLauncher
+        return new dev.lamp.LampLauncher() {
+            Process launch(List<String> arguments, Map<String, String> environment) {
+                var engine = new EngineInThisProcess(simulation, arguments, environment)
+                engines << engine
+                engine
+            }
+            Process exec(List<String> commandLine) {
+                simulation.build().exec(Machine.Command.of(commandLine as String[]))
+            }
+        }
     }
 
     final List<EngineInThisProcess> engines = new java.util.concurrent.CopyOnWriteArrayList<>()

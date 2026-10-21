@@ -147,6 +147,16 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
     /// Like [#launch], there is no timeout: the conversation lasts until one side closes it.
     Conversation converse(Command command);
 
+    /// Starts a process whose standard input, output and error the caller reads and writes
+    /// itself, byte for byte: a command an application runs in a sandbox, through the ssh
+    /// command line a session hands it, as `Lamp.exec` does.
+    ///
+    /// The engine never calls this: the application starts such a command. A scenario's lamp
+    /// does, so that the command reaches the simulated sandbox.
+    ///
+    /// @throws IOException when the process could not be started at all
+    Process exec(Command command) throws IOException;
+
     /// A running program, and the lines it and oillamp exchange.
     interface Conversation {
 
