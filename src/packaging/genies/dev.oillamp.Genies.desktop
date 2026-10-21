@@ -8,4 +8,4 @@ Icon=dev.oillamp.Genies
 Terminal=false
 Categories=Development;
 Keywords=AI;agent;chat;sandbox;
-StartupWMClass=dev-gui-Genies
+StartupWMClass=dev-gui-Main
