@@ -1,5 +1,6 @@
 package dev.gui.view;
 
+import dev.gui.Genies;
 import dev.gui.model.*;
 import sprouts.*;
 import swingtree.UI;
