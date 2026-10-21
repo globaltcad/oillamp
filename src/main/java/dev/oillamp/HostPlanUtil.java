@@ -1,6 +1,6 @@
 package dev.oillamp;
 
-import dev.lamp.LampPhase;
+import dev.lamp.LampStartupPhase;
 import dev.lamp.Problem;
 
 import sprouts.Association;
@@ -100,7 +100,7 @@ final class HostPlanUtil {
         Tuple<Problem> errors = problems.retainIf(Problem::isError);
         if (!errors.isEmpty())
             return Result.err(problems);
-        return Result.ok(Plan.of(LampPhase.HOST, steps), problems);
+        return Result.ok(Plan.of(LampStartupPhase.HOST, steps), problems);
     }
 
     private static Tuple<Problem> podmanProblems(HostFacts facts) {

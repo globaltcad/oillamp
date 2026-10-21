@@ -24,7 +24,7 @@ class TheShapeOfTheCodeSpec extends Specification {
     /** What an application that embeds oillamp sees: the words oillamp speaks in, and a lamp. */
     static final Set<String> EMBEDDING_API = [
             'LampEvent', 'Problem', 'ExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
-            'LampSaveKind', 'LampJob', 'JobAuthor', 'LampPhase'
+            'LampSaveKind', 'LampJob', 'JobAuthor', 'LampStartupPhase'
     ] as Set
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API
@@ -113,7 +113,7 @@ class TheShapeOfTheCodeSpec extends Specification {
         """
         when:
             var leaks = []
-            // By package as well as name: dev.oillamp has an internal LampPhase of its own.
+            // By package as well as name: a dev.lamp type may share its name with an internal one.
             code.findAll { (it.packageName == 'dev.oillamp' && it.simpleName in ENGINE_API)
                         || (it.packageName == 'dev.lamp' && it.simpleName in EMBEDDING_API) }.each { type ->
                 type.methods.findAll { it.modifiers.contains(JavaModifier.PUBLIC) }.each { method ->

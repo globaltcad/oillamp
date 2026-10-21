@@ -32,8 +32,8 @@ public sealed interface LampEvent {
     /// @param detail   the full story, for the session log
     record StepInfo(String kind, String describe, String detail) {}
 
-    record PhaseStarted(LampPhase phase)                    implements LampEvent {}
-    record PhaseFinished(LampPhase phase, Duration took)    implements LampEvent {}
+    record PhaseStarted(LampStartupPhase phase)         implements LampEvent {}
+    record PhaseFinished(LampStartupPhase phase, Duration took) implements LampEvent {}
 
     /// A check that passed, e.g. `[host] ✓ podman 5.4.2, rootless, crun`.
     record Ok(String area, String text)                 implements LampEvent {}
@@ -87,7 +87,7 @@ public sealed interface LampEvent {
     /// @param what what the agent shows, in its own words, such as "the chart you asked for".
     ///             Control characters are removed, and it is at most 200 characters long. Empty
     ///             when the agent did not say
-    record LookAtDesktop(String what) implements LampEvent {}
+    record LookAtDesktop(String what)                   implements LampEvent {}
 
     /// A window oillamp opened on the user's desktop: the terminal or a viewer.
     ///
@@ -96,7 +96,7 @@ public sealed interface LampEvent {
     record WindowOpened(String what, Tuple<String> argv) implements LampEvent {}
 
     /// A block of lines with a title, such as the briefing when a session starts or the summary when it ends.
-    record Summary(String title, Tuple<String> lines) implements LampEvent {}
+    record Summary(String title, Tuple<String> lines)   implements LampEvent {}
 
     /// A save made a snapshot. A save that finds nothing changed makes none, and reports an
     /// [Info] instead.
@@ -105,7 +105,7 @@ public sealed interface LampEvent {
     record Saved(LampSave snapshot, int files)          implements LampEvent {}
 
     /// A lamp's snapshots, newest first. What `oillamp history` answers.
-    record History(Tuple<LampSave> snapshots) implements LampEvent {}
+    record History(Tuple<LampSave> snapshots)           implements LampEvent {}
 
     /// The lamp was brought back to `target`, and `result` is the snapshot that records it.
     /// When the lamp already was as `target` holds it, nothing changed and `result` is `target`.
@@ -122,11 +122,11 @@ public sealed interface LampEvent {
             implements LampEvent {}
 
     /// A job was added to the schedule, by the user or by the agent.
-    record JobAdded(LampJob job)                            implements LampEvent {}
+    record JobAdded(LampJob job)                        implements LampEvent {}
     /// A job was taken off the schedule.
     ///
     /// @param why for example "removed by the user", "expired" or "ran once, as it was meant to"
-    record JobRemoved(LampJob job, String why)              implements LampEvent {}
+    record JobRemoved(LampJob job, String why)          implements LampEvent {}
     /// A job was switched on or off, or the whole schedule paused or resumed.
     record ScheduleChanged(String what)                 implements LampEvent {}
 

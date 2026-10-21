@@ -397,7 +397,7 @@ final class CommandExecutionUtil {
                             + " takes precedence over /usr/bin/" + tool
                             + " inside the sandbox; update does not change that copy"));
             }
-            Result<Plan> built = new StepRunner(machine, context).run(Plan.of(dev.lamp.LampPhase.IMAGE,
+            Result<Plan> built = new StepRunner(machine, context).run(Plan.of(LampStartupPhase.IMAGE,
                     Tuple.of(Step.class, new Step.ExtractImageContext(layout.imageContext()),
                             new Step.BuildImage(image, layout.imageContext(),
                                     SandboxPhase.asAssociation(arguments), system))));
@@ -474,7 +474,7 @@ final class CommandExecutionUtil {
                 .withTimeout(Duration.ofSeconds(20)).labelled("podman container exists")
                 .shieldedFromSignals()).succeeded();
         if (!exists) return;
-        Result<Plan> removed = new StepRunner(machine, context).run(Plan.of(dev.lamp.LampPhase.SESSION,
+        Result<Plan> removed = new StepRunner(machine, context).run(Plan.of(LampStartupPhase.SESSION,
                 Tuple.of(Step.class, new Step.RemoveContainer(container, why))));
         if (removed instanceof Result.Err<Plan> failure) context.sinkAcceptProblems(failure.problems());
         else context.sink().accept(new LampEvent.Info("session",

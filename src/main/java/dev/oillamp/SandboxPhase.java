@@ -1,6 +1,7 @@
 package dev.oillamp;
 
 import dev.lamp.LampEvent;
+import dev.lamp.LampStartupPhase;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -62,7 +63,7 @@ final class SandboxPhase {
         // Two plans, reported as separate phases, because "the image could not be built" and
         // "the sandbox would not start" are different problems.
         if (!steps.isEmpty()) {
-            Result<Plan> image_ = runner.run(Plan.of(dev.lamp.LampPhase.IMAGE, steps));
+            Result<Plan> image_ = runner.run(Plan.of(LampStartupPhase.IMAGE, steps));
             if (image_ instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
             if (!imagePresent && !context.options().dryRun())
                 context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.imageLeftovers(image.value())));
@@ -84,7 +85,7 @@ final class SandboxPhase {
                         new Step.Endpoint("the desktop (VNC)", layout.vncSocket()),
                         new Step.Endpoint("the shell (SSH)", layout.agentSshSocket()))));
 
-        Result<Plan> started = runner.run(Plan.of(dev.lamp.LampPhase.SESSION, session));
+        Result<Plan> started = runner.run(Plan.of(LampStartupPhase.SESSION, session));
         if (started instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
         if (context.options().dryRun())
             return Result.ok(new Running(container, image, "{}"), started.warnings());
