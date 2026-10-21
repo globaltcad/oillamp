@@ -2,7 +2,7 @@ package gui
 
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
-import dev.gui.genie.Lighter
+import dev.gui.genie.LampLighter
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
@@ -359,19 +359,19 @@ class ChoosingTheGeniesModelSpec extends Specification {
      *  out. A command run in the sandbox runs here, in the genie's home: the simulated machine has
      *  no sandbox to run it in.
      */
-    private Lighter lighter() {
+    private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
         var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
             here(real.light(directory, name, settings, key, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events -> real.join(directory, events).map { here(it) } }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
-                unlit: { Path directory -> real.unlit(directory) }] as Lighter
+                unlit: { Path directory -> real.unlit(directory) }] as LampLighter
     }
 
     /** `lit`, except that its commands run here, in the genie's home, and putting it out is noted. */
-    private Lighter.Lit here(Lighter.Lit lit) {
-        new Lighter.Lit() {
+    private LampLighter.Lit here(LampLighter.Lit lit) {
+        new LampLighter.Lit() {
             Process exec(String... command) {
                 var builder = new ProcessBuilder(command as List<String>)
                 builder.environment().put('HOME', home().toString())

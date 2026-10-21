@@ -30,7 +30,7 @@ public final class HostAccessKeeper {
     private final Consumer<UnaryOperator<Genie>> changes;
     private final ExecutorService work = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("host-access").factory());
 
-    /// @param lamp the genie's lamp, unlit: [Lighter#unlit]
+    /// @param lamp the genie's lamp, unlit: [LampLighter#unlit]
     public HostAccessKeeper(Path directory, LampDirectory lamp, Consumer<UnaryOperator<Genie>> changes) {
         this.directory = directory;
         this.lamp = lamp;

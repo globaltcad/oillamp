@@ -1,7 +1,7 @@
 package gui
 
 import dev.gui.GeniesBackend
-import dev.gui.genie.Lighter
+import dev.gui.genie.LampLighter
 import dev.gui.genie.OllamaKeeper
 import dev.gui.genie.Shelf
 import dev.gui.model.GeniesState
@@ -73,7 +73,7 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
             var state = Var.of(GeniesState.of(Tuple.of(Genie, genie), Settings.defaults(), Optional.of('sk-env'))
                     .withPage(GeniesState.Page.SETTINGS))
             // Held until the end: the app watches the page through views it keeps, which go when it goes.
-            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, progress, events -> throw new IOException('no lamps here') } as Lighter,
+            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, progress, events -> throw new IOException('no lamps here') } as LampLighter,
                                  new OllamaKeeper(tmp.resolve('ollama')))
 
         when: 'the user changes the model, then clicks the genie instead of Done'

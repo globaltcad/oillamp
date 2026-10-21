@@ -29,7 +29,7 @@ import dev.lamp.LampRun;
 /// reads them. Which agent that is, and where it keeps its settings, is the engine's business.
 ///
 /// Every lamp is lit with its schedule on, so the jobs on it wake the genie while it is awake.
-public final class LampLighterImpl implements Lighter {
+public final class LampLighterImpl implements LampLighter {
 
     private final Optional<LampLauncher> launcher;
 
