@@ -30,7 +30,7 @@ final class CommandExecutionUtil {
     private static final Duration ASK_PATIENCE = Duration.ofDays(1);
 
     /// The class `oillamp genies` starts: Genies' entry point, named and never imported.
-    private static final String GENIES = "dev.gui.GeniesBackend";
+    private static final String GENIES = "dev.gui.Main";
 
     /// One oillamp container, as `podman ps` describes it.
     private record RunningSandbox(String name, String state, String lamp) {}
