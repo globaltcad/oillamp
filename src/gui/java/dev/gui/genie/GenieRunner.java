@@ -48,12 +48,12 @@ import sprouts.Tuple;
 public final class GenieRunner {
 
     private final Path directory;
-    private final Lighter lighter;
+    private final LampLighter lighter;
     private final Consumer<UnaryOperator<Genie>> changes;
     private final ExecutorService work = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("genie").factory());
     /// One reading after the other, so that an older reading never arrives after a newer one.
     private final ExecutorService conversationReader = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("conversations").factory());
-    private volatile Optional<Lighter.Lit> lamp = Optional.empty();
+    private volatile Optional<LampLighter.Lit> lamp = Optional.empty();
     /// What the lit lamp was lit with; empty while it is out, and for a lamp that was joined,
     /// whose service and key Genies cannot know.
     private volatile Optional<LitWith> litWith = Optional.empty();
@@ -86,7 +86,7 @@ public final class GenieRunner {
     /// the app that joins it next.
     private volatile boolean leftRunning;
 
-    public GenieRunner(Path directory, Lighter lighter, Consumer<UnaryOperator<Genie>> changes) {
+    public GenieRunner(Path directory, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
         this.directory = directory;
         this.lighter = lighter;
         this.changes = changes;
@@ -125,7 +125,7 @@ public final class GenieRunner {
             sleeping = false;
             changes.accept(Genie::waking);
             try {
-                Lighter.Lit lit = lighter.light(directory, name, settings, key,
+                LampLighter.Lit lit = lighter.light(directory, name, settings, key,
                         what -> changes.accept(genie -> genie.lampSays(what)), this::onLampEvent);
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
@@ -160,7 +160,7 @@ public final class GenieRunner {
 
     /// Stops `run`, such as a job's. What the genie did until then stays, and is saved.
     public void stopRun(String run) {
-        Optional<Lighter.Lit> lit = lamp;
+        Optional<LampLighter.Lit> lit = lamp;
         if (lit.isEmpty()) return;
         Thread.ofVirtual().name("stop").start(() -> {
             try {
@@ -175,7 +175,7 @@ public final class GenieRunner {
 
     /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
     public void decidePermission(String request, boolean allowed) {
-        Optional<Lighter.Lit> lit = lamp;
+        Optional<LampLighter.Lit> lit = lamp;
         changes.accept(genie -> genie.withHostAccess(genie.hostAccess().permissionDecided(request)));
         if (lit.isEmpty()) return;
         Thread.ofVirtual().name("permission").start(() -> {
@@ -302,7 +302,7 @@ public final class GenieRunner {
             heldWhileCatchingUp = Optional.of(new ArrayList<>());
             changes.accept(genie -> genie.waking().withActivity("joining its lamp, which was left running"));
             try {
-                Optional<Lighter.Lit> lit = lighter.join(directory, this::onLampEvent);
+                Optional<LampLighter.Lit> lit = lighter.join(directory, this::onLampEvent);
                 if (lit.isEmpty()) {
                     heldWhileCatchingUp = Optional.empty();
                     changes.accept(Genie::asleep);
@@ -377,7 +377,7 @@ public final class GenieRunner {
         work.execute(() -> {
             sleeping = true;
             leftRunning = true;
-            lamp.ifPresent(Lighter.Lit::leaveRunning);
+            lamp.ifPresent(LampLighter.Lit::leaveRunning);
             lamp = Optional.empty();
         });
         work.shutdown();
@@ -387,7 +387,7 @@ public final class GenieRunner {
     /// Hands a question to the lamp's session, on a thread of its own: it starts a short-lived
     /// engine process, which takes a moment.
     private void sendQuestion(LampPrompt question) {
-        Optional<Lighter.Lit> lit = lamp;
+        Optional<LampLighter.Lit> lit = lamp;
         if (lit.isEmpty()) {
             showProblem("The genie is asleep; wake it first.");
             return;
@@ -494,7 +494,7 @@ public final class GenieRunner {
     public void useModel(Settings settings, String key) {
         work.execute(() -> {
             String wanted = settings.model().strip();
-            Optional<Lighter.Lit> lit = lamp;
+            Optional<LampLighter.Lit> lit = lamp;
             Optional<LitWith> was = litWith;
             if (lit.isEmpty() || was.isEmpty() || wanted.isEmpty() || wanted.equals(was.get().model())) return;
             if (!was.get().service().equals(settings.service().strip()) || !was.get().key().equals(key)) return;
@@ -537,12 +537,12 @@ public final class GenieRunner {
     public boolean isAwake() { return lamp.isPresent(); }
 
     /// The desktop, while the lamp is lit.
-    public Optional<Desktop> desktop() { return lamp.map(Lighter.Lit::desktop); }
+    public Optional<Desktop> desktop() { return lamp.map(LampLighter.Lit::desktop); }
 
     private void putOutLamp() {
         schedule.wentOut();
         sleeping = true;
-        lamp.ifPresent(Lighter.Lit::close);
+        lamp.ifPresent(LampLighter.Lit::close);
         lamp = Optional.empty();
         litWith = Optional.empty();
         history.wentOut();
@@ -607,10 +607,10 @@ public final class GenieRunner {
         });
     }
 
-    private interface Transfer { void run(Lighter.Lit lit) throws IOException, InterruptedException; }
+    private interface Transfer { void run(LampLighter.Lit lit) throws IOException, InterruptedException; }
 
     private void transfer(String done, Transfer transfer) {
-        Optional<Lighter.Lit> lit = lamp;
+        Optional<LampLighter.Lit> lit = lamp;
         if (lit.isEmpty()) {
             showProblem("The genie is asleep; wake it first.");
             return;

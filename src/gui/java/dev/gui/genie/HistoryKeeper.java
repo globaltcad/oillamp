@@ -31,7 +31,7 @@ public final class HistoryKeeper {
     /// lamp does not make the keeper read it.
     private volatile boolean watched;
 
-    /// @param lamp the genie's lamp, unlit: [Lighter#unlit]
+    /// @param lamp the genie's lamp, unlit: [LampLighter#unlit]
     public HistoryKeeper(LampDirectory lamp, Consumer<UnaryOperator<Genie>> changes) {
         this.lamp = lamp;
         this.changes = changes;
