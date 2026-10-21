@@ -33,11 +33,10 @@ final class Main {
     }
 
     private static void open(Shelf shelf, ErrorLog errors) {
-        Genies app = Genies.open(shelf);
+        Genies app = Genies.open(shelf, errors);
         JFrame frame = new JFrame("Genies");
         new JGlassPane(frame.getRootPane());
         GeniesView view = new GeniesView(app);
-        errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state().update(it -> it.withTrouble(trouble))));
         frame.setContentPane(view);
         frame.setIconImage(GeniesView.windowIcon());
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -84,16 +83,9 @@ final class Main {
         // goes on without the panel, before its lamp is let go. A genie put to sleep takes its
         // desktop with it.
         Optional<Thread> givingBack = keep ? view.letGoOfTheDesktop() : Optional.empty();
-        Thread.ofVirtual().name("quit").start(() -> {
-            try {
-                if (givingBack.isPresent()) givingBack.get().join();
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-            SwingUtilities.invokeLater(() -> app.quit(keep, () -> {
-                frame.dispose();
-                System.exit(0);
-            }));
+        app.quit(keep, givingBack, () -> {
+            frame.dispose();
+            System.exit(0);
         });
     }
 }
