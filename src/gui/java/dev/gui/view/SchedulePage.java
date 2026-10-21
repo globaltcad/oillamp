@@ -59,7 +59,7 @@ import static swingtree.UI.*;
 /// jobs themselves as tiles beside it, and an editor with room to write a job's task.
 ///
 /// Like the rest of the window, a function of the [GeniesState]: every field is a lens onto the
-/// selected genie's [Schedule], and anything that changes the lamp goes through [Actions].
+/// selected genie's [Schedule], and anything that changes the lamp goes through [Genies].
 final class SchedulePage {
 
     /*
@@ -93,7 +93,7 @@ final class SchedulePage {
     private static final int NODE_Y = 15;
 
     private final Var<GeniesState> state;
-    private final Actions actions;
+    private final Genies app;
     private final Look look;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
@@ -112,9 +112,9 @@ final class SchedulePage {
     private final Val<Boolean> overview;
     private final Val<Boolean> wide;
 
-    SchedulePage(Var<GeniesState> state, Actions actions, Look look) {
+    SchedulePage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
-        this.actions = actions;
+        this.app = app;
         this.look = look;
         genie    = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         schedule = genie.zoomTo(Genie::schedule, Genie::withSchedule);
@@ -193,11 +193,11 @@ final class SchedulePage {
                 .withStyle(wide, (isWide, it) -> it.backgroundColor(TRANSPARENT).padding(isWide ? 4 : 0, 0, 0, 0))
                 .add(button("✦  Wake").group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
                      .withTooltip("Jobs run only while the genie is awake")
-                     .onClick(it -> actions.wake(selected())))
+                     .onClick(it -> app.wake(selected())))
                 .add(button(paused.viewAsString(it -> it ? "▶  Resume" : "❚❚  Pause")).group(Skin.QUIET_BUTTON)
                      .isVisibleIf(schedule.viewAs(Boolean.class, it -> it.paused() || !it.jobs().isEmpty()))
                      .withTooltip(paused.viewAsString(it -> it ? "Let the jobs run again" : "Hold every job until you resume; nothing is lost"))
-                     .onClick(it -> actions.pauseSchedule(selected(), !schedule.get().paused())))
+                     .onClick(it -> app.pauseSchedule(selected(), !schedule.get().paused())))
                 .add(button("＋  New job").group(Skin.FLAME_BUTTON)
                      .onClick(it -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))));
     }
@@ -376,11 +376,11 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .isVisibleIf(moment.conversation().isPresent() || working)
                 .add(ViewPartsUtil.link("Open the conversation  →").isVisibleIf(moment.conversation().isPresent())
-                     .onClick(it -> moment.conversation().ifPresent(id -> actions.openConversation(selected(), id))))
+                     .onClick(it -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id))))
                 .add(button("Stop").group(Skin.QUIET_BUTTON).isVisibleIf(working)
                      .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
                      .withTooltip("Stop this run; what the genie did so far is kept, and saved")
-                     .onClick(it -> actions.stopRun(selected(), moment.run()))));
+                     .onClick(it -> app.stopRun(selected(), moment.run()))));
     }
 
     // ─── the jobs ──────────────────────────────────────────────────────────────────────────
@@ -428,7 +428,7 @@ final class SchedulePage {
             })
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 10", "[][grow][]")
-                .add("top, gaptop 1", onOff(on, () -> actions.switchJob(selected(), id, !job.get().enabled())))
+                .add("top, gaptop 1", onOff(on, () -> app.switchJob(selected(), id, !job.get().enabled())))
                 .add("growx, wmin 0", words(Viewable.of(Words.class, when, on, (text, isOn) -> new Words(text, isOn ? TEXT : SUBTEXT)), 13, 2f))
                 .add("top", button("").group(Skin.ICON_BUTTON).withTooltip("Change, switch off or remove this job")
                      .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, SUBTEXT)))
@@ -463,7 +463,7 @@ final class SchedulePage {
         JPopupMenu menu = new JPopupMenu();
         schedule.get().job(id).ifPresent(job -> {
             menu.add(ViewPartsUtil.item("Change…", true, () -> schedule.update(From.VIEW, s -> s.change(id, state.get().localNow()))));
-            menu.add(ViewPartsUtil.item(job.enabled() ? "Switch off" : "Switch on", true, () -> actions.switchJob(selected(), id, !job.enabled())));
+            menu.add(ViewPartsUtil.item(job.enabled() ? "Switch off" : "Switch on", true, () -> app.switchJob(selected(), id, !job.enabled())));
             menu.addSeparator();
             JMenuItem remove = ViewPartsUtil.item("Remove…", true, () -> confirmRemove(job));
             remove.setForeground(TROUBLE);
@@ -476,7 +476,7 @@ final class SchedulePage {
         ConfirmAnswer answer = UI.confirmation("Take \"" + job.title() + "\" off the schedule? "
                 + "What its runs did stays in the history.").titled("Remove a job")
                 .yesOption("Remove").noOption("Keep").cancelOption("").show();
-        if (answer == ConfirmAnswer.YES) actions.removeJob(selected(), job.id());
+        if (answer == ConfirmAnswer.YES) app.removeJob(selected(), job.id());
     }
 
     // ─── the editor ────────────────────────────────────────────────────────────────────────
@@ -514,7 +514,7 @@ final class SchedulePage {
                      .withTooltip(blocked.viewAsString(it -> it.isEmpty() ? "Ctrl and Return save too" : it))
                      .withStyle(canSave, (can, it) -> can ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
                          .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                     .onClick(it -> actions.saveJob(selected()))));
+                     .onClick(it -> app.saveJob(selected()))));
     }
 
     /// The task, with room to write a proper brief.
@@ -536,7 +536,7 @@ final class SchedulePage {
                         KeyEvent key = it.getEvent();
                         if (key.getKeyCode() == KeyEvent.VK_ENTER && key.isControlDown()) {
                             key.consume();
-                            actions.saveJob(selected());
+                            app.saveJob(selected());
                         }
                     })))
             .add("growx, wmin 0",

@@ -7,8 +7,8 @@ import java.util.UUID;
 import dev.gui.desktop.Desktop;
 
 /// What the window asks the app to do, beyond changing its state: everything that starts,
-/// stops or moves something outside the window. The app, [dev.gui.Genies], does it.
-public interface Actions {
+/// stops or moves something outside the window. The app, [dev.gui.GeniesBackend], does it.
+public interface Genies {
 
     void newGenie();
 
