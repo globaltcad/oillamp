@@ -101,7 +101,9 @@ final class HostPaths {
     }
 
     private static Tuple<Path> allowed(Path home, Tuple<String> roots) {
-        return roots.isEmpty() ? Tuple.of(Path.class, real(home))
+        // Not `Tuple.of(Path.class, real(home))`: a Path is an Iterable of its names, so that
+        // would be the tuple [home, me], and no absolute path starts with either.
+        return roots.isEmpty() ? Tuple.of(Path.class).add(real(home))
                                : roots.mapTo(Path.class, root -> real(Path.of(root)));
     }
 }

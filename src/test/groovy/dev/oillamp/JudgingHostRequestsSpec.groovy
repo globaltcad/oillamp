@@ -22,6 +22,7 @@ each is easier to see on its own than through a whole session:
   asked and did, and keeps the one that just did something.
 - **How the checker's answer is read off the wire.** As bytes, so a reason in any language
   arrives whole.
+- **Where a lamp without roots reaches.** The user's home, all of it, and nothing beside it.
 - **Which files "show" may open.** Documents, never something the desktop would run.
 - **Where a copy out reads from.** The sandbox's own home, and nowhere else.
 - **When the person is asked.** One question at a time, and only while the session runs.
@@ -66,6 +67,27 @@ class JudgingHostRequestsSpec extends Specification {
 
         and: 'a forgotten run is judged on the request alone'
             HostAccess.logOf(known, 'run-1').instruction() == ''
+    }
+
+    def 'A lamp that names no roots reaches the user\'s home, and only that'() {
+        reportInfo """
+            An empty `host_access.roots` means the home directory, which is what Genies and the
+            lamp template leave it as. The home itself is inside, and so is anything under it;
+            a neighbour whose name only starts the same way is not.
+        """
+        given:
+            var home = File.createTempDir('home', '').toPath()
+            Files.createDirectories(home.resolve('Documents'))
+            var none = Tuple.of(String)
+
+        expect:
+            HostPaths.within(HostPaths.locate('~/', home).value().hostPath(), home, none)
+            HostPaths.within(HostPaths.locate('~/Documents/q3.md', home).value().hostPath(), home, none)
+            !HostPaths.within(Path.of(home.toRealPath().toString() + '-other'), home, none)
+            !HostPaths.within(Path.of('/etc/passwd'), home, none)
+
+        cleanup:
+            home.toFile().deleteDir()
     }
 
     def 'The checker\'s answer is read as bytes, so a reason in any language arrives whole'() {
