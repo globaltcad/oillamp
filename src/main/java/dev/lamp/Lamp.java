@@ -94,7 +94,7 @@ public final class Lamp implements AutoCloseable {
     private final CountDownLatch ended = new CountDownLatch(1);
     /// How to run a command in the sandbox, once the engine has said so. Present means running.
     private volatile Optional<LampEvent.SessionOpened> opened = Optional.empty();
-    private volatile Optional<ExitStatus> exit = Optional.empty();
+    private volatile Optional<LampExitStatus> exit = Optional.empty();
     /// Whether the session ends when this lamp is closed: true for a lamp this application
     /// started, until it is left running; false for one it joined.
     private volatile boolean holding;
@@ -131,7 +131,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Everything an engine said, and how it ended.
-    record Ran(ExitStatus status, List<LampEvent> events) {
+    record Ran(LampExitStatus status, List<LampEvent> events) {
 
         /// Throws the first error the engine reported, if it did not succeed.
         void orThrow() throws LampFailedException {
@@ -559,8 +559,8 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// How the engine ended, once it has. For a joined lamp, how following ended:
-    /// [ExitStatus#SUCCESS] when the session ended, or when this lamp was closed.
-    public Optional<ExitStatus> exitStatus() { return exit; }
+    /// [LampExitStatus#SUCCESS] when the session ended, or when this lamp was closed.
+    public Optional<LampExitStatus> exitStatus() { return exit; }
 
     /// Ends the session and waits until the engine has shut the sandbox down.
     ///
@@ -643,7 +643,7 @@ public final class Lamp implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 code = -1;
             }
-            exit = Optional.of(ExitStatus.ofCode(code).orElse(ExitStatus.ERROR));
+            exit = Optional.of(LampExitStatus.ofCode(code).orElse(LampExitStatus.ERROR));
             runningOrEnded.countDown();
             ended.countDown();
         }

@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.Machine
 import dev.oillamp.OilLamp
@@ -222,7 +222,7 @@ class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
             engine.waitFor(2, TimeUnit.MINUTES)
 
         then:
-            stopped.status() == ExitStatus.SUCCESS
+            stopped.status() == LampExitStatus.SUCCESS
             !engine.alive
             filesHolding(directory).isEmpty()
             !holdsKey(Files.readString(engineOutput))

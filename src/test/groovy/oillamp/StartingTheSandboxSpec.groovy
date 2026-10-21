@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.Machine
 import spock.lang.Specification
@@ -56,7 +56,7 @@ class StartingTheSandboxSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'the session starts'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'and oillamp checked the sockets rather than trusting the readiness file'
             outcome.stepKinds().contains('CheckEndpoints')
@@ -82,7 +82,7 @@ class StartingTheSandboxSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'oillamp refuses to call this a session'
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
 
         and: 'and says which part is not answering, in the words the user would use'
             outcome.errors().any { it.toString().contains('desktop') }
@@ -111,7 +111,7 @@ class StartingTheSandboxSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the start fails'
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
             outcome.reported('OIL-SANDBOX-004')
 
         and: 'and the container it had started is removed before oillamp exits'
@@ -186,7 +186,7 @@ class StartingTheSandboxSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'the session fails, because the only readiness file present is the old one'
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
 
         and: 'the previous session\'s file is still sitting there, having been believed by nobody'
             Files.readString(readyFile) == previous
@@ -212,7 +212,7 @@ class StartingTheSandboxSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the readiness file is this session\'s, not the one that was already there'
             Files.readString(readyFile) != previous
@@ -239,8 +239,8 @@ class StartingTheSandboxSpec extends Specification {
             var second = host.oillamp.run('at', lamp.toString())
 
         then: 'both sessions are equally good'
-            first.status() == ExitStatus.SUCCESS
-            second.status() == ExitStatus.SUCCESS
+            first.status() == LampExitStatus.SUCCESS
+            second.status() == LampExitStatus.SUCCESS
 
         and: 'and the second checked its sockets like the first'
             second.stepKinds().contains('CheckEndpoints')

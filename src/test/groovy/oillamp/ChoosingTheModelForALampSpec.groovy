@@ -2,7 +2,7 @@ package oillamp
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import spock.lang.Specification
@@ -242,7 +242,7 @@ class ChoosingTheModelForALampSpec extends Specification {
 
         then:
             !lamp.awaitRunning(Duration.ofSeconds(30))
-            lamp.exitStatus() == Optional.of(ExitStatus.USAGE)
+            lamp.exitStatus() == Optional.of(LampExitStatus.USAGE)
             events.any { it instanceof LampEvent.Failure && it.problem().whatHappened().contains('must be https://') }
     }
 

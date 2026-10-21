@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import spock.lang.Specification
@@ -52,7 +52,7 @@ class HoldingALampSpec extends Specification {
             lamp.close()
 
         then: 'the engine ended cleanly, because it was asked to'
-            lamp.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             received.any { it instanceof LampEvent.Summary
                            && it.lines().toList().any { line -> line.contains('asked to stop by the application') } }
 
@@ -134,7 +134,7 @@ class HoldingALampSpec extends Specification {
 
         then: 'it ends cleanly, and leaves nothing behind'
             stopped.succeeded()
-            lamp.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             !Files.exists(host.lampPath().resolve('.oillamp/session.json'))
     }
 
@@ -167,7 +167,7 @@ class HoldingALampSpec extends Specification {
             joined.stop()
 
         then: 'the session has ended, and nothing of it is left'
-            joined.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            joined.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             !starting.isRunning()
             received.any { it instanceof LampEvent.Summary }
     }
@@ -270,7 +270,7 @@ class HoldingALampSpec extends Specification {
             var status = Lamp.at(host.lampPath()).onEvent { received << it }.launchedBy(host.launcher).remove()
 
         then: 'it is gone'
-            status == ExitStatus.SUCCESS
+            status == LampExitStatus.SUCCESS
             !Files.exists(host.lampPath().resolve('.oillamp'))
             !Files.exists(host.lampPath().resolve('oillamp.toml'))
 
@@ -315,7 +315,7 @@ class HoldingALampSpec extends Specification {
             var status = Lamp.at(host.lampPath()).onEvent { received << it }.launchedBy(host.launcher).remove()
 
         then:
-            status != ExitStatus.SUCCESS
+            status != LampExitStatus.SUCCESS
             Files.exists(host.lampPath().resolve('notes.txt'))
             received.any { it instanceof LampEvent.Failure && it.problem().whatHappened().contains('not an oillamp lamp') }
     }
@@ -373,7 +373,7 @@ class HoldingALampSpec extends Specification {
         expect:
             !lamp.awaitRunning(Duration.ofSeconds(30))
             lamp.exitStatus().isPresent()
-            lamp.exitStatus().get() != ExitStatus.SUCCESS
+            lamp.exitStatus().get() != LampExitStatus.SUCCESS
             received.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-LAMP-003' }
 
         cleanup:

@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampSaveKind
@@ -364,7 +364,7 @@ class TravellingBackInTimeSpec extends Specification {
             var restore = host.oillamp.run('restore', lamp.toString(), earlier.shortId())
 
         then:
-            restore.status() == ExitStatus.LAMP_BUSY
+            restore.status() == LampExitStatus.LAMP_BUSY
             restore.reported('OIL-HISTORY-005')
             Files.exists(home(lamp).resolve('workspace/risky.txt'))
 
@@ -391,7 +391,7 @@ class TravellingBackInTimeSpec extends Specification {
             var outcome = host.oillamp.run('restore', lamp.toString(), given)
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.reported('OIL-HISTORY-001')
             outcome.console().contains('oillamp history ' + lamp)
 
@@ -428,7 +428,7 @@ class TravellingBackInTimeSpec extends Specification {
         then:
             var failed = thrown(LampFailedException)
             failed.problem().code().value() == 'OIL-HISTORY-001'
-            failed.status() == ExitStatus.USAGE
+            failed.status() == LampExitStatus.USAGE
     }
 
     def 'An application switches the saves on and off, and only those lines of the file change'() {
@@ -472,7 +472,7 @@ class TravellingBackInTimeSpec extends Specification {
             var wrong = host.oillamp.run('autosave', lamp.toString(), 'lunch', 'on')
 
         then:
-            wrong.status() == ExitStatus.USAGE
+            wrong.status() == LampExitStatus.USAGE
             wrong.console().contains('expected startup, shutdown, before-run or after-run')
     }
 
@@ -487,7 +487,7 @@ class TravellingBackInTimeSpec extends Specification {
 
         then:
             var busy = thrown(LampFailedException)
-            busy.status() == ExitStatus.LAMP_BUSY
+            busy.status() == LampExitStatus.LAMP_BUSY
             settings.autosave() == new Lamp.Autosave(false, false, true, true)
     }
 

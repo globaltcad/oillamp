@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import spock.lang.Specification
 import spock.lang.Subject
@@ -46,7 +46,7 @@ class EmbeddingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--embedded')
 
         then: 'the session ran and ended cleanly'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'no window was opened'
             outcome.events().findAll { it instanceof LampEvent.WindowOpened }.isEmpty()
@@ -105,7 +105,7 @@ class EmbeddingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--embedded')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !outcome.reported('OIL-TERM-002')
     }
 
@@ -122,7 +122,7 @@ class EmbeddingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--embedded')
 
         then: 'the session runs, and nobody is told a display is missing'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !outcome.reported('OIL-HOST-003')
     }
 }

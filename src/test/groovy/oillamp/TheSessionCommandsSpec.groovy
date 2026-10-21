@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.OilLamp
 import spock.lang.Specification
@@ -68,7 +68,7 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('status', lamp.toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'it says what state the session is in, and what it is made of'
             var answer = outcome.events().find { it instanceof LampEvent.Answer }.text()
@@ -94,11 +94,11 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('stop', lamp.toString())
 
         then: 'the request is accepted'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'and the session really ends, cleanly, of its own accord'
             session.join(30_000)
-            sessionOutcome.status() == ExitStatus.SUCCESS
+            sessionOutcome.status() == LampExitStatus.SUCCESS
             reported.any { it instanceof LampEvent.Summary &&
                            it.lines().toList().any { line -> line.contains('asked to stop by') } }
     }
@@ -117,7 +117,7 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('shell', lamp.toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the session noticed it arrive'
             waitUntil { reported.any { it instanceof LampEvent.Info &&
@@ -169,7 +169,7 @@ class TheSessionCommandsSpec extends Specification {
             session.join(20_000)
 
         then:
-            sessionOutcome.status() == ExitStatus.SUCCESS
+            sessionOutcome.status() == LampExitStatus.SUCCESS
     }
 
     def 'after the shell window closes, the session keeps running and another shell can attach'() {
@@ -192,12 +192,12 @@ class TheSessionCommandsSpec extends Specification {
             var shell = host.oillamp.run('shell', lamp.toString())
 
         then: 'the session still answers, and says the window is closed'
-            status.status() == ExitStatus.SUCCESS
+            status.status() == LampExitStatus.SUCCESS
             status.console().contains('running')
             status.console().contains('shell window oillamp opened is closed')
 
         and: 'a new shell attached to it'
-            shell.status() == ExitStatus.SUCCESS
+            shell.status() == LampExitStatus.SUCCESS
             waitUntil { reported.any { it instanceof LampEvent.Info &&
                                        it.text().contains('extra shell attached') } }
 
@@ -222,7 +222,7 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('view', lamp.toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the session opened one more viewer than it had'
             waitUntil { windowsOpened() == before + 1 }
@@ -250,8 +250,8 @@ class TheSessionCommandsSpec extends Specification {
             waitUntil { viewers().size() == 3 }
 
         then:
-            watching.status() == ExitStatus.SUCCESS
-            ordinary.status() == ExitStatus.SUCCESS
+            watching.status() == LampExitStatus.SUCCESS
+            ordinary.status() == LampExitStatus.SUCCESS
 
         and: 'only the first was told to take no input'
             var watchingViewer = viewers()[1]
@@ -270,7 +270,7 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('list')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.events().find { it instanceof LampEvent.Answer }
                    .text().contains('no oillamp sandboxes are running')
     }
@@ -299,7 +299,7 @@ class TheSessionCommandsSpec extends Specification {
             var stopped = host.oillamp.run('stop', lamp.toString())
 
         then: 'stop cleans up and says what it did'
-            stopped.status() == ExitStatus.SUCCESS
+            stopped.status() == LampExitStatus.SUCCESS
             stopped.console().contains(containerStillThere ? 'the sandbox left by the previous session has been removed'
                                                           : 'its sandbox was already gone')
             !Files.exists(socket)
@@ -330,7 +330,7 @@ class TheSessionCommandsSpec extends Specification {
             var outcome = host.oillamp.run('status', lamp.toString())
 
         then: 'status is answered straight away'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(3)
 
         and: 'the silent connection is closed once its time is up'

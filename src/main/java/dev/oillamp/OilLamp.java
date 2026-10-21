@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import dev.lamp.ExitStatus;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampProblem;
 
@@ -74,14 +74,14 @@ public final class OilLamp {
                 for (Consumer<LampEvent> listener : listeners) listener.accept(event);
             }
         };
-        ExitStatus status;
+        LampExitStatus status;
         try {
             status = CommandExecutionUtil.execute(machine, sink, console, VERSION, Tuple.of(String.class, argv));
         } catch (RuntimeException | StackOverflowError failure) {
             // A bug in oillamp is reported as problem OIL-INTERNAL-001, with the start of the
             // stack trace as evidence, rather than as a raw stack trace on the console.
             sink.accept(new LampEvent.Failure(ProblemCatalogUtil.crash(failure)));
-            status = ExitStatus.ERROR;
+            status = LampExitStatus.ERROR;
         }
         synchronized (recorded) {
             return new Outcome(status, Tuple.of(LampEvent.class, recorded), console.text());
@@ -91,7 +91,7 @@ public final class OilLamp {
     /// What happened: the exit code, everything oillamp said, and the console text it produced.
     ///
     /// @param console the rendered output, exactly as it appeared in the terminal (minus colour)
-    public record Outcome(ExitStatus status, Tuple<LampEvent> events, String console) {
+    public record Outcome(LampExitStatus status, Tuple<LampEvent> events, String console) {
 
         public boolean succeeded() { return status.isSuccess(); }
 

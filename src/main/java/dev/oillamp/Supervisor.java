@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 
-import dev.lamp.ExitStatus;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampSaveKind;
 import dev.lamp.LampProblem;
@@ -153,7 +153,7 @@ final class Supervisor {
     ///
     /// Returns only once the container is stopped and everything the session created is gone,
     /// however it ended.
-    public ExitStatus run() {
+    public LampExitStatus run() {
         sessionStarted = machine.now();
         state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
 
@@ -165,7 +165,7 @@ final class Supervisor {
             context.sinkAcceptProblems(shutDown(new SessionState.ShutdownReason.StartupFailed(
                     problems.first())));
             followers.end();
-            return ExitStatus.SESSION_FAILED;
+            return LampExitStatus.SESSION_FAILED;
         }
         context.sinkAcceptProblems(((Result.Ok<Tuple<LampProblem>>) opened).value());
 
@@ -175,7 +175,7 @@ final class Supervisor {
         if (context.options().embedded()) watchTheApplication();
         post(new SessionEvent.ContainerReady(ReadyInfo.parse(sandbox.readyJson())));
 
-        ExitStatus status;
+        LampExitStatus status;
         try {
             status = loop();
         } catch (RuntimeException bug) {
@@ -196,8 +196,8 @@ final class Supervisor {
     ///
     /// When no event arrives within a second, a `Tick` is processed instead. That is how
     /// timeouts are noticed, without a separate timer thread.
-    private ExitStatus loop() {
-        ExitStatus exit = ExitStatus.SUCCESS;
+    private LampExitStatus loop() {
+        LampExitStatus exit = LampExitStatus.SUCCESS;
         while (!state.isFinal()) {
             Timed timed;
             try {
@@ -221,7 +221,7 @@ final class Supervisor {
                 dispatchUserBriefing();
 
             for (SessionAction action : transition.actions()) {
-                if (action instanceof SessionAction.Exit(ExitStatus status)) exit = status;
+                if (action instanceof SessionAction.Exit(LampExitStatus status)) exit = status;
                 else perform(action);
             }
         }
@@ -233,11 +233,11 @@ final class Supervisor {
     /// The event loop is what ends a session. Without it, nothing would stop the sandbox, and the
     /// shutdown hook would wait the whole shutdown allowance for a loop that is gone. So the
     /// shutdown sequence runs here, or, if the loop had begun it, is waited for.
-    private ExitStatus endAfterACrash(RuntimeException bug) {
+    private LampExitStatus endAfterACrash(RuntimeException bug) {
         LampProblem crash = ProblemCatalogUtil.crash(bug);
         context.sink().accept(new LampEvent.Failure(crash));
         // The loop failed after the session had already ended: nothing is left to shut down.
-        if (state instanceof SessionState.Stopped(var ended, ExitStatus exit)) return exit;
+        if (state instanceof SessionState.Stopped(var ended, LampExitStatus exit)) return exit;
         SessionState.ShutdownReason reason = new SessionState.ShutdownReason.Crashed(crash);
         if (shuttingDown.compareAndSet(false, true)) {
             context.sinkAcceptProblems(shutDown(reason));

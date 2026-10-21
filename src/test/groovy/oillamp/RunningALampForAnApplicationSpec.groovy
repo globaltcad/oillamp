@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import spock.lang.Requires
@@ -306,7 +306,7 @@ for line in sys.stdin:
             var status = oillamp('status', directory.toString())
 
         then:
-            status.status() == ExitStatus.SUCCESS
+            status.status() == LampExitStatus.SUCCESS
             var answer = status.events().find { it instanceof LampEvent.Answer }.text()
             answer.contains('running, for the application that started it')
             answer.contains(containerOf(directory))
@@ -333,7 +333,7 @@ for line in sys.stdin:
             var took = Duration.between(closing, Instant.now())
 
         then: 'the engine ended cleanly, because the application asked it to'
-            lamp.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             heard.any { it instanceof LampEvent.Summary
                         && it.lines().toList().any { line -> line.contains('asked to stop by the application') } }
 
@@ -387,7 +387,7 @@ for line in sys.stdin:
             var removed = oillamp('remove', directory.toString(), '--yes')
 
         then:
-            removed.status() == ExitStatus.SUCCESS
+            removed.status() == LampExitStatus.SUCCESS
             !Files.exists(directory)
     }
 }

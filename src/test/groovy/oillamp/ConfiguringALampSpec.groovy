@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -62,7 +62,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('config', lamp.toString(), 'check')
 
         then: 'the exit code says the problem is the configuration, not the machine'
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
 
         and: 'all three are reported'
             outcome.errors().size() == 3
@@ -227,7 +227,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('config', lamp.toString(), 'show-effective')
 
         then: 'it reads back the values the file documents'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('1920x1080')
             outcome.console().contains('gpu auto')
             outcome.console().contains('clipboard to-agent')
@@ -313,7 +313,7 @@ class ConfiguringALampSpec extends Specification {
 
         then:
             outcome.reported('OIL-CONFIG-001')
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
     }
 
     def 'How long oillamp waits for the sandbox to start is set in the configuration'() {
@@ -389,7 +389,7 @@ class ConfiguringALampSpec extends Specification {
             var checked = host.oillamp.run('config', lamp.toString(), 'check')
 
         then: 'it is refused, with the two values that work'
-            checked.status() == ExitStatus.USAGE
+            checked.status() == LampExitStatus.USAGE
             checked.reported('OIL-CONFIG-004')
             checked.console().contains('"floating" or "tiling"')
     }
@@ -470,7 +470,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('config', lamp.toString(), 'check')
 
         then: 'the mistake is found, and located in the company-wide file'
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.reported('OIL-CONFIG-004')
             outcome.console().contains('.config/oillamp/config.toml')
     }
@@ -520,7 +520,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'the session does not start'
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
             outcome.console().contains('EDENAI_MAX_TOKENS')
             outcome.console().contains('line break')
 
@@ -591,7 +591,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('config', lamp.toString(), 'check')
 
         then: 'the missing text and the relative path are both named'
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().size() == 2
             outcome.reported('OIL-CONFIG-004')
             outcome.console().contains('host_access.requirements')
@@ -600,7 +600,7 @@ class ConfiguringALampSpec extends Specification {
 
         and: 'a file without the table is simply off'
             host.givenConfig(lamp, 'schema_version = 1' + System.lineSeparator())
-            host.oillamp.run('config', lamp.toString(), 'check').status() == ExitStatus.SUCCESS
+            host.oillamp.run('config', lamp.toString(), 'check').status() == LampExitStatus.SUCCESS
     }
 
     def 'The requirements are one piece of text, written over several lines'() {
@@ -626,7 +626,7 @@ class ConfiguringALampSpec extends Specification {
             var outcome = host.oillamp.run('config', lamp.toString(), 'show-effective')
 
         then: 'the checker would be given both lines, backslash and all'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('You may read ~/Documents.')
             outcome.console().contains('Never read ~/.ssh, nor anything under ~/\\.gnupg.')
 

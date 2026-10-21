@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -31,7 +31,7 @@ class CheckingTheMachineSpec extends Specification {
             var outcome = oillamp.run('doctor')
 
         then: 'it succeeds'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'nothing is reported as wrong'
             outcome.errors().isEmpty()
@@ -73,7 +73,7 @@ class CheckingTheMachineSpec extends Specification {
             outcome.reported('OIL-PKG-001')
 
         and: 'it exits with the code that specifically means "prerequisites missing"'
-            outcome.status() == ExitStatus.PREREQUISITES_MISSING
+            outcome.status() == LampExitStatus.PREREQUISITES_MISSING
 
         and: 'both missing packages are named'
             var problem = outcome.errors().find { it.code().value() == 'OIL-PKG-001' }
@@ -118,7 +118,7 @@ class CheckingTheMachineSpec extends Specification {
             outcome.reported('OIL-TERM-001')
 
         and: 'and the exit code says the machine is not ready, rather than something generic'
-            outcome.status() == ExitStatus.PREREQUISITES_MISSING
+            outcome.status() == LampExitStatus.PREREQUISITES_MISSING
     }
 
     def 'With installing allowed, missing prerequisites become a plan instead of a complaint'() {
@@ -287,7 +287,7 @@ class CheckingTheMachineSpec extends Specification {
             var outcome = host.oillamp.run('doctor')
 
         then: 'doctor still runs and reports the machine as usable'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         when: 'but they try to actually start a session'
             var session = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
@@ -351,7 +351,7 @@ class CheckingTheMachineSpec extends Specification {
 
         then:
             outcome.reported('OIL-HOST-001')
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
 
         and: 'the message names the platform it actually found'
             outcome.errors().first().whatHappened().contains('Mac OS X')

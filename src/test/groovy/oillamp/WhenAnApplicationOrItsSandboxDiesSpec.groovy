@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import spock.lang.Requires
@@ -61,7 +61,7 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
 
         then: 'the engine shuts the session down by itself, and exits cleanly'
             eventually(Duration.ofSeconds(90)) { lamp.exitStatus().isPresent() }
-            lamp.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
 
         and: 'it says why: the application that started it let go'
             heard.any { it instanceof LampEvent.Summary
@@ -92,7 +92,7 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
 
         then: 'the engine notices, and ends the session as failed'
             eventually(Duration.ofSeconds(90)) { lamp.exitStatus().isPresent() }
-            lamp.exitStatus() == Optional.of(ExitStatus.SESSION_FAILED)
+            lamp.exitStatus() == Optional.of(LampExitStatus.SESSION_FAILED)
 
         and: 'the application was told what happened, in words it can show'
             heard.any { it instanceof LampEvent.Summary

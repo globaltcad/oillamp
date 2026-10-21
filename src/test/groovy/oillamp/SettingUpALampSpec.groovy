@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -50,7 +50,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString(), '--dry-run')
 
         then: 'it succeeds'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the directory is still not there, and neither is anything else'
             !Files.exists(lamp)
@@ -87,7 +87,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
         then: 'they get the plan, not a complaint about sudo'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !outcome.reported('OIL-PKG-002')
             outcome.stepKinds().contains('InstallPackages')
 
@@ -121,7 +121,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'it succeeds'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.errors().isEmpty()
 
         and: 'the agent has a home with somewhere for code and somewhere for native libraries'
@@ -219,7 +219,7 @@ class SettingUpALampSpec extends Specification {
             var asked = host.oillamp.run('remove', lamp.toString())
 
         then: 'it says what would go, names the agent\'s work, and stops'
-            asked.status() == ExitStatus.USAGE
+            asked.status() == LampExitStatus.USAGE
             asked.console().contains('workspace')
             asked.console().contains('--yes')
 
@@ -231,7 +231,7 @@ class SettingUpALampSpec extends Specification {
             var removed = host.oillamp.run('remove', lamp.toString(), '--yes')
 
         then: 'everything oillamp made is gone, the agent home included'
-            removed.status() == ExitStatus.SUCCESS
+            removed.status() == LampExitStatus.SUCCESS
             !Files.exists(lamp.resolve('oillamp.toml'))
             !Files.exists(lamp.resolve('.oillamp'))
             !Files.exists(agentHome)
@@ -272,7 +272,7 @@ class SettingUpALampSpec extends Specification {
             var refused = host.oillamp.run('remove', lamp.toString(), '--yes')
 
         then: 'podman is asked instead, by the label that carries the lamp path'
-            refused.status() == ExitStatus.LAMP_BUSY
+            refused.status() == LampExitStatus.LAMP_BUSY
             refused.errors().first().whatHappened().contains('oillamp-y62b5ihg')
 
         and: 'so nothing was pulled out from under a container that is still running'
@@ -283,7 +283,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('remove', lamp.toString(), '--yes')
 
         then: 'removal works anyway, and takes the agent home it found by name'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !Files.exists(lamp.resolve('.oillamp'))
             !Files.exists(agentHome)
     }
@@ -315,7 +315,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('remove', link.toString(), '--yes')
 
         then: 'the running sandbox is found, and nothing is removed'
-            outcome.status() == ExitStatus.LAMP_BUSY
+            outcome.status() == LampExitStatus.LAMP_BUSY
             outcome.errors().first().whatHappened().contains('oillamp-y62b5ihg')
             Files.exists(real.resolve('oillamp.toml'))
     }
@@ -338,7 +338,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', link.toString())
 
         then: 'the lamp is made where the link points'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             Files.exists(real.resolve('oillamp.toml'))
             Files.isSymbolicLink(link)
     }
@@ -367,7 +367,7 @@ class SettingUpALampSpec extends Specification {
                                               second.toString(), '--yes')
 
         then: 'nothing is removed, and the directory at fault is named'
-            refused.status() == ExitStatus.USAGE
+            refused.status() == LampExitStatus.USAGE
             refused.errors().first().whatHappened().contains('test-notes')
             refused.console().contains('Nothing has been removed')
             Files.exists(first.resolve('oillamp.toml'))
@@ -377,7 +377,7 @@ class SettingUpALampSpec extends Specification {
             var asked = host.oillamp.run('remove', first.toString(), second.toString())
 
         then: 'it lists both, and offers one command that removes both'
-            asked.status() == ExitStatus.USAGE
+            asked.status() == LampExitStatus.USAGE
             asked.console().contains(first.toString())
             asked.console().contains(second.toString())
             asked.console().contains("oillamp remove ${first} ${second} --yes")
@@ -387,7 +387,7 @@ class SettingUpALampSpec extends Specification {
             var removed = host.oillamp.run('remove', first.toString(), second.toString(), '--yes')
 
         then: 'both are gone'
-            removed.status() == ExitStatus.SUCCESS
+            removed.status() == LampExitStatus.SUCCESS
             !Files.exists(first)
             !Files.exists(second)
             removed.console().contains('All 2 lamps were removed')
@@ -404,7 +404,7 @@ class SettingUpALampSpec extends Specification {
                                               host.lampPath('test2').toString())
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains('works on one lamp, but was given 2')
     }
 
@@ -427,7 +427,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('remove', lamp.toString(), '--yes')
 
         then: 'it refuses, and says which command to run first'
-            outcome.status() == ExitStatus.LAMP_BUSY
+            outcome.status() == LampExitStatus.LAMP_BUSY
             outcome.errors().first().whatHappened().contains('still there')
             outcome.errors().first().fixes().any { it.command().orElse('').startsWith('oillamp stop') }
 
@@ -460,7 +460,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'it succeeds'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the edited setting is still there'
             Files.readString(settings).contains('width  = 2560')
@@ -499,7 +499,7 @@ class SettingUpALampSpec extends Specification {
 
         then: 'oillamp refuses'
             outcome.reported('OIL-LAMP-002')
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
 
         and: 'nothing was created'
             !Files.exists(directory.resolve('.oillamp'))
@@ -516,7 +516,7 @@ class SettingUpALampSpec extends Specification {
             var confirmed = host.oillamp.run('at', directory.toString(), '--init')
 
         then: 'oillamp sets the lamp up alongside their files'
-            confirmed.status() == ExitStatus.SUCCESS
+            confirmed.status() == LampExitStatus.SUCCESS
             Files.exists(directory.resolve('.oillamp/lamp.json'))
             Files.readString(directory.resolve('README.md')) == 'my actual project'
     }
@@ -599,7 +599,7 @@ class SettingUpALampSpec extends Specification {
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'oillamp refuses, saying what it found'
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
             outcome.reported('OIL-LAMP-011')
             outcome.errors().first().whatHappened().contains(infra.toString())
             outcome.errors().first().whatHappened().contains(host.home.toString())
@@ -706,7 +706,7 @@ class SettingUpALampSpec extends Specification {
             var listed = host.oillamp.run('recordings', lamp.toString())
 
         then: 'each is named with how long it ran and what it cost'
-            listed.status() == ExitStatus.SUCCESS
+            listed.status() == LampExitStatus.SUCCESS
             listed.console().contains('20260115-100000.mkv')
             listed.console().contains('5m00s')
             listed.console().contains('2.0 MB')
@@ -720,7 +720,7 @@ class SettingUpALampSpec extends Specification {
             var missing = host.oillamp.run('recordings', lamp.toString(), '--open', '20200101-000000')
 
         then: 'it says so, and names the ones that do exist'
-            missing.status() == ExitStatus.USAGE
+            missing.status() == LampExitStatus.USAGE
             missing.reported('OIL-LAMP-009')
             missing.errors().first().whyItMatters().contains('20260115-100000')
     }
@@ -742,9 +742,9 @@ class SettingUpALampSpec extends Specification {
             var joined = host.oillamp.run('recordings', lamp.toString(), '--open=20260115-100000')
 
         then: 'both open the same file'
-            spaced.status() == ExitStatus.SUCCESS
+            spaced.status() == LampExitStatus.SUCCESS
             spaced.console().contains('opened ' + recording)
-            joined.status() == ExitStatus.SUCCESS
+            joined.status() == LampExitStatus.SUCCESS
             joined.console().contains('opened ' + recording)
     }
 
@@ -773,7 +773,7 @@ class SettingUpALampSpec extends Specification {
             var pruned = host.oillamp.run('recordings', lamp.toString(), '--prune')
 
         then: 'the one past its fortnight is gone and the one inside it is not'
-            pruned.status() == ExitStatus.SUCCESS
+            pruned.status() == LampExitStatus.SUCCESS
             !Files.exists(old)
             Files.exists(recent)
 
@@ -781,7 +781,7 @@ class SettingUpALampSpec extends Specification {
             var again = host.oillamp.run('recordings', lamp.toString(), '--prune')
 
         then: 'it says so rather than reporting work it did not do'
-            again.status() == ExitStatus.SUCCESS
+            again.status() == LampExitStatus.SUCCESS
             again.console().contains('nothing is beyond')
             Files.exists(recent)
     }

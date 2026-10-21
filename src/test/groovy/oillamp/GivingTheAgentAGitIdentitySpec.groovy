@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -47,7 +47,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
                               .filter { it.startsWith('agent-lamp-') }.findFirst().orElseThrow() - 'agent-lamp-'
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the sandbox is given the genie\'s identity'
             gitValue('user.name') == 'genie agent'
@@ -79,7 +79,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the sandbox is given that identity'
             gitValue('user.name') == 'Ada Lovelace'
@@ -110,7 +110,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             gitValue('user.name') == 'Ada\'s \\agent\\ "helper"'
             gitValue('user.email') == 'agent@example.com'
     }
@@ -133,7 +133,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !Files.readString(sessionGitConfig()).contains('[user]')
             outcome.console().contains('the agent has no git identity')
     }
@@ -156,7 +156,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !Files.readString(sessionGitConfig()).contains('[user]')
             outcome.console().contains('your git configuration has no user.name and user.email')
     }
@@ -179,7 +179,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() != ExitStatus.SUCCESS
+            outcome.status() != LampExitStatus.SUCCESS
             outcome.console().contains('git.identity')
             outcome.console().contains('needs both git.name and git.email')
     }

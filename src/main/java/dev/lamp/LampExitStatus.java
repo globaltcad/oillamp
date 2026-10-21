@@ -6,7 +6,7 @@ import java.util.Optional;
 /// always means "that lamp is already running".
 ///
 /// Public so that a caller can act on how the process ended by name rather than by number.
-public enum ExitStatus {
+public enum LampExitStatus {
     /// Success, or a session that ended cleanly.
     SUCCESS(0),
     /// Any `ERROR` problem not covered by a more specific code below.
@@ -24,14 +24,14 @@ public enum ExitStatus {
 
     private final int code;
 
-    ExitStatus(int code) { this.code = code; }
+    LampExitStatus(int code) { this.code = code; }
 
     public int code() { return code; }
 
     /// The status an oillamp process meant by exiting with `code`, or empty for a code oillamp
     /// never uses, such as a Java runtime that could not start.
-    public static Optional<ExitStatus> ofCode(int code) {
-        for (ExitStatus status : values())
+    public static Optional<LampExitStatus> ofCode(int code) {
+        for (LampExitStatus status : values())
             if (status.code == code) return Optional.of(status);
         return Optional.empty();
     }

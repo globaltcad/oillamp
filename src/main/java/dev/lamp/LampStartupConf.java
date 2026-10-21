@@ -237,9 +237,9 @@ public final class LampStartupConf {
     ///
     /// Blocks until the engine is done. What it reports goes to the listeners.
     ///
-    /// @return [ExitStatus#SUCCESS] once the lamp is gone; otherwise the events said why
+    /// @return [LampExitStatus#SUCCESS] once the lamp is gone; otherwise the events said why
     /// @throws IOException when the engine's process could not be started at all
-    public ExitStatus remove() throws IOException, InterruptedException {
+    public LampExitStatus remove() throws IOException, InterruptedException {
         return Lamp.runToEnd(launcher, listeners, "remove", directory.toString(), "--yes").status();
     }
 
@@ -315,7 +315,7 @@ public final class LampStartupConf {
     /// those two keys and keeps every other line of the file, comments included. It writes
     /// the file only when the result is a valid configuration.
     ///
-    /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
     /// reads the file only when it starts.
     ///
     /// @param enabled      the new value of `enabled`: whether the next session gives the
@@ -354,7 +354,7 @@ public final class LampStartupConf {
     /// after-run on|off` as a short-lived engine process. The engine replaces only those
     /// keys and keeps every other line of the file, comments included.
     ///
-    /// Refused with [ExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
     /// reads the file only when it starts.
     ///
     /// @throws LampFailedException when the sandbox is running, or the lamp's file is not valid; the

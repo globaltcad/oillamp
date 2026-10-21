@@ -2,7 +2,7 @@ package oillamp
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.OilLamp
 import spock.lang.Specification
@@ -206,7 +206,7 @@ class KeepingTheModelKeyOnTheHostSpec extends Specification {
             var outcome = host.oillamp.run(['at', host.lampPath().toString(), *given] as String[])
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.console().contains(complaint)
             !Files.exists(host.lampPath())
 

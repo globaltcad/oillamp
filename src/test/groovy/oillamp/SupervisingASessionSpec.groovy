@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import spock.lang.Specification
 import spock.lang.Subject
@@ -46,7 +46,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the session ran and ended cleanly'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'two windows were opened, and oillamp said which was which'
             var windows = outcome.events().findAll { it instanceof LampEvent.WindowOpened }
@@ -85,7 +85,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'oillamp exits 0, because this is how a session is supposed to end'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'the window closing was reported, with how to open another shell, and ended nothing'
             var events = outcome.events().toList()
@@ -153,7 +153,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the session still ran, and still ended cleanly'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'but the user was told, with the command that failed'
             outcome.reported('OIL-VIEW-001')
@@ -179,7 +179,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the session failed, with the session exit code rather than a generic error'
-            outcome.status() == ExitStatus.SESSION_FAILED
+            outcome.status() == LampExitStatus.SESSION_FAILED
 
         and: 'the reason names the terminal, and quotes what was run'
             outcome.reported('OIL-TERM-003')
@@ -215,12 +215,12 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'oillamp gives up rather than wait, and says what it was waiting for'
-            outcome.status() == ExitStatus.SESSION_FAILED
+            outcome.status() == LampExitStatus.SESSION_FAILED
             outcome.reported('OIL-TERM-002')
 
         and: 'and the lamp is free again: a second run is not refused as busy'
             var second = host.oillamp.run('at', host.lampPath().toString())
-            second.status() != ExitStatus.LAMP_BUSY
+            second.status() != LampExitStatus.LAMP_BUSY
     }
 
     def '--no-viewer opens the shell and nothing else'() {
@@ -236,7 +236,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--no-viewer')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             var windows = outcome.events().findAll { it instanceof LampEvent.WindowOpened }
             windows.size() == 1
             windows.first().what().contains('terminal')
@@ -259,7 +259,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'it went on checking that all three sockets still answer'
             outcome.console().contains('desktop, shell and network all still answering')
@@ -286,7 +286,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the session ends as failed, not as a normal stop'
-            outcome.status() == ExitStatus.SESSION_FAILED
+            outcome.status() == LampExitStatus.SESSION_FAILED
 
         and: 'the summary says why, with the sandbox\'s own exit code'
             outcome.console().contains('the sandbox container exited (code 70)')
@@ -318,7 +318,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = oillamp.run('at', host.lampPath().toString())
 
         then: 'the bug is reported as one'
-            outcome.status() == ExitStatus.ERROR
+            outcome.status() == LampExitStatus.ERROR
             outcome.reported('OIL-INTERNAL-001')
             outcome.console().contains('the listener broke')
 
@@ -397,7 +397,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'the session still ends successfully, because the container did go away'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
 
         and: 'nothing is reported as an internal error'
             !outcome.console().contains('OIL-INTERNAL-001')
@@ -457,7 +457,7 @@ class SupervisingASessionSpec extends Specification {
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
         then: 'it ended because the terminal closed, not because the sandbox was thought dead'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('ended because')
             !outcome.console().contains('the sandbox stopped')
 

@@ -62,7 +62,7 @@ class InternalLampUtil {
                     passToListeners(listeners, event);
                 });
         }
-        return new Lamp.Ran(ExitStatus.ofCode(engine.waitFor()).orElse(ExitStatus.ERROR), List.copyOf(events));
+        return new Lamp.Ran(LampExitStatus.ofCode(engine.waitFor()).orElse(LampExitStatus.ERROR), List.copyOf(events));
     }
 
     /// Gives `event` to each listener. One that throws does not keep it from the others.

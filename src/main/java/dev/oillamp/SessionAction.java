@@ -1,6 +1,6 @@
 package dev.oillamp;
 
-import dev.lamp.ExitStatus;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampEvent;
 
 /// Something the supervisor should do during a session.
@@ -30,7 +30,7 @@ sealed interface SessionAction {
     record Announce(LampEvent event) implements SessionAction {}
 
     /// Leave, with this code. Only ever the last action of a transition.
-    record Exit(ExitStatus status) implements SessionAction {}
+    record Exit(LampExitStatus status) implements SessionAction {}
 
     /// Ask the person at the session whether a host request may happen. The answer arrives as
     /// `SessionEvent.UserAnswered`.

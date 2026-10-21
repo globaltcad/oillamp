@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
@@ -51,7 +51,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
         lamp = host.lampPath()
         // Updating needs an existing lamp. One session creates it, and its image.
-        assert host.oillamp.run('at', lamp.toString()).status() == ExitStatus.SUCCESS
+        assert host.oillamp.run('at', lamp.toString()).status() == LampExitStatus.SUCCESS
     }
 
     def 'An update builds a new image that the following sessions start from'() {
@@ -80,7 +80,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var update = host.oillamp.run('update', lamp.toString(), '--verbose')
 
         then: 'an image was built, but no sandbox was started'
-            update.status() == ExitStatus.SUCCESS
+            update.status() == LampExitStatus.SUCCESS
             update.stepKinds().contains('BuildImage')
             !update.stepKinds().contains('RunContainer')
 
@@ -102,7 +102,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var next = host.oillamp.run('at', lamp.toString(), '--dry-run', '--verbose')
 
         then: 'it starts from the image the update built'
-            next.status() == ExitStatus.SUCCESS
+            next.status() == LampExitStatus.SUCCESS
             var built = (update.console() =~ /localhost\/oillamp\/sandbox:[0-9a-f]{16}/)[0]
             next.console().contains(built)
     }
@@ -121,7 +121,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             strict mode.
         """
         given: 'the lamp was updated'
-            assert host.oillamp.run('update', lamp.toString()).status() == ExitStatus.SUCCESS
+            assert host.oillamp.run('update', lamp.toString()).status() == LampExitStatus.SUCCESS
 
         and: 'then the user adds a system package, so the next start must build the image again'
             var config = lamp.resolve('oillamp.toml')
@@ -156,7 +156,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var first = host.oillamp.run('update', lamp.toString())
 
         then: 'its old image is kept, because other lamps may share it'
-            first.status() == ExitStatus.SUCCESS
+            first.status() == LampExitStatus.SUCCESS
             !first.console().contains('removed the image')
 
         when: 'the lamp is updated again'
@@ -164,7 +164,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var second = host.oillamp.run('update', lamp.toString())
 
         then: 'the image of the first update is removed, since only this lamp used it'
-            second.status() == ExitStatus.SUCCESS
+            second.status() == LampExitStatus.SUCCESS
             second.console().contains('removed the image the lamp used before, ' + firstImage)
     }
 
@@ -181,8 +181,8 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var second = host.oillamp.run('update', lamp.toString())
 
         then:
-            first.status() == ExitStatus.SUCCESS
-            second.status() == ExitStatus.SUCCESS
+            first.status() == LampExitStatus.SUCCESS
+            second.status() == LampExitStatus.SUCCESS
             Files.readString(revisionFile()) != firstRevision
     }
 
@@ -193,14 +193,14 @@ class UpdatingTheAgentToolsSpec extends Specification {
             uses now.
         """
         given: 'the lamp was updated once already'
-            assert host.oillamp.run('update', lamp.toString()).status() == ExitStatus.SUCCESS
+            assert host.oillamp.run('update', lamp.toString()).status() == LampExitStatus.SUCCESS
             var current = Files.readString(revisionFile())
 
         when:
             var dry = host.oillamp.run('update', lamp.toString(), '--dry-run')
 
         then:
-            dry.status() == ExitStatus.SUCCESS
+            dry.status() == LampExitStatus.SUCCESS
             Files.readString(revisionFile()) == current
     }
 
@@ -212,7 +212,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             user is told that nothing changed, and the next session is the same as the last one.
         """
         given: 'the lamp was updated once already'
-            assert host.oillamp.run('update', lamp.toString()).status() == ExitStatus.SUCCESS
+            assert host.oillamp.run('update', lamp.toString()).status() == LampExitStatus.SUCCESS
             var current = Files.readString(revisionFile())
 
         and: 'the next build will fail'
@@ -222,7 +222,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var failed = host.oillamp.run('update', lamp.toString())
 
         then: 'the update reports the failure'
-            failed.status() == ExitStatus.ERROR
+            failed.status() == LampExitStatus.ERROR
             failed.console().contains('the lamp keeps the image it had')
 
         and: 'the lamp still uses the image from the earlier update'
@@ -250,7 +250,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var outcome = host.oillamp.run('update', lamp.toString())
 
         then: 'nothing is built, and the lamp is unchanged'
-            outcome.status() == ExitStatus.LAMP_BUSY
+            outcome.status() == LampExitStatus.LAMP_BUSY
             !outcome.stepKinds().contains('BuildImage')
             !Files.exists(revisionFile())
 
@@ -277,7 +277,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var update = host.oillamp.run('update', lamp.toString())
 
         then:
-            update.status() == ExitStatus.USAGE
+            update.status() == LampExitStatus.USAGE
             update.console().contains('expected latest or an exact version')
             !update.stepKinds().contains('BuildImage')
             !Files.exists(revisionFile())
@@ -366,7 +366,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var update = host.oillamp.run('update', lamp.toString(), '--system', '--verbose')
 
         then: 'the image is built from scratch, with the newest base image'
-            update.status() == ExitStatus.SUCCESS
+            update.status() == LampExitStatus.SUCCESS
             update.stepDetails().any { it.contains('--pull=always') && it.contains('--no-cache') }
 
         and: 'it is as strict as any update'
@@ -388,7 +388,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var update = host.oillamp.run('update', lamp.toString(), '--verbose')
 
         then:
-            update.status() == ExitStatus.SUCCESS
+            update.status() == LampExitStatus.SUCCESS
             update.stepDetails().every { !it.contains('--pull=always') && !it.contains('--no-cache') }
     }
 
@@ -411,7 +411,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var started = host.oillamp.run('at', lamp.toString())
 
         then: 'the session starts'
-            started.status() == ExitStatus.SUCCESS
+            started.status() == LampExitStatus.SUCCESS
 
         and: 'with a warning that says how old the image is, and how to renew it'
             started.reported('OIL-IMAGE-002')
@@ -432,7 +432,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var started = host.oillamp.run('at', lamp.toString())
 
         then:
-            started.status() == ExitStatus.SUCCESS
+            started.status() == LampExitStatus.SUCCESS
             !started.reported('OIL-IMAGE-002')
     }
 
@@ -452,7 +452,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var update = host.oillamp.run('update', lamp.toString())
 
         then: 'the user is told, with the commands that help'
-            update.status() == ExitStatus.SUCCESS
+            update.status() == LampExitStatus.SUCCESS
             update.reported('OIL-IMAGE-003')
             update.console().contains('podman images localhost/oillamp/sandbox')
             update.console().contains('podman rmi')
@@ -466,7 +466,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var rebuilt = host.oillamp.run('at', lamp.toString())
 
         then: 'that start says the same'
-            rebuilt.status() == ExitStatus.SUCCESS
+            rebuilt.status() == LampExitStatus.SUCCESS
             rebuilt.stepKinds().contains('BuildImage')
             rebuilt.reported('OIL-IMAGE-003')
 
@@ -475,7 +475,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var reused = host.oillamp.run('at', lamp.toString())
 
         then: 'it builds nothing, and does not mention it'
-            reused.status() == ExitStatus.SUCCESS
+            reused.status() == LampExitStatus.SUCCESS
             !reused.stepKinds().contains('BuildImage')
             !reused.reported('OIL-IMAGE-003')
     }
@@ -489,7 +489,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             var dry = host.oillamp.run('update', lamp.toString(), '--dry-run')
 
         then:
-            dry.status() == ExitStatus.SUCCESS
+            dry.status() == LampExitStatus.SUCCESS
             !dry.reported('OIL-IMAGE-003')
     }
 

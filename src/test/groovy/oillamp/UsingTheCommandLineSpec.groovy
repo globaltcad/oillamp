@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
@@ -30,7 +30,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.console().contains('config <dir>')
 
         and: 'and it is still a usage error, so a script notices'
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.status().code() == 2
     }
 
@@ -44,7 +44,7 @@ class UsingTheCommandLineSpec extends Specification {
             var command = host.oillamp.run('doctro')
 
         then:
-            command.status() == ExitStatus.USAGE
+            command.status() == LampExitStatus.USAGE
             command.errors().first().whatHappened().contains("'doctro'")
             command.errors().first().whyItMatters().contains('nothing on your machine changed')
 
@@ -52,7 +52,7 @@ class UsingTheCommandLineSpec extends Specification {
             var option = host.oillamp.run('doctor', '--fix-everything')
 
         then:
-            option.status() == ExitStatus.USAGE
+            option.status() == LampExitStatus.USAGE
             option.errors().first().whatHappened().contains('--fix-everything')
     }
 
@@ -72,7 +72,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', lamp).split(' '))
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(complaint)
             outcome.console().contains(usage)
 
@@ -126,7 +126,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
 
         then:
-            outcome.status() != ExitStatus.USAGE || !outcome.errors().any { it.whatHappened().contains('does not take') }
+            outcome.status() != LampExitStatus.USAGE || !outcome.errors().any { it.whatHappened().contains('does not take') }
 
         where:
             line << ['--verbose doctor', 'doctor --dry-run', 'at LAMP --dry-run --init --no-viewer --no-install',
@@ -150,7 +150,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('at')
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.console().contains('oillamp at <dir>')
     }
 
@@ -159,7 +159,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('version')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('oillamp 0.2.0')
 
         and: 'and the Java it runs on, which a bug report needs as well'
@@ -176,7 +176,7 @@ class UsingTheCommandLineSpec extends Specification {
             var about = host.oillamp.run('about')
 
         then: 'they learn why it exists and what it is built from'
-            about.status() == ExitStatus.SUCCESS
+            about.status() == LampExitStatus.SUCCESS
             about.console().contains('WHY IT EXISTS')
             about.console().contains('podman')
             about.console().contains('oillamp 0.2.0')
@@ -185,7 +185,7 @@ class UsingTheCommandLineSpec extends Specification {
             var guide = host.oillamp.run('guide')
 
         then: 'they get the steps in the order they need them, from checking the machine to deleting the lamp'
-            guide.status() == ExitStatus.SUCCESS
+            guide.status() == LampExitStatus.SUCCESS
             var steps = ['oillamp doctor', 'oillamp at ~/lamps/first', 'oillamp stop ~/lamps/first',
                          'oillamp remove ~/lamps/first --yes'].collect { guide.console().indexOf(it) }
             steps.every { it >= 0 }
@@ -222,7 +222,7 @@ class UsingTheCommandLineSpec extends Specification {
 
         then: 'they get a problem, not a stack trace'
             outcome.reported('OIL-INTERNAL-001')
-            outcome.status() == ExitStatus.ERROR
+            outcome.status() == LampExitStatus.ERROR
             !outcome.console().contains('\tat dev.oillamp')
 
         and: 'with the advice that makes a useful bug report'
@@ -259,7 +259,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('recordings', host.lampPath().toString(), '--open')
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.console().contains('--open needs the session to play')
     }
 
@@ -297,7 +297,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('doctor', host.lampPath().toString())
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().any { it.code().value().startsWith('OIL-CONFIG-') }
             outcome.console().contains('size')
     }
@@ -307,7 +307,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('config', host.lampPath().toString(), 'path')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().trim().endsWith(host.lampPath().resolve('oillamp.toml').toString())
     }
 
@@ -322,7 +322,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('completion', 'bash')
 
         then: 'nothing but the script is printed'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             !outcome.console().contains('🪔')
             !outcome.console().contains('\u001B[')
 
@@ -356,7 +356,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(complaint)
 
         where:
@@ -391,7 +391,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(complaint)
             outcome.console().contains(usage)
 
@@ -424,7 +424,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(complaint)
 
         and: 'nothing was set up'
@@ -452,14 +452,14 @@ class UsingTheCommandLineSpec extends Specification {
             var literal = host.oillamp.run('ask', host.lampPath().toString(), '--', '--list the open tickets')
 
         then: 'it is not mistaken for an option'
-            literal.status() != ExitStatus.USAGE
+            literal.status() != LampExitStatus.USAGE
             !literal.errors().any { it.whatHappened().contains('is not an option oillamp knows') }
 
         when: 'the same prompt without --'
             var option = host.oillamp.run('ask', host.lampPath().toString(), '--list the open tickets')
 
         then: 'it is taken for an option, and refused'
-            option.status() == ExitStatus.USAGE
+            option.status() == LampExitStatus.USAGE
             option.errors().first().whatHappened().contains("'--list the open tickets' is not an option oillamp knows")
     }
 
@@ -496,7 +496,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(command)
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains("`oillamp ${command}` needs the path of a lamp directory")
             outcome.console().contains("oillamp ${command} <dir>")
 
@@ -520,7 +520,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(command, first, second)
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened()
                     .contains("`oillamp ${command}` works on one lamp, but was given 2 directories (${first}, ${second}); run it once for each")
 
@@ -563,17 +563,17 @@ class UsingTheCommandLineSpec extends Specification {
             var unknown = host.oillamp.run('config', lamp.toString(), 'fix')
 
         then: 'with no action, it checks'
-            bare.status() == ExitStatus.SUCCESS
+            bare.status() == LampExitStatus.SUCCESS
             bare.console() == check.console()
 
         and: 'show-effective shows more than the check does'
-            shown.status() == ExitStatus.SUCCESS
+            shown.status() == LampExitStatus.SUCCESS
             shown.console() != check.console()
             shown.events().any { it instanceof dev.lamp.LampEvent.Answer }
             !check.events().any { it instanceof dev.lamp.LampEvent.Answer }
 
         and: 'an unknown action is refused, with the actions there are'
-            unknown.status() == ExitStatus.USAGE
+            unknown.status() == LampExitStatus.USAGE
             unknown.errors().first().whatHappened().contains("'fix' is not a config action")
             unknown.console().contains('oillamp config <dir> (check | show-effective | path)')
     }
@@ -589,11 +589,11 @@ class UsingTheCommandLineSpec extends Specification {
             var zsh = host.oillamp.run('completion', 'zsh')
 
         then: 'with no shell named, it is the bash script'
-            unnamed.status() == ExitStatus.SUCCESS
+            unnamed.status() == LampExitStatus.SUCCESS
             unnamed.console() == host.oillamp.run('completion', 'bash').console()
 
         and: 'another shell is refused, rather than given a script it cannot run'
-            zsh.status() == ExitStatus.USAGE
+            zsh.status() == LampExitStatus.USAGE
             zsh.errors().first().whatHappened().contains("oillamp only ships a completion script for bash, not 'zsh'")
     }
 
@@ -606,7 +606,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('help')
 
         then:
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.console().contains('at <dir>')
             outcome.console().contains('doctor [<dir>]')
     }
@@ -622,7 +622,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('image')
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains("there is no 'image' command")
             outcome.errors().first().whatHappened().contains('oillamp update <dir> --system')
     }
@@ -638,7 +638,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(complaint)
 
         where:
@@ -662,7 +662,7 @@ class UsingTheCommandLineSpec extends Specification {
             var outcome = host.oillamp.run('schedule', host.lampPath().toString(), 'tidy')
 
         then:
-            outcome.status() == ExitStatus.USAGE
+            outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains("'tidy' is not something `oillamp schedule` does")
     }
 

@@ -3,7 +3,7 @@ package dev.oillamp;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.lamp.ExitStatus;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
@@ -46,7 +46,7 @@ sealed interface SessionState {
             implements SessionState {}
 
     /// Final. Carries the exit code the process will leave with.
-    record Stopped(ShutdownReason reason, ExitStatus exit) implements SessionState {}
+    record Stopped(ShutdownReason reason, LampExitStatus exit) implements SessionState {}
 
     /// Why a session is ending. Both the exit code and the closing summary are derived from it, so
     /// they cannot disagree.
@@ -73,14 +73,14 @@ sealed interface SessionState {
         record Crashed(LampProblem problem) implements ShutdownReason {}
 
         /// The process exit code for this reason.
-        default ExitStatus exitStatus() {
+        default LampExitStatus exitStatus() {
             return switch (this) {
-                case StopCommand ignored    -> ExitStatus.SUCCESS;
+                case StopCommand ignored    -> LampExitStatus.SUCCESS;
                 case UserInterrupt interrupt -> interrupt.wasRunning()
-                        ? ExitStatus.SUCCESS : ExitStatus.INTERRUPTED;
-                case ContainerDied ignored  -> ExitStatus.SESSION_FAILED;
-                case StartupFailed ignored  -> ExitStatus.SESSION_FAILED;
-                case Crashed ignored        -> ExitStatus.ERROR;
+                        ? LampExitStatus.SUCCESS : LampExitStatus.INTERRUPTED;
+                case ContainerDied ignored  -> LampExitStatus.SESSION_FAILED;
+                case StartupFailed ignored  -> LampExitStatus.SESSION_FAILED;
+                case Crashed ignored        -> LampExitStatus.ERROR;
             };
         }
 

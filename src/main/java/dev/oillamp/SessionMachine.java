@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.lamp.ExitStatus;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampProblem;
 
@@ -255,7 +255,7 @@ record SessionMachine(Settings settings) {
     private Transition finish(SessionState.ShuttingDown state, SessionEvent.ShutdownCompleted done) {
         // Cleanup problems are reported as warnings, but do not change the exit code: that still
         // describes how the session itself ended.
-        ExitStatus exit = state.reason().exitStatus();
+        LampExitStatus exit = state.reason().exitStatus();
         Tuple<SessionAction> actions = Tuple.of(SessionAction.class);
         for (LampProblem problem : done.problems())
             actions = actions.add(new SessionAction.Announce(new LampEvent.Warning(problem)));

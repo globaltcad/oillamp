@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import spock.lang.Requires
@@ -70,7 +70,7 @@ class TwoLampsAtOnceSpec extends Specification {
             first.close()
 
         then: 'it ended cleanly, and its container is gone'
-            first.exitStatus() == Optional.of(ExitStatus.SUCCESS)
+            first.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             !containerExists(containerOf(north))
 
         and: 'the second carries on, untouched'
@@ -95,7 +95,7 @@ class TwoLampsAtOnceSpec extends Specification {
 
         then: 'the second never runs, and says the lamp is busy'
             !second.awaitRunning(LATER_START)
-            second.exitStatus() == Optional.of(ExitStatus.LAMP_BUSY)
+            second.exitStatus() == Optional.of(LampExitStatus.LAMP_BUSY)
             refusals.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-LOCK-001' }
 
         and: 'the first is still running and still answering'

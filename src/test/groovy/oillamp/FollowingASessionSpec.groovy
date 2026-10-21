@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.ExitStatus
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
@@ -94,7 +94,7 @@ class FollowingASessionSpec extends Specification {
             following.join(30_000)
 
         then: 'following ends with it, and says so'
-            following.outcome.status() == ExitStatus.SUCCESS
+            following.outcome.status() == LampExitStatus.SUCCESS
             followed.any { it instanceof LampEvent.Summary }
     }
 
@@ -109,7 +109,7 @@ class FollowingASessionSpec extends Specification {
             var outcome = host.oillamp.run('follow', lamp.toString(), '--embedded')
 
         then: 'following ended cleanly'
-            outcome.status() == ExitStatus.SUCCESS
+            outcome.status() == LampExitStatus.SUCCESS
             outcome.events().any { it instanceof LampEvent.SessionOpened }
 
         and: 'the session is still running'

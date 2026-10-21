@@ -489,7 +489,7 @@ class ReachingTheHostSpec extends Specification {
 
         then: 'it is refused, and the file is as it was'
             var busy = thrown(LampFailedException)
-            busy.status() == dev.lamp.ExitStatus.LAMP_BUSY
+            busy.status() == dev.lamp.LampExitStatus.LAMP_BUSY
             !settings.hostAccess().enabled()
 
         when: 'the lamp sleeps, and the application writes again'

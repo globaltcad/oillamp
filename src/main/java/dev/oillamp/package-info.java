@@ -11,7 +11,7 @@
 ///
 /// - [dev.lamp.LampEvent]: what oillamp reports, as values
 /// - [dev.lamp.LampProblem]: what went wrong, with evidence and fixes
-/// - [dev.lamp.ExitStatus]: how the process ended
+/// - [dev.lamp.LampExitStatus]: how the process ended
 ///
 /// Everything else is package-private, so that it can be changed without breaking any caller.
 /// Java enforces this: a package-private class cannot be used from another package. That is also
