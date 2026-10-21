@@ -2,15 +2,10 @@ package gui
 
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
-import dev.gui.genie.LampLighter
 import dev.gui.model.Genie
 import dev.gui.model.HostAccess
 import dev.gui.model.Settings
 import dev.lamp.Lamp
-import dev.lamp.LampEvent
-import dev.lamp.LampDirectory
-import dev.lamp.LampPrompt
-import dev.lamp.LampRun
 import oillamp.ScenarioHost
 import spock.lang.Narrative
 import spock.lang.Specification
@@ -49,7 +44,7 @@ class KeepingAGeniesHostAccessSpec extends Specification {
         lamp = sandbox.lampPath('jafar')
         sandbox.machine { it.reallyRuns('ssh-keygen').windowsStayOpenFor(Duration.ofSeconds(80))
                             .agent { String prompt -> 'You said: ' + prompt } }
-        runner = new GenieRunner(lamp, lighter(), { UnaryOperator<Genie> change ->
+        runner = new GenieRunner(lamp, new LampLighterImpl(sandbox.launcher), { UnaryOperator<Genie> change ->
             synchronized (this) { genie = change.apply(genie) }
         } as Consumer)
     }
@@ -175,33 +170,6 @@ class KeepingAGeniesHostAccessSpec extends Specification {
         waitUntil { genie.phase() == Genie.Phase.READY }
         runner.sleep()
         waitUntil { genie.phase() == Genie.Phase.ASLEEP }
-    }
-
-    /// oillamp's engine in this JVM; commands run in the sandbox run on this machine, in the
-    /// genie's home.
-    private LampLighter lighter() {
-        var real = new LampLighterImpl(sandbox.launcher)
-        return new LampLighter() {
-            LampLighter.Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
-                var lit = real.light(directory, name, settings, key, progress, events)
-                new LampLighter.Lit() {
-                    Process exec(String... command) {
-                        var home = Lamp.agentHome(lamp).orElseThrow()
-                        var builder = new ProcessBuilder(command as List<String>)
-                        builder.environment().put('HOME', home.toString())
-                        builder.directory(home.toFile())
-                        builder.start()
-                    }
-                    dev.gui.desktop.Desktop desktop() { lit.desktop() }
-                    LampRun send(LampPrompt question) { lit.send(question) }
-                    void cancel(String run) { lit.cancel(run) }
-                    void useModel(String model) { lit.useModel(model) }
-                    void decidePermission(String request, boolean allowed) { lit.decidePermission(request, allowed) }
-                    void close() { lit.close() }
-                }
-            }
-            LampDirectory unlit(Path directory) { real.unlit(directory) }
-        }
     }
 
     private void waitUntil(Closure<Boolean> condition) {
