@@ -26,7 +26,7 @@ public record LampJob(
         String when,
         Optional<Instant> next,
         String prompt,
-        JobAuthor author,
+        LampJobAuthor author,
         Instant created,
         Optional<Instant> expires,
         boolean enabled,

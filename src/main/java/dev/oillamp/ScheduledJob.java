@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 
-import dev.lamp.JobAuthor;
+import dev.lamp.LampJobAuthor;
 
 import dev.lamp.LampJob;
 import sprouts.Tuple;
@@ -23,7 +23,7 @@ import sprouts.Tuple;
 /// @param lastRun when it last ran. A repeating job runs at the first time its expression names
 ///                after this, or after `created` if it never ran. So a job that came due while no
 ///                session ran runs once as soon as one does, not once for every time it missed
-record ScheduledJob(String id, When when, String prompt, JobAuthor author, Instant created,
+record ScheduledJob(String id, When when, String prompt, LampJobAuthor author, Instant created,
                     Optional<Instant> expires, boolean enabled, Optional<Instant> lastRun) {
 
     /// The longest prompt a job may have. A prompt is an instruction, not a document.

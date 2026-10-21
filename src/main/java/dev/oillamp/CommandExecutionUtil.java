@@ -942,10 +942,10 @@ final class CommandExecutionUtil {
             case Command.Schedule.Action.ListJobs _ -> book.read().map(schedule -> describe(schedule, limits, zone, now));
             case Command.Schedule.Action.Add add -> book.update(schedule -> schedule.add(new Schedule.Request(add.cron(),
                             add.at(), add.prompt(), add.expires()),
-                            JobAuthor.USER, now, zone, limits), Schedule.Changed::schedule)
+                            LampJobAuthor.USER, now, zone, limits), Schedule.Changed::schedule)
                     .map(added -> new LampEvent.JobAdded(added.job().describe(zone, now)));
             case Command.Schedule.Action.Remove remove -> book.update(schedule -> schedule.remove(remove.job(),
-                            JobAuthor.USER, layout.root()), Schedule.Changed::schedule)
+                            LampJobAuthor.USER, layout.root()), Schedule.Changed::schedule)
                     .map(removed -> new LampEvent.JobRemoved(removed.job().describe(zone, now), "removed by you"));
             case Command.Schedule.Action.Enable enable -> book.update(schedule -> schedule.enable(enable.job(),
                             true, now, layout.root()), Schedule.Changed::schedule)

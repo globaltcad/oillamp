@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import dev.lamp.JobAuthor;
+import dev.lamp.LampJobAuthor;
 
 import sprouts.Tuple;
 
@@ -47,11 +47,11 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         return jobs.stream().filter(job -> job.id().equals(id.strip())).findFirst();
     }
 
-    Tuple<ScheduledJob> byAgent() { return jobs.retainIf(job -> job.author() == JobAuthor.AGENT); }
+    Tuple<ScheduledJob> byAgent() { return jobs.retainIf(job -> job.author() == LampJobAuthor.AGENT); }
 
     /// Adds a job, if the rules allow it.
-    Result<Changed> add(Request request, JobAuthor author, Instant now, ZoneId zone, LampConfig.Schedule limits) {
-        boolean agent = author == JobAuthor.AGENT;
+    Result<Changed> add(Request request, LampJobAuthor author, Instant now, ZoneId zone, LampConfig.Schedule limits) {
+        boolean agent = author == LampJobAuthor.AGENT;
         String prompt = request.prompt().strip();
         if (prompt.isEmpty()) return refused("a job needs a prompt: what the agent is asked when it wakes");
         if (prompt.length() > ScheduledJob.MAX_PROMPT)
@@ -112,10 +112,10 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
     }
 
     /// Takes a job off the schedule. The agent may only remove its own.
-    Result<Changed> remove(String id, JobAuthor by, Path lamp) {
+    Result<Changed> remove(String id, LampJobAuthor by, Path lamp) {
         Optional<ScheduledJob> found = job(id);
         if (found.isEmpty()) return Result.err(ProblemCatalogUtil.noSuchJob(id, lamp));
-        if (by == JobAuthor.AGENT && found.get().author() == JobAuthor.USER)
+        if (by == LampJobAuthor.AGENT && found.get().author() == LampJobAuthor.USER)
             return refused(found.get().id() + " is one of the user's jobs; only the user can remove it");
         return Result.ok(new Changed(without(found.get().id()), found.get()));
     }
@@ -217,7 +217,7 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
                     when = new ScheduledJob.When.Once(Instant.parse(node.path("at").asText()));
                 }
                 jobs = jobs.add(new ScheduledJob(node.path("id").asText(), when, node.path("prompt").asText(),
-                        node.path("author").asText().equals("agent") ? JobAuthor.AGENT : JobAuthor.USER,
+                        node.path("author").asText().equals("agent") ? LampJobAuthor.AGENT : LampJobAuthor.USER,
                         Instant.parse(node.path("created").asText()),
                         optionalInstant(node, "expires"), node.path("enabled").asBoolean(true),
                         optionalInstant(node, "last_run")));

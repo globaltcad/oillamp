@@ -1,6 +1,6 @@
 package oillamp
 
-import dev.lamp.JobAuthor
+import dev.lamp.LampJobAuthor
 import dev.lamp.LampEvent
 import dev.lamp.LampStartupPhase
 import dev.lamp.LampSave
@@ -60,7 +60,7 @@ class TheEventWireFormatSpec extends Specification {
 
     static final LampJob JOB = new LampJob('job-3', '0 9 * * 1-5',
             Optional.of(Instant.parse('2026-09-30T07:00:00Z')), 'Check the build\nand say "why"',
-            JobAuthor.AGENT, Instant.parse('2026-09-29T18:14:03Z'),
+            LampJobAuthor.AGENT, Instant.parse('2026-09-29T18:14:03Z'),
             Optional.of(Instant.parse('2026-10-13T18:14:03Z')), true,
             Tuple.of(Instant, Instant.parse('2026-09-30T07:00:00Z'), Instant.parse('2026-10-01T07:00:00Z')))
 
@@ -105,7 +105,7 @@ class TheEventWireFormatSpec extends Specification {
                     Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())),
             new LampEvent.Schedule(true, false, 'Europe/Berlin', Tuple.of(LampJob, JOB,
                     new LampJob('job-4', 'once at 2026-10-01 09:00', Optional.empty(), 'x',
-                                      JobAuthor.USER, Instant.EPOCH, Optional.empty(), false, Tuple.of(Instant)))),
+                                      LampJobAuthor.USER, Instant.EPOCH, Optional.empty(), false, Tuple.of(Instant)))),
             new LampEvent.JobAdded(JOB),
             new LampEvent.JobRemoved(JOB, 'it expired'),
             new LampEvent.ScheduleChanged('the schedule is paused'),

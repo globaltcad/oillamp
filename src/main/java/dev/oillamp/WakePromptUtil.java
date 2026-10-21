@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 
-import dev.lamp.JobAuthor;
+import dev.lamp.LampJobAuthor;
 import dev.lamp.LampSaveKind;
 
 import sprouts.Association;
@@ -42,7 +42,7 @@ final class WakePromptUtil {
     ///
     /// @param base    the snapshot the lamp was in as the run began, when it is known
     /// @param answer  the agent's last message
-    record Past(String run, Optional<String> job, JobAuthor author, Instant at, String outcome,
+    record Past(String run, Optional<String> job, LampJobAuthor author, Instant at, String outcome,
                 Optional<String> base, String tree, String answer) {
 
         /// Reads a run's last snapshot, or empty for any other commit.
@@ -54,7 +54,7 @@ final class WakePromptUtil {
             String message = commit.snapshot().message();
             int blank = message.indexOf("\n\n");
             return Optional.of(new Past(run.get(), trailers.get(GitObjectUtil.JOB_TRAILER),
-                    trailers.get(GitObjectUtil.AUTHOR_TRAILER).filter("agent"::equals).isPresent() ? JobAuthor.AGENT : JobAuthor.USER,
+                    trailers.get(GitObjectUtil.AUTHOR_TRAILER).filter("agent"::equals).isPresent() ? LampJobAuthor.AGENT : LampJobAuthor.USER,
                     commit.snapshot().at(), trailers.get(GitObjectUtil.OUTCOME_TRAILER).orElse("finished"),
                     trailers.get(GitObjectUtil.BASE_TRAILER), commit.tree(),
                     blank < 0 ? "" : message.substring(blank + 2).strip()));
@@ -78,11 +78,11 @@ final class WakePromptUtil {
         switch (reason) {
             case Reason.ByJob(ScheduledJob job) -> {
                 out.append("You were woken by ").append(job.id()).append(", a job ")
-                   .append(job.author() == JobAuthor.AGENT ? "you added yourself" : "the user added")
+                   .append(job.author() == LampJobAuthor.AGENT ? "you added yourself" : "the user added")
                    .append(" on ").append(TimeNotationUtil.show(job.created(), zone)).append(", which runs ");
                 out.append(job.when() instanceof ScheduledJob.When.Once
                         ? "only this once.\n" : "on the schedule \"" + job.describeWhen(zone) + "\".\n");
-                if (job.author() == JobAuthor.AGENT)
+                if (job.author() == LampJobAuthor.AGENT)
                     out.append("You wrote its task yourself, in an earlier run. Check it still makes sense before you act on it.\n");
             }
             case Reason.Asked() -> out.append("The user is asking you something directly, through oillamp.\n");

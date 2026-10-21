@@ -11,7 +11,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import dev.lamp.LampEvent;
-import dev.lamp.JobAuthor;
+import dev.lamp.LampJobAuthor;
 import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSaveKind;
 
@@ -243,7 +243,7 @@ final class AgentRunner {
                         ? "it expired" : "it ran, and will not run again"));
         for (ScheduledJob due : schedule.due(now, zone)) {
             if (stopping || isQueued(due.id())) continue;
-            if (due.author() == JobAuthor.AGENT && agentRunsInADay(now) >= config.maxAgentRunsPerDay()) {
+            if (due.author() == LampJobAuthor.AGENT && agentRunsInADay(now) >= config.maxAgentRunsPerDay()) {
                 book.update(current -> Result.ok(current.ran(due.id(), now)), s -> s);
                 context.sink().accept(new LampEvent.Info("schedule",
                         due.id() + " was due, but was skipped: the agent's jobs ran "
@@ -266,14 +266,14 @@ final class AgentRunner {
     /// How many runs of the agent's own jobs began in the last 24 hours: those the history
     /// records, and those in progress or waiting now.
     private int agentRunsInADay(Instant now) {
-        int counted = (int) queue.stream().filter(pending -> pending.job().filter(job -> job.author() == JobAuthor.AGENT).isPresent()).count()
-                + (current.flatMap(Pending::job).filter(job -> job.author() == JobAuthor.AGENT).isPresent() ? 1 : 0);
+        int counted = (int) queue.stream().filter(pending -> pending.job().filter(job -> job.author() == LampJobAuthor.AGENT).isPresent()).count()
+                + (current.flatMap(Pending::job).filter(job -> job.author() == LampJobAuthor.AGENT).isPresent() ? 1 : 0);
         Result<Tuple<GitObjectUtil.Commit>> commits = new History(layout).commitList();
         if (commits instanceof Result.Ok<Tuple<GitObjectUtil.Commit>>(Tuple<GitObjectUtil.Commit> all, var _))
             for (GitObjectUtil.Commit commit : all) {
                 if (commit.snapshot().at().isBefore(now.minus(Duration.ofDays(1)))) break;
                 Optional<WakePromptUtil.Past> past = WakePromptUtil.Past.of(commit);
-                if (past.isPresent() && past.get().author() == JobAuthor.AGENT) counted++;
+                if (past.isPresent() && past.get().author() == LampJobAuthor.AGENT) counted++;
             }
         return counted;
     }
@@ -372,7 +372,7 @@ final class AgentRunner {
         String said = answer.text().strip();
         if (said.length() > ANSWER_KEPT) said = said.substring(0, ANSWER_KEPT) + "\n[…]";
         Association<String, String> after = trailers
-                .put(GitObjectUtil.AUTHOR_TRAILER, pending.job().map(job -> job.author() == JobAuthor.AGENT ? "agent" : "user").orElse("user"))
+                .put(GitObjectUtil.AUTHOR_TRAILER, pending.job().map(job -> job.author() == LampJobAuthor.AGENT ? "agent" : "user").orElse("user"))
                 .put(GitObjectUtil.OUTCOME_TRAILER, outcome);
         if (pending.job().isPresent()) after = after.put(GitObjectUtil.JOB_TRAILER, pending.job().get().id());
         if (base.isPresent()) after = after.put(GitObjectUtil.BASE_TRAILER, base.get());
@@ -461,7 +461,7 @@ final class AgentRunner {
             case "add" -> {
                 Schedule.Request asked = new Schedule.Request(present(request, "cron"), present(request, "at"),
                         request.arguments().get("prompt").orElse(""), present(request, "expires"));
-                Result<Schedule.Changed> added = book.update(schedule -> schedule.add(asked, JobAuthor.AGENT, now, zone, config),
+                Result<Schedule.Changed> added = book.update(schedule -> schedule.add(asked, LampJobAuthor.AGENT, now, zone, config),
                         Schedule.Changed::schedule);
                 if (!(added instanceof Result.Ok<Schedule.Changed>(Schedule.Changed change, var _)))
                     yield Control.Reply.failed(added.problems().first().whatHappened());
@@ -472,7 +472,7 @@ final class AgentRunner {
             }
             case "remove" -> {
                 Result<Schedule.Changed> removed = book.update(schedule -> schedule.remove(
-                        request.arguments().get("id").orElse(""), JobAuthor.AGENT, layout.root()), Schedule.Changed::schedule);
+                        request.arguments().get("id").orElse(""), LampJobAuthor.AGENT, layout.root()), Schedule.Changed::schedule);
                 if (!(removed instanceof Result.Ok<Schedule.Changed>(Schedule.Changed change, var _)))
                     yield Control.Reply.failed(removed.problems().first().whatHappened());
                 context.sink().accept(
@@ -497,7 +497,7 @@ final class AgentRunner {
            .append(".\n");
         if (schedule.jobs().isEmpty()) return out.append("There are no jobs.").toString();
         for (ScheduledJob job : schedule.jobs())
-            out.append("\n- ").append(job.id()).append(job.author() == JobAuthor.AGENT ? " (yours)" : " (the user's; you cannot change it)")
+            out.append("\n- ").append(job.id()).append(job.author() == LampJobAuthor.AGENT ? " (yours)" : " (the user's; you cannot change it)")
                .append(": ").append(describe(job, zone)).append("\n  Task: ").append(job.prompt().strip().replace("\n", "\n  ")).append('\n');
         return out.toString();
     }
