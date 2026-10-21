@@ -160,19 +160,8 @@ public sealed interface LampEvent {
 
     // ─── host access ───────────────────────────────────────────────────────────────────────
 
-    /// How risky a host request is, and how much it may change. The order is the ceiling: a
-    /// request is judged at most at its own tier, and the checker may only put it lower.
-    enum Risk {
-        /// Reads, and returns what it read. It cannot change anything.
-        PASSIVE,
-        /// Changes something on the host, but in a way the user can see and undo.
-        ADDITIVE,
-        /// Runs a program on the host. Closed unless the lamp names the programs.
-        EXECUTING
-    }
-
     /// What the checker decided about one host request, and why.
-    record Verdict(boolean allowed, Risk risk, String reason) {}
+    record Verdict(boolean allowed, LampHostRisk risk, String reason) {}
 
     /// The session has the host tools, and the agent can see them.
     ///

@@ -1,6 +1,7 @@
 package dev.oillamp
 
 import dev.lamp.LampEvent
+import dev.lamp.LampHostRisk
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Title
@@ -111,7 +112,7 @@ class ReadingHostRequestsSpec extends Specification {
             HostTool.offeredBy(readOnly).toList() == ['host_list_dir', 'host_stat', 'host_read_file', 'host_show']
 
         and: 'opening a page is a way out, not a read, so a read-only lamp refuses it too'
-            HostTool.tierOf(new HostTool.OpenUrl(URI.create('https://example.org/?q=secret'))) == LampEvent.Risk.ADDITIVE
+            HostTool.tierOf(new HostTool.OpenUrl(URI.create('https://example.org/?q=secret'))) == LampHostRisk.ADDITIVE
             HostTool.closedBecause(new HostTool.OpenUrl(URI.create('https://example.org/')), readOnly).present
 
         and: 'the clipboard tools are not built, so no lamp offers them'

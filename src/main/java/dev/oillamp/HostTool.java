@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import dev.lamp.LampEvent;
+import dev.lamp.LampHostRisk;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import sprouts.Association;
@@ -47,13 +48,13 @@ sealed interface HostTool {
 
     /// The tier a tool belongs to. It is the ceiling: the checker may put a request lower, never
     /// higher, and [HostAccess] refuses a request in a tier that is closed.
-    static LampEvent.Risk tierOf(HostTool tool) {
+    static LampHostRisk tierOf(HostTool tool) {
         return switch (tool) {
-            case ListDir _, Stat _, ReadFile _, ClipboardRead _, Show _ -> LampEvent.Risk.PASSIVE;
+            case ListDir _, Stat _, ReadFile _, ClipboardRead _, Show _ -> LampHostRisk.PASSIVE;
             // Opening a page sends whatever the address holds to whoever serves it, so it is a way
             // out for anything the agent has read, not a read.
-            case OpenUrl _, WriteFile _, ClipboardWrite _, Notify _, CopyOut _ -> LampEvent.Risk.ADDITIVE;
-            case Run _ -> LampEvent.Risk.EXECUTING;
+            case OpenUrl _, WriteFile _, ClipboardWrite _, Notify _, CopyOut _ -> LampHostRisk.ADDITIVE;
+            case Run _ -> LampHostRisk.EXECUTING;
         };
     }
 
@@ -265,10 +266,10 @@ sealed interface HostTool {
         if (!decision.equals("allow") && !decision.equals("deny"))
             return Result.err(HostAccessProblems.unreadableVerdict(answered));
         String risk = node.path("risk").asText("").toUpperCase(Locale.ROOT);
-        Optional<LampEvent.Risk> tier = switch (risk) {
-            case "PASSIVE" -> Optional.of(LampEvent.Risk.PASSIVE);
-            case "ADDITIVE" -> Optional.of(LampEvent.Risk.ADDITIVE);
-            case "EXECUTING" -> Optional.of(LampEvent.Risk.EXECUTING);
+        Optional<LampHostRisk> tier = switch (risk) {
+            case "PASSIVE" -> Optional.of(LampHostRisk.PASSIVE);
+            case "ADDITIVE" -> Optional.of(LampHostRisk.ADDITIVE);
+            case "EXECUTING" -> Optional.of(LampHostRisk.EXECUTING);
             default -> Optional.empty();
         };
         if (tier.isEmpty()) return Result.err(HostAccessProblems.unreadableVerdict(answered));
