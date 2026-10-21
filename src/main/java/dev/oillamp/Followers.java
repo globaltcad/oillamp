@@ -10,6 +10,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
 import dev.lamp.LampEvent;
+import dev.lamp.LampRun;
 
 import sprouts.Tuple;
 
@@ -43,7 +44,7 @@ final class Followers implements Consumer<LampEvent> {
     private Optional<LampEvent.SessionOpened> opened = Optional.empty();
     private Optional<LampEvent.SessionStateChanged> state = Optional.empty();
     private final List<LampEvent> running = new ArrayList<>();
-    private final Map<String, LampEvent.Run> waiting = new LinkedHashMap<>();
+    private final Map<String, LampRun> waiting = new LinkedHashMap<>();
     private final List<BlockingQueue<LampEvent>> following = new ArrayList<>();
     private boolean ended;
 
@@ -68,10 +69,10 @@ final class Followers implements Consumer<LampEvent> {
             state.ifPresent(queue::add);
             queue.addAll(running);
             int ahead = 0;
-            for (LampEvent.Run run : waiting.values()) queue.add(new LampEvent.RunQueued(run, ahead++));
-            Optional<LampEvent.Run> current = running.isEmpty() ? Optional.empty()
+            for (LampRun run : waiting.values()) queue.add(new LampEvent.RunQueued(run, ahead++));
+            Optional<LampRun> current = running.isEmpty() ? Optional.empty()
                     : Optional.of(((LampEvent.RunStarted) running.getFirst()).run());
-            queue.add(new LampEvent.AgentStatus(current, Tuple.of(LampEvent.Run.class, List.copyOf(waiting.values()))));
+            queue.add(new LampEvent.AgentStatus(current, Tuple.of(LampRun.class, List.copyOf(waiting.values()))));
             if (ended) queue.add(END);
             else following.add(queue);
             return new Feed(this, queue);

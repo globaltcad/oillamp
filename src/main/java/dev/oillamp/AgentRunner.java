@@ -16,6 +16,7 @@ import dev.lamp.LampEvent.RunOutcome;
 import dev.lamp.LampSaveKind;
 
 import dev.lamp.LampSave;
+import dev.lamp.LampRun;
 import sprouts.Association;
 import sprouts.Tuple;
 
@@ -71,7 +72,7 @@ final class AgentRunner {
     /// A run waiting its turn, and whoever waits for its end.
     ///
     /// @param where where the question goes, or empty for a new conversation
-    private record Pending(LampEvent.Run run, Optional<ScheduledJob> job, Optional<Harness.Target> where,
+    private record Pending(LampRun run, Optional<ScheduledJob> job, Optional<Harness.Target> where,
                            CompletableFuture<LampEvent.RunFinished> done) {}
 
     /// @param instructions what the agent is told in addition to pi's own instructions, for the
@@ -105,7 +106,7 @@ final class AgentRunner {
     }
 
     /// A queued question: its run, and a future completed when the run ends.
-    record Asked(LampEvent.Run run, CompletableFuture<LampEvent.RunFinished> done) {}
+    record Asked(LampRun run, CompletableFuture<LampEvent.RunFinished> done) {}
 
     /// Queues `prompt` as a new run.
     ///
@@ -118,7 +119,7 @@ final class AgentRunner {
         if (!(numbered instanceof Result.Ok<Schedule.Numbered>(Schedule.Numbered number, var _)))
             return Result.err(numbered.problems());
         CompletableFuture<LampEvent.RunFinished> done = new CompletableFuture<>();
-        LampEvent.Run run = new LampEvent.Run(number.run(), Optional.empty(), prompt.strip(), conversation);
+        LampRun run = new LampRun(number.run(), Optional.empty(), prompt.strip(), conversation);
         enqueue(new Pending(run, Optional.empty(), where, done));
         return Result.ok(new Asked(run, done));
     }
@@ -155,7 +156,7 @@ final class AgentRunner {
 
     /// The run in progress and those waiting, for `oillamp status`.
     LampEvent.AgentStatus status() {
-        Tuple<LampEvent.Run> waiting = Tuple.of(LampEvent.Run.class);
+        Tuple<LampRun> waiting = Tuple.of(LampRun.class);
         for (Pending pending : queue) waiting = waiting.add(pending.run());
         return new LampEvent.AgentStatus(current.map(Pending::run), waiting);
     }
@@ -175,7 +176,7 @@ final class AgentRunner {
 
     /// The run in progress, if any. The host-access gate judges a request by this run, because
     /// the session knows which run the agent is in and the agent's own word for it is no fact.
-    Optional<LampEvent.Run> currentRun() { return current.map(Pending::run); }
+    Optional<LampRun> currentRun() { return current.map(Pending::run); }
 
     /// Stops the run in progress, if any, and every waiting one, as the session ends. Waits until
     /// the run in progress is saved, for at most [#WIND_DOWN].
@@ -251,7 +252,7 @@ final class AgentRunner {
             }
             Result<Schedule.Numbered> numbered = book.update(current -> Result.ok(current.numberRun()), Schedule.Numbered::schedule);
             if (numbered instanceof Result.Ok<Schedule.Numbered>(Schedule.Numbered number, var _))
-                enqueue(new Pending(new LampEvent.Run(number.run(), Optional.of(due.id()), due.prompt(), Optional.empty()),
+                enqueue(new Pending(new LampRun(number.run(), Optional.of(due.id()), due.prompt(), Optional.empty()),
                         Optional.of(due), Optional.empty(), new CompletableFuture<>()));
         }
     }
@@ -325,7 +326,7 @@ final class AgentRunner {
     }
 
     private LampEvent.RunFinished perform(Pending pending) {
-        LampEvent.Run run = pending.run();
+        LampRun run = pending.run();
         Instant started = machine.now();
         ZoneId zone = machine.zone();
         pending.job().ifPresent(job -> startedJob(job, started, zone));

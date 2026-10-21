@@ -1054,7 +1054,7 @@ final class CommandExecutionUtil {
                 context.sinkAcceptProblems(failure.problems());
                 return exitStatusFor(failure.problems());
             }
-            context.sink().accept(new LampEvent.RunAccepted(new LampEvent.Run(
+            context.sink().accept(new LampEvent.RunAccepted(new LampRun(
                     ((Result.Ok<Control.Reply>) taken).value().values().get("run").orElse("run"),
                     Optional.empty(), prompt, ask.conversation())));
             return ExitStatus.SUCCESS;
@@ -1074,7 +1074,7 @@ final class CommandExecutionUtil {
                 Tuple<LampSave> all, var _))
             snapshot = all.stream().filter(s -> s.id().equals(saved.get())).findFirst();
         context.sink().accept(new LampEvent.RunFinished(
-                new LampEvent.Run(answer.values().get("run").orElse("run"), Optional.empty(), prompt, ask.conversation()),
+                new LampRun(answer.values().get("run").orElse("run"), Optional.empty(), prompt, ask.conversation()),
                 outcome, answer.values().get("answer").orElse(""), snapshot,
                 Duration.ofSeconds(Long.parseLong(answer.values().get("seconds").orElse("0"))),
                 answer.values().get("conversation")));

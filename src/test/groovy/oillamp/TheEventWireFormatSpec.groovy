@@ -9,6 +9,7 @@ import dev.lamp.LampJob
 import dev.lamp.Problem
 import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
+import dev.lamp.LampRun
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -71,7 +72,7 @@ class TheEventWireFormatSpec extends Specification {
                         Tuple.of(dev.lamp.Lamp.Conversation.ToolCall, new dev.lamp.Lamp.Conversation.ToolCall('c1', 'bash', 'ls')),
                         Optional.of('bash'), true, Optional.of('azure/gpt-6.1-sol'))))
 
-    static final LampEvent.Run RUN = new LampEvent.Run('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
+    static final LampRun RUN = new LampRun('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
     static final List<LampEvent> EXAMPLES = [
             new LampEvent.PhaseStarted(LampStartupPhase.SESSION),
@@ -104,7 +105,7 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.JobAdded(JOB),
             new LampEvent.JobRemoved(JOB, 'it expired'),
             new LampEvent.ScheduleChanged('the schedule is paused'),
-            new LampEvent.RunQueued(new LampEvent.Run('run-13', Optional.empty(), 'what now?', Optional.of('01a0ec69-de1c')), 0),
+            new LampEvent.RunQueued(new LampRun('run-13', Optional.empty(), 'what now?', Optional.of('01a0ec69-de1c')), 0),
             new LampEvent.RunStarted(RUN),
             new LampEvent.RunFinished(RUN, LampEvent.RunOutcome.FINISHED, 'All green.\n\nNothing to do.',
                     Optional.of(SNAPSHOT), Duration.ofSeconds(95), Optional.of('01a0ec69-de1c')),
@@ -118,8 +119,8 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolStarted('call-1', 'bash', 'ls -la')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolFinished('call-1', true, 'no such file')),
             new LampEvent.RunProgress('run-12', new LampEvent.Progress.Retrying(2, 3, '529 overloaded')),
-            new LampEvent.AgentStatus(Optional.of(RUN), Tuple.of(LampEvent.Run, RUN)),
-            new LampEvent.AgentStatus(Optional.empty(), Tuple.of(LampEvent.Run)),
+            new LampEvent.AgentStatus(Optional.of(RUN), Tuple.of(LampRun, RUN)),
+            new LampEvent.AgentStatus(Optional.empty(), Tuple.of(LampRun)),
             new LampEvent.Conversations(Tuple.of(dev.lamp.Lamp.Conversation, CONVERSATION)),
             new LampEvent.ConversationShown(CONVERSATION),
             new LampEvent.HostAccessEnabled(Tuple.of(String, 'host_read_file', 'host_list_dir'),

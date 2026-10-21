@@ -5,6 +5,7 @@ import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampEvent.RunOutcome
 import dev.lamp.LampSaveKind
+import dev.lamp.LampRun
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Specification
@@ -310,7 +311,7 @@ class WakingTheAgentSpec extends Specification {
                     reported.findIndexOf { it instanceof LampEvent.RunQueued || it instanceof LampEvent.RunStarted }
 
         and: 'the agent was woken with the job\'s prompt, as the job\'s first run'
-            reported.find { it instanceof LampEvent.RunStarted }.run() == new LampEvent.Run('run-1', Optional.of('job-1'),
+            reported.find { it instanceof LampEvent.RunStarted }.run() == new LampRun('run-1', Optional.of('job-1'),
                     'Write the weekly report into ~/workspace/report.md', Optional.empty())
             prompts.size() == 1
             prompts[0].contains('You were woken by job-1, a job the user added')

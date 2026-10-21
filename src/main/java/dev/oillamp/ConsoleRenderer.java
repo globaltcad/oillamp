@@ -369,7 +369,7 @@ final class ConsoleRenderer {
     }
 
     /// What woke the agent: a job, or someone asking.
-    private static String describe(LampEvent.Run run) {
+    private static String describe(LampRun run) {
         return run.job().map(job -> "job " + job).orElse("asked");
     }
 

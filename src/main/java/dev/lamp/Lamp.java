@@ -615,11 +615,11 @@ public final class Lamp implements AutoCloseable {
     /// run waits its turn, and [LampEvent.RunQueued] says so.
     ///
     /// @throws LampFailedException when the conversation or the entry is not there, or the session is ending
-    public LampEvent.Run send(Question question) throws IOException, InterruptedException, LampFailedException {
+    public LampRun send(Question question) throws IOException, InterruptedException, LampFailedException {
         var command = InternalLampUtil.askCommand(directory, question, "--no-wait");
         Ran ran = runToEnd(launcher, listeners, command);
         for ( LampEvent event : ran.events() )
-            if (event instanceof LampEvent.RunAccepted(LampEvent.Run run))
+            if (event instanceof LampEvent.RunAccepted(LampRun run))
                 return run;
         ran.orThrow();
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no run"));

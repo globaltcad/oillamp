@@ -117,20 +117,11 @@ public sealed interface LampEvent {
     /// A job was switched on or off, or the whole schedule paused or resumed.
     record ScheduleChanged(String what)                 implements LampEvent {}
 
-    /// One time the agent is woken, by a job or by someone asking. Runs happen one at a time.
-    ///
-    /// @param id           `run-` and a number counted per lamp, such as `run-12`. The snapshots
-    ///                     taken as the run began and ended carry it too
-    /// @param job          the job that woke the agent; empty when someone asked
-    /// @param prompt       the job's prompt, or the question, as written
-    /// @param conversation the conversation the run continues; empty for a new one
-    record Run(String id, Optional<String> job, String prompt, Optional<String> conversation) {}
-
     /// A run waits, because the agent is busy.
     ///
     /// @param ahead runs waiting before this one, not counting the one in progress
-    record RunQueued(Run run, int ahead)                implements LampEvent {}
-    record RunStarted(Run run)                          implements LampEvent {}
+    record RunQueued(LampRun run, int ahead)            implements LampEvent {}
+    record RunStarted(LampRun run)                      implements LampEvent {}
     /// A run ended, and the lamp was saved.
     ///
     /// @param answer       the agent's last message; for a failed run, the error
@@ -138,12 +129,12 @@ public sealed interface LampEvent {
     /// @param took         from [RunStarted] to this event
     /// @param conversation the conversation the run happened in; empty when pi failed before it
     ///                     opened one
-    record RunFinished(Run run, RunOutcome outcome, String answer,
+    record RunFinished(LampRun run, RunOutcome outcome, String answer,
                        Optional<LampSave> snapshot, Duration took,
                        Optional<String> conversation) implements LampEvent {}
 
     /// The session queued a question as `run`. What `oillamp ask --no-wait` and [Lamp#send] report.
-    record RunAccepted(Run run)                         implements LampEvent {}
+    record RunAccepted(LampRun run)                     implements LampEvent {}
 
     /// Something the agent did during a run, as pi reports it.
     ///
@@ -189,7 +180,7 @@ public sealed interface LampEvent {
     ///
     /// @param current the run in progress; empty when the agent is idle
     /// @param waiting the runs waiting, in the order they will run
-    record AgentStatus(Optional<Run> current, Tuple<Run> waiting) implements LampEvent {
+    record AgentStatus(Optional<LampRun> current, Tuple<LampRun> waiting) implements LampEvent {
         public boolean busy() { return current.isPresent() || !waiting.isEmpty(); }
     }
 

@@ -20,6 +20,7 @@ import java.util.function.Supplier;
 
 import dev.lamp.LampEvent;
 import dev.lamp.Problem;
+import dev.lamp.LampRun;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -85,7 +86,7 @@ final class HostAccess implements AutoCloseable {
     /// The run the agent is working on now, as the session's runner knows it. The request does
     /// not name its run: anything the sandbox sends is the agent's word, and the agent must not
     /// choose whose instruction the checker reads.
-    private final Supplier<Optional<LampEvent.Run>> currentRun;
+    private final Supplier<Optional<LampRun>> currentRun;
     /// What each run did, as the session's state holds it: read from the event loop's value, never
     /// written from here.
     private final Function<String, RunLog> activityNow;
@@ -96,7 +97,7 @@ final class HostAccess implements AutoCloseable {
     HostAccess(Machine machine, LampLayout layout, LampConfig config, SessionId session, Path home,
                HostAccessChecker checker, Consumer<LampEvent> sink,
                Function<RequestForPermission, CompletableFuture<Boolean>> decisions,
-               Supplier<Optional<LampEvent.Run>> currentRun, Function<String, RunLog> activityNow) {
+               Supplier<Optional<LampRun>> currentRun, Function<String, RunLog> activityNow) {
         this.machine = machine;
         this.layout = layout;
         this.config = config;
@@ -186,8 +187,8 @@ final class HostAccess implements AutoCloseable {
     Control.Reply answer(Control.Request request) {
         Instant started = machine.now();
         String line = request.arguments().get("request").orElse("");
-        Optional<LampEvent.Run> working = currentRun.get();
-        String run = working.map(LampEvent.Run::id).orElse("");
+        Optional<LampRun> working = currentRun.get();
+        String run = working.map(LampRun::id).orElse("");
         Result<HostTool.Call> read = HostTool.read(line);
         if (read instanceof Result.Err<HostTool.Call> bad) {
             String why = bad.problems().first().whatHappened();
@@ -286,7 +287,7 @@ final class HostAccess implements AutoCloseable {
 
     /// What the checker is told about the run in progress. The state may not have heard of a run
     /// that began a moment ago, so its instruction comes from the runner, which started it.
-    private HostAccessChecker.Activity activityOf(Optional<LampEvent.Run> working) {
+    private HostAccessChecker.Activity activityOf(Optional<LampRun> working) {
         if (working.isEmpty()) return RunLog.unknown("").activity();
         RunLog log = activityNow.apply(working.get().id());
         return log.instruction().isEmpty()
