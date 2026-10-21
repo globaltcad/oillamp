@@ -56,10 +56,19 @@ class TheShapeOfTheCodeSpec extends Specification {
             exposed.sort() == ENGINE_API.sort()
     }
 
-    def 'The embedding package exposes only what an application needs'() {
+    def 'The client API in dev.lamp has exactly the public types listed in EMBEDDING_API'() {
         reportInfo """
-            `dev.lamp` is what an application such as a game compiles against. Whatever is public
-            there is a promise to that application, so the list is checked like the engine's.
+            `dev.lamp` is the client library: the package that other Java programs compile
+            against when they start and control oillamp from their own code (a game that runs
+            an agent in a lamp, for example), rather than running `oillamp` from a shell.
+            Those programs never touch `dev.oillamp`. They use `Lamp` to start the engine as a
+            separate process and read its `LampEvent`s.
+
+            Every public top-level type in `dev.lamp` is something those programs may come to
+            rely on, so it cannot be removed or renamed later without breaking them. This
+            scenario fails when a type becomes public there without being added to
+            EMBEDDING_API, or when a listed type stops being public, so that every change to
+            the client API is deliberate.
         """
         when:
             var exposed = code.findAll { it.packageName == 'dev.lamp' }
@@ -104,7 +113,9 @@ class TheShapeOfTheCodeSpec extends Specification {
         """
         when:
             var leaks = []
-            code.findAll { it.simpleName in PUBLIC_API }.each { type ->
+            // By package as well as name: dev.oillamp has an internal LampPhase of its own.
+            code.findAll { (it.packageName == 'dev.oillamp' && it.simpleName in ENGINE_API)
+                        || (it.packageName == 'dev.lamp' && it.simpleName in EMBEDDING_API) }.each { type ->
                 type.methods.findAll { it.modifiers.contains(JavaModifier.PUBLIC) }.each { method ->
                     (method.rawParameterTypes + [method.rawReturnType]).each { used ->
                         if (used.packageName in ['dev.oillamp', 'dev.lamp'] && !used.modifiers.contains(JavaModifier.PUBLIC))
@@ -117,16 +128,23 @@ class TheShapeOfTheCodeSpec extends Specification {
             leaks.isEmpty()
     }
 
-    def 'The code that decides things does not also perform them'() {
+    def 'Only the classes listed here may use files, processes, threads, System or SecureRandom'() {
         reportInfo """
-            Everything oillamp decides - which packages to install, whether a directory may become
-            a lamp, which recordings to delete, what the plan is - is a pure function over values
-            that were gathered elsewhere. Only a named handful of classes actually touch the
-            filesystem, spawn processes, read the clock or generate randomness.
+            oillamp's logic (which packages to install, whether a directory may become a lamp,
+            which recordings to delete, what the plan is) lives in pure functions. They take
+            plain values as input and return a result, and they never read a file or start a
+            process themselves. The I/O happens in a small set of classes, listed below as
+            `allowed`. Those gather the inputs and carry out the result.
 
-            That split is why the scenarios can cover broken machines, dangerous directories and
-            malformed configuration without installing anything or needing a container. If a planner starts reading a file directly, that stops being true - and
-            it stops quietly, one class at a time. Hence this test.
+            This separation is what lets the scenarios test broken machines, dangerous
+            directories and malformed configuration with plain values, without installing
+            anything or starting a container. It breaks silently: a planner that calls
+            `Files.readString` still compiles and still works, but can no longer be tested that way.
+
+            So this scenario scans every class outside the `allowed` list and fails if one
+            depends directly on `Files`, `ProcessBuilder`, `Process`, `Thread`, `System` or
+            `SecureRandom`. If a class really is a new I/O boundary, add it to `allowed` with a
+            comment saying what it touches and which pure class makes its decisions.
         """
         given: 'the classes whose job is to touch the outside world'
             var allowed = ['RealMachine', 'SimulatedMachine', 'FilesystemUtil', 'LampLock', 'HostProbeUtil',
