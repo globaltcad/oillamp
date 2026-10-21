@@ -255,7 +255,7 @@ public final class Lamp implements AutoCloseable {
                 try {
                     if (Files.size(file) > LARGEST_CONVERSATION) continue;
                     List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-                    PiSessionFile.parse(SESSIONS + "/" + folder.getFileName() + "/" + name, lines).ifPresent(found::add);
+                    InternalPiSessionFileUtil.parse(SESSIONS + "/" + folder.getFileName() + "/" + name, lines).ifPresent(found::add);
                 } catch (IOException | UncheckedIOException unreadable) {
                     // Being written, or gone since it was listed: left out until the next look.
                 }

@@ -973,7 +973,7 @@ run in progress and the runs waiting.
 conversation: a header with its id, then one entry per line, each naming the one before it. So a
 conversation is a tree, and it stands at the entry written last. `Lamp.conversations` reads them
 straight from the lamp, whether or not it runs, into `LampConversation` values (entries with a
-kind: question, answer, tool output, summary or other), with `PiSessionFile` doing the parsing.
+kind: question, answer, tool output, summary or other), with `InternalPiSessionFileUtil` doing the parsing.
 The agent writes these files, so no link is followed on the way to them, files over 64 MB are
 left out, and lines that are not entries are passed over. `oillamp conversations` shows them, and
 `Lamp.forget` deletes one.
@@ -1505,7 +1505,7 @@ instead, explaining that it may take a while.
 | Host phase | `HostPhase`, `HostProbeUtil`, `HostPlanUtil`, `HostFacts`, `HostRequirements`, `SubIdRangeUtil`, and fact records `OsRelease`, `UserInfo`, `GraphicalSession`, `PodmanFacts`, `UserNameSpaceFacts`, `SubIdFacts`, `SudoFacts`, `GpuFacts`, `TerminalCandidate`, `IdRange`, `DistroFamily`, `Installing` |
 | Lamp phase | `LampPhase`, `LampPlanUtil`, `LampDirectoryUtil`, `LampState`, `LampLayout`, `LampLocationUtil`, `LampMeta`, `AgentId`, `SessionId`, `DirListing`, `RecordingRetentionUtil`, `RecordingFile` |
 | History | `History` (reads the agent directory, writes and reads the repository), `GitObjectUtil` (git's object format and the commit messages, pure) |
-| Schedule and runs | `AgentRunner` (the queue, the schedule watcher, the agent's requests), `Harness` (pi over ssh, and the session's model and instructions in pi's files), `PiSetupUtil` (what goes into those files, pure), `Schedule` and `ScheduledJob` (the jobs and their rules, pure), `ScheduleBook` (the file), `CronExpression`, `TimeNotationUtil` (times as people write them), `WakePromptUtil` (a run's prompt, pure); in `dev.lamp`, `PiSessionFile` (pi's session files as `LampConversation`, pure) |
+| Schedule and runs | `AgentRunner` (the queue, the schedule watcher, the agent's requests), `Harness` (pi over ssh, and the session's model and instructions in pi's files), `PiSetupUtil` (what goes into those files, pure), `Schedule` and `ScheduledJob` (the jobs and their rules, pure), `ScheduleBook` (the file), `CronExpression`, `TimeNotationUtil` (times as people write them), `WakePromptUtil` (a run's prompt, pure); in `dev.lamp`, `InternalPiSessionFileUtil` (pi's session files as `LampConversation`, pure) |
 | Configuration | `ConfigLoadingUtil`, `ConfigTree`, `ConfigSection`, `ConfigSource`, `ConfigDefaultsUtil`, `LampConfig`, `GeneratedFileTextUtil`, and value types `GpuMode`, `ClipboardMode`, `TerminalProfileId`, `WindowLayout` |
 | Plans | `Plan`, `Step`, `StepRunner`, `PosixMode` |
 | Errors and events | `LampProblem`, `ProblemCatalogUtil`, `Result`, `LampEvent`, `LampExitStatus` |

@@ -23,9 +23,9 @@ import sprouts.Tuple;
 /// or is not an entry, is passed over, and nothing in them is trusted to be well formed.
 ///
 /// Pure: it is given the lines, and [Lamp] reads the files.
-final class PiSessionFile {
+final class InternalPiSessionFileUtil {
 
-    private PiSessionFile() {}
+    private InternalPiSessionFileUtil() {}
 
     private static final ObjectMapper JSON = new ObjectMapper();
 

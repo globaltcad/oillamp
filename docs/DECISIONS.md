@@ -464,7 +464,7 @@ that makes the agent act goes through the session, so that one pi does one run a
 every run is saved before and after.
 
 *Given up:* the reader depends on pi's session file format (version 3). A change to it in a new pi
-needs a change in `PiSessionFile`. *(added on 2026-09-30)*
+needs a change in `InternalPiSessionFileUtil`. *(added on 2026-09-30)*
 
 ### Host access, when it exists, is judged on the host by a model with its own prompt
 
