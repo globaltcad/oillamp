@@ -1522,8 +1522,10 @@ instead, explaining that it may take a while.
 Planned and built as described in [HOST-ACCESS.md](HOST-ACCESS.md); this is where it sits in the
 running session.
 
-The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on, and the
-entrypoint bridges `127.0.0.1:3131` in the sandbox to it only while `OILLAMP_HOST_ACCESS` is `1`.
+The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on. The
+agent's pi extension opens it directly, at `/oillamp/sockets/host/host-access.sock`, as the
+scheduling tools open theirs: the socket is `0600` and the agent's, so no bridge run by the
+sandbox's `lamp` user could reach it.
 One JSON line per connection is read by [Control.Server][Control.Server], as on the schedule and
 desktop sockets, and handed to `HostAccess.answer` on that connection's thread.
 

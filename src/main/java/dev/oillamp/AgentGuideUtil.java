@@ -272,6 +272,7 @@ final class AgentGuideUtil {
         }
 
         if (config.schedule().enabled()) out.append(scheduleSection(config.schedule()));
+        if (config.hostAccess().enabled()) out.append(hostAccessSection(config.hostAccess()));
 
         out.append("""
             ## What you cannot do
@@ -327,6 +328,60 @@ final class AgentGuideUtil {
 
             """.formatted(schedule.maxAgentJobs(), schedule.minAgentIntervalMinutes(), schedule.maxAgentDays(),
                           schedule.maxAgentRunsPerDay(), schedule.maxRunMinutes(), schedule.notesMaxKb());
+    }
+
+    /// How the agent reaches the user's own machine, for a lamp whose host access is on: the tools
+    /// it has, and that every request is judged first. Without this the tools are only names in
+    /// pi's list, and an agent asked whether it can reach the host says no.
+    private static String hostAccessSection(LampConfig.HostAccess access) {
+        StringBuilder out = new StringBuilder("""
+            ## Reaching the user's computer
+
+            The user let you reach their own computer, outside this sandbox, through these tools,
+            which pi has here:
+
+            | Tool | What it does |
+            |---|---|
+            """);
+        for (String tool : HostTool.offeredBy(access))
+            out.append("| `").append(tool).append("` | ").append(whatItDoes(tool)).append(" |\n");
+        out.append("""
+
+            Nothing else of the host is mounted or reachable here: not with `bash`, `curl` or a
+            socket of your own. Only these tools reach it.
+
+            oillamp, on the user's computer, judges every request before it happens: it checks the
+            path, then asks a model whether the user's rules allow it. You cannot see those rules.
+            A refusal comes back as the tool's error, with the reason; tell the user what was
+            refused and why, rather than trying another way. Paths are absolute or start with
+            `~/`, the user's home there, not yours here, and never contain `.` or `..`.
+            """);
+        if (access.roots().isEmpty()) out.append("Only paths in the user's home directory can be reached.\n");
+        else {
+            out.append("Only paths under these folders can be reached:");
+            for (String root : access.roots()) out.append(" `").append(root).append('`');
+            out.append(".\n");
+        }
+        out.append("""
+            What you change there is outside the lamp's history: it cannot be undone from here.
+
+            """);
+        return out.toString();
+    }
+
+    private static String whatItDoes(String tool) {
+        return switch (tool) {
+            case "host_list_dir" -> "list a directory";
+            case "host_stat" -> "say whether a path exists, its size, times and permissions";
+            case "host_read_file" -> "read a text file; large files are cut, ask again with `offset`";
+            case "host_open_url" -> "open an http or https page in the user's browser";
+            case "host_show" -> "open a file, such as a PDF or a picture, with the user's own application";
+            case "host_write_file" -> "write a text file, creating or replacing it";
+            case "host_notify" -> "show the user a desktop notification";
+            case "host_copy_out" -> "copy a file from your home here to the user's computer";
+            case "host_run" -> "run one of the programs the user allowed; the user is asked first";
+            default -> "see its description in pi";
+        };
     }
 
     /// The pi extension that gives the agent its scheduling tools. They send requests to the

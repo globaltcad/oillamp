@@ -26,7 +26,6 @@ set -a; . /oillamp/session/runtime.env; set +a
 : "${OILLAMP_SESSION:?runtime.env is missing OILLAMP_SESSION}"
 : "${OILLAMP_PROXY_PORT:=3128}"
 : "${OILLAMP_MODEL_PORT:=3129}"
-: "${OILLAMP_HOST_ACCESS_PORT:=3131}"
 : "${OILLAMP_VNC_MAX_FPS:=30}"
 : "${OILLAMP_RECORDING_ENABLED:=false}"
 : "${OILLAMP_RECORDING_CODEC:=libx264}"
@@ -300,13 +299,6 @@ BRIDGE_PIDS+=("$LAST_PID")
 drop lamp 077 model socat "TCP-LISTEN:${OILLAMP_MODEL_PORT},bind=127.0.0.1,reuseaddr,fork" \
      UNIX-CONNECT:/oillamp/sockets/host/model.sock
 BRIDGE_PIDS+=("$LAST_PID")
-# The host tools. Only in a lamp whose host access is on; the host serves no socket otherwise, and
-# a bridge to a socket that is not there would only fail every call the agent makes.
-if [ "${OILLAMP_HOST_ACCESS:-0}" = 1 ]; then
-    drop lamp 077 host-access socat "TCP-LISTEN:${OILLAMP_HOST_ACCESS_PORT},bind=127.0.0.1,reuseaddr,fork" \
-         UNIX-CONNECT:/oillamp/sockets/host/host-access.sock
-    BRIDGE_PIDS+=("$LAST_PID")
-fi
 for forward in $OILLAMP_FORWARDS; do
     name=${forward%%:*}; port=${forward##*:}
     drop lamp 077 "fwd-$name" socat "TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr,fork" \

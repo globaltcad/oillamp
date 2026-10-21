@@ -16,15 +16,9 @@
 import { Type } from "@earendil-works/pi-ai";
 import net from "node:net";
 
-// The bridge the sandbox gives the extension: a TCP port that socat forwards to the session's
-// socket. The socket itself is the fallback, for a sandbox where the bridge did not start.
-const ADDRESS = process.env.OILLAMP_HOST_ACCESS || "";
-
-function connect() {
-    if (!ADDRESS.startsWith("http://")) return net.createConnection("/oillamp/sockets/host/host-access.sock");
-    const url = new URL(ADDRESS);
-    return net.createConnection(Number(url.port), url.hostname);
-}
+// The session's socket, reached directly, as the scheduling tools reach theirs. Only the agent may
+// open it: a bridge run by the sandbox's lamp user would be refused.
+const SOCKET = "/oillamp/sockets/host/host-access.sock";
 
 // A request may wait for a person, so the socket waits longer than a tool call normally would.
 const PATIENCE_MS = 120000;
@@ -39,7 +33,7 @@ function register(pi, tool) {
 
 function ask(request, signal) {
     return new Promise((resolve, reject) => {
-        const socket = connect();
+        const socket = net.createConnection(SOCKET);
         let answer = "";
         socket.setEncoding("utf8");
         socket.setTimeout(PATIENCE_MS, () => socket.destroy(new Error("oillamp did not answer in time")));

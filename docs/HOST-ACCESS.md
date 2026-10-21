@@ -53,7 +53,6 @@ implementation is a request over a Unix socket; the host does the judging **and*
 flowchart LR
     subgraph C["in the sandbox"]
         pi["pi, with oillamp's host-tools extension"]
-        socat["socat 127.0.0.1:3131<br/>(the profile sets OILLAMP_HOST_ACCESS)"]
     end
     subgraph H["on the host (the session)"]
         sock["sockets/host/host-access.sock"]
@@ -62,7 +61,7 @@ flowchart LR
         relay["model relay<br/>(adds the key)"]
         log["logs/host-access-&lt;session&gt;.jsonl"]
     end
-    pi -->|"one JSON line per request"| socat -->|"host-access.sock"| gate
+    pi -->|"one JSON line per request,<br/>straight to the socket"| sock --> gate
     gate -->|verdict| checker --> relay
     gate --> log
     gate --> host(("the host's files,<br/>clipboard, browser"))
@@ -171,7 +170,7 @@ built, is absent rather than a tool that always refuses.
 
 ### What happens when the feature is off
 
-No socket, no socat bridge, no extension. pi starts exactly as it does today, and the tools do not
+No socket and no extension. pi starts exactly as it does today, and the tools do not
 exist. A model that tries to call one gets pi's own "no such tool".
 
 ---

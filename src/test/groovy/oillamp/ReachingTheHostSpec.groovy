@@ -41,7 +41,7 @@ judges first and then carries out, or refuses.
    { path: "~/Documents/q3.md" }
         │ one JSON line
         ▼
- socat 127.0.0.1:3131  ─────────▶  sockets/host/host-access.sock
+ the session's socket  ─────────▶  sockets/host/host-access.sock
                                    │
                                    ├ 1. read: a request, or nothing at all
                                    ├ 2. the tier: closed is closed
@@ -164,6 +164,14 @@ class ReachingTheHostSpec extends Specification {
             offered.contains('"host_list_dir", "host_stat", "host_read_file"')
             !offered.contains('host_run')
             !offered.contains('host_clipboard')
+            extension.contains('net.createConnection(SOCKET)')
+
+        and: 'the agent\'s guide says it can reach the host, with which tools and under which folder'
+            var guide = Files.readString(Lamp.agentHome(host.lampPath()).orElseThrow().resolve('AGENTS.md'))
+            guide.contains("## Reaching the user's computer")
+            guide.contains('| `host_read_file` |')
+            !guide.contains('`host_run`')
+            guide.contains("`${host.home.resolve('Documents')}`")
 
         when: 'the agent reads a document under the root, naming it from the home directory'
             var reply = ask('host_read_file', [path: '~/Documents/q3.md'])
@@ -447,8 +455,8 @@ class ReachingTheHostSpec extends Specification {
             second.awaitRunning(Duration.ofSeconds(30))
 
         then: 'the lamp stays closed, and the application hears that its rules are unused'
-            Files.readString(closed.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_HOST_ACCESS='0'")
             !Files.exists(Lamp.agentHome(closed).orElseThrow().resolve('.pi/agent/extensions/oillamp-host-access.js'))
+            !Files.readString(Lamp.agentHome(closed).orElseThrow().resolve('AGENTS.md')).contains("## Reaching the user's computer")
             !heard.any { it instanceof LampEvent.HostAccessEnabled }
             heard.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-HOSTACCESS-014' }
             Files.exists(closed.resolve('.oillamp/sockets/host/model.sock'))

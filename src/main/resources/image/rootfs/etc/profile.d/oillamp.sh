@@ -64,15 +64,6 @@ export EDENAI_API_KEY=held-by-oillamp-on-the-host
 # no extra flags, as the agent guide promises. Java builds java.library.path from LD_LIBRARY_PATH
 # followed by the system directories. Do not set -Djava.library.path as well: it would replace
 # that list, and libraries installed in /usr/lib would no longer be found.
-# The host tools: oillamp's extension in ~/.pi/agent/extensions asks the session, on the host,
-# through this port. Only while the lamp's host access is on, which is the only time the session
-# serves the socket and the bridge exists.
-if [ "${OILLAMP_HOST_ACCESS:-0}" = 1 ]; then
-    export OILLAMP_HOST_ACCESS="http://127.0.0.1:${OILLAMP_HOST_ACCESS_PORT:-3131}"
-else
-    unset OILLAMP_HOST_ACCESS
-fi
-
 export LD_LIBRARY_PATH="$(oillamp_prepend "${LD_LIBRARY_PATH:-}" "$HOME/libs")"
 export JAVA_TOOL_OPTIONS="-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=${OILLAMP_PROXY_PORT:-3128} -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=${OILLAMP_PROXY_PORT:-3128} -Dhttp.nonProxyHosts=localhost|127.0.0.1"
 export PATH="$(oillamp_prepend "$PATH" "$HOME/.local/bin")"
