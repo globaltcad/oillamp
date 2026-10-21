@@ -33,9 +33,9 @@ import java.util.function.UnaryOperator
  *
  *  <p>{@link GenieRunner} does all of it through the Lamp API. Here the lamp is oillamp's real
  *  engine, run in this JVM on a simulated machine, with a stand-in pi that answers the way pi
- *  does and keeps its conversations in files the way pi does. Only the commands that move files
- *  in and out, which reach into the sandbox over ssh, run on this machine instead, in the genie's
- *  home.
+ *  does and keeps its conversations in files the way pi does. The commands that move files in
+ *  and out, which reach into the sandbox over ssh, run in the simulated sandbox: in the genie's
+ *  home, on this machine.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class KeepingAGenieAliveSpec extends Specification {
@@ -605,31 +605,23 @@ class KeepingAGenieAliveSpec extends Specification {
         genie.transcript().entries().findAll { it.kind() in [Entry.Kind.YOU, Entry.Kind.GENIE] }*.text()
     }
 
-    /**
-     *  oillamp's engine in this JVM, through the Lamp API, except that a command run in the
-     *  sandbox runs here, in the genie's home: the simulated machine has no sandbox to run it in.
-     */
+    /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
         var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
-            here(real.light(directory, name, settings, key, progress, events))
+            noted(real.light(directory, name, settings, key, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events ->
-            real.join(directory, events).map { here(it) }
+            real.join(directory, events).map { noted(it) }
         }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
                 unlit: { Path directory -> real.unlit(directory) }] as LampLighter
     }
 
-    /** `lit`, except that its commands run here, in the genie's home. */
-    private LampLighter.Lit here(LampLighter.Lit lit) {
+    /** `lit`, except that putting it out is noted. */
+    private LampLighter.Lit noted(LampLighter.Lit lit) {
             new LampLighter.Lit() {
-                Process exec(String... command) {
-                    var builder = new ProcessBuilder(command as List<String>)
-                    builder.environment().put('HOME', home().toString())
-                    builder.directory(home().toFile())
-                    builder.start()
-                }
+                Process exec(String... command) { lit.exec(command) }
                 dev.gui.desktop.Desktop desktop() { lit.desktop() }
                 LampRun send(LampPrompt question) { lit.send(question) }
                 void cancel(String run) { lit.cancel(run) }
