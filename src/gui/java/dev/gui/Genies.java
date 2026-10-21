@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import dev.gui.desktop.Desktop;
+import dev.gui.genie.Shelf;
 import dev.gui.model.GeniesState;
 import sprouts.Var;
 
@@ -12,6 +13,13 @@ import sprouts.Var;
 /// window asks it to do beyond that: everything that starts, stops or moves something outside the
 /// window. The app, [GeniesBackend], does it.
 public interface Genies {
+
+    /// The app with the genies and the settings `shelf` keeps, without a window: each genie's
+    /// tree of conversations and host access read, those left running when Genies last closed
+    /// joined again, and Ollama looked for. [Main] gives it its window.
+    static Genies open(Shelf shelf) {
+        return GeniesBackend.open(shelf);
+    }
 
     /// Everything the window shows. The window changes it through lenses, such as a draft, the
     /// settings or the selected genie; the app changes it for everything else.
