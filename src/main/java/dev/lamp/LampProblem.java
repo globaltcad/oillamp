@@ -13,8 +13,13 @@ import sprouts.Tuple;
 /// values, configuration locations) and concrete _fixes_. The wording for each code lives in
 /// `ProblemCatalogUtil` in the engine.
 ///
-/// Public because callers, including tests and a future GUI, need to inspect failures rather than
-/// parse text.
+/// An application receives them in [LampEvent.Warning] and [LampEvent.Failure] events and in a
+/// [LampFailedException], and can act on the [code][#code()] rather than parse text.
+///
+/// @param title        one line that names the problem
+/// @param whatHappened what oillamp saw, in a sentence or two
+/// @param whyItMatters what it means for the user, and what does not work because of it
+/// @param logFile      the log that tells the full story, when there is one
 public record LampProblem(
     Code code,
     Severity severity,
