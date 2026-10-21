@@ -101,6 +101,12 @@ public interface Genies {
     /// The settings page closes. Leaving it, however, keeps the settings.
     void settingsDone();
 
+    /// Keeps the genies and the settings, then puts every genie to sleep, or leaves it running,
+    /// and calls `whenDone` on Swing's event thread once each lamp has gone out or been let go.
+    /// (If Genies is killed instead, the lamps end by themselves: each notices its application
+    /// is gone.)
+    void quit(boolean leaveRunning, Runnable whenDone);
+
     /// Where what went wrong that Genies did not expect is written.
     Path errorLog();
 
