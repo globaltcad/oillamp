@@ -28,7 +28,7 @@ import static swingtree.UI.*;
 /// is awake, the page shows them, greyed, and says so in a banner.
 ///
 /// Like the rest of the window, a function of the [GeniesState]: a lens onto the selected genie's
-/// [HostAccess], and [Actions] for saving.
+/// [HostAccess], and [Genies] for saving.
 final class HostAccessPage {
 
     /*
@@ -69,7 +69,7 @@ final class HostAccessPage {
     }
 
     private final Var<GeniesState> state;
-    private final Actions actions;
+    private final Genies app;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
     private final Var<Genie> genie;
@@ -81,9 +81,9 @@ final class HostAccessPage {
     /// Whether the rules may be changed now: the genie sleeps, has a lamp, and nothing is on its way.
     private final Val<Boolean> changeable;
 
-    HostAccessPage(Var<GeniesState> state, Actions actions) {
+    HostAccessPage(Var<GeniesState> state, Genies app) {
         this.state = state;
-        this.actions = actions;
+        this.app = app;
         genie      = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         hostAccess = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
         draft      = hostAccess.zoomTo(HostAccess::draft, HostAccess::withDraft);
@@ -196,7 +196,7 @@ final class HostAccessPage {
                  .withTooltip("Write these rules into the genie's lamp")
                  .withStyle(canSave, (can, it) -> can ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
                      .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                 .onClick(it -> actions.saveHostAccess(selected())));
+                 .onClick(it -> app.saveHostAccess(selected())));
     }
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────

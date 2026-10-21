@@ -144,7 +144,7 @@ tasks.register('genies', JavaExec) {
     group = 'application'
     description = 'Starts Genies, the chat app whose agents each live in a lamp.'
     classpath = sourceSets.gui.runtimeClasspath
-    mainClass = 'dev.gui.Genies'
+    mainClass = 'dev.gui.GeniesBackend'
 }
 
 // The default `test` task must stay fast, offline and deterministic: it runs entirely against
@@ -328,7 +328,7 @@ def geniesJar = tasks.register('geniesJar', Jar) {
     description = "Packs Genies' own classes into a jar."
     archiveBaseName = 'genies'
     from(sourceSets.gui.output)
-    manifest { attributes('Main-Class': 'dev.gui.Genies') }
+    manifest { attributes('Main-Class': 'dev.gui.GeniesBackend') }
 }
 
 // The icon in each size a desktop asks for, laid out as an icon theme expects it:
@@ -398,7 +398,7 @@ def geniesApp = tasks.register('geniesApp') {
             commandLine "${home.get()}/bin/jpackage", '--type', 'app-image',
                     '--name', 'genies', '--app-version', theVersion,
                     '--input', jars.absolutePath, '--main-jar', mainJar.get().asFile.name,
-                    '--main-class', 'dev.gui.Genies',
+                    '--main-class', 'dev.gui.GeniesBackend',
                     '--icon', new File(icons.get(), "256x256/apps/${id}.png").absolutePath,
                     '--add-modules', modules,
                     '--jlink-options', '--strip-debug --strip-native-commands --no-header-files --no-man-pages --compress zip-6',
