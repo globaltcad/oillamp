@@ -48,10 +48,10 @@ import java.util.function.Consumer;
 /// The key goes to the engine in its environment, which only this user can read, and never onto
 /// its command line or into the lamp.
 ///
-/// An application that lets its user choose the model also gives that, with [LampStartupConf#model(String)]. The
+/// An application that lets its user choose the model also gives that, with [LampDirectory#model(String)]. The
 /// agent then answers every question with it, in old conversations too. And an application that
 /// has something to tell the agent about the world it lives in, such as how the user talks to it,
-/// gives that with [LampStartupConf#instructions(String)]. The engine writes both into pi's own files in the
+/// gives that with [LampDirectory#instructions(String)]. The engine writes both into pi's own files in the
 /// agent's home, so the application never needs to know where pi keeps them, or what they look
 /// like.
 ///
@@ -63,13 +63,13 @@ public final class Lamp implements AutoCloseable {
     /// What [#leaveRunning()] writes on the engine's standard input. Named as text for the same
     /// reason as [#ENGINE].
     static final String LEAVE_RUNNING = "leave-running";
-    /// The variable in the engine's environment that holds a key given with [LampStartupConf#modelKey(String)].
+    /// The variable in the engine's environment that holds a key given with [LampDirectory#modelKey(String)].
     static final String MODEL_KEY_VARIABLE = "OILLAMP_MODEL_KEY";
     /// The variable in the engine's environment that holds instructions given with
-    /// [LampStartupConf#instructions(String)].
+    /// [LampDirectory#instructions(String)].
     static final String INSTRUCTIONS_VARIABLE = "OILLAMP_INSTRUCTIONS";
     /// The variable in the engine's environment that holds the host-access requirements given
-    /// with [LampStartupConf#security(String)].
+    /// with [LampDirectory#security(String)].
     static final String SECURITY_REQUIREMENTS_VARIABLE = "OILLAMP_SECURITY_REQUIREMENTS";
     /// The longest instructions, in bytes of UTF-8. The engine checks the same.
     static final int LONGEST_INSTRUCTIONS = 64 * 1024;
@@ -114,8 +114,8 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
-    public static LampStartupConf at(Path directory) {
-        return new LampStartupConf(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
+    public static LampDirectory at(Path directory) {
+        return new LampDirectory(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
                             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false,
                             Optional.empty());
     }
@@ -214,7 +214,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
-    /// `oillamp.toml`, as [LampStartupConf#hostAccess()] reads them and [LampStartupConf#hostAccess(boolean, String)]
+    /// `oillamp.toml`, as [LampDirectory#hostAccess()] reads them and [LampDirectory#hostAccess(boolean, String)]
     /// writes them.
     ///
     /// @param enabled      whether a session gives the agent the host tools
@@ -222,8 +222,8 @@ public final class Lamp implements AutoCloseable {
     public record HostAccess(boolean enabled, String requirements) {}
 
     /// When oillamp saves a lamp by itself, so that it can go back there: the `[autosave]` table
-    /// of its `oillamp.toml`, as [LampStartupConf#autosave()] reads it and [LampStartupConf#autosave(Autosave)]
-    /// writes it. A save someone asks for, with [LampStartupConf#save(String)], happens whatever these say.
+    /// of its `oillamp.toml`, as [LampDirectory#autosave()] reads it and [LampDirectory#autosave(Autosave)]
+    /// writes it. A save someone asks for, with [LampDirectory#save(String)], happens whatever these say.
     ///
     /// @param startup   as a session starts, before the sandbox runs. Off unless switched on
     /// @param shutdown  as a session ends, after the sandbox has stopped. Off unless switched on
@@ -322,8 +322,8 @@ public final class Lamp implements AutoCloseable {
         }
     }
 
-    /// The models the agent of a lamp given `service` and `key` with [LampStartupConf#modelService(URI)] and
-    /// [LampStartupConf#modelKey(String)] is offered, in the service's order. Asked on this machine, without the
+    /// The models the agent of a lamp given `service` and `key` with [LampDirectory#modelService(URI)] and
+    /// [LampDirectory#modelKey(String)] is offered, in the service's order. Asked on this machine, without the
     /// engine, so an application can offer them in its settings before any lamp runs.
     ///
     /// The service is asked where the engine's relay asks it: under its own path, such as
@@ -348,7 +348,7 @@ public final class Lamp implements AutoCloseable {
     /// The lamp directory.
     public Path directory() { return directory; }
 
-    /// Takes a snapshot of this lamp while its sandbox runs, as [LampStartupConf#save] does. Programs in
+    /// Takes a snapshot of this lamp while its sandbox runs, as [LampDirectory#save] does. Programs in
     /// the sandbox may be writing at that moment, so the snapshot is marked as a running save.
     ///
     /// Blocks until it is done. What the engine reports goes to this lamp's listeners.
@@ -360,17 +360,17 @@ public final class Lamp implements AutoCloseable {
         return save(launcher, listeners, directory, message);
     }
 
-    /// This lamp's schedule, as [LampStartupConf#schedule] reads it.
+    /// This lamp's schedule, as [LampDirectory#schedule] reads it.
     public LampEvent.Schedule schedule() throws IOException, InterruptedException, LampFailedException {
         return schedule(launcher, listeners, directory);
     }
 
-    /// Adds a repeating job, as [LampStartupConf#repeat] does. The running session sees it at once.
+    /// Adds a repeating job, as [LampDirectory#repeat] does. The running session sees it at once.
     public LampJob repeat(String cron, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--cron", cron, prompt);
     }
 
-    /// Adds a job that runs once, as [LampStartupConf#once] does. The running session sees it at once.
+    /// Adds a job that runs once, as [LampDirectory#once] does. The running session sees it at once.
     public LampJob once(String at, String prompt) throws IOException, InterruptedException, LampFailedException {
         return addJob(launcher, listeners, directory, "--at", at, prompt);
     }
@@ -384,7 +384,7 @@ public final class Lamp implements AutoCloseable {
     /// Deletes a conversation for good. See [Lamp#forget(Path, String)].
     public void forget(String conversation) throws IOException { forget(directory, conversation); }
 
-    /// Takes a job off the schedule, as [LampStartupConf#unschedule] does.
+    /// Takes a job off the schedule, as [LampDirectory#unschedule] does.
     public void unschedule(String job) throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
     }
@@ -446,7 +446,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Has the agent answer with `id`, a model as the service names it, from its next run on, as
-    /// [LampStartupConf#model(String)] would have had it from the start: in new conversations and in old ones,
+    /// [LampDirectory#model(String)] would have had it from the start: in new conversations and in old ones,
     /// for questions and scheduled jobs alike, and as pi's default. A run in progress finishes on
     /// the model it started with. The session's service and key stay as they are; changing those
     /// needs a new session.
@@ -575,7 +575,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// Lets the session go on after this application is gone, until [#stop()] or
-    /// `oillamp stop <dir>` ends it. [LampStartupConf#join] finds it again.
+    /// `oillamp stop <dir>` ends it. [LampDirectory#join] finds it again.
     ///
     /// For an application that closes while the agent should keep working: on its schedule, say.
     /// The engine is told on its standard input, which is closed after. Its events keep coming

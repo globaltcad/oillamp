@@ -5,7 +5,7 @@ import dev.lamp.LampConversation.Kind
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
-import dev.lamp.LampStartupConf
+import dev.lamp.LampDirectory
 import dev.lamp.LampConversation
 import spock.lang.Specification
 import spock.lang.Subject
@@ -224,7 +224,7 @@ class AskingInAConversationSpec extends Specification {
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     /** The lamp, as an application sees it. The session holding it was started from the command line. */
-    private LampStartupConf running() {
+    private LampDirectory running() {
         Lamp.at(lamp).launchedBy(host.launcher)
     }
 

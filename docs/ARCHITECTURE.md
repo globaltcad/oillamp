@@ -893,7 +893,7 @@ conversation:
   send `/oillamp-goto …` to the model as a prompt.
 
 Then `get_state` says the conversation's id (reported as `RunProgress` `Opened`) and the model pi
-is on. If the session was given a model (`--model`, `LampStartupConf.model`, or later `oillamp model`
+is on. If the session was given a model (`--model`, `LampDirectory.model`, or later `oillamp model`
 and `Lamp.useModel`, which take effect at the next run) and pi is on another
 one, the harness sends `set_model` with provider `edenai` and that model's id; if pi refuses, the
 run fails with pi's reason, naming the model, and the question is not asked. pi is on another model
@@ -927,8 +927,8 @@ lines (`OIL-SCHEDULE-005`), and the next run starts it again.
 
 | Given | File | What is written |
 |---|---|---|
-| a model (`--model`, `LampStartupConf.model`) | `~/.pi/agent/settings.json` | `defaultProvider` `edenai` and `defaultModel` the model; every other key stays, among them the `packages` that load pi-edenai |
-| instructions (`--instructions-env`, `LampStartupConf.instructions`) | `~/.pi/agent/APPEND_SYSTEM.md` | the text, replacing what was there |
+| a model (`--model`, `LampDirectory.model`) | `~/.pi/agent/settings.json` | `defaultProvider` `edenai` and `defaultModel` the model; every other key stays, among them the `packages` that load pi-edenai |
+| instructions (`--instructions-env`, `LampDirectory.instructions`) | `~/.pi/agent/APPEND_SYSTEM.md` | the text, replacing what was there |
 
 A session without a model, or without instructions, leaves that file as it is. `oillamp model`
 and `Lamp.useModel` write the new model into `settings.json` at once, too. pi reads both files
@@ -941,7 +941,7 @@ Settings that are not a JSON object are left alone, with a warning (`OIL-LAMP-01
 refused (`OIL-LAMP-012`). What goes into the files is decided by `PiSetupUtil`.
 
 The instructions reach the engine in its environment, in the variable `--instructions-env`
-names: `LampStartupConf.instructions` puts them in `OILLAMP_INSTRUCTIONS`, as it puts the key in
+names: `LampDirectory.instructions` puts them in `OILLAMP_INSTRUCTIONS`, as it puts the key in
 `OILLAMP_MODEL_KEY`. `at` reads the variable before anything else, and refuses one that is not
 set, empty, or longer than 64 KiB (`OIL-USAGE-001`).
 

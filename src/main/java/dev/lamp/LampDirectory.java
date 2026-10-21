@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /// A lamp that has been described but not started yet.
-public final class LampStartupConf {
+public final class LampDirectory {
 
     private final Path directory;
     private final List<Consumer<LampEvent>> listeners;
@@ -36,7 +36,7 @@ public final class LampStartupConf {
         }
     }
 
-    LampStartupConf(
+    LampDirectory(
             final Path directory,
             final List<Consumer<LampEvent>> listeners,
             final LampLauncher launcher,
@@ -66,14 +66,14 @@ public final class LampStartupConf {
     /// A listener that throws misses nothing else: the exception goes to the reading thread's
     /// uncaught exception handler, and the other listeners, and the lamp itself, still get
     /// this event and every one after it.
-    public LampStartupConf onEvent(Consumer<LampEvent> listener) {
+    public LampDirectory onEvent(Consumer<LampEvent> listener) {
         List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
         more.add(listener);
-        return new LampStartupConf(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
+        return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
 
-    public LampStartupConf launchedBy(LampLauncher launcher) {
-        return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
+    public LampDirectory launchedBy(LampLauncher launcher) {
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
 
     /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -83,24 +83,24 @@ public final class LampStartupConf {
     ///
     /// Only Eden AI's models are filtered to those served in the EU. Any other service's
     /// models are all offered, since its model list names no regions.
-    public LampStartupConf modelService(URI service) {
-        return new LampStartupConf(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security);
+    public LampDirectory modelService(URI service) {
+        return new LampDirectory(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security);
     }
 
     /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
     /// lamp's `model.key_env` names. The sandbox never sees it.
     ///
     /// @throws IllegalArgumentException when `key` is blank, which would only fail later
-    public LampStartupConf modelKey(String key) {
+    public LampDirectory modelKey(String key) {
         if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-        return new LampStartupConf(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security);
+        return new LampDirectory(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security);
     }
 
     /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
     /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
     /// changed.
-    public LampStartupConf enableScheduling() {
-        return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security);
+    public LampDirectory enableScheduling() {
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security);
     }
 
     /// Has the agent answer every question with `id`, a model as the service names it, such
@@ -119,10 +119,10 @@ public final class LampStartupConf {
     ///
     /// @throws IllegalArgumentException when `id` is empty or has spaces, which no service's
     ///                                  model has
-    public LampStartupConf model(String id) {
+    public LampDirectory model(String id) {
         if (!id.matches(Lamp.MODEL_ID))
             throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-        return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security);
     }
 
     /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
@@ -139,11 +139,11 @@ public final class LampStartupConf {
     ///
     /// @throws IllegalArgumentException when `text` is blank, or longer than 64 KiB, far more
     ///                                  than any useful instructions
-    public LampStartupConf instructions(String text) {
+    public LampDirectory instructions(String text) {
         if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
         if (text.getBytes(StandardCharsets.UTF_8).length > Lamp.LONGEST_INSTRUCTIONS)
             throw new IllegalArgumentException("instructions cannot be longer than " + Lamp.LONGEST_INSTRUCTIONS / 1024 + " KiB");
-        return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security);
     }
 
     /// Lets the agent reach the host machine through oillamp, as `[host_access]` in the lamp's
@@ -163,12 +163,12 @@ public final class LampStartupConf {
     /// [Lamp#useModel], unless the lamp's file names a `checker_model` of its own. A lamp with
     /// neither does not start: there is no model to judge with.
     ///
-    /// The requirements go to the engine in its environment, like [LampStartupConf#instructions], so
+    /// The requirements go to the engine in its environment, like [LampDirectory#instructions], so
     /// that they are not on a command line any user of the machine can read.
     ///
     /// @throws IllegalArgumentException when the requirements are blank or longer than 64 KiB
-    public LampStartupConf security(String requirements) {
-        return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, model,
+    public LampDirectory security(String requirements) {
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
                 instructions, scheduling, Optional.of(new Security(requirements)));
     }
 

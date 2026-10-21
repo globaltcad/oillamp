@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
  *  carry.
  *
  *  <p>An application such as a chat app has its own settings screen, where its user types in a
- *  model service and a key. {@link dev.lamp.LampStartupConf#modelService} and {@link dev.lamp.LampStartupConf#modelKey}
+ *  model service and a key. {@link dev.lamp.LampDirectory#modelService} and {@link dev.lamp.LampDirectory#modelKey}
  *  hand them to the engine, which adds the key to the sandbox's requests on the host, exactly as
  *  it does with a key from its environment. The sandbox never sees either.
  *

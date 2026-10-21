@@ -23,7 +23,7 @@ class TheShapeOfTheCodeSpec extends Specification {
 
     /** What an application that embeds oillamp sees: the words oillamp speaks in, and a lamp. */
     static final Set<String> EMBEDDING_API = [
-            'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
+            'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampDirectory', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'LampJobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
             'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
             'LampConversation', 'LampLauncher'
@@ -188,7 +188,7 @@ class TheShapeOfTheCodeSpec extends Specification {
         given: 'the classes whose job is to touch the outside world'
             var allowed = ['RealMachine', 'SimulatedMachine', 'FilesystemUtil', 'LampLock', 'HostProbeUtil',
                            'StepRunner', 'LampPhase', 'HostPhase', 'CommandExecutionUtil', 'ConsoleRenderer',
-                           'OilLamp', 'Machine', 'LampStartupConf', 'InternalLampUtil',
+                           'OilLamp', 'Machine', 'LampDirectory', 'InternalLampUtil',
                            // The session. These three bind sockets, move bytes between them
                            // and start the windows. They decide nothing: every decision a
                            // session makes is SessionMachine's.
