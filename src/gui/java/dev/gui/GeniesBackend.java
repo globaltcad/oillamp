@@ -166,7 +166,7 @@ public final class GeniesBackend implements Genies {
         frame.setIconImage(GeniesView.windowIcon());
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent event) { app.quit(frame, view); }
+            @Override public void windowClosing(WindowEvent event) { quit(app, frame, view); }
         });
         // The tree of conversations under each genie is there before any genie wakes, and so is
         // whether it may reach this computer, which its card says. A genie left running when
@@ -529,11 +529,10 @@ public final class GeniesBackend implements Genies {
     }
 
     /// Asks the user what becomes of the genies that are awake, then puts them to sleep or leaves
-    /// them running, before the window goes. Without an answer, nothing closes. (If Genies is
-    /// killed instead, the lamps end by themselves: each notices its application is gone.)
-    private void quit(JFrame frame, GeniesView view) {
+    /// them running, before the window goes. Without an answer, nothing closes.
+    private static void quit(Genies app, JFrame frame, GeniesView view) {
         List<String> awake = new ArrayList<>();
-        for (Genie genie : state.get().genies())
+        for (Genie genie : app.state().get().genies())
             if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING) awake.add(genie.name());
         boolean leaveRunning = false;
         if (!awake.isEmpty()) {
@@ -545,10 +544,9 @@ public final class GeniesBackend implements Genies {
         }
         boolean keep = leaveRunning;
         frame.setTitle(keep ? "Genies — leaving the genies running…" : "Genies — putting the genies to sleep…");
-        keepGenies();
-        keepSettings();
         // A desktop shown at the size of the panel gets its own size back, for the genie that
-        // goes on without the panel. A genie put to sleep takes its desktop with it.
+        // goes on without the panel, before its lamp is let go. A genie put to sleep takes its
+        // desktop with it.
         Optional<Thread> givingBack = keep ? view.letGoOfTheDesktop() : Optional.empty();
         Thread.ofVirtual().name("quit").start(() -> {
             try {
@@ -556,18 +554,26 @@ public final class GeniesBackend implements Genies {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
+            SwingUtilities.invokeLater(() -> app.quit(keep, () -> {
+                frame.dispose();
+                System.exit(0);
+            }));
+        });
+    }
+
+    @Override public void quit(boolean leaveRunning, Runnable whenDone) {
+        keepGenies();
+        keepSettings();
+        Thread.ofVirtual().name("quit").start(() -> {
             for (GenieRunner runner : runners.values()) {
                 try {
-                    if (keep) runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                    if (leaveRunning) runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
                     else runner.sleepAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 }
             }
-            SwingUtilities.invokeLater(() -> {
-                frame.dispose();
-                System.exit(0);
-            });
+            SwingUtilities.invokeLater(whenDone);
         });
     }
 }
