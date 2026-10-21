@@ -4,6 +4,7 @@ import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
+import dev.lamp.LampAgentProgress
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Narrative
@@ -511,7 +512,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
             entries.findAll { it.kind() != Lamp.Conversation.Kind.MESSAGE_FROM_AGENT }.every { it.model().isEmpty() }
 
         and: 'each answer, as the session reported it, named its model'
-            reported.findAll { it instanceof LampEvent.RunProgress && it.progress() instanceof LampEvent.Progress.Answered }
+            reported.findAll { it instanceof LampEvent.RunProgress && it.progress() instanceof LampAgentProgress.Answered }
                     *.progress()*.model() == [Optional.of(DEEPSEEK), Optional.of(GPT)]
     }
 

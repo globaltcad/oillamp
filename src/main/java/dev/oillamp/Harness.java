@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.lamp.LampEvent;
 import dev.lamp.LampRunOutcome;
 import dev.lamp.Problem;
+import dev.lamp.LampAgentProgress;
 
 /// The agent, as a running session holds it: pi in RPC mode, in the sandbox, reached through ssh.
 ///
@@ -130,7 +131,7 @@ final class Harness implements AutoCloseable {
     /// @param cancelled whether someone cancelled this run; asked again and again while it lasts
     /// @param progress told what the agent does, as it does it
     Answer run(Optional<String> name, String prompt, Duration limit, Optional<Target> target,
-               BooleanSupplier cancelled, Consumer<LampEvent.Progress> progress) {
+               BooleanSupplier cancelled, Consumer<LampAgentProgress> progress) {
         if (stopping) return new Answer(LampRunOutcome.INTERRUPTED, "the session was ending, so the agent was not woken");
         try {
             Machine.Conversation agent = started();
@@ -149,7 +150,7 @@ final class Harness implements AutoCloseable {
             Optional<JsonNode> state = answer(agent, command("get_state"));
             Optional<String> conversation = state
                     .map(s -> s.path("data").path("sessionId").asText("")).filter(id -> !id.isEmpty());
-            conversation.ifPresent(id -> progress.accept(new LampEvent.Progress.Opened(id)));
+            conversation.ifPresent(id -> progress.accept(new LampAgentProgress.Opened(id)));
             Optional<String> wanted = model;
             if (wanted.isPresent()) {
                 Optional<String> couldNot = switchModel(agent, state, wanted.get());
@@ -173,7 +174,7 @@ final class Harness implements AutoCloseable {
     /// Reads what pi reports until it has settled: it has finished, including any retries and
     /// follow-ups of its own. Tells it to stop when the time is up or the session is ending.
     private Answer follow(Machine.Conversation agent, Instant deadline, BooleanSupplier cancelled,
-                          Consumer<LampEvent.Progress> progress) throws IOException, InterruptedException {
+                          Consumer<LampAgentProgress> progress) throws IOException, InterruptedException {
         String said = "";
         String stopReason = "";
         String error = "";
@@ -202,8 +203,8 @@ final class Harness implements AutoCloseable {
                 case "message_update" -> {
                     JsonNode update = event.path("assistantMessageEvent");
                     switch (update.path("type").asText()) {
-                        case "text_delta" -> progress.accept(new LampEvent.Progress.Said(update.path("delta").asText()));
-                        case "thinking_delta" -> progress.accept(new LampEvent.Progress.Thought(update.path("delta").asText()));
+                        case "text_delta" -> progress.accept(new LampAgentProgress.Said(update.path("delta").asText()));
+                        case "thinking_delta" -> progress.accept(new LampAgentProgress.Thought(update.path("delta").asText()));
                         default -> { }
                     }
                 }
@@ -215,19 +216,19 @@ final class Harness implements AutoCloseable {
                         stopReason = message.path("stopReason").asText();
                         error = message.path("errorMessage").asText("");
                         boolean failed = stopReason.equals("error") || stopReason.equals("aborted");
-                        progress.accept(new LampEvent.Progress.Answered(failed && !error.isBlank() ? error : text, failed,
+                        progress.accept(new LampAgentProgress.Answered(failed && !error.isBlank() ? error : text, failed,
                                 Optional.of(message.path("model").asText("")).filter(model -> !model.isBlank())));
                     }
                 }
-                case "tool_execution_start" -> progress.accept(new LampEvent.Progress.ToolStarted(
+                case "tool_execution_start" -> progress.accept(new LampAgentProgress.ToolStarted(
                         event.path("toolCallId").asText(), event.path("toolName").asText(), summary(event.path("args"))));
                 case "tool_execution_end" -> {
                     String output = text(event.path("result").path("content"));
-                    progress.accept(new LampEvent.Progress.ToolFinished(event.path("toolCallId").asText(),
+                    progress.accept(new LampAgentProgress.ToolFinished(event.path("toolCallId").asText(),
                             event.path("isError").asBoolean(false),
                             output.length() <= OUTPUT_SHOWN ? output : output.substring(0, OUTPUT_SHOWN) + "\n[…]"));
                 }
-                case "auto_retry_start" -> progress.accept(new LampEvent.Progress.Retrying(
+                case "auto_retry_start" -> progress.accept(new LampAgentProgress.Retrying(
                         event.path("attempt").asInt(), event.path("maxAttempts").asInt(), event.path("errorMessage").asText()));
                 case "extension_ui_request" -> declineDialog(agent, event);
                 case "agent_settled" -> {

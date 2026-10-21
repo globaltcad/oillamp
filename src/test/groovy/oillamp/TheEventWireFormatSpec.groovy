@@ -11,6 +11,7 @@ import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
 import dev.lamp.LampRun
 import dev.lamp.LampRunOutcome
+import dev.lamp.LampAgentProgress
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -112,14 +113,14 @@ class TheEventWireFormatSpec extends Specification {
                     Optional.of(SNAPSHOT), Duration.ofSeconds(95), Optional.of('01a0ec69-de1c')),
             new LampEvent.RunFinished(RUN, LampRunOutcome.TIMED_OUT, '', Optional.empty(), Duration.ofMinutes(30), Optional.empty()),
             new LampEvent.RunAccepted(RUN),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Opened('01a0ec69-de1c')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Said('Hel')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Thought('hmm\n"quoted"')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Answered('Hello.', false, Optional.of('azure/gpt-6.1-sol'))),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Answered('', true, Optional.empty())),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolStarted('call-1', 'bash', 'ls -la')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.ToolFinished('call-1', true, 'no such file')),
-            new LampEvent.RunProgress('run-12', new LampEvent.Progress.Retrying(2, 3, '529 overloaded')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Opened('01a0ec69-de1c')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Said('Hel')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Thought('hmm\n"quoted"')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Answered('Hello.', false, Optional.of('azure/gpt-6.1-sol'))),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Answered('', true, Optional.empty())),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.ToolStarted('call-1', 'bash', 'ls -la')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.ToolFinished('call-1', true, 'no such file')),
+            new LampEvent.RunProgress('run-12', new LampAgentProgress.Retrying(2, 3, '529 overloaded')),
             new LampEvent.AgentStatus(Optional.of(RUN), Tuple.of(LampRun, RUN)),
             new LampEvent.AgentStatus(Optional.empty(), Tuple.of(LampRun)),
             new LampEvent.Conversations(Tuple.of(dev.lamp.Lamp.Conversation, CONVERSATION)),
@@ -196,6 +197,6 @@ class TheEventWireFormatSpec extends Specification {
         """
         expect:
             LampEvent.fromJson('{"type":"RunProgress","run":"run-3","progress":{"type":"Answered","text":"Hi.","failed":false}}') ==
-                    Optional.of(new LampEvent.RunProgress('run-3', new LampEvent.Progress.Answered('Hi.', false, Optional.empty())))
+                    Optional.of(new LampEvent.RunProgress('run-3', new LampAgentProgress.Answered('Hi.', false, Optional.empty())))
     }
 }

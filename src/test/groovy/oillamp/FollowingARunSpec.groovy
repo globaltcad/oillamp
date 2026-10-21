@@ -3,7 +3,7 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.Lamp.Question
 import dev.lamp.LampEvent
-import dev.lamp.LampEvent.Progress
+import dev.lamp.LampAgentProgress
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampFailedException
 import spock.lang.Specification
@@ -81,15 +81,15 @@ class FollowingARunSpec extends Specification {
 
         and: 'the progress came in the order it happened'
             var steps = progressOf(run.id())
-            steps.first() instanceof Progress.Opened
+            steps.first() instanceof LampAgentProgress.Opened
             steps.first().conversation() == finished.conversation().orElseThrow()
-            var tool = steps.find { it instanceof Progress.ToolStarted }
+            var tool = steps.find { it instanceof LampAgentProgress.ToolStarted }
             tool.tool() == 'bash'
             tool.summary() == 'ls ~/workspace'
-            steps.find { it instanceof Progress.ToolFinished }.call() == tool.call()
-            steps.find { it instanceof Progress.Thought }.text() == 'Thinking it over.'
-            steps.findAll { it instanceof Progress.Said }*.text().join('') == 'There are two files here.'
-            steps.last() instanceof Progress.Answered
+            steps.find { it instanceof LampAgentProgress.ToolFinished }.call() == tool.call()
+            steps.find { it instanceof LampAgentProgress.Thought }.text() == 'Thinking it over.'
+            steps.findAll { it instanceof LampAgentProgress.Said }*.text().join('') == 'There are two files here.'
+            steps.last() instanceof LampAgentProgress.Answered
             steps.last().text() == 'There are two files here.'
 
         and: 'the run ends with the same answer, and a snapshot with the agent\'s file'
@@ -178,7 +178,7 @@ class FollowingARunSpec extends Specification {
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
-    private List<Progress> progressOf(String run) {
+    private List<LampAgentProgress> progressOf(String run) {
         heard.findAll { it instanceof LampEvent.RunProgress && it.run() == run }*.progress()
     }
 

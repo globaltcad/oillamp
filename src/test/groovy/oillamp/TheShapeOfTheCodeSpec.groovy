@@ -25,7 +25,7 @@ class TheShapeOfTheCodeSpec extends Specification {
     static final Set<String> EMBEDDING_API = [
             'LampEvent', 'Problem', 'ExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'JobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
-            'LampRun', 'LampRunOutcome'
+            'LampRun', 'LampRunOutcome', 'LampAgentProgress'
     ] as Set
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API

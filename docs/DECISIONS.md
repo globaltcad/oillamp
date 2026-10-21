@@ -376,7 +376,7 @@ everything running on the agent's desktop. The service and the key cannot be cha
 relay holds them from the start of the session, and changing them needs a new session.
 
 pi records the model with every answer, so `Lamp.Conversation.Entry.model` says which model wrote
-each answer, and `LampEvent.Progress.Answered.model` says it as the answer comes. An event from an
+each answer, and `LampAgentProgress.Answered.model` says it as the answer comes. An event from an
 older engine, without it, reads with no model.
 
 *Given up:* a model that is not in the service's list fails every run until the session is given

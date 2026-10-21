@@ -273,16 +273,16 @@ final class ConsoleRenderer {
             // once it is complete. Its tools are printed as they run, which says what it is doing.
             case LampEvent.RunProgress progress -> {
                 switch (progress.progress()) {
-                    case LampEvent.Progress.ToolStarted tool -> printLine(area("run") + dim("· " + progress.run() + " "
+                    case LampAgentProgress.ToolStarted tool -> printLine(area("run") + dim("· " + progress.run() + " "
                             + shortened(tool.tool(), 20) + ": " + shortened(tool.summary(), 100)));
-                    case LampEvent.Progress.Retrying retrying -> printLine(area("run") + dim("· " + progress.run()
+                    case LampAgentProgress.Retrying retrying -> printLine(area("run") + dim("· " + progress.run()
                             + ": the model service failed (" + shortened(retrying.why(), 80) + "); trying again, "
                             + retrying.attempt() + " of " + retrying.most()));
-                    case LampEvent.Progress.Opened ignored -> { }
-                    case LampEvent.Progress.Said ignored -> { }
-                    case LampEvent.Progress.Thought ignored -> { }
-                    case LampEvent.Progress.Answered ignored -> { }
-                    case LampEvent.Progress.ToolFinished ignored -> { }
+                    case LampAgentProgress.Opened ignored -> { }
+                    case LampAgentProgress.Said ignored -> { }
+                    case LampAgentProgress.Thought ignored -> { }
+                    case LampAgentProgress.Answered ignored -> { }
+                    case LampAgentProgress.ToolFinished ignored -> { }
                 }
             }
             // `status` prints the same as text; this is its form for applications.

@@ -17,6 +17,7 @@ import dev.lamp.LampSaveKind;
 
 import dev.lamp.LampSave;
 import dev.lamp.LampRun;
+import dev.lamp.LampAgentProgress;
 import sprouts.Association;
 import sprouts.Tuple;
 
@@ -395,11 +396,11 @@ final class AgentRunner {
                 snapshot, Duration.between(started, ended), conversation);
     }
 
-    private void remember(LampEvent.Progress progress, String run) {
+    private void remember(LampAgentProgress progress, String run) {
         context.sink().accept(new LampEvent.RunProgress(run, progress));
-        if (progress instanceof LampEvent.Progress.ToolStarted tool)
+        if (progress instanceof LampAgentProgress.ToolStarted tool)
             post.accept(new SessionEvent.RunToolCalled(run, tool.tool(), tool.summary()));
-        if (progress instanceof LampEvent.Progress.Thought thought)
+        if (progress instanceof LampAgentProgress.Thought thought)
             post.accept(new SessionEvent.RunThought(run, thought.text()));
     }
 

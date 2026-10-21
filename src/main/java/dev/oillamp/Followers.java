@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampRun;
+import dev.lamp.LampAgentProgress;
 
 import sprouts.Tuple;
 
@@ -113,16 +114,16 @@ final class Followers implements Consumer<LampEvent> {
     /// the same kind.
     private void joinOrAdd(LampEvent.RunProgress progress) {
         if (running.getLast() instanceof LampEvent.RunProgress last && last.run().equals(progress.run())) {
-            if (last.progress() instanceof LampEvent.Progress.Said before
-                    && progress.progress() instanceof LampEvent.Progress.Said now) {
+            if (last.progress() instanceof LampAgentProgress.Said before
+                    && progress.progress() instanceof LampAgentProgress.Said now) {
                 running.set(running.size() - 1, new LampEvent.RunProgress(last.run(),
-                        new LampEvent.Progress.Said(before.text() + now.text())));
+                        new LampAgentProgress.Said(before.text() + now.text())));
                 return;
             }
-            if (last.progress() instanceof LampEvent.Progress.Thought before
-                    && progress.progress() instanceof LampEvent.Progress.Thought now) {
+            if (last.progress() instanceof LampAgentProgress.Thought before
+                    && progress.progress() instanceof LampAgentProgress.Thought now) {
                 running.set(running.size() - 1, new LampEvent.RunProgress(last.run(),
-                        new LampEvent.Progress.Thought(before.text() + now.text())));
+                        new LampAgentProgress.Thought(before.text() + now.text())));
                 return;
             }
         }
