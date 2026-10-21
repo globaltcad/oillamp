@@ -17,13 +17,13 @@ public sealed interface LampEvent {
 
     /// This event as one line of JSON, the form in which an embedded oillamp reports it to the
     /// application that started it. [#fromJson] reads it back into an equal value.
-    default String toJson() { return Wire.write(this); }
+    default String toJson() { return InternalEventJsonUtil.write(this); }
 
     /// Reads a line written by [#toJson].
     ///
     /// Empty for a line that is not an event this version of oillamp knows, such as one from a
     /// newer version, so that a reader can skip it rather than fail.
-    static Optional<LampEvent> fromJson(String line) { return Wire.read(line); }
+    static Optional<LampEvent> fromJson(String line) { return InternalEventJsonUtil.read(line); }
 
     record PhaseStarted(LampStartupPhase phase)         implements LampEvent {}
     record PhaseFinished(LampStartupPhase phase, Duration took) implements LampEvent {}

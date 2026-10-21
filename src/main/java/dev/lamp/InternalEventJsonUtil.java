@@ -35,9 +35,9 @@ import sprouts.Tuple;
 ///
 /// Reading accepts only the types a [LampEvent] is made of, and anything it does not understand
 /// (for example an event kind from a newer oillamp) is read as nothing rather than as an error.
-final class Wire {
+final class InternalEventJsonUtil {
 
-    private Wire() {}
+    private InternalEventJsonUtil() {}
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
