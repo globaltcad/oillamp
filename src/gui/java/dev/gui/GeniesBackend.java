@@ -17,7 +17,7 @@ import javax.swing.SwingUtilities;
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.GenieRunner;
 import dev.gui.genie.LampLighterImpl;
-import dev.gui.genie.Lighter;
+import dev.gui.genie.LampLighter;
 import dev.gui.genie.OllamaKeeper;
 import dev.gui.genie.Shelf;
 import dev.gui.model.Conversation;
@@ -57,7 +57,7 @@ public final class GeniesBackend implements Genies {
 
     private final Var<GeniesState> state;
     private final Shelf shelf;
-    private final Lighter lighter;
+    private final LampLighter lighter;
     private final OllamaKeeper ollama;
     private final Map<UUID, GenieRunner> runners = new ConcurrentHashMap<>();
     /// The thread setting up Ollama, while one does; only touched on Swing's event thread.
@@ -84,7 +84,7 @@ public final class GeniesBackend implements Genies {
     /// same reason: the host access is read from its lamp when it comes on show.
     private final Val<UUID> hostAccessShown;
 
-    GeniesBackend(Var<GeniesState> state, Shelf shelf, Lighter lighter, OllamaKeeper ollama) {
+    GeniesBackend(Var<GeniesState> state, Shelf shelf, LampLighter lighter, OllamaKeeper ollama) {
         this.state = state;
         this.shelf = shelf;
         this.lighter = lighter;
