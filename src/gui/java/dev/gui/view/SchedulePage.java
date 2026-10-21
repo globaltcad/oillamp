@@ -25,6 +25,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 
+import dev.gui.Genies;
 import dev.gui.model.DateWordingUtil;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
