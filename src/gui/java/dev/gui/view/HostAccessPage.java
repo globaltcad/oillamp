@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import javax.swing.JButton;
 
+import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.HostAccess;

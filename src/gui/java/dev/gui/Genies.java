@@ -1,4 +1,4 @@
-package dev.gui.view;
+package dev.gui;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -10,7 +10,7 @@ import sprouts.Var;
 
 /// The app as the window sees it: its state, which the window draws and changes, and what the
 /// window asks it to do beyond that: everything that starts, stops or moves something outside the
-/// window. The app, [dev.gui.GeniesBackend], does it.
+/// window. The app, [GeniesBackend], does it.
 public interface Genies {
 
     /// Everything the window shows. The window changes it through lenses, such as a draft, the
