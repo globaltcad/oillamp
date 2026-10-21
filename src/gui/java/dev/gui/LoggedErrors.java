@@ -19,7 +19,7 @@ import org.slf4j.spi.SLF4JServiceProvider;
 /// instead of letting it through. Without this, Genies would never hear of it: oillamp binds slf4j
 /// to nothing, so that it does not talk to the user of the command line.
 ///
-/// Chosen by its name in the system property `slf4j.provider`, which [Genies#main] sets before
+/// Chosen by its name in the system property `slf4j.provider`, which [GeniesBackend#main] sets before
 /// anything logs. It is not listed as a service, so oillamp's engine, which runs from the same
 /// classpath, keeps logging nowhere.
 public final class LoggedErrors implements SLF4JServiceProvider {

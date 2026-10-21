@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.JComponent;
 
+import dev.gui.Genies;
 import dev.gui.model.GeniesState;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Settings;
