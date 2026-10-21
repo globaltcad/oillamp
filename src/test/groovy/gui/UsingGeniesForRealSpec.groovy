@@ -1,6 +1,6 @@
 package gui
 
-import dev.gui.Genies
+import dev.gui.GeniesBackend
 import dev.gui.genie.LampLighter
 import dev.gui.genie.OllamaKeeper
 import dev.gui.genie.Shelf
@@ -24,7 +24,7 @@ import java.nio.file.Path
 import java.time.Duration
 
 /**
- *  The Genies app as the user clicks through it, minus the window: its {@link Genies} actions,
+ *  The Genies app as the user clicks through it, minus the window: its {@link GeniesBackend} actions,
  *  called as the buttons call them, against real lamps on this machine.
  *
  *  <p>The shelf is a temporary directory rather than {@code ~/.local/share/genies}, so the user's
@@ -42,7 +42,7 @@ class UsingGeniesForRealSpec extends Specification {
     @Shared Shelf shelf = new Shelf(shelfDirectory)
     @Shared Var<GeniesState> state = Var.of(GeniesState.of(Tuple.of(Genie), Settings.defaults(),
                                                              Optional.of(KEY ?: 'sk-no-real-key')))
-    @Shared Genies app = new Genies(state, shelf, new LampLighter(), new OllamaKeeper(shelf.ollama()))
+    @Shared GeniesBackend app = new GeniesBackend(state, shelf, new LampLighter(), new OllamaKeeper(shelf.ollama()))
     @Shared UUID id
 
     def cleanupSpec() {

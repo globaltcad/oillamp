@@ -43,7 +43,7 @@ import static swingtree.UI.*;
 /// schedule's timeline draws its week, and the way back to any of them.
 ///
 /// Like the rest of the window, a function of the [GeniesState]: a lens onto the selected genie's
-/// [History], and [Actions] for saving and going back.
+/// [History], and [Genies] for saving and going back.
 final class HistoryPage {
 
     /*
@@ -74,7 +74,7 @@ final class HistoryPage {
     private static final int NODE_Y = 15;
 
     private final Var<GeniesState> state;
-    private final Actions actions;
+    private final Genies app;
     private final Look look;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
@@ -84,9 +84,9 @@ final class HistoryPage {
     /// Why the genie cannot go back now, in a few words; empty when it can.
     private final Val<String> notNow;
 
-    HistoryPage(Var<GeniesState> state, Actions actions, Look look) {
+    HistoryPage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
-        this.actions = actions;
+        this.app = app;
         this.look = look;
         genie   = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         history = genie.zoomTo(Genie::history, Genie::withHistory);
@@ -178,7 +178,7 @@ final class HistoryPage {
             .add("top", button("↶  Undo").group(Skin.QUIET_BUTTON).isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
                  .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
                  .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Go back to how it was before" : it))
-                 .onClick(it -> history.get().undo().ifPresent(before -> actions.goBack(selected(), before.id()))));
+                 .onClick(it -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id()))));
     }
 
     // ─── the moments ───────────────────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ final class HistoryPage {
                      .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Bring its files and conversations back to how they were then" : it))
                      .onClick(it -> confirmGoBack(moment)))
                 .add(ViewPartsUtil.link("Open the conversation  →").isVisibleIf(canOpen)
-                     .onClick(it -> actions.openConversation(selected(), moment.conversation()))));
+                     .onClick(it -> app.openConversation(selected(), moment.conversation()))));
     }
 
     // ─── what a moment holds ───────────────────────────────────────────────────────────────
@@ -395,7 +395,7 @@ final class HistoryPage {
         Genie shown = genie.get();
         Object answer = JOptionPane.showInputDialog(parent, "What should this moment be remembered by? You may leave it empty.",
                 "Save " + shown.name() + " as it is now", JOptionPane.PLAIN_MESSAGE, null, null, "");
-        if (answer instanceof String words) actions.save(shown.id(), words.strip());
+        if (answer instanceof String words) app.save(shown.id(), words.strip());
     }
 
     private void confirmGoBack(History.Moment moment) {
@@ -405,7 +405,7 @@ final class HistoryPage {
                 + "Its files and conversations become what they were then. How it is now is kept, so you can return."
                 + (shown.phase().isAwake() ? "\n" + shown.name() + " sleeps while it goes back, and wakes again after." : ""))
                 .titled("Go back in time").yesOption("Go back").noOption("Stay").cancelOption("").show();
-        if (answer == ConfirmAnswer.YES) actions.goBack(shown.id(), moment.id());
+        if (answer == ConfirmAnswer.YES) app.goBack(shown.id(), moment.id());
     }
 
     private UUID selected() { return state.get().selected(); }
