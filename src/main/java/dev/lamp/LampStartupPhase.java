@@ -1,6 +1,8 @@
 package dev.lamp;
 
-/// The phases of `oillamp at`, in order.
+/// A stage of the work oillamp does, as [LampEvent.PhaseStarted] and [LampEvent.PhaseFinished]
+/// report it. `oillamp at` and [LampDirectory#start] go through all four, in this order; other
+/// commands report the one their work belongs to, such as [#IMAGE] for `oillamp update`.
 public enum LampStartupPhase {
     /// Check and repair the host itself: packages, subuid ranges, a working rootless podman.
     HOST,
