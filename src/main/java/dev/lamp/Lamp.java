@@ -19,13 +19,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-/// A running lamp, held by the application that started it.
+/// A lamp's session, as an application holds it after [LampDirectory#start] or
+/// [LampDirectory#join], until it closes it.
 ///
 /// ```
 /// try (Lamp lamp = Lamp.at(Path.of("/home/me/campaigns/north")).onEvent(ui::show).start()) {
 ///     if (lamp.awaitRunning(Duration.ofMinutes(15))) { … }
 /// }   // closing ends the session and waits until the sandbox is gone
 /// ```
+///
+/// That is for a session this application started. Closing one it [joined][LampDirectory#join],
+/// or [left running][#leaveRunning()], only stops following it, and the session goes on.
 ///
 /// The sandbox itself is run by oillamp's engine, in a separate Java process started from the
 /// same classpath as the application: `oillamp at <dir> --embedded`. This object holds that
@@ -54,8 +58,6 @@ import java.util.function.Consumer;
 /// gives that with [LampDirectory#instructions(String)]. The engine writes both into pi's own files in the
 /// agent's home, so the application never needs to know where pi keeps them, or what they look
 /// like.
-///
-/// Public because this is what an application uses oillamp through.
 public final class Lamp implements AutoCloseable {
 
     /// The engine's main class. Named as text, because this package must not depend on the engine.
