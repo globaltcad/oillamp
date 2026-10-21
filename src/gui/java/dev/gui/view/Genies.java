@@ -5,10 +5,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 import dev.gui.desktop.Desktop;
+import dev.gui.model.GeniesState;
+import sprouts.Var;
 
-/// What the window asks the app to do, beyond changing its state: everything that starts,
-/// stops or moves something outside the window. The app, [dev.gui.GeniesBackend], does it.
+/// The app as the window sees it: its state, which the window draws and changes, and what the
+/// window asks it to do beyond that: everything that starts, stops or moves something outside the
+/// window. The app, [dev.gui.GeniesBackend], does it.
 public interface Genies {
+
+    /// Everything the window shows. The window changes it through lenses, such as a draft, the
+    /// settings or the selected genie; the app changes it for everything else.
+    Var<GeniesState> state();
 
     void newGenie();
 
