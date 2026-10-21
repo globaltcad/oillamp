@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -96,8 +96,8 @@ public final class OilLamp {
         public boolean succeeded() { return status.isSuccess(); }
 
         /// Every problem reported, warnings included.
-        public Tuple<Problem> problems() {
-            Tuple<Problem> out = Tuple.of(Problem.class);
+        public Tuple<LampProblem> problems() {
+            Tuple<LampProblem> out = Tuple.of(LampProblem.class);
             for (LampEvent event : events)
                 switch (event) {
                     case LampEvent.Warning warning -> out = out.add(warning.problem());
@@ -107,9 +107,9 @@ public final class OilLamp {
             return out;
         }
 
-        public Tuple<Problem> errors()   { return problems().retainIf(Problem::isError); }
+        public Tuple<LampProblem> errors()   { return problems().retainIf(LampProblem::isError); }
 
-        public Tuple<Problem> warnings() { return problems().retainIf(Problem::isWarning); }
+        public Tuple<LampProblem> warnings() { return problems().retainIf(LampProblem::isWarning); }
 
         /// True when a problem with this code was reported — the usual thing to assert on.
         public boolean reported(String problemCode) {

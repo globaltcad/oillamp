@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 import dev.lamp.LampStartupPhase;
 
 import sprouts.Tuple;
@@ -58,9 +58,9 @@ final class LampPlanUtil {
     public static Result<Plan> planSkeleton(Inputs inputs) {
         LampLayout layout = inputs.layout();
 
-        Optional<Problem> refusal = switch (inputs.state()) {
+        Optional<LampProblem> refusal = switch (inputs.state()) {
             case LampState.Foreign foreign -> inputs.initRequested()
-                    ? Optional.<Problem>empty()
+                    ? Optional.<LampProblem>empty()
                     : Optional.of(ProblemCatalogUtil.lampNotEmpty(foreign.root(), foreign.sampleEntries()));
             case LampState.Unreadable unreadable ->
                     Optional.of(ProblemCatalogUtil.lampNotWritable(unreadable.root(), unreadable.reason()));
@@ -68,13 +68,13 @@ final class LampPlanUtil {
                     existing.meta().schemaVersion() > LampMeta.CURRENT_SCHEMA_VERSION
                         ? Optional.of(ProblemCatalogUtil.lampNewerSchema(existing.root(),
                                 existing.meta().schemaVersion(), LampMeta.CURRENT_SCHEMA_VERSION))
-                        : Optional.<Problem>empty();
-            case LampState.Missing ignored -> Optional.<Problem>empty();
-            case LampState.Empty ignored   -> Optional.<Problem>empty();
+                        : Optional.<LampProblem>empty();
+            case LampState.Missing ignored -> Optional.<LampProblem>empty();
+            case LampState.Empty ignored   -> Optional.<LampProblem>empty();
         };
         if (refusal.isPresent()) return Result.err(refusal.get());
 
-        Tuple<Problem> warnings = Tuple.of(Problem.class);
+        Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
         Tuple<Step> steps = Tuple.of(Step.class);
 
         // ── clean up after a session that crashed without shutting down ────────────────────

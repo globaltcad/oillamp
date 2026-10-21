@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Association;
 import sprouts.Pair;
@@ -37,7 +37,7 @@ final class StepRunner {
     public Result<Plan> run(Plan plan) {
         context.sink().accept(new LampEvent.PhaseStarted(plan.phase()));
         Instant phaseStarted = machine.now();
-        Tuple<Problem> warnings = Tuple.of(Problem.class);
+        Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
 
         for (Step step : plan.steps()) {
             if (context.options().dryRun()) {
@@ -98,7 +98,7 @@ final class StepRunner {
             change.make();
             return Result.ok(step);
         } catch (FilesystemUtil.LinkInAgentHome link) {
-            return Result.ok(step, Tuple.of(Problem.class,
+            return Result.ok(step, Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.agentFileBehindALink(file, link.link(), withoutIt)));
         }
     }
@@ -340,7 +340,7 @@ final class StepRunner {
         if (outcome.succeeded()) return Result.ok(step);
         // Not fatal: the entrypoint deletes these files too, and checking that the sandbox's
         // sockets answer catches the case where neither worked.
-        return Result.ok(step, Tuple.of(Problem.class,
+        return Result.ok(step, Tuple.of(LampProblem.class,
                 ProblemCatalogUtil.internal("cleanup", "could not delete files " + step.reason() + ": "
                         + outcome.errorOutput().trim())));
     }
@@ -435,12 +435,12 @@ final class StepRunner {
             || upper.endsWith("_KEY");
     }
 
-    private static Problem.Evidence.Command evidenceOf(Machine.Outcome outcome, String... argv) {
+    private static LampProblem.Evidence.Command evidenceOf(Machine.Outcome outcome, String... argv) {
         return evidenceOf(outcome, Tuple.of(String.class, argv));
     }
 
-    private static Problem.Evidence.Command evidenceOf(Machine.Outcome outcome, Tuple<String> argv) {
-        return new Problem.Evidence.Command(argv, outcome.exitCode(),
+    private static LampProblem.Evidence.Command evidenceOf(Machine.Outcome outcome, Tuple<String> argv) {
+        return new LampProblem.Evidence.Command(argv, outcome.exitCode(),
                 tail(outcome.errorOutput(), 10), Duration.ZERO);
     }
 

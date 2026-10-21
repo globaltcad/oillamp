@@ -23,7 +23,7 @@ class TheShapeOfTheCodeSpec extends Specification {
 
     /** What an application that embeds oillamp sees: the words oillamp speaks in, and a lamp. */
     static final Set<String> EMBEDDING_API = [
-            'LampEvent', 'Problem', 'ExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
+            'LampEvent', 'LampProblem', 'ExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'JobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
             'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
             'LampConversation'

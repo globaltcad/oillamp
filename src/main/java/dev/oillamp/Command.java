@@ -4,7 +4,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Association;
 import sprouts.Tuple;

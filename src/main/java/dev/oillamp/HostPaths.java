@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 

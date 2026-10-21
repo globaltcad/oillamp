@@ -4,7 +4,7 @@ import java.nio.file.Path;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -86,8 +86,8 @@ final class HostPhase {
     }
 
     /// Exit code 3 when the host is not ready (missing packages, podman or subordinate ids), otherwise 1.
-    public static ExitStatus exitStatusFor(Tuple<Problem> problems) {
-        for (Problem problem : problems) {
+    public static ExitStatus exitStatusFor(Tuple<LampProblem> problems) {
+        for (LampProblem problem : problems) {
             String code = problem.code().value();
             if (code.startsWith("OIL-PKG-") || code.startsWith("OIL-PODMAN-")
                     || code.equals("OIL-HOST-010"))

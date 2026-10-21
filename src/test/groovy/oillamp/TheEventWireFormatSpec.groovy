@@ -6,7 +6,7 @@ import dev.lamp.LampStartupPhase
 import dev.lamp.LampSave
 import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
-import dev.lamp.Problem
+import dev.lamp.LampProblem
 import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
 import dev.lamp.LampRun
@@ -31,21 +31,21 @@ import java.time.Instant
  */
 class TheEventWireFormatSpec extends Specification {
 
-    static final Problem PROBLEM = new Problem(
-            new Problem.Code('OIL-SANDBOX-002'), Problem.Severity.ERROR,
+    static final LampProblem PROBLEM = new LampProblem(
+            new LampProblem.Code('OIL-SANDBOX-002'), LampProblem.Severity.ERROR,
             'The sandbox stopped while starting up',
             'the container exited with code 70',
             'there is no sandbox to work in',
-            Tuple.of(Problem.Evidence,
-                    new Problem.Evidence.Command(Tuple.of(String, 'podman', 'run'), 70,
+            Tuple.of(LampProblem.Evidence,
+                    new LampProblem.Evidence.Command(Tuple.of(String, 'podman', 'run'), 70,
                                                  'entrypoint: missing setting', Duration.ofMillis(1234)),
-                    new Problem.Evidence.File(Path.of('/tmp/lamp/oillamp.toml'), 'the configuration'),
-                    new Problem.Evidence.Value('podman', '4.9.3'),
-                    new Problem.Evidence.Excerpt('container log', 'line one\nline "two"\t\\'),
-                    new Problem.Evidence.Config(Path.of('/tmp/lamp/oillamp.toml'),
+                    new LampProblem.Evidence.File(Path.of('/tmp/lamp/oillamp.toml'), 'the configuration'),
+                    new LampProblem.Evidence.Value('podman', '4.9.3'),
+                    new LampProblem.Evidence.Excerpt('container log', 'line one\nline "two"\t\\'),
+                    new LampProblem.Evidence.Config(Path.of('/tmp/lamp/oillamp.toml'),
                                                 'network.rules[0].cidrs', '"10/8"', 'an address range')),
-            Tuple.of(Problem.Fix, Problem.Fix.of('look at the log'),
-                                  Problem.Fix.run('stop it', 'oillamp stop /tmp/lamp')),
+            Tuple.of(LampProblem.Fix, LampProblem.Fix.of('look at the log'),
+                                  LampProblem.Fix.run('stop it', 'oillamp stop /tmp/lamp')),
             Optional.of(Path.of('/tmp/lamp/.oillamp/logs/x.log')))
 
     static final LampStep STEP = new LampStep('WriteFile', 'write a file', 'because')
@@ -141,9 +141,9 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.HostAccessAsked('run-12', 'host_run', 'run `inkscape report.svg`, in ~/Documents'),
             new LampEvent.HostAccessSettings(true, '{"may_read": ["~/Documents"]}\nAnd nothing private.'),
             new LampEvent.AutosaveSettings(false, true, true, false),
-            new LampEvent.Warning(PROBLEM.withFix(Problem.Fix.of('another'))),
-            new LampEvent.Failure(new Problem(new Problem.Code('OIL-LOCK-001'), Problem.Severity.ERROR,
-                    'busy', '', '', Tuple.of(Problem.Evidence), Tuple.of(Problem.Fix), Optional.empty())),
+            new LampEvent.Warning(PROBLEM.withFix(LampProblem.Fix.of('another'))),
+            new LampEvent.Failure(new LampProblem(new LampProblem.Code('OIL-LOCK-001'), LampProblem.Severity.ERROR,
+                    'busy', '', '', Tuple.of(LampProblem.Evidence), Tuple.of(LampProblem.Fix), Optional.empty())),
             new LampEvent.Failure(PROBLEM),
     ]
 

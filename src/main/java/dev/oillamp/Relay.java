@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 /// A Unix socket on the host that forwards each connection into the sandbox's SSH socket.
 ///
@@ -42,7 +42,7 @@ final class Relay implements AutoCloseable {
     interface Listener {
         void connected();
         void disconnected();
-        void trouble(Problem problem);
+        void trouble(LampProblem problem);
     }
 
     private final Path socket;

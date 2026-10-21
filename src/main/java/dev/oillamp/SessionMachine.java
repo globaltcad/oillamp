@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -257,7 +257,7 @@ record SessionMachine(Settings settings) {
         // describes how the session itself ended.
         ExitStatus exit = state.reason().exitStatus();
         Tuple<SessionAction> actions = Tuple.of(SessionAction.class);
-        for (Problem problem : done.problems())
+        for (LampProblem problem : done.problems())
             actions = actions.add(new SessionAction.Announce(new LampEvent.Warning(problem)));
         actions = actions.add(new SessionAction.Exit(exit));
         return new Transition(new SessionState.Stopped(state.reason(), exit), actions);

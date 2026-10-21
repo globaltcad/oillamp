@@ -34,7 +34,7 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import dev.lamp.LampSaveKind;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 import dev.lamp.LampSave;
 
 import sprouts.Association;
@@ -225,8 +225,8 @@ final class History {
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
             }
-            Tuple<Problem> warnings = safety.skipped().isEmpty() ? Tuple.of(Problem.class)
-                    : Tuple.of(Problem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
+            Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
+                    : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
             if (current.tree().equals(wanted.tree()))
                 return Result.ok(new Restoring(target, safety.made(), Optional.empty(), safety.skipped()), warnings);
             try {

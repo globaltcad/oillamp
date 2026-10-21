@@ -1,6 +1,6 @@
 package dev.oillamp;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 /// Whether rootless podman can create user namespaces on this host, found by running
 /// `podman unshare true`.
@@ -11,5 +11,5 @@ import dev.lamp.Problem;
 /// records whether AppArmor is the cause (`OIL-PODMAN-004`) or not (`OIL-PODMAN-003`).
 sealed interface UserNameSpaceFacts {
     record Works() implements UserNameSpaceFacts {}
-    record Fails(Problem.Evidence.Command evidence, boolean apparmorRestricted) implements UserNameSpaceFacts {}
+    record Fails(LampProblem.Evidence.Command evidence, boolean apparmorRestricted) implements UserNameSpaceFacts {}
 }

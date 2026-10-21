@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampRunOutcome;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 import dev.lamp.LampAgentProgress;
 
 /// The agent, as a running session holds it: pi in RPC mode, in the sandbox, reached through ssh.
@@ -307,7 +307,7 @@ final class Harness implements AutoCloseable {
     private void changeInAgentHome(Path file, String withoutIt, String done, Consumer<LampEvent> report,
                                    AgentFileChange change) {
         Path home = layout.agentDir();
-        Optional<Problem> problem;
+        Optional<LampProblem> problem;
         try {
             problem = change.make(home, home.relativize(file))
                     .map(why -> ProblemCatalogUtil.agentFileNotWritten(file, why, withoutIt));

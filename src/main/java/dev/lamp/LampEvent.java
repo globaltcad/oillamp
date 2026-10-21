@@ -215,7 +215,7 @@ public sealed interface LampEvent {
             implements LampEvent {}
 
     /// Something went wrong but oillamp carried on.
-    record Warning(Problem problem)                     implements LampEvent {}
+    record Warning(LampProblem problem)                 implements LampEvent {}
     /// Something went wrong and oillamp stopped.
-    record Failure(Problem problem)                     implements LampEvent {}
+    record Failure(LampProblem problem)                 implements LampEvent {}
 }

@@ -137,7 +137,7 @@ public final class Lamp implements AutoCloseable {
         void orThrow() throws LampFailedException {
             if (status.isSuccess()) return;
             for (LampEvent event : events)
-                if (event instanceof LampEvent.Failure(Problem problem)) throw new LampFailedException(status, problem);
+                if (event instanceof LampEvent.Failure(LampProblem problem)) throw new LampFailedException(status, problem);
             throw new LampFailedException(status, InternalLampUtil.internal("the engine exited with " + status + " without saying why"));
         }
     }

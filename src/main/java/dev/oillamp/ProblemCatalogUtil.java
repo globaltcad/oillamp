@@ -5,11 +5,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
 
-import dev.lamp.Problem;
-import dev.lamp.Problem.Code;
-import dev.lamp.Problem.Evidence;
-import dev.lamp.Problem.Fix;
-import dev.lamp.Problem.Severity;
+import dev.lamp.LampProblem;
+import dev.lamp.LampProblem.Code;
+import dev.lamp.LampProblem.Evidence;
+import dev.lamp.LampProblem.Fix;
+import dev.lamp.LampProblem.Severity;
 
 import sprouts.Tuple;
 
@@ -101,7 +101,7 @@ final class ProblemCatalogUtil {
     /// A forward's target could not be reached. A warning, not an error: the service being down is
     /// no reason to stop the session, but inside the sandbox it only looks like a closed connection,
     /// so the user is told here.
-    public static Problem forwardUnreachable(Forward forward, String why) {
+    public static LampProblem forwardUnreachable(Forward forward, String why) {
         return warning(NET_FORWARD_UNREACHABLE, "A forward target cannot be reached",
                 "the forward '" + forward.name() + "' could not connect to " + forward.target(),
                 "the sandbox sees this as a closed connection on 127.0.0.1:" + forward.port()
@@ -114,7 +114,7 @@ final class ProblemCatalogUtil {
 
     /// The network log cannot be written. The session carries on; its connections are only not
     /// recorded.
-    public static Problem networkLogNotWritten(Path file, String why) {
+    public static LampProblem networkLogNotWritten(Path file, String why) {
         return warning(NET_LOG_NOT_WRITTEN, "The network log cannot be written",
                 "oillamp could not write to " + file + ": " + why,
                 "the session works as before, but what the sandbox connects to is not recorded "
@@ -125,7 +125,7 @@ final class ProblemCatalogUtil {
 
     // ─── host ──────────────────────────────────────────────────────────────────────────────
 
-    public static Problem hostNotLinux(String osName) {
+    public static LampProblem hostNotLinux(String osName) {
         return error(HOST_NOT_LINUX, "Unsupported operating system",
                 "oillamp is running on " + osName + ", but the sandbox needs Linux",
                 "the sandbox is a rootless Podman container using Linux user namespaces; "
@@ -133,7 +133,7 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.Value("os.name", osName));
     }
 
-    public static Problem hostNotApt(String distroId, Tuple<String> requiredPackages) {
+    public static LampProblem hostNotApt(String distroId, Tuple<String> requiredPackages) {
         return error(HOST_NOT_APT, "Unsupported Linux distribution (no APT)",
                 "the distribution reports ID=" + distroId + ", which oillamp cannot install packages on",
                 "v1 installs host prerequisites with apt-get; on other distributions you have to "
@@ -145,7 +145,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("skip the check once the packages are there", "oillamp doctor"));
     }
 
-    public static Problem hostNoGraphics() {
+    public static LampProblem hostNoGraphics() {
         return error(HOST_NO_GRAPHICS, "No graphical session found",
                 "neither WAYLAND_DISPLAY nor DISPLAY is set in this environment",
                 "oillamp opens a shell window, and the desktop viewer unless told not to, and cannot "
@@ -156,7 +156,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("host checks that do not need a display still work", "oillamp doctor"));
     }
 
-    public static Problem hostNoSubIds(String user) {
+    public static LampProblem hostNoSubIds(String user) {
         return error(HOST_NO_SUBIDS, "No subordinate UID/GID range for the user",
                 "/etc/subuid and /etc/subgid contain no range of at least 65536 ids for " + user,
                 "rootless Podman maps container users onto these ids; without them the sandbox "
@@ -169,7 +169,7 @@ final class ProblemCatalogUtil {
 
     // ─── packages and sudo ─────────────────────────────────────────────────────────────────
 
-    public static Problem packagesMissing(Tuple<String> missing, String installCommand,
+    public static LampProblem packagesMissing(Tuple<String> missing, String installCommand,
                                           Installing installing) {
         // The second fix depends on why oillamp is not installing them itself. A `doctor` user
         // never passed --no-install, so telling them to drop it would be confusing.
@@ -191,7 +191,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of(letOillampDoIt));
     }
 
-    public static Problem noSudo(String detail) {
+    public static LampProblem noSudo(String detail) {
         return error(PKG_NO_SUDO, "Cannot run sudo",
                 detail,
                 "host packages and the subordinate id range can only be set up with root rights")
@@ -199,7 +199,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("or install the prerequisites yourself and re-run with --no-install"));
     }
 
-    public static Problem installFailed(Evidence.Command command) {
+    public static LampProblem installFailed(Evidence.Command command) {
         return error(PKG_INSTALL_FAILED, "Package installation failed",
                 "apt-get exited with code " + command.exitCode(),
                 "without the prerequisites oillamp cannot start a sandbox")
@@ -211,7 +211,7 @@ final class ProblemCatalogUtil {
     // ─── podman ────────────────────────────────────────────────────────────────────────────
 
     /// The package is installed but the program did not answer — a broken or shadowed install.
-    static Problem podmanUnusable(String detail) {
+    static LampProblem podmanUnusable(String detail) {
         return error(PODMAN_UNUSABLE, "Podman is installed but did not respond",
                 detail,
                 "oillamp asks podman for its version and configuration before using it; a podman "
@@ -221,7 +221,7 @@ final class ProblemCatalogUtil {
                           + "binary in ~/.local/bin or /usr/local/bin"));
     }
 
-    public static Problem podmanTooOld(String found, String required) {
+    public static LampProblem podmanTooOld(String found, String required) {
         return error(PODMAN_TOO_OLD, "Podman too old",
                 "found podman " + found + ", but oillamp needs at least " + required,
                 "older versions lack the rootless user-namespace and keep-id mapping options "
@@ -230,7 +230,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("install a newer podman", "sudo apt-get install -y podman"));
     }
 
-    public static Problem podmanNotRootless(String detail) {
+    public static LampProblem podmanNotRootless(String detail) {
         return error(PODMAN_NOT_ROOTLESS, "Podman is not running rootless",
                 detail,
                 "oillamp deliberately never runs a container as real root; a rootful podman would "
@@ -239,7 +239,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("check what podman reports", "podman info --format json"));
     }
 
-    public static Problem usernsBroken(Evidence.Command evidence) {
+    public static LampProblem usernsBroken(Evidence.Command evidence) {
         return error(PODMAN_USERNS_BROKEN, "Rootless user namespaces do not work",
                 "the functional check `podman unshare true` failed",
                 "every part of the sandbox — the read-only image, the two container users, the "
@@ -249,7 +249,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("look for the underlying error", "podman unshare true"));
     }
 
-    public static Problem apparmorBlocked(Evidence.Command evidence) {
+    public static LampProblem apparmorBlocked(Evidence.Command evidence) {
         return error(PODMAN_APPARMOR, "Blocked by Ubuntu's AppArmor user-namespace restriction",
                 "kernel.apparmor_restrict_unprivileged_userns is 1 and `podman unshare true` fails",
                 "Ubuntu 23.10 and newer only let programs with a matching AppArmor profile create "
@@ -266,7 +266,7 @@ final class ProblemCatalogUtil {
 
     // ─── lamp ──────────────────────────────────────────────────────────────────────────────
 
-    public static Problem lampForbiddenPath(Path requested, String why) {
+    public static LampProblem lampForbiddenPath(Path requested, String why) {
         return error(LAMP_FORBIDDEN_PATH, "Refusing to use a system or home directory as a lamp",
                 requested + " " + why,
                 "a lamp owns the directory it lives in — it writes state into it and mounts part of "
@@ -278,7 +278,7 @@ final class ProblemCatalogUtil {
 
     /// A path podman cannot mount. `--volume` separates the host path, the container path and
     /// the options with colons, so a colon inside the host path would be read as one of them.
-    public static Problem lampInvalidPath(Path requested, String why) {
+    public static LampProblem lampInvalidPath(Path requested, String why) {
         return error(LAMP_INVALID_PATH, "This directory cannot hold a lamp",
                 requested + " " + why,
                 "parts of the lamp are mounted into the sandbox with `podman run --volume "
@@ -287,7 +287,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("choose a directory whose path has no colon in it"));
     }
 
-    public static Problem lampNotEmpty(Path root, Tuple<String> sampleEntries) {
+    public static LampProblem lampNotEmpty(Path root, Tuple<String> sampleEntries) {
         return error(LAMP_NOT_EMPTY, "Directory is not empty and not a lamp",
                 root + " already contains files, but no .oillamp/lamp.json",
                 "oillamp will not scatter lamp state over a directory you are using for something else")
@@ -297,7 +297,7 @@ final class ProblemCatalogUtil {
                              "oillamp at " + root + " --init"));
     }
 
-    public static Problem lampNewerSchema(Path root, int found, int supported) {
+    public static LampProblem lampNewerSchema(Path root, int found, int supported) {
         return error(LAMP_NEWER_SCHEMA, "Lamp created by a newer oillamp",
                 "the lamp declares schema version " + found + ", this build understands " + supported,
                 "a newer layout may hold state this version would misread or destroy")
@@ -305,7 +305,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("upgrade oillamp to a version that understands this lamp"));
     }
 
-    public static Problem lampBadFilesystem(Path root, String fsType) {
+    public static LampProblem lampBadFilesystem(Path root, String fsType) {
         return error(LAMP_BAD_FILESYSTEM, "Lamp is on a filesystem without Unix socket support",
                 root + " is on a " + fsType + " filesystem",
                 "the sandbox talks to the host only through Unix domain sockets inside the lamp; "
@@ -314,14 +314,14 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("put the lamp on a local filesystem, for example under your home directory"));
     }
 
-    public static Problem lampNotWritable(Path root, String reason) {
+    public static LampProblem lampNotWritable(Path root, String reason) {
         return error(LAMP_NOT_WRITABLE, "Cannot write to the lamp directory",
                 reason,
                 "oillamp stores the lamp's identity, keys, logs and recordings there")
             .withEvidence(new Evidence.File(root, reason));
     }
 
-    public static Problem lampSocketDirReplaced(Path directory, String pointsTo) {
+    public static LampProblem lampSocketDirReplaced(Path directory, String pointsTo) {
         return error(LAMP_TAMPERED, "A socket directory of this lamp was replaced by a link",
                 directory + " should be a directory oillamp made, but it is a symbolic link to "
               + pointsTo,
@@ -341,7 +341,7 @@ final class ProblemCatalogUtil {
     /// symbolic link. A warning: the session goes on without the file.
     ///
     /// @param consequence what the session does without the file
-    public static Problem agentFileBehindALink(Path file, Path link, String consequence) {
+    public static LampProblem agentFileBehindALink(Path file, Path link, String consequence) {
         return warning(AGENT_FILE_LINKED, "A file in the agent's home was not written, because of a link",
                 "oillamp did not write " + file + ": " + link + " is a symbolic link. " + consequence,
                 "the agent can change anything in its home, and runs as you on this machine. Had "
@@ -358,7 +358,7 @@ final class ProblemCatalogUtil {
     /// could not be kept. A warning: the session goes on without it.
     ///
     /// @param consequence what the session does without the file
-    public static Problem agentFileNotWritten(Path file, String why, String consequence) {
+    public static LampProblem agentFileNotWritten(Path file, String why, String consequence) {
         return warning(AGENT_FILE_NOT_WRITTEN, "A file in the agent's home was not written",
                 "oillamp did not write " + file + ": " + why + ". " + consequence,
                 "the file is the agent's, so oillamp leaves it as it is rather than replace what "
@@ -367,8 +367,8 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("correct or remove " + file + "; the next session writes it again"));
     }
 
-    public static Problem lockBusy(Path root, long supervisorPid, String startedAt) {
-        return new Problem(LOCK_BUSY, Severity.ERROR, "Lamp is already running",
+    public static LampProblem lockBusy(Path root, long supervisorPid, String startedAt) {
+        return new LampProblem(LOCK_BUSY, Severity.ERROR, "Lamp is already running",
                 "a session started at " + startedAt + " holds " + root + " (supervisor pid " + supervisorPid + ")",
                 "one lamp runs at most one sandbox, so two sessions cannot fight over the same agent "
               + "home, the same container name and the same sockets",
@@ -386,8 +386,8 @@ final class ProblemCatalogUtil {
     ///
     /// Deleting the agent's home under a running container would leave the session using
     /// directories that no longer exist, and a container with no lamp left to stop it with.
-    public static Problem lampStillRunning(Path root, String what) {
-        return new Problem(LAMP_STILL_RUNNING, Severity.ERROR, "That lamp is in use",
+    public static LampProblem lampStillRunning(Path root, String what) {
+        return new LampProblem(LAMP_STILL_RUNNING, Severity.ERROR, "That lamp is in use",
                 what,
                 "removing a lamp deletes the agent's home, and doing that under a running "
               + "container would leave the session working in directories that no longer exist",
@@ -403,7 +403,7 @@ final class ProblemCatalogUtil {
     /// The infra sockets and recordings belong to the infra user, which this user can only delete
     /// through podman's user namespace. `remove` does that, so reaching this means podman was
     /// missing or refused.
-    public static Problem lampNotRemoved(Path path, String why) {
+    public static LampProblem lampNotRemoved(Path path, String why) {
         return error(LAMP_NOT_REMOVED, "Part of the lamp could not be removed",
                 path + " is still there: " + why,
                 "some of a lamp is owned by the sandbox's own users, which is what stops the "
@@ -416,7 +416,7 @@ final class ProblemCatalogUtil {
     /// `oillamp recordings --open` named a session with no recording.
     ///
     /// Lists the sessions that do have recordings, since the usual cause is a mistyped id.
-    public static Problem noSuchRecording(String session, Path lamp, Path directory,
+    public static LampProblem noSuchRecording(String session, Path lamp, Path directory,
                                           Tuple<RecordingFile> existing) {
         Tuple<String> ids = Tuple.of(String.class);
         for (RecordingFile file : existing)
@@ -434,7 +434,7 @@ final class ProblemCatalogUtil {
     ///
     /// oillamp hands the file to `xdg-open`, so this usually means no program is set up to
     /// open `.mkv` files, or there is no desktop.
-    public static Problem recordingNotOpened(Path file, String why) {
+    public static LampProblem recordingNotOpened(Path file, String why) {
         return error(RECORDING_NOT_OPENED, "That recording could not be opened",
                 why,
                 "oillamp asks the desktop to open the file rather than choosing a video player "
@@ -444,8 +444,8 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("or open " + file + " from your file manager"));
     }
 
-    public static Problem lockRecovered(Path root, String what) {
-        return new Problem(LOCK_RECOVERED, Severity.WARNING, "Cleaned up after a previous crashed session",
+    public static LampProblem lockRecovered(Path root, String what) {
+        return new LampProblem(LOCK_RECOVERED, Severity.WARNING, "Cleaned up after a previous crashed session",
                 what,
                 "a supervisor died without running its shutdown sequence; oillamp removed the "
               + "leftovers so this run can start cleanly",
@@ -457,7 +457,7 @@ final class ProblemCatalogUtil {
     // ─── history ───────────────────────────────────────────────────────────────────────────
 
     /// `oillamp restore` named a snapshot that is not there, or not only one.
-    public static Problem noSuchSnapshot(String given, Path lamp, String why) {
+    public static LampProblem noSuchSnapshot(String given, Path lamp, String why) {
         return error(NO_SUCH_SNAPSHOT, "No such snapshot",
                 "'" + given + "' does not name one snapshot of " + lamp + ": " + why,
                 "a restore replaces the agent's home, so oillamp only does it for a snapshot "
@@ -466,7 +466,7 @@ final class ProblemCatalogUtil {
     }
 
     /// The history could not be read: a file in it is missing or not what oillamp wrote.
-    public static Problem historyDamaged(Path history, String detail) {
+    public static LampProblem historyDamaged(Path history, String detail) {
         return error(HISTORY_DAMAGED, "The lamp's history cannot be read",
                 detail,
                 "without it oillamp cannot list or restore snapshots; the agent's home itself "
@@ -480,7 +480,7 @@ final class ProblemCatalogUtil {
 
     /// A save stopped part of the way. Nothing it wrote counts until the last step, so the
     /// history is as it was before.
-    public static Problem saveFailed(Path lamp, String reason) {
+    public static LampProblem saveFailed(Path lamp, String reason) {
         return error(SAVE_FAILED, "The lamp could not be saved",
                 reason,
                 "no snapshot was made, so the lamp's state right now cannot be restored later; "
@@ -490,7 +490,7 @@ final class ProblemCatalogUtil {
     }
 
     /// A save made its snapshot, but had to leave some files out.
-    public static Problem filesNotSaved(Path lamp, Tuple<String> skipped) {
+    public static LampProblem filesNotSaved(Path lamp, Tuple<String> skipped) {
         int shown = Math.min(skipped.size(), 10);
         StringBuilder list = new StringBuilder();
         for (int i = 0; i < shown; i++) list.append(i == 0 ? "" : "\n").append(skipped.get(i));
@@ -506,7 +506,7 @@ final class ProblemCatalogUtil {
     }
 
     /// `oillamp restore` on a lamp whose session is running.
-    public static Problem restoreWhileRunning(Path lamp) {
+    public static LampProblem restoreWhileRunning(Path lamp) {
         return error(RESTORE_WHILE_RUNNING, "Stop the session before restoring",
                 "a session is running on " + lamp,
                 "a restore rewrites the agent's home, and programs in the sandbox would go on "
@@ -516,7 +516,7 @@ final class ProblemCatalogUtil {
     }
 
     /// A restore stopped part of the way. The safety save before it holds the lamp as it was.
-    public static Problem restoreFailed(Path lamp, String reason, String safetySnapshot) {
+    public static LampProblem restoreFailed(Path lamp, String reason, String safetySnapshot) {
         return error(RESTORE_FAILED, "The restore did not finish",
                 reason,
                 "the agent's home is now partly restored; oillamp saved it just before it began, "
@@ -527,7 +527,7 @@ final class ProblemCatalogUtil {
     }
 
     /// Another save or restore held the history for longer than oillamp waited.
-    public static Problem historyBusy(Path lamp, Duration waited) {
+    public static LampProblem historyBusy(Path lamp, Duration waited) {
         return error(HISTORY_BUSY, "Another save is still running",
                 "another oillamp process has been saving or restoring " + lamp + " for over "
               + waited.toSeconds() + " seconds",
@@ -541,14 +541,14 @@ final class ProblemCatalogUtil {
 
     /// A job was not added or changed: its time could not be read, or it breaks one of the
     /// rules, such as the agent's limit on jobs. Said the same way to the user and to the agent.
-    public static Problem scheduleRefused(String why) {
+    public static LampProblem scheduleRefused(String why) {
         return error(SCHEDULE_REFUSED, "The schedule was not changed",
                 why,
                 "the schedule is as it was before");
     }
 
     /// The file that holds a lamp's schedule could not be read or written.
-    public static Problem scheduleDamaged(Path file, String reason) {
+    public static LampProblem scheduleDamaged(Path file, String reason) {
         return error(SCHEDULE_DAMAGED, "The schedule cannot be read",
                 reason,
                 "no job can run or be changed until oillamp can read the schedule again")
@@ -557,7 +557,7 @@ final class ProblemCatalogUtil {
                           + "move it aside, and oillamp starts an empty schedule"));
     }
 
-    public static Problem noSuchJob(String id, Path lamp) {
+    public static LampProblem noSuchJob(String id, Path lamp) {
         return error(NO_SUCH_JOB, "There is no such job",
                 "the schedule of " + lamp + " has no job called '" + id + "'",
                 "nothing was changed")
@@ -566,7 +566,7 @@ final class ProblemCatalogUtil {
 
     /// Jobs are on the schedule, but `schedule.enabled` is off and no session started with
     /// `--enable-scheduling` runs, so none of them will run.
-    public static Problem scheduleOff(Path config) {
+    public static LampProblem scheduleOff(Path config) {
         return warning(SCHEDULE_OFF, "The schedule is switched off",
                 "`schedule.enabled` is not true in " + config,
                 "jobs stay on the schedule, but none of them runs")
@@ -576,7 +576,7 @@ final class ProblemCatalogUtil {
     }
 
     /// The agent could not be woken for a run, or stopped answering in the middle of one.
-    public static Problem runFailed(String run, String reason) {
+    public static LampProblem runFailed(String run, String reason) {
         return warning(RUN_FAILED, "The agent could not do " + run,
                 reason,
                 "the run ended without the agent finishing it; the next run starts the agent again")
@@ -586,7 +586,7 @@ final class ProblemCatalogUtil {
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 
     /// A conversation, or an entry in one, that is not there, or a name that fits several.
-    public static Problem noSuchConversation(String which, Path lamp) {
+    public static LampProblem noSuchConversation(String which, Path lamp) {
         return error(NO_SUCH_CONVERSATION, "There is no such conversation",
                 "the agent in " + lamp + " has no conversation, or no entry, that '" + which + "' names on its own",
                 "nothing was asked or changed")
@@ -596,14 +596,14 @@ final class ProblemCatalogUtil {
 
     // ─── configuration ─────────────────────────────────────────────────────────────────────
 
-    public static Problem configUnparseable(Path file, String detail) {
+    public static LampProblem configUnparseable(Path file, String detail) {
         return error(CONFIG_UNPARSEABLE, "Config file cannot be parsed (TOML syntax)",
                 detail,
                 "oillamp cannot tell what policy you intended, and guessing would be worse than stopping")
             .withEvidence(new Evidence.File(file, detail));
     }
 
-    public static Problem configUnknownKey(Path file, String keyPath, String didYouMean) {
+    public static LampProblem configUnknownKey(Path file, String keyPath, String didYouMean) {
         return error(CONFIG_UNKNOWN_KEY, "Unknown config key",
                 "'" + keyPath + "' is not a key oillamp knows",
                 "a typo in a key name would otherwise be silently ignored — and a silently ignored "
@@ -611,7 +611,7 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.Config(file, keyPath, "", didYouMean));
     }
 
-    public static Problem configWrongType(Path file, String keyPath, String value, String expected) {
+    public static LampProblem configWrongType(Path file, String keyPath, String value, String expected) {
         return error(CONFIG_WRONG_TYPE, "Wrong config value type",
                 "'" + keyPath + "' is " + value + ", which is not " + expected,
                 "oillamp binds configuration to typed values so the rest of the program cannot "
@@ -619,7 +619,7 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.Config(file, keyPath, value, expected));
     }
 
-    public static Problem configInvalidValue(Path file, String keyPath, String value, String expected) {
+    public static LampProblem configInvalidValue(Path file, String keyPath, String value, String expected) {
         return error(CONFIG_INVALID_VALUE, "Invalid config value",
                 "'" + keyPath + "' is " + value + ", but " + expected,
                 "the value parses but cannot work; catching it now beats a confusing failure "
@@ -629,7 +629,7 @@ final class ProblemCatalogUtil {
 
     // ─── misc ──────────────────────────────────────────────────────────────────────────────
 
-    public static Problem noTerminal(Tuple<String> supported) {
+    public static LampProblem noTerminal(Tuple<String> supported) {
         return error(TERM_NONE_FOUND, "No supported terminal emulator found",
                 "none of the known terminal emulators is on PATH",
                 "oillamp opens your shell into the sandbox in a terminal window; without one there "
@@ -639,7 +639,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("or point oillamp at yours with terminal.command in oillamp.toml"));
     }
 
-    public static Problem socketPathTooLong(Path path, int limit) {
+    public static LampProblem socketPathTooLong(Path path, int limit) {
         return error(NET_SOCKET_PATH_LONG, "Socket path too long",
                 path + " is " + path.toString().getBytes(StandardCharsets.UTF_8).length
                         + " bytes, the kernel limit is " + limit,
@@ -648,7 +648,7 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("make sure XDG_RUNTIME_DIR is set to a short path such as /run/user/1000"));
     }
 
-    public static Problem cannotListen(Path socket, String reason) {
+    public static LampProblem cannotListen(Path socket, String reason) {
         return error(NET_CANNOT_LISTEN, "Cannot listen on a socket",
                 "oillamp could not bind " + socket + ": " + reason,
                 "the terminal and the viewer reach the sandbox through these sockets; without "
@@ -664,7 +664,7 @@ final class ProblemCatalogUtil {
     ///
     /// Without a timeout, the session would wait for a shell that is never coming. The cause is
     /// usually the terminal's arguments, so the fix suggests running the command by hand.
-    public static Problem terminalDidNotConnect(Duration waited) {
+    public static LampProblem terminalDidNotConnect(Duration waited) {
         return error(TERM_NO_CONNECT, "The terminal window did not connect",
                 "the terminal was started but no shell reached the sandbox within "
                         + waited.toSeconds() + "s",
@@ -675,8 +675,8 @@ final class ProblemCatalogUtil {
     }
 
     /// The terminal emulator itself would not start, as opposed to starting and never connecting.
-    public static Problem terminalNotStarted(Tuple<String> argv, String reason, String output) {
-        Problem problem = error(TERM_NOT_STARTED, "The terminal window could not be opened",
+    public static LampProblem terminalNotStarted(Tuple<String> argv, String reason, String output) {
+        LampProblem problem = error(TERM_NOT_STARTED, "The terminal window could not be opened",
                 "starting " + argv.first() + " failed: " + reason,
                 "the terminal setting is most likely wrong, and would be wrong in every session, "
               + "so oillamp stops here and says so")
@@ -689,7 +689,7 @@ final class ProblemCatalogUtil {
 
     /// The viewer window closed straight after opening. A warning, not an error: the session still
     /// works, and the user can open another viewer with `oillamp view`.
-    public static Problem viewerDiedImmediately(Tuple<String> argv, int exitCode, String output) {
+    public static LampProblem viewerDiedImmediately(Tuple<String> argv, int exitCode, String output) {
         return warning(VIEWER_DIED, "The viewer window closed immediately",
                 argv.first() + " exited with code " + exitCode + " a moment after it was started",
                 "the session is running and you can still reach it; you simply cannot see the "
@@ -700,7 +700,7 @@ final class ProblemCatalogUtil {
     }
 
     /// A second connection to the primary SSH socket, which belongs to the terminal window only.
-    public static Problem extraPrimaryRejected(Path socket) {
+    public static LampProblem extraPrimaryRejected(Path socket) {
         return warning(SSH_PRIMARY_TAKEN, "A second connection to the session's own socket was refused",
                 socket + " accepts one connection per session, and it is already in use",
                 "that socket is kept for the shell window oillamp opens; "
@@ -711,14 +711,14 @@ final class ProblemCatalogUtil {
 
     // ─── reaching a running session ────────────────────────────────────────────────────────
 
-    public static Problem noSessionRunning(Path lamp, String command) {
+    public static LampProblem noSessionRunning(Path lamp, String command) {
         return error(SESSION_NOT_RUNNING, "No session is running for this lamp",
                 "there is no supervisor listening for " + lamp,
                 "`oillamp " + command + "` talks to a running session; there is nothing to talk to yet")
             .withFix(Fix.run("start one", "oillamp at " + lamp));
     }
 
-    public static Problem supervisorUnreachable(Path socket, String reason) {
+    public static LampProblem supervisorUnreachable(Path socket, String reason) {
         return error(SESSION_UNREACHABLE, "The running session did not answer",
                 "its control socket " + socket + " is there but did not respond: " + reason,
                 "the supervisor may have been killed without tidying up, which leaves the socket "
@@ -729,11 +729,11 @@ final class ProblemCatalogUtil {
     /// The session answered, but said no. It is alive, so nothing needs cleaning up.
     /// What the session says when it will not take or stop a run. The session answers with
     /// what happened only; the command that asked says it was refused.
-    public static Problem runRefused(String reason) {
+    public static LampProblem runRefused(String reason) {
         return error(SESSION_REFUSED, "The running session refused", reason, "nothing was asked or stopped");
     }
 
-    public static Problem sessionRefused(Path lamp, String command, String reason) {
+    public static LampProblem sessionRefused(Path lamp, String command, String reason) {
         return error(SESSION_REFUSED, "The running session refused",
                 "`oillamp " + command + "` was refused by the session on " + lamp + ": " + reason,
                 "the session is running and answered, so there is nothing to clean up")
@@ -742,7 +742,7 @@ final class ProblemCatalogUtil {
 
     /// podman did not answer whether the sandbox is running. A warning: the session goes on, and
     /// the user is told once, not at every check.
-    public static Problem sandboxStateUnknown(String container, String reason) {
+    public static LampProblem sandboxStateUnknown(String container, String reason) {
         return warning(SANDBOX_STATE_UNKNOWN, "podman did not say whether the sandbox is running",
                 "`podman container inspect " + container + "` failed: " + reason,
                 "oillamp checks every two seconds that the sandbox is still there; until podman "
@@ -751,7 +751,7 @@ final class ProblemCatalogUtil {
                           + "passes; if it does not, check `podman ps` in another terminal"));
     }
 
-    public static Problem sshKeygenFailed(Evidence.Command command) {
+    public static LampProblem sshKeygenFailed(Evidence.Command command) {
         return error(SSH_KEYGEN_FAILED, "Key generation failed",
                 "ssh-keygen exited with code " + command.exitCode(),
                 "the lamp needs its own key pair; oillamp never reuses your personal SSH keys for "
@@ -761,7 +761,7 @@ final class ProblemCatalogUtil {
 
     // ─── the image and the sandbox ─────────────────────────────────────────────────────────
 
-    public static Problem podmanFailed(String what, int exitCode, String output) {
+    public static LampProblem podmanFailed(String what, int exitCode, String output) {
         Code code = what.contains("build") ? IMAGE_BUILD_FAILED : SANDBOX_START_FAILED;
         return error(code,
                 what.contains("build") ? "Could not build the sandbox image" : "Could not start the sandbox",
@@ -776,7 +776,7 @@ final class ProblemCatalogUtil {
 
     /// The image a session starts from was built long ago. A warning: the image still works,
     /// but nothing in it, Firefox and openssh included, has had an update since.
-    public static Problem imageOld(Path lamp, String image, long days) {
+    public static LampProblem imageOld(Path lamp, String image, long days) {
         return warning(IMAGE_OLD, "The sandbox image is " + days + " days old",
                 image + " was built " + days + " days ago, and nothing in it has been updated since",
                 "Debian's security fixes, for Firefox and openssh among others, reach the sandbox "
@@ -788,7 +788,7 @@ final class ProblemCatalogUtil {
     /// A new image was built, and the ones before it are still on disk. A warning after every
     /// build: oillamp removes only the image an update replaces, and cleaning up the rest is
     /// left to the user, who alone knows which lamps they still need.
-    public static Problem imageLeftovers(String image) {
+    public static LampProblem imageLeftovers(String image) {
         return warning(IMAGE_LEFTOVERS, "Old sandbox images stay on disk",
                 "oillamp built " + image + "; the images built before it are not removed",
                 "each image takes about 3.5 GB, and a new one is made by every update and by every "
@@ -806,7 +806,7 @@ final class ProblemCatalogUtil {
     ///
     /// Includes the last lines of the container's log, the only place the entrypoint explains
     /// why it stopped.
-    public static Problem sandboxDied(String container, String log) {
+    public static LampProblem sandboxDied(String container, String log) {
         return error(SANDBOX_DIED, "The sandbox stopped while starting up",
                 "container " + container + " exited before it reported itself ready",
                 "the desktop, the VNC server and the ssh listener all have to come up; the "
@@ -817,7 +817,7 @@ final class ProblemCatalogUtil {
 
     /// Neither `podman stop` nor `podman rm -f` worked, so the container is still there.
     /// Not an internal error: it is a problem with podman or the machine, and the fix is a command.
-    public static Problem containerNotRemoved(String container, String stopError, String removeError) {
+    public static LampProblem containerNotRemoved(String container, String stopError, String removeError) {
         return error(SANDBOX_NOT_REMOVED, "The sandbox container is still there",
                 "neither stopping nor removing container " + container + " worked",
                 "a container left behind keeps its memory and CPU reservations, and the next "
@@ -831,7 +831,7 @@ final class ProblemCatalogUtil {
                              "podman system migrate"));
     }
 
-    public static Problem sandboxNotReady(String container, Duration waited, String log) {
+    public static LampProblem sandboxNotReady(String container, Duration waited, String log) {
         return error(SANDBOX_NOT_READY, "The sandbox did not become ready in time",
                 "container " + container + " was still starting after " + waited.toSeconds() + "s",
                 "oillamp waits for the sandbox to say it is ready rather than guessing, so that a "
@@ -847,7 +847,7 @@ final class ProblemCatalogUtil {
     /// A server can die after `ready.json` is written, or fail to start and leave the
     /// previous session's socket file in place. Either way the sandbox looks healthy until
     /// something connects, which is why oillamp connects before saying the session is ready.
-    public static Problem sandboxEndpointDead(String what, Path socket,
+    public static LampProblem sandboxEndpointDead(String what, Path socket,
                                               String container, String log) {
         return error(SANDBOX_ENDPOINT_DEAD, "The sandbox is not answering on " + what,
                 socket + " refused the connection, although the sandbox reported itself ready",
@@ -869,7 +869,7 @@ final class ProblemCatalogUtil {
         return !log.isBlank() && !log.startsWith("(");
     }
 
-    public static Problem commandNotFound(String executable) {
+    public static LampProblem commandNotFound(String executable) {
         return error(EXEC_NOT_FOUND, "Command not found",
                 executable + " is not on PATH",
                 "oillamp shells out to a small, fixed set of tools and cannot continue without this one")
@@ -877,14 +877,14 @@ final class ProblemCatalogUtil {
     }
 
     /// The user typed something oillamp does not understand. Exit code 2.
-    static Problem usage(String whatHappened, String usage) {
+    static LampProblem usage(String whatHappened, String usage) {
         return error(new Code("OIL-USAGE-001"), "Invalid command line",
                 whatHappened,
                 "oillamp stopped before doing anything, so nothing on your machine changed")
             .withEvidence(new Evidence.Excerpt("usage", usage));
     }
 
-    public static Problem internal(String where, String detail) {
+    public static LampProblem internal(String where, String detail) {
         return error(INTERNAL, "Unexpected internal error (please report)",
                 detail,
                 "this is a bug in oillamp, not something you did wrong")
@@ -892,8 +892,8 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("re-run with --verbose and include the whole output in a bug report"));
     }
 
-    public static Problem gpuSoftware(String reason, Tuple<Fix> remedy) {
-        return new Problem(GPU_SOFTWARE, Severity.INFO, "GPU not used",
+    public static LampProblem gpuSoftware(String reason, Tuple<Fix> remedy) {
+        return new LampProblem(GPU_SOFTWARE, Severity.INFO, "GPU not used",
                 reason,
                 "the desktop falls back to software rendering, which is slower but always works",
                 Tuple.of(Evidence.class),
@@ -904,7 +904,7 @@ final class ProblemCatalogUtil {
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     /// An unexpected failure, rendered as a problem rather than dumped as a stack trace.
-    static Problem crash(Throwable failure) {
+    static LampProblem crash(Throwable failure) {
         StringBuilder trace = new StringBuilder(failure.toString());
         StackTraceElement[] frames = failure.getStackTrace();
         for (int i = 0; i < Math.min(frames.length, 8); i++)
@@ -928,18 +928,18 @@ final class ProblemCatalogUtil {
 
     /// The same problem, reported as a warning: for a session that carries on after it, such as
     /// a save that failed at the start of a run.
-    public static Problem asWarning(Problem problem) {
-        return new Problem(problem.code(), Severity.WARNING, problem.title(), problem.whatHappened(),
+    public static LampProblem asWarning(LampProblem problem) {
+        return new LampProblem(problem.code(), Severity.WARNING, problem.title(), problem.whatHappened(),
                 problem.whyItMatters(), problem.evidence(), problem.fixes(), problem.logFile());
     }
 
-    private static Problem warning(Code code, String title, String whatHappened, String whyItMatters) {
-        return new Problem(code, Severity.WARNING, title, whatHappened, whyItMatters,
+    private static LampProblem warning(Code code, String title, String whatHappened, String whyItMatters) {
+        return new LampProblem(code, Severity.WARNING, title, whatHappened, whyItMatters,
                 Tuple.of(Evidence.class), Tuple.of(Fix.class), Optional.empty());
     }
 
-    private static Problem error(Code code, String title, String whatHappened, String whyItMatters) {
-        return new Problem(code, Severity.ERROR, title, whatHappened, whyItMatters,
+    private static LampProblem error(Code code, String title, String whatHappened, String whyItMatters) {
+        return new LampProblem(code, Severity.ERROR, title, whatHappened, whyItMatters,
                 Tuple.of(Evidence.class), Tuple.of(Fix.class), Optional.empty());
     }
 }

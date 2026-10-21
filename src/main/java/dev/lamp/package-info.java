@@ -5,7 +5,7 @@
 /// sees of it:
 ///
 /// - [dev.lamp.LampEvent]: everything oillamp reports, as values
-/// - [dev.lamp.Problem]: what went wrong, with evidence and fixes
+/// - [dev.lamp.LampProblem]: what went wrong, with evidence and fixes
 /// - [dev.lamp.ExitStatus]: how an oillamp process ended
 /// - [dev.lamp.Lamp]: a lamp an application started or joined, until it closes it
 ///

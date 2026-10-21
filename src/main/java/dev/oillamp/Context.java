@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -148,8 +148,8 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
     }
 
     /// Each problem as a [LampEvent.Failure] if it is an error, otherwise as a [LampEvent.Warning].
-    public void sinkAcceptProblems(Tuple<Problem> problems) {
-        for (Problem problem : problems)
+    public void sinkAcceptProblems(Tuple<LampProblem> problems) {
+        for (LampProblem problem : problems)
             sink.accept(problem.isError() ? new LampEvent.Failure(problem) : new LampEvent.Warning(problem));
     }
 }

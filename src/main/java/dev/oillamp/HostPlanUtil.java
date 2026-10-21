@@ -1,7 +1,7 @@
 package dev.oillamp;
 
 import dev.lamp.LampStartupPhase;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -44,7 +44,7 @@ final class HostPlanUtil {
         if (!facts.isLinux())
             return Result.err(ProblemCatalogUtil.hostNotLinux(facts.os().osName()));
 
-        Tuple<Problem> problems = Tuple.of(Problem.class);
+        Tuple<LampProblem> problems = Tuple.of(LampProblem.class);
         Tuple<Step> steps = Tuple.of(Step.class);
 
         if (!facts.isAptBased())
@@ -97,14 +97,14 @@ final class HostPlanUtil {
         if (options.requiresGraphicalSession() && facts.terminals().isEmpty())
             problems = problems.add(ProblemCatalogUtil.noTerminal(TerminalEmulatorUtil.supportedNames()));
 
-        Tuple<Problem> errors = problems.retainIf(Problem::isError);
+        Tuple<LampProblem> errors = problems.retainIf(LampProblem::isError);
         if (!errors.isEmpty())
             return Result.err(problems);
         return Result.ok(Plan.of(LampStartupPhase.HOST, steps), problems);
     }
 
-    private static Tuple<Problem> podmanProblems(HostFacts facts) {
-        Tuple<Problem> problems = Tuple.of(Problem.class);
+    private static Tuple<LampProblem> podmanProblems(HostFacts facts) {
+        Tuple<LampProblem> problems = Tuple.of(LampProblem.class);
         if (facts.podman().isEmpty())
             return problems.add(ProblemCatalogUtil.podmanUnusable(
                     "`podman version --format json` did not produce a usable answer"));

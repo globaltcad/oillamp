@@ -603,7 +603,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
     }
 
     /** The warnings with {@code code} that the session reported. */
-    private List<dev.lamp.Problem> warnings(String code) {
+    private List<dev.lamp.LampProblem> warnings(String code) {
         reported.findAll { it instanceof LampEvent.Warning && it.problem().code().value() == code }*.problem()
     }
 

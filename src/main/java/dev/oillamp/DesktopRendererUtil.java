@@ -1,8 +1,8 @@
 package dev.oillamp;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
-import dev.lamp.Problem.Evidence;
+import dev.lamp.LampProblem.Evidence;
 import sprouts.Tuple;
 import java.util.Optional;
 
@@ -28,10 +28,10 @@ final class DesktopRendererUtil {
         ///
         /// @param remedy what the user can do about it, if anything, such as the `usermod`
         ///               command that adds them to the render group
-        record Software(String reason, Tuple<Problem.Fix> remedy) implements Decision {
-            Software(String reason) { this(reason, Tuple.of(Problem.Fix.class)); }
+        record Software(String reason, Tuple<LampProblem.Fix> remedy) implements Decision {
+            Software(String reason) { this(reason, Tuple.of(LampProblem.Fix.class)); }
         }
-        record Refused(Problem problem) implements Decision {}
+        record Refused(LampProblem problem) implements Decision {}
 
         /// The renderer name sway is started with: `gles2` for the GPU, `pixman` for software.
         default String renderer() {
@@ -39,7 +39,7 @@ final class DesktopRendererUtil {
         }
     }
 
-    public static final Problem.Code GPU_REQUIRED_BUT_UNAVAILABLE = new Problem.Code("OIL-GPU-003");
+    public static final LampProblem.Code GPU_REQUIRED_BUT_UNAVAILABLE = new LampProblem.Code("OIL-GPU-003");
 
     public static Decision decide(GpuMode mode, GpuFacts gpu, UserInfo user, Optional<PodmanFacts> podman) {
         if (mode == GpuMode.OFF)
@@ -54,27 +54,27 @@ final class DesktopRendererUtil {
 
         String reason = obstacle.map(Obstacle::reason).orElse("no usable render node");
         if (mode == GpuMode.ON)
-            return new Decision.Refused(new Problem(
-                    GPU_REQUIRED_BUT_UNAVAILABLE, Problem.Severity.ERROR,
+            return new Decision.Refused(new LampProblem(
+                    GPU_REQUIRED_BUT_UNAVAILABLE, LampProblem.Severity.ERROR,
                     "GPU required but unavailable",
                     reason,
                     "display.gpu is set to \"on\", which means you would rather be told than "
                   + "silently get software rendering",
                     Tuple.of(Evidence.class, new Evidence.Value("render nodes",
                             gpu.renderNodes().isEmpty() ? "none" : describeNodes(gpu))),
-                    Tuple.of(Problem.Fix.class,
-                            Problem.Fix.of("set display.gpu = \"auto\" to fall back to software rendering"),
-                            Problem.Fix.of("or fix the underlying cause named above")),
+                    Tuple.of(LampProblem.Fix.class,
+                            LampProblem.Fix.of("set display.gpu = \"auto\" to fall back to software rendering"),
+                            LampProblem.Fix.of("or fix the underlying cause named above")),
                     Optional.empty()));
         return new Decision.Software(reason,
-                obstacle.map(Obstacle::remedy).orElse(Tuple.of(Problem.Fix.class)));
+                obstacle.map(Obstacle::remedy).orElse(Tuple.of(LampProblem.Fix.class)));
     }
 
     /// Why the GPU is not being used, and what to do about it, if anything.
-    private record Obstacle(String reason, Tuple<Problem.Fix> remedy) {
-        static Obstacle of(String reason) { return new Obstacle(reason, Tuple.of(Problem.Fix.class)); }
-        static Obstacle of(String reason, Problem.Fix... fixes) {
-            return new Obstacle(reason, Tuple.of(Problem.Fix.class, fixes));
+    private record Obstacle(String reason, Tuple<LampProblem.Fix> remedy) {
+        static Obstacle of(String reason) { return new Obstacle(reason, Tuple.of(LampProblem.Fix.class)); }
+        static Obstacle of(String reason, LampProblem.Fix... fixes) {
+            return new Obstacle(reason, Tuple.of(LampProblem.Fix.class, fixes));
         }
     }
 
@@ -96,7 +96,7 @@ final class DesktopRendererUtil {
                 // user logs in again, so this session would stay on software rendering anyway.
                 return Optional.of(Obstacle.of(
                         "you are not in the '" + node.owningGroup() + "' group that owns " + node.path(),
-                        Problem.Fix.run("run this on this machine, in your own terminal, then log out "
+                        LampProblem.Fix.run("run this on this machine, in your own terminal, then log out "
                                       + "and back in — a new group only reaches processes started "
                                       + "after a fresh login",
                                 "sudo usermod -aG " + node.owningGroup() + " " + user.name())));
@@ -117,7 +117,7 @@ final class DesktopRendererUtil {
     }
 
     /// The informational note shown when the session falls back to software rendering.
-    public static Optional<Problem> noteFor(Decision decision) {
+    public static Optional<LampProblem> noteFor(Decision decision) {
         return switch (decision) {
             case Decision.Hardware ignored -> Optional.empty();
             case Decision.Software software ->

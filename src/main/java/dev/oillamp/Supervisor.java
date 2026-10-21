@@ -21,7 +21,7 @@ import java.util.function.IntFunction;
 import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampSaveKind;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 import dev.lamp.LampSessionStatus;
 
 import sprouts.Tuple;
@@ -157,8 +157,8 @@ final class Supervisor {
         sessionStarted = machine.now();
         state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
 
-        Result<Tuple<Problem>> opened = openTheSession();
-        if (opened instanceof Result.Err<Tuple<Problem>>(Tuple<Problem> problems)) {
+        Result<Tuple<LampProblem>> opened = openTheSession();
+        if (opened instanceof Result.Err<Tuple<LampProblem>>(Tuple<LampProblem> problems)) {
             // The session could not be opened, but the container is already running and must
             // not be left behind.
             context.sinkAcceptProblems(problems);
@@ -167,7 +167,7 @@ final class Supervisor {
             followers.end();
             return ExitStatus.SESSION_FAILED;
         }
-        context.sinkAcceptProblems(((Result.Ok<Tuple<Problem>>) opened).value());
+        context.sinkAcceptProblems(((Result.Ok<Tuple<LampProblem>>) opened).value());
 
         Thread hook = new Thread(this::onSignal, "oillamp-shutdown-hook");
         Runtime.getRuntime().addShutdownHook(hook);
@@ -234,7 +234,7 @@ final class Supervisor {
     /// shutdown hook would wait the whole shutdown allowance for a loop that is gone. So the
     /// shutdown sequence runs here, or, if the loop had begun it, is waited for.
     private ExitStatus endAfterACrash(RuntimeException bug) {
-        Problem crash = ProblemCatalogUtil.crash(bug);
+        LampProblem crash = ProblemCatalogUtil.crash(bug);
         context.sink().accept(new LampEvent.Failure(crash));
         // The loop failed after the session had already ended: nothing is left to shut down.
         if (state instanceof SessionState.Stopped(var ended, ExitStatus exit)) return exit;
@@ -257,7 +257,7 @@ final class Supervisor {
         try {
             while (Instant.now().isBefore(deadline)) {
                 Timed timed = events.poll(1, TimeUnit.SECONDS);
-                if (timed != null && timed.event() instanceof SessionEvent.ShutdownCompleted(Tuple<Problem> problems)) {
+                if (timed != null && timed.event() instanceof SessionEvent.ShutdownCompleted(Tuple<LampProblem> problems)) {
                     context.sinkAcceptProblems(problems);
                     return;
                 }
@@ -370,7 +370,7 @@ final class Supervisor {
     /// doing.
     private void openTerminal() {
         Result<Tuple<String>> command = terminalCommand();
-        if (command instanceof Result.Err<Tuple<String>>(Tuple<Problem> problems)) {
+        if (command instanceof Result.Err<Tuple<String>>(Tuple<LampProblem> problems)) {
             post(new SessionEvent.ActionFailed(new SessionAction.LaunchTerminal(),
                     problems.first()));
             return;
@@ -432,20 +432,20 @@ final class Supervisor {
     ///
     /// The sockets are bound before `session.json` is written, so that whenever
     /// `session.json` exists, the control socket is already answering.
-    private Result<Tuple<Problem>> openTheSession() {
+    private Result<Tuple<LampProblem>> openTheSession() {
         LampLayout layout = prepared.layout();
         Result<Relay> primaryRelay = Relay.open(layout.primarySshSocket(), layout.agentSshSocket(),
                 1, new PrimaryListener());
-        if (primaryRelay instanceof Result.Err<Relay>(Tuple<Problem> problems)) return Result.err(problems);
+        if (primaryRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
         primary = Optional.of(((Result.Ok<Relay>) primaryRelay).value());
 
         Result<Relay> extraRelay = Relay.open(layout.extraSshSocket(), layout.agentSshSocket(),
                 Integer.MAX_VALUE, new ExtraListener());
-        if (extraRelay instanceof Result.Err<Relay>(Tuple<Problem> problems)) return Result.err(problems);
+        if (extraRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
         extras = Optional.of(((Result.Ok<Relay>) extraRelay).value());
 
         Result<Control.Server> server = Control.Server.open(layout.controlSocket(), this::answer);
-        if (server instanceof Result.Err<Control.Server>(Tuple<Problem> problems)) return Result.err(problems);
+        if (server instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
         control = Optional.of(((Result.Ok<Control.Server>) server).value());
 
         // The sandbox has no network of its own. Without the proxy, every outbound connection the
@@ -457,17 +457,17 @@ final class Supervisor {
                 machine.environmentVariable(configured.keyEnv()));
         Result<Egress> proxy = Egress.open(layout, prepared.config(), prepared.session(),
                 model, new EgressListener());
-        if (proxy instanceof Result.Err<Egress>(Tuple<Problem> problems)) return Result.err(problems);
+        if (proxy instanceof Result.Err<Egress>(Tuple<LampProblem> problems)) return Result.err(problems);
         egress = Optional.of(((Result.Ok<Egress>) proxy).value());
 
         // The agent's way to the schedule, in the directory of sockets the host serves to the sandbox.
         if (prepared.config().schedule().enabled()) {
             Result<Control.Server> desk = Control.Server.open(layout.scheduleSocket(), runs::answerAgent);
-            if (desk instanceof Result.Err<Control.Server>(Tuple<Problem> problems)) return Result.err(problems);
+            if (desk instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
             scheduleDesk = Optional.of(((Result.Ok<Control.Server>) desk).value());
         }
 
-        Tuple<Problem> warnings = Tuple.of(Problem.class);
+        Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
 
         // The way out to the host. Every request on it is judged by a model, and its effect
         // happens here. A lamp that did not ask for it has no socket at all.
@@ -481,7 +481,7 @@ final class Supervisor {
                     context.sink(), this::awaitAnswered, runs::currentRun,
                     run -> HostAccess.logOf(state.runs(), run));
             Result<Control.Server> door = Control.Server.open(layout.hostAccessSocket(), granted::answer);
-            if (door instanceof Result.Err<Control.Server>(Tuple<Problem> problems)) return Result.err(problems);
+            if (door instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
             hostAccessDesk = Optional.of(((Result.Ok<Control.Server>) door).value());
             granted.announce();
         }
@@ -489,7 +489,7 @@ final class Supervisor {
         // The agent's way to ask the user to look at its desktop. Without it, the session works
         // as before, and the agent is told so when it asks; so failing to open it is a warning.
         Result<Control.Server> look = Control.Server.open(layout.desktopSocket(), this::answerAboutTheDesktop);
-        if (look instanceof Result.Err<Control.Server>(Tuple<Problem> problems)) warnings = warnings.addAll(problems);
+        if (look instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) warnings = warnings.addAll(problems);
         else desktopDesk = Optional.of(((Result.Ok<Control.Server>) look).value());
 
         try {
@@ -516,13 +516,13 @@ final class Supervisor {
     private void beginShutdown(SessionState.ShutdownReason reason) {
         if (!shuttingDown.compareAndSet(false, true)) return;
         Thread.ofVirtual().name("oillamp-shutdown").start(() -> {
-            Tuple<Problem> problems;
+            Tuple<LampProblem> problems;
             try {
                 problems = shutDown(reason);
                 summarise(reason);
             } catch (RuntimeException e) {
                 // Without ShutdownCompleted the event loop would wait for ever.
-                problems = Tuple.of(Problem.class, ProblemCatalogUtil.internal("shutdown", ProblemCatalogUtil.reason(e)));
+                problems = Tuple.of(LampProblem.class, ProblemCatalogUtil.internal("shutdown", ProblemCatalogUtil.reason(e)));
             }
             post(new SessionEvent.ShutdownCompleted(problems));
         });
@@ -531,8 +531,8 @@ final class Supervisor {
     /// The shutdown sequence. Every step runs even if an earlier one failed, because they are
     /// independent cleanups: stopping at the first failure would leave the sockets and
     /// `session.json` behind as well.
-    private Tuple<Problem> shutDown(SessionState.ShutdownReason reason) {
-        Tuple<Problem> problems = Tuple.of(Problem.class);
+    private Tuple<LampProblem> shutDown(SessionState.ShutdownReason reason) {
+        Tuple<LampProblem> problems = Tuple.of(LampProblem.class);
         context.sink().accept(new LampEvent.Info("session", "shutting down — " + reason.describe()));
 
         // 0. Stop the agent's run, if one is going, and save it, while the sandbox still runs.
@@ -617,20 +617,20 @@ final class Supervisor {
     }
 
     /// Updates `lastSessionAt` in `lamp.json`.
-    private Tuple<Problem> recordLastSession() {
+    private Tuple<LampProblem> recordLastSession() {
         Path metaFile = prepared.layout().lampMeta();
         Optional<String> json = FilesystemUtil.readString(metaFile);
-        if (json.isEmpty()) return Tuple.of(Problem.class);
+        if (json.isEmpty()) return Tuple.of(LampProblem.class);
         LampState meta = LampDirectoryUtil.classify(prepared.layout().root(),
                 FilesystemUtil.list(prepared.layout().root()), json);
-        if (!(meta instanceof LampState.Existing existing)) return Tuple.of(Problem.class);
+        if (!(meta instanceof LampState.Existing existing)) return Tuple.of(LampProblem.class);
         try {
             FilesystemUtil.writeFile(metaFile,
                     LampDirectoryUtil.render(existing.meta().usedAt(machine.now())),
                     PosixMode.PUBLIC_FILE);
-            return Tuple.of(Problem.class);
+            return Tuple.of(LampProblem.class);
         } catch (IOException e) {
-            return Tuple.of(Problem.class, ProblemCatalogUtil.internal("lamp.json", ProblemCatalogUtil.reason(e)));
+            return Tuple.of(LampProblem.class, ProblemCatalogUtil.internal("lamp.json", ProblemCatalogUtil.reason(e)));
         }
     }
 
@@ -898,14 +898,14 @@ final class Supervisor {
     private final class PrimaryListener implements Relay.Listener {
         @Override public void connected()    { post(new SessionEvent.PrimaryConnected()); }
         @Override public void disconnected() { post(new SessionEvent.PrimaryDisconnected()); }
-        @Override public void trouble(Problem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
+        @Override public void trouble(LampProblem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
     }
 
     /// `oillamp shell`. Closing one of these ends nothing.
     private final class ExtraListener implements Relay.Listener {
         @Override public void connected()    { post(new SessionEvent.ShellConnected()); }
         @Override public void disconnected() { post(new SessionEvent.ShellDisconnected()); }
-        @Override public void trouble(Problem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
+        @Override public void trouble(LampProblem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
     }
 
     /// Reports what the egress proxy has to say. With `network.console_denied` on (the
@@ -916,7 +916,7 @@ final class Supervisor {
             if (prepared.config().network().consoleDenied())
                 context.sink().accept(new LampEvent.Info("network", "denied " + journey.describe()));
         }
-        @Override public void trouble(Problem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
+        @Override public void trouble(LampProblem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
     }
 
     /// Runs on Ctrl-C, SIGTERM or SIGHUP: asks for a clean shutdown and waits for it.

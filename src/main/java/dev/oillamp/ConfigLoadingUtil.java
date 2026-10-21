@@ -5,7 +5,7 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,7 +31,7 @@ final class ConfigLoadingUtil {
     ///
     /// @param sources the files, global first and the lamp's last; built-in defaults apply beneath both
     public static Result<LampConfig> load(Tuple<ConfigSource> sources) {
-        Tuple<Problem> parseProblems = Tuple.of(Problem.class);
+        Tuple<LampProblem> parseProblems = Tuple.of(LampProblem.class);
         Optional<ConfigTree> merged = Optional.empty();
 
         for (ConfigSource source : sources) {
@@ -58,24 +58,24 @@ final class ConfigLoadingUtil {
                 : ConfigSection.root(merged.get());
 
         LampConfig config = read(root);
-        Tuple<Problem> problems = parseProblems.addAll(root.problems());
-        Tuple<Problem> errors = problems.retainIf(Problem::isError);
+        Tuple<LampProblem> problems = parseProblems.addAll(root.problems());
+        Tuple<LampProblem> errors = problems.retainIf(LampProblem::isError);
         return errors.isEmpty() ? Result.ok(config, problems) : Result.err(problems);
     }
 
-    private static Tuple<Problem> checkSchemaVersion(ConfigSource source, JsonNode parsed) {
+    private static Tuple<LampProblem> checkSchemaVersion(ConfigSource source, JsonNode parsed) {
         JsonNode version = parsed.get("schema_version");
         if (version == null || version.isNull())
-            return Tuple.of(Problem.class, ProblemCatalogUtil.configInvalidValue(source.origin(), "schema_version",
+            return Tuple.of(LampProblem.class, ProblemCatalogUtil.configInvalidValue(source.origin(), "schema_version",
                     "(missing)", "every lamp config declares schema_version = " + LampConfig.SCHEMA_VERSION));
         if (!version.isIntegralNumber())
-            return Tuple.of(Problem.class, ProblemCatalogUtil.configWrongType(source.origin(), "schema_version",
+            return Tuple.of(LampProblem.class, ProblemCatalogUtil.configWrongType(source.origin(), "schema_version",
                     version.asText(), "a whole number"));
         if (version.asInt() > LampConfig.SCHEMA_VERSION)
-            return Tuple.of(Problem.class, ProblemCatalogUtil.configInvalidValue(source.origin(), "schema_version",
+            return Tuple.of(LampProblem.class, ProblemCatalogUtil.configInvalidValue(source.origin(), "schema_version",
                     version.asText(), "this oillamp understands up to " + LampConfig.SCHEMA_VERSION
                             + " — upgrade oillamp to read this lamp"));
-        return Tuple.of(Problem.class);
+        return Tuple.of(LampProblem.class);
     }
 
     // ─── the schema ────────────────────────────────────────────────────────────────────────

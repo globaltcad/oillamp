@@ -5,16 +5,16 @@ public final class LampFailedException extends Exception {
 
     private static final long serialVersionUID = 1L;
 
-    private final transient Problem problem;
+    private final transient LampProblem problem;
     private final ExitStatus status;
 
-    LampFailedException(ExitStatus status, Problem problem) {
+    LampFailedException(ExitStatus status, LampProblem problem) {
         super(problem.code() + " " + problem.title() + ": " + problem.whatHappened());
         this.problem = problem;
         this.status = status;
     }
 
-    public Problem problem() {
+    public LampProblem problem() {
         return problem;
     }
 

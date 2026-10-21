@@ -50,7 +50,7 @@ final class CommandExecutionUtil {
         Result<Command> parsed = Command.parse(arguments);
         if (parsed instanceof Result.Err<Command> refused) {
             console.banner(version, "");
-            for (Problem problem : refused.problems()) sink.accept(new LampEvent.Failure(problem));
+            for (LampProblem problem : refused.problems()) sink.accept(new LampEvent.Failure(problem));
             return ExitStatus.USAGE;
         }
         Command command = ((Result.Ok<Command>) parsed).value();
@@ -257,12 +257,12 @@ final class CommandExecutionUtil {
         try {
             lock = LampLock.tryAcquire(prepared.layout().lockFile());
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(prepared.layout().root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         }
         if (lock.isEmpty()) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class, busyProblem(prepared)));
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class, busyProblem(prepared)));
             return ExitStatus.LAMP_BUSY;
         }
 
@@ -271,7 +271,7 @@ final class CommandExecutionUtil {
         // left it, and this session can always be undone; when `autosave.startup` is on. A save
         // that fails is a warning: the session is still worth having.
         if (prepared.config().autosave().startup())
-            for (Problem problem : saveLamp(context, prepared.layout(), LampSaveKind.STARTUP, "",
+            for (LampProblem problem : saveLamp(context, prepared.layout(), LampSaveKind.STARTUP, "",
                                             Optional.of(prepared.session()), machine.now()))
                 context.sink().accept(new LampEvent.Warning(problem));
         // Until the supervisor takes over, nothing else would remove a container this run started:
@@ -324,7 +324,7 @@ final class CommandExecutionUtil {
             try {
                 held.close();
             } catch (IOException e) {
-                context.sinkAcceptProblems(Tuple.of(Problem.class,
+                context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                         ProblemCatalogUtil.internal("lock release", ProblemCatalogUtil.reason(e))));
             }
         }
@@ -371,7 +371,7 @@ final class CommandExecutionUtil {
             if (!context.options().dryRun()) {
                 lock = LampLock.tryAcquire(layout.lockFile());
                 if (lock.isEmpty()) {
-                    context.sinkAcceptProblems(Tuple.of(Problem.class, busyProblem(layout)));
+                    context.sinkAcceptProblems(Tuple.of(LampProblem.class, busyProblem(layout)));
                     return ExitStatus.LAMP_BUSY;
                 }
             }
@@ -421,7 +421,7 @@ final class CommandExecutionUtil {
             context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.imageLeftovers(image.value())));
             return ExitStatus.SUCCESS;
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         } finally {
@@ -532,7 +532,7 @@ final class CommandExecutionUtil {
         }
         Tuple<String> argv = ((Result.Ok<Control.Reply>) reply).value().argv();
         if (argv.isEmpty()) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.internal("shell", "the session did not say how to reach it")));
             return ExitStatus.ERROR;
         }
@@ -576,7 +576,7 @@ final class CommandExecutionUtil {
         for (Path lampPath : lampPaths) roots.add(LampPhase.resolve(machine, lampPath));
 
         Tuple<LampPlanUtil.Removal> removals = Tuple.of(LampPlanUtil.Removal.class);
-        Tuple<Problem> refusals = Tuple.of(Problem.class);
+        Tuple<LampProblem> refusals = Tuple.of(LampProblem.class);
         boolean anyInUse = false;
         for (Path root : roots) {
             Result<LampPlanUtil.Removal> examined = examineForRemoval(machine, root);
@@ -608,7 +608,7 @@ final class CommandExecutionUtil {
 
         // Every lamp was checked above and the user confirmed them all, so one that fails to
         // delete does not stop the others.
-        Tuple<Problem> failures = Tuple.of(Problem.class);
+        Tuple<LampProblem> failures = Tuple.of(LampProblem.class);
         int removed = 0;
         for (LampPlanUtil.Removal found : removals) {
             Result<Plan> done = new StepRunner(machine, context).run(LampPlanUtil.planRemoval(found));
@@ -778,7 +778,7 @@ final class CommandExecutionUtil {
     private static ExitStatus list(Machine machine, Context context) {
         Machine.Outcome outcome = listRunningSandboxes(machine);
         if (!outcome.succeeded()) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class, ProblemCatalogUtil.podmanFailed(
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class, ProblemCatalogUtil.podmanFailed(
                     "podman ps", outcome.exitCode(), outcome.errorOutput().strip())));
             return ExitStatus.ERROR;
         }
@@ -812,7 +812,7 @@ final class CommandExecutionUtil {
         try {
             idle = LampLock.tryAcquire(layout.lockFile());
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         }
@@ -824,7 +824,7 @@ final class CommandExecutionUtil {
                 context.sink().accept(new LampEvent.Info("history",
                         "a session is running, so programs in the sandbox may be "
                         + "writing while this saves; the snapshot is marked as a running save"));
-            Tuple<Problem> problems = saveLamp(context, layout,
+            Tuple<LampProblem> problems = saveLamp(context, layout,
                     idle.isPresent() ? LampSaveKind.IDLE : LampSaveKind.RUNNING, message, session, machine.now());
             context.sinkAcceptProblems(problems);
             return exitStatusFor(problems);
@@ -864,12 +864,12 @@ final class CommandExecutionUtil {
         try {
             lock = LampLock.tryAcquire(layout.lockFile());
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         }
         if (lock.isEmpty()) {
-            Tuple<Problem> refused = Tuple.of(Problem.class, ProblemCatalogUtil.restoreWhileRunning(layout.root()));
+            Tuple<LampProblem> refused = Tuple.of(LampProblem.class, ProblemCatalogUtil.restoreWhileRunning(layout.root()));
             context.sinkAcceptProblems(refused);
             return exitStatusFor(refused);
         }
@@ -895,7 +895,7 @@ final class CommandExecutionUtil {
 
     /// Saves a lamp, reports the snapshot or that nothing changed, and returns the problems to
     /// report. Also used by `at` as a session starts and by the supervisor as it ends.
-    static Tuple<Problem> saveLamp(Context context, LampLayout layout, LampSaveKind kind, String message,
+    static Tuple<LampProblem> saveLamp(Context context, LampLayout layout, LampSaveKind kind, String message,
                                    Optional<SessionId> session, Instant now) {
         String activity = "saving lamp state now — this may take a while";
         context.sink().accept(new LampEvent.StepStarted(new LampStep(
@@ -912,8 +912,8 @@ final class CommandExecutionUtil {
                     .map(latest -> "nothing changed since " + latest.shortId() + " (" + latest.kind().label()
                                  + "), so there was nothing to save")
                     .orElse("nothing to save yet")));
-        return saving.skipped().isEmpty() ? Tuple.of(Problem.class)
-                : Tuple.of(Problem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped()));
+        return saving.skipped().isEmpty() ? Tuple.of(LampProblem.class)
+                : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped()));
     }
 
     // ─── the schedule, and asking the agent ────────────────────────────────────────────────
@@ -967,7 +967,7 @@ final class CommandExecutionUtil {
         }
         context.sink().accept(((Result.Ok<LampEvent>) done).value());
         if (!(action instanceof Command.Schedule.Action.ListJobs)) {
-            if (!limits.enabled()) context.sinkAcceptProblems(Tuple.of(Problem.class,
+            if (!limits.enabled()) context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.scheduleOff(layout.config())));
             // A running session looks at the schedule every half minute; this makes it look now.
             // Without a session there is nothing to tell, and that is fine.
@@ -1011,7 +1011,7 @@ final class CommandExecutionUtil {
         }
         Optional<dev.lamp.LampConversation> conversation = dev.lamp.Lamp.conversation(root, which.get());
         if (conversation.isEmpty()) {
-            Tuple<Problem> missing = Tuple.of(Problem.class, ProblemCatalogUtil.noSuchConversation(which.get(), root));
+            Tuple<LampProblem> missing = Tuple.of(LampProblem.class, ProblemCatalogUtil.noSuchConversation(which.get(), root));
             context.sinkAcceptProblems(missing);
             return exitStatusFor(missing);
         }
@@ -1030,7 +1030,7 @@ final class CommandExecutionUtil {
     private static ExitStatus ask(Machine machine, Context context, Command.Ask ask) {
         String prompt = ask.prompt();
         if (prompt.isBlank()) {
-            Tuple<Problem> refused = Tuple.of(Problem.class, ProblemCatalogUtil.usage(
+            Tuple<LampProblem> refused = Tuple.of(LampProblem.class, ProblemCatalogUtil.usage(
                     "`oillamp ask` needs something to ask the agent", Command.usageOf("ask")));
             context.sinkAcceptProblems(refused);
             return ExitStatus.USAGE;
@@ -1148,7 +1148,7 @@ final class CommandExecutionUtil {
 
         Optional<String> requirements = requirementsEnv.map(name -> machine.environmentVariable(name).orElse(""));
         if (requirements.isPresent() && requirements.get().getBytes(StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS) {
-            Tuple<Problem> tooLong = Tuple.of(Problem.class, ProblemCatalogUtil.usage("--requirements-env "
+            Tuple<LampProblem> tooLong = Tuple.of(LampProblem.class, ProblemCatalogUtil.usage("--requirements-env "
                     + requirementsEnv.get() + ": more than " + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024
                     + " KiB, far more than any useful rules", Command.usageOf("host-access")));
             context.sinkAcceptProblems(tooLong);
@@ -1220,12 +1220,12 @@ final class CommandExecutionUtil {
         try {
             lock = LampLock.tryAcquire(layout.lockFile());
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         }
         if (lock.isEmpty()) {
-            Tuple<Problem> busy = Tuple.of(Problem.class, busyProblem(layout));
+            Tuple<LampProblem> busy = Tuple.of(LampProblem.class, busyProblem(layout));
             context.sinkAcceptProblems(busy);
             return exitStatusFor(busy);
         }
@@ -1241,7 +1241,7 @@ final class CommandExecutionUtil {
                 return exitStatusFor(failure.problems());
             }
             if (!((Result.Ok<LampConfig>) after).value().equals(wanted)) {
-                Tuple<Problem> wrong = Tuple.of(Problem.class, ProblemCatalogUtil.internal("writing " + table,
+                Tuple<LampProblem> wrong = Tuple.of(LampProblem.class, ProblemCatalogUtil.internal("writing " + table,
                         "the changed oillamp.toml did not read back as what was asked, so it was left as it was"));
                 context.sinkAcceptProblems(wrong);
                 return exitStatusFor(wrong);
@@ -1250,7 +1250,7 @@ final class CommandExecutionUtil {
             reported.run();
             return ExitStatus.SUCCESS;
         } catch (IOException e) {
-            context.sinkAcceptProblems(Tuple.of(Problem.class,
+            context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                     ProblemCatalogUtil.lampNotWritable(layout.root(), ProblemCatalogUtil.reason(e))));
             return ExitStatus.ERROR;
         } finally {
@@ -1367,14 +1367,14 @@ final class CommandExecutionUtil {
                         Machine.Command.of("xdg-open", file.path().toString()).labelled("xdg-open"),
                         Machine.Window.Stdio.DETACHED);
                 if (window.failure().isPresent()) {
-                    context.sinkAcceptProblems(Tuple.of(Problem.class,
+                    context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                             ProblemCatalogUtil.recordingNotOpened(file.path(), window.failure().get())));
                     return ExitStatus.ERROR;
                 }
                 context.sink().accept(new LampEvent.Ok("recordings", "opened " + file.path()));
                 return ExitStatus.SUCCESS;
             }
-        context.sinkAcceptProblems(Tuple.of(Problem.class,
+        context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                 ProblemCatalogUtil.noSuchRecording(session, layout.root(), layout.recordingsDir(), existing)));
         return ExitStatus.USAGE;
     }
@@ -1446,7 +1446,7 @@ final class CommandExecutionUtil {
     ///
     /// A supervisor that answered at all, even to say no, is alive, and nothing is removed.
     private static ExitStatus cleanUpAfterACrashedSession(Machine machine, Context context, Path lampPath,
-                                                          Tuple<Problem> why) {
+                                                          Tuple<LampProblem> why) {
         Result<LampLayout> found = layoutOf(machine, lampPath);
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
@@ -1474,7 +1474,7 @@ final class CommandExecutionUtil {
                     .of("podman", "rm", "-f", container.value())
                     .withTimeout(Duration.ofSeconds(30)).labelled("podman rm"));
             if (!removed.succeeded()) {
-                context.sinkAcceptProblems(Tuple.of(Problem.class, ProblemCatalogUtil.podmanFailed(
+                context.sinkAcceptProblems(Tuple.of(LampProblem.class, ProblemCatalogUtil.podmanFailed(
                         "podman rm", removed.exitCode(), removed.errorOutput().strip())));
                 return ExitStatus.ERROR;
             }
@@ -1484,7 +1484,7 @@ final class CommandExecutionUtil {
             try {
                 FilesystemUtil.deleteIfPresent(leftover);
             } catch (IOException e) {
-                context.sinkAcceptProblems(Tuple.of(Problem.class,
+                context.sinkAcceptProblems(Tuple.of(LampProblem.class,
                         ProblemCatalogUtil.internal("cleanup", ProblemCatalogUtil.reason(e))));
             }
         }
@@ -1579,11 +1579,11 @@ final class CommandExecutionUtil {
     }
 
     /// Says who holds the lamp, from the `session.json` the running session wrote.
-    private static Problem busyProblem(LampPhase.Prepared prepared) {
+    private static LampProblem busyProblem(LampPhase.Prepared prepared) {
         return busyProblem(prepared.layout());
     }
 
-    private static Problem busyProblem(LampLayout layout) {
+    private static LampProblem busyProblem(LampLayout layout) {
         Optional<com.fasterxml.jackson.databind.JsonNode> session =
                 FilesystemUtil.readString(layout.sessionMeta()).flatMap(JsonUtil::parse);
         return ProblemCatalogUtil.lockBusy(layout.root(),
@@ -1593,14 +1593,14 @@ final class CommandExecutionUtil {
     }
 
     /// The exit code for a list of problems: 4 for a busy lamp, 2 for configuration errors, otherwise 1.
-    private static ExitStatus exitStatusFor(Tuple<Problem> problems) {
-        for (Problem problem : problems) {
+    private static ExitStatus exitStatusFor(Tuple<LampProblem> problems) {
+        for (LampProblem problem : problems) {
             String code = problem.code().value();
             if (code.equals("OIL-LOCK-001") || code.equals("OIL-HISTORY-005")) return ExitStatus.LAMP_BUSY;
             if (code.equals("OIL-HISTORY-001")) return ExitStatus.USAGE;
             if (code.startsWith("OIL-CONFIG-")) return ExitStatus.USAGE;
         }
-        for (Problem problem : problems)
+        for (LampProblem problem : problems)
             if (problem.isError()) return ExitStatus.ERROR;
         return ExitStatus.SUCCESS;
     }

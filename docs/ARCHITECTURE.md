@@ -1413,11 +1413,11 @@ application that embeds oillamp needs.
 | `OilLamp` | `dev.oillamp` | The entry point. `OilLamp.on(machine).run(argv)` is the whole tool. |
 | `Machine` | `dev.oillamp` | Everything oillamp does to the outside world goes through it, so a caller (a test, a future GUI) must be able to supply one. |
 | `LampEvent` | `dev.lamp` | The stream of things oillamp reports. An application renders these itself. |
-| `Problem` | `dev.lamp` | Structured errors, so a caller can inspect them rather than parse text. |
+| `LampProblem` | `dev.lamp` | Structured errors, so a caller can inspect them rather than parse text. |
 | `ExitStatus` | `dev.lamp` | The process exit codes, by name. |
 | `Lamp` | `dev.lamp` | An application's handle on a lamp: starts the engine as `oillamp at <dir> --embedded` in a separate process, reads its events, and ends the session on `close()`, unless it was left running (`leaveRunning()`). `Lamp.at(dir).join()` returns the same handle on a session that is already running, through `oillamp follow <dir> --embedded`; closing that one ends nothing, and `stop()` ends the session for either. |
 
-`LampEvent`, `Problem` and `ExitStatus` are in `dev.lamp` because both the engine and an
+`LampEvent`, `LampProblem` and `ExitStatus` are in `dev.lamp` because both the engine and an
 application embedding it use them.
 `dev.lamp` never imports `dev.oillamp`.
 
@@ -1468,7 +1468,7 @@ all three handle it; their `switch` statements have no `default` on purpose.
 
 Expected failures are values, not exceptions.
 
-- `Problem` has a code (`OIL-AREA-NNN`), a severity (`INFO`, `WARNING`, `ERROR`), a title, what
+- `LampProblem` has a code (`OIL-AREA-NNN`), a severity (`INFO`, `WARNING`, `ERROR`), a title, what
   happened, why it matters, evidence (a command and its output, a file, a value, a config location)
   and fixes (a description and, optionally, a command to paste).
 - `ProblemCatalogUtil.java` is the catalogue: one factory method per problem, with its fixed wording.
@@ -1508,7 +1508,7 @@ instead, explaining that it may take a while.
 | Schedule and runs | `AgentRunner` (the queue, the schedule watcher, the agent's requests), `Harness` (pi over ssh, and the session's model and instructions in pi's files), `PiSetupUtil` (what goes into those files, pure), `Schedule` and `ScheduledJob` (the jobs and their rules, pure), `ScheduleBook` (the file), `CronExpression`, `TimeNotationUtil` (times as people write them), `WakePromptUtil` (a run's prompt, pure); in `dev.lamp`, `PiSessionFile` (pi's session files as `LampConversation`, pure) |
 | Configuration | `ConfigLoadingUtil`, `ConfigTree`, `ConfigSection`, `ConfigSource`, `ConfigDefaultsUtil`, `LampConfig`, `GeneratedFileTextUtil`, and value types `GpuMode`, `ClipboardMode`, `TerminalProfileId`, `WindowLayout` |
 | Plans | `Plan`, `Step`, `StepRunner`, `PosixMode` |
-| Errors and events | `Problem`, `ProblemCatalogUtil`, `Result`, `LampEvent`, `ExitStatus` |
+| Errors and events | `LampProblem`, `ProblemCatalogUtil`, `Result`, `LampEvent`, `ExitStatus` |
 | Shared | `JsonUtil` (every JSON file, message and answer goes through it) |
 | Image and container | `SandboxPhase`, `SandboxImageFilesUtil`, `ImageTag`, `ContainerName`, `RuntimeEnvFileUtil`, `ReadyInfo`, `AgentGuideUtil`, `DesktopRendererUtil` |
 | Session | `Supervisor`, `SessionMachine`, `SessionState`, `SessionEvent`, `SessionAction`, `Relay`, `Control`, `SandboxSshUtil`, `TerminalEmulatorUtil`, `VncViewerUtil` |

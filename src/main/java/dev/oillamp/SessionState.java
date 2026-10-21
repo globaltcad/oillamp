@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import dev.lamp.ExitStatus;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -67,10 +67,10 @@ sealed interface SessionState {
         record ContainerDied(int exitCode) implements ShutdownReason {}
 
         /// The session never came up. Carries the problem that already explained why.
-        record StartupFailed(Problem problem) implements ShutdownReason {}
+        record StartupFailed(LampProblem problem) implements ShutdownReason {}
 
         /// oillamp itself failed while it ran the session. Carries the problem that reported it.
-        record Crashed(Problem problem) implements ShutdownReason {}
+        record Crashed(LampProblem problem) implements ShutdownReason {}
 
         /// The process exit code for this reason.
         default ExitStatus exitStatus() {

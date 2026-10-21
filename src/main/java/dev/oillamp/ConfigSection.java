@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -30,9 +30,9 @@ final class ConfigSection {
     private final ConfigTree tree;
     private final String keyPath;
     private final JsonNode node;
-    private final List<Problem> problems;
+    private final List<LampProblem> problems;
 
-    private ConfigSection(ConfigTree tree, String keyPath, JsonNode node, List<Problem> problems) {
+    private ConfigSection(ConfigTree tree, String keyPath, JsonNode node, List<LampProblem> problems) {
         this.tree = tree;
         this.keyPath = keyPath;
         this.node = node;
@@ -44,7 +44,7 @@ final class ConfigSection {
     }
 
     /// Everything that went wrong while reading, in the order it was discovered.
-    public Tuple<Problem> problems() { return Tuple.of(Problem.class, problems); }
+    public Tuple<LampProblem> problems() { return Tuple.of(LampProblem.class, problems); }
 
     public String keyPath() { return keyPath; }
 
@@ -236,7 +236,7 @@ final class ConfigSection {
         report(ProblemCatalogUtil.configInvalidValue(fileOf(keyPath), keyPath, value, expectation));
     }
 
-    public void report(Problem problem) { problems.add(problem); }
+    public void report(LampProblem problem) { problems.add(problem); }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 

@@ -435,13 +435,13 @@ final class ConsoleRenderer {
 
     /// A problem, in full. Errors and warnings share the layout so that a user learns to read it
     /// once; only the marker and colour differ.
-    private void problem(Problem problem) {
+    private void problem(LampProblem problem) {
         String marker = switch (problem.severity()) {
             case ERROR   -> colour(RED, "✗");
             case WARNING -> colour(YELLOW, "!");
             case INFO    -> dim("·");
         };
-        if (problem.severity() == Problem.Severity.INFO) {
+        if (problem.severity() == LampProblem.Severity.INFO) {
             printLine(area("note") + dim("· " + problem.whatHappened()));
             return;
         }
@@ -451,12 +451,12 @@ final class ConsoleRenderer {
         field("Why it matters", problem.whyItMatters());
 
         boolean firstEvidence = true;
-        for (Problem.Evidence evidence : problem.evidence()) {
+        for (LampProblem.Evidence evidence : problem.evidence()) {
             field(firstEvidence ? "Evidence" : "", describe(evidence));
             firstEvidence = false;
         }
         int index = 1;
-        for (Problem.Fix fix : problem.fixes()) {
+        for (LampProblem.Fix fix : problem.fixes()) {
             String text = index + ". " + fix.description()
                         + fix.command().map(command -> "\n     " + command).orElse("");
             field(index == 1 ? "Try" : "", text);
@@ -466,15 +466,15 @@ final class ConsoleRenderer {
         printLine("");
     }
 
-    private static String describe(Problem.Evidence evidence) {
+    private static String describe(LampProblem.Evidence evidence) {
         return switch (evidence) {
-            case Problem.Evidence.Command command ->
+            case LampProblem.Evidence.Command command ->
                     "$ " + String.join(" ", command.argv()) + "  (exit " + command.exitCode() + ")"
                     + (command.stderrTail().isBlank() ? "" : "\n" + command.stderrTail());
-            case Problem.Evidence.File file    -> file.path() + " — " + file.note();
-            case Problem.Evidence.Value value  -> value.name() + ": " + value.value();
-            case Problem.Evidence.Excerpt text -> text.title() + ":\n" + text.text();
-            case Problem.Evidence.Config config ->
+            case LampProblem.Evidence.File file    -> file.path() + " — " + file.note();
+            case LampProblem.Evidence.Value value  -> value.name() + ": " + value.value();
+            case LampProblem.Evidence.Excerpt text -> text.title() + ":\n" + text.text();
+            case LampProblem.Evidence.Config config ->
                     config.file() + "\n" + config.keyPath()
                     + (config.value().isEmpty() ? "" : " = " + config.value())
                     + "\n" + config.expected();

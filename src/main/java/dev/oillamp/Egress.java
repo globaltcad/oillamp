@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -82,7 +82,7 @@ final class Egress implements AutoCloseable {
     /// What the supervisor is told as it happens. Called from connection threads.
     interface Listener {
         void denied(Journey journey);
-        void trouble(Problem problem);
+        void trouble(LampProblem problem);
     }
 
     /// One connection, as written to the network log: host, port, resolved address, decision,

@@ -4,20 +4,20 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
-/// The result of something that can fail: a value with any warnings, or a list of [Problem]s.
+/// The result of something that can fail: a value with any warnings, or a list of [LampProblem]s.
 /// Expected failures are returned this way instead of thrown.
 ///
 /// [#combine] and [#all] collect the problems of independent checks, so a user with
 /// three mistakes in their `oillamp.toml` sees all three in one run.
 sealed interface Result<T> {
 
-    record Ok<T>(T value, Tuple<Problem> warnings) implements Result<T> {}
+    record Ok<T>(T value, Tuple<LampProblem> warnings) implements Result<T> {}
 
-    record Err<T>(Tuple<Problem> problems) implements Result<T> {
+    record Err<T>(Tuple<LampProblem> problems) implements Result<T> {
         public Err {
             if (problems.isEmpty())
                 throw new IllegalArgumentException("A failed Result must say what went wrong");
@@ -25,32 +25,32 @@ sealed interface Result<T> {
     }
 
     static <T> Result<T> ok(T value) {
-        return new Ok<>(value, Tuple.of(Problem.class));
+        return new Ok<>(value, Tuple.of(LampProblem.class));
     }
 
-    static <T> Result<T> ok(T value, Tuple<Problem> warnings) {
+    static <T> Result<T> ok(T value, Tuple<LampProblem> warnings) {
         return new Ok<>(value, warnings);
     }
 
-    static <T> Result<T> err(Problem problem) {
-        return new Err<>(Tuple.of(Problem.class, problem));
+    static <T> Result<T> err(LampProblem problem) {
+        return new Err<>(Tuple.of(LampProblem.class, problem));
     }
 
-    static <T> Result<T> err(Tuple<Problem> problems) {
+    static <T> Result<T> err(Tuple<LampProblem> problems) {
         return new Err<>(problems);
     }
 
     default boolean isOk() { return this instanceof Ok<T>; }
 
-    default Tuple<Problem> warnings() {
+    default Tuple<LampProblem> warnings() {
         return switch (this) {
             case Ok<T> ok   -> ok.warnings();
-            case Err<T> ignored -> Tuple.of(Problem.class);
+            case Err<T> ignored -> Tuple.of(LampProblem.class);
         };
     }
 
     /// Everything worth telling the user about, whether or not the result succeeded.
-    default Tuple<Problem> problems() {
+    default Tuple<LampProblem> problems() {
         return switch (this) {
             case Ok<T> ok   -> ok.warnings();
             case Err<T> err -> err.problems();
@@ -76,7 +76,7 @@ sealed interface Result<T> {
     }
 
     /// Adds a warning without changing the outcome.
-    default Result<T> warn(Problem warning) {
+    default Result<T> warn(LampProblem warning) {
         return switch (this) {
             case Ok<T> ok   -> new Ok<>(ok.value(), ok.warnings().add(warning));
             case Err<T> err -> new Err<>(err.problems().add(warning));
@@ -88,14 +88,14 @@ sealed interface Result<T> {
     static <A, B, C> Result<C> combine(Result<A> a, Result<B> b, BiFunction<A, B, C> f) {
         if (a instanceof Ok<A> okA && b instanceof Ok<B> okB)
             return new Ok<>(f.apply(okA.value(), okB.value()), okA.warnings().addAll(okB.warnings()));
-        return new Err<>(a.problems().addAll(b.problems()).retainIf(Problem::isError));
+        return new Err<>(a.problems().addAll(b.problems()).retainIf(LampProblem::isError));
     }
 
     /// Turns a tuple of independent results into a result of a tuple, collecting every problem.
     static <T> Result<Tuple<T>> all(Class<T> type, Tuple<Result<T>> results) {
         Tuple<T> values = Tuple.of(type);
-        Tuple<Problem> failures = Tuple.of(Problem.class);
-        Tuple<Problem> warnings = Tuple.of(Problem.class);
+        Tuple<LampProblem> failures = Tuple.of(LampProblem.class);
+        Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
         for (Result<T> each : results) {
             switch (each) {
                 case Ok<T> ok   -> { values = values.add(ok.value()); warnings = warnings.addAll(ok.warnings()); }
@@ -107,7 +107,7 @@ sealed interface Result<T> {
 
     /// For tests and for the top of the shell, where a failure is a bug.
     /// The value, or what `onError` makes of the problems.
-    default T orElseGet(Function<Tuple<Problem>, T> onError) {
+    default T orElseGet(Function<Tuple<LampProblem>, T> onError) {
         return switch (this) {
             case Ok<T> ok -> ok.value();
             case Err<T> err -> onError.apply(err.problems());

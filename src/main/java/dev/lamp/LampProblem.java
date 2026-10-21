@@ -15,7 +15,7 @@ import sprouts.Tuple;
 ///
 /// Public because callers, including tests and a future GUI, need to inspect failures rather than
 /// parse text.
-public record Problem(
+public record LampProblem(
     Code code,
     Severity severity,
     String title,
@@ -25,7 +25,7 @@ public record Problem(
     Tuple<Fix> fixes,
     Optional<Path> logFile
 ) {
-    public Problem {
+    public LampProblem {
         if (title.isBlank())
             throw new IllegalArgumentException("A problem needs a title");
     }
@@ -71,18 +71,18 @@ public record Problem(
     public boolean isError()   { return severity == Severity.ERROR; }
     public boolean isWarning() { return severity == Severity.WARNING; }
 
-    public Problem withEvidence(Evidence more) {
-        return new Problem(code, severity, title, whatHappened, whyItMatters,
+    public LampProblem withEvidence(Evidence more) {
+        return new LampProblem(code, severity, title, whatHappened, whyItMatters,
                            evidence.add(more), fixes, logFile);
     }
 
-    public Problem withFix(Fix more) {
-        return new Problem(code, severity, title, whatHappened, whyItMatters,
+    public LampProblem withFix(Fix more) {
+        return new LampProblem(code, severity, title, whatHappened, whyItMatters,
                            evidence, fixes.add(more), logFile);
     }
 
-    public Problem inLog(Path log) {
-        return new Problem(code, severity, title, whatHappened, whyItMatters,
+    public LampProblem inLog(Path log) {
+        return new LampProblem(code, severity, title, whatHappened, whyItMatters,
                            evidence, fixes, Optional.of(log));
     }
 }

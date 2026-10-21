@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import sprouts.Association;
@@ -202,7 +202,7 @@ final class HostProbeUtil {
         boolean apparmor = machine
                 .readSystemFile(Path.of("/proc/sys/kernel/apparmor_restrict_unprivileged_userns"))
                 .map(String::trim).filter("1"::equals).isPresent();
-        return new UserNameSpaceFacts.Fails(new Problem.Evidence.Command(
+        return new UserNameSpaceFacts.Fails(new LampProblem.Evidence.Command(
                 Tuple.of(String.class, "podman", "unshare", "true"),
                 outcome.exitCode(), tail(outcome.errorOutput(), 10), Duration.ZERO), apparmor);
     }

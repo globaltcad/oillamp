@@ -2,7 +2,7 @@ package dev.oillamp;
 
 import java.time.Instant;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -44,10 +44,10 @@ sealed interface SessionEvent {
     /// Which action it was decides how much it matters, and the difference is sharp: a viewer
     /// that will not open costs the user their view of a session that is otherwise fine, while a
     /// terminal that will not open leaves a sandbox nobody is in.
-    record ActionFailed(SessionAction action, Problem problem) implements SessionEvent {}
+    record ActionFailed(SessionAction action, LampProblem problem) implements SessionEvent {}
 
     /// The shutdown sequence has finished, with whatever went wrong along the way.
-    record ShutdownCompleted(Tuple<Problem> problems) implements SessionEvent {}
+    record ShutdownCompleted(Tuple<LampProblem> problems) implements SessionEvent {}
 
     /// The agent asked the host for something that needs the person at the session to decide.
     ///

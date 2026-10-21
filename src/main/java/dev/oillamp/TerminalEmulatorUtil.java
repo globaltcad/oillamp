@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
@@ -68,8 +68,8 @@ final class TerminalEmulatorUtil {
             for (TerminalCandidate candidate : available)
                 if (candidate.id() == wanted)
                     return Result.ok(profileOf(wanted).orElseThrow());
-            Problem problem = ProblemCatalogUtil.noTerminal(supportedNames())
-                    .withEvidence(new Problem.Evidence.Config(
+            LampProblem problem = ProblemCatalogUtil.noTerminal(supportedNames())
+                    .withEvidence(new LampProblem.Evidence.Config(
                             Path.of("oillamp.toml"), "terminal.profile",
                             wanted.configName(), "a terminal that is installed"));
             return Result.err(problem);

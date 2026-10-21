@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.util.Optional;
 
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -59,7 +59,7 @@ final class LampPhase {
 
         LampLayout layout = new LampLayout(root, agentId, host.runtimeDirectory());
 
-        Optional<Problem> replaced = aSocketDirectoryReplacedByALink(layout);
+        Optional<LampProblem> replaced = aSocketDirectoryReplacedByALink(layout);
         if (replaced.isPresent()) return Result.err(replaced.get());
 
         Result<LampConfig> configuration = loadConfiguration(layout, host);
@@ -176,7 +176,7 @@ final class LampPhase {
         Optional<String> clientKey = FilesystemUtil.readString(layout.clientKeyPub());
         Optional<String> hostKey = FilesystemUtil.readString(layout.hostKeyPub());
         if (clientKey.isEmpty() || hostKey.isEmpty())
-            return Result.err(ProblemCatalogUtil.sshKeygenFailed(new Problem.Evidence.Command(
+            return Result.err(ProblemCatalogUtil.sshKeygenFailed(new LampProblem.Evidence.Command(
                     Tuple.of(String.class, "ssh-keygen"), 0,
                     "the generated public key could not be read back from " + layout.keysDir(),
                     Duration.ZERO)));
@@ -282,7 +282,7 @@ final class LampPhase {
     ///
     /// Older versions attached their shared parent, which the agent owns, so the agent could
     /// replace one with a link to any directory of the user's. Such a lamp is refused.
-    private static Optional<Problem> aSocketDirectoryReplacedByALink(LampLayout layout) {
+    private static Optional<LampProblem> aSocketDirectoryReplacedByALink(LampLayout layout) {
         for (Path directory : Tuple.of(Path.class, layout.socketsDir(), layout.hostSocketsDir(),
                                                    layout.agentSocketsDir(), layout.infraSocketsDir())) {
             if (!Files.isSymbolicLink(directory)) continue;

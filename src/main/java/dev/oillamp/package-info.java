@@ -10,7 +10,7 @@
 /// What oillamp says lives in `dev.lamp`, because an application that embeds oillamp reads it too:
 ///
 /// - [dev.lamp.LampEvent]: what oillamp reports, as values
-/// - [dev.lamp.Problem]: what went wrong, with evidence and fixes
+/// - [dev.lamp.LampProblem]: what went wrong, with evidence and fixes
 /// - [dev.lamp.ExitStatus]: how the process ended
 ///
 /// Everything else is package-private, so that it can be changed without breaking any caller.

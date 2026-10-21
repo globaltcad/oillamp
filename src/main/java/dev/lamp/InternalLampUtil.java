@@ -18,11 +18,11 @@ class InternalLampUtil {
     private InternalLampUtil() {}
 
 
-    static Problem internal(String what) {
-        return new Problem(new Problem.Code("OIL-INTERNAL-001"), Problem.Severity.ERROR,
+    static LampProblem internal(String what) {
+        return new LampProblem(new LampProblem.Code("OIL-INTERNAL-001"), LampProblem.Severity.ERROR,
                 "Unexpected internal error (please report)", what,
                 "this is a bug in oillamp, not something you did wrong",
-                Tuple.of(Problem.Evidence.class), Tuple.of(Problem.Fix.class), Optional.empty());
+                Tuple.of(LampProblem.Evidence.class), Tuple.of(LampProblem.Fix.class), Optional.empty());
     }
 
     static String[] askCommand(Path directory, LampPrompt question, String... options) {

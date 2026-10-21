@@ -19,7 +19,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import dev.lamp.LampEvent;
-import dev.lamp.Problem;
+import dev.lamp.LampProblem;
 import dev.lamp.LampRun;
 import dev.lamp.LampHostVerdict;
 
@@ -262,7 +262,7 @@ final class HostAccess implements AutoCloseable {
 
         // 6. The work. Paths are resolved once more here, so a link swapped in while the model
         // thought cannot move the effect to another file.
-        Optional<Problem> moved = recheckPaths(call, resolved);
+        Optional<LampProblem> moved = recheckPaths(call, resolved);
         if (moved.isPresent()) return refuse(attempt, resolved, moved.get().whatHappened());
 
         Result<String> done;
@@ -275,7 +275,7 @@ final class HostAccess implements AutoCloseable {
             done = Result.err(HostAccessProblems.failed(attempt.tool(), ProblemCatalogUtil.reason(failed)));
         }
         if (done instanceof Result.Err<String> failed) {
-            Problem problem = failed.problems().first();
+            LampProblem problem = failed.problems().first();
             sink.accept(new LampEvent.HostAccessRefused(run, attempt.tool(), problem.whatHappened()));
             log(attempt, resolved, "failed", risk, problem.whatHappened(), 0);
             return Control.Reply.failed(problem.whatHappened());
@@ -323,7 +323,7 @@ final class HostAccess implements AutoCloseable {
 
     /// Checks the same paths again, immediately before the effect. A path that resolved one way
     /// when the checker was asked and another way now is a refusal, not a retry.
-    private Optional<Problem> recheckPaths(HostTool.Call call, Tuple<HostPaths.ResolvedPath> before) {
+    private Optional<LampProblem> recheckPaths(HostTool.Call call, Tuple<HostPaths.ResolvedPath> before) {
         Tuple<String> asked = HostTool.pathsOf(call.tool());
         for (int i = 0; i < asked.size(); i++) {
             Result<HostPaths.ResolvedPath> path = HostPaths.locate(asked.get(i), home);
