@@ -9,7 +9,29 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
 
-/// A lamp that has been described but not started yet.
+/// A lamp's directory, whether or not a session runs it: what can be done to the lamp at rest,
+/// and how to start or join its session. [Lamp#at(Path)] returns one.
+///
+/// ```
+/// LampDirectory north = Lamp.at(Path.of("/home/me/campaigns/north")).onEvent(ui::show);
+/// List<LampSave> saves = north.history();      // works whether or not a session runs
+/// try (Lamp lamp = north.model("azure/gpt-6.1-sol").start()) { … }
+/// ```
+///
+/// It is immutable: each method that configures it returns a new one and leaves this one as it
+/// was. Those methods are of two kinds:
+///
+/// - [#onEvent] and [#launchedBy] apply to everything this directory does: the session that
+///   [#start] or [#join] opens, and every command below.
+/// - [#modelService], [#modelKey], [#model], [#instructions], [#security] and
+///   [#enableScheduling] only say how [#start] starts a session. Nothing is written to the lamp
+///   before then, and [#join] ignores them: the session it joins keeps the settings it was
+///   started with.
+///
+/// The other methods act on the lamp itself, such as [#save], [#history], [#restore],
+/// [#schedule] and [#remove]. Each one runs a short-lived engine process, waits for it, and
+/// passes what it reports to the listeners; each says whether it works while a session runs.
+/// The conversation methods read the agent's home directly, and [#ask] needs a running session.
 public final class LampDirectory {
 
     private final Path directory;
@@ -72,6 +94,9 @@ public final class LampDirectory {
         return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
 
+    /// Starts the engine with `launcher` instead of the default, which runs `java` from this
+    /// JVM with this application's classpath. For tests, or for an application that runs the
+    /// engine some other way.
     public LampDirectory launchedBy(LampLauncher launcher) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
@@ -322,7 +347,8 @@ public final class LampDirectory {
     ///                     agent the host tools
     /// @param requirements the new value of `requirements`: the text the checker model judges
     ///                     every host request against. May be empty only when `enabled` is
-    ///                     false. Genies passes the JSON its settings page builds
+    ///                     false. Plain text in the user's own words, or anything else the
+    ///                     checker model can read, such as JSON from a settings form
     /// @return the values as the file now has them
     /// @throws LampFailedException when the sandbox is running, or the settings are not valid, such
     ///                     as on with no requirements; the problem says which
@@ -425,6 +451,7 @@ public final class LampDirectory {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "pause").orThrow();
     }
 
+    /// Lets the schedule run again after [#pause].
     public void resume() throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "resume").orThrow();
     }
