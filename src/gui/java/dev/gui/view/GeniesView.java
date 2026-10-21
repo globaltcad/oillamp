@@ -92,8 +92,8 @@ public final class GeniesView extends JPanel {
     /// Set once the conversation's scroll pane exists.
     private Optional<FollowTheEnd> follow = Optional.empty();
 
-    public GeniesView(Var<GeniesState> state, Genies app) {
-        this.state = state;
+    public GeniesView(Genies app) {
+        this.state = app.state();
         this.app = app;
         genie        = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         draft        = genie.zoomTo(Genie::draft, Genie::withDraft);
