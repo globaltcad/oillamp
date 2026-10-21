@@ -161,7 +161,7 @@ public final class GeniesBackend implements Genies {
                                 shelf, new LampLighter(), ollama);
         JFrame frame = new JFrame("Genies");
         new JGlassPane(frame.getRootPane());
-        GeniesView view = new GeniesView(app.state, app);
+        GeniesView view = new GeniesView(app);
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         frame.setContentPane(view);
         frame.setIconImage(GeniesView.windowIcon());
@@ -199,6 +199,8 @@ public final class GeniesBackend implements Genies {
     }
 
     // ─── actions ───────────────────────────────────────────────────────────────────────────
+
+    @Override public Var<GeniesState> state() { return state; }
 
     @Override public Path errorLog() { return shelf.errorLog(); }
 
