@@ -1,7 +1,7 @@
 package gui
 
 import dev.gui.genie.GenieRunner
-import dev.gui.genie.LampLighter
+import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.Lighter
 import dev.gui.model.Genie
 import dev.gui.model.History
@@ -249,7 +249,7 @@ class KeepingAGeniesHistorySpec extends Specification {
     /// oillamp's engine in this JVM; commands run in the sandbox run on this machine, in the
     /// genie's home.
     private Lighter lighter() {
-        var real = new LampLighter(sandbox.launcher)
+        var real = new LampLighterImpl(sandbox.launcher)
         return new Lighter() {
             Lighter.Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
                 var lit = real.light(directory, name, settings, key, progress, events)

@@ -1,7 +1,7 @@
 package gui
 
 import dev.gui.genie.GenieRunner
-import dev.gui.genie.LampLighter
+import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.Lighter
 import dev.gui.model.Entry
 import dev.gui.model.Genie
@@ -44,7 +44,7 @@ where pi keeps its settings: the lamp's engine looks after that.
  Genies                                   Lamp API                     the lamp's engine
  ──────                                   ────────                     ─────────────────
  a genie wakes:
-   GenieRunner.wake ─▶ LampLighter.light ─▶ Lamp.at(dir)
+   GenieRunner.wake ─▶ LampLighterImpl.light ─▶ Lamp.at(dir)
                                               .modelService(url)      ─▶ oillamp at <dir> --embedded
                                               .modelKey(key)               --model <id> …
                                               .model(id)                   writes pi's default model
@@ -360,7 +360,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
      *  no sandbox to run it in.
      */
     private Lighter lighter() {
-        var real = new LampLighter(host.launcher)
+        var real = new LampLighterImpl(host.launcher)
         var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
             here(real.light(directory, name, settings, key, progress, events))
         }

@@ -16,7 +16,7 @@ import javax.swing.SwingUtilities;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.GenieRunner;
-import dev.gui.genie.LampLighter;
+import dev.gui.genie.LampLighterImpl;
 import dev.gui.genie.Lighter;
 import dev.gui.genie.OllamaKeeper;
 import dev.gui.genie.Shelf;
@@ -138,7 +138,7 @@ public final class GeniesBackend implements Genies {
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
         GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
-                                shelf, new LampLighter(), ollama);
+                                shelf, new LampLighterImpl(), ollama);
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
         // whether it may reach this computer, which its card says. A genie left running when

@@ -29,17 +29,17 @@ import dev.lamp.LampRun;
 /// reads them. Which agent that is, and where it keeps its settings, is the engine's business.
 ///
 /// Every lamp is lit with its schedule on, so the jobs on it wake the genie while it is awake.
-public final class LampLighter implements Lighter {
+public final class LampLighterImpl implements Lighter {
 
     private final Optional<LampLauncher> launcher;
 
     /// Starts each lamp's engine in a process of its own, from this application's classpath.
-    public LampLighter() { this(Optional.empty()); }
+    public LampLighterImpl() { this(Optional.empty()); }
 
     /// Starts each lamp's engine with `launcher`, as the scenarios do, to run it in their own JVM.
-    public LampLighter(LampLauncher launcher) { this(Optional.of(launcher)); }
+    public LampLighterImpl(LampLauncher launcher) { this(Optional.of(launcher)); }
 
-    private LampLighter(Optional<LampLauncher> launcher) {
+    private LampLighterImpl(Optional<LampLauncher> launcher) {
         this.launcher = launcher;
     }
 
