@@ -336,13 +336,13 @@ public final class Lamp implements AutoCloseable {
     /// @throws IOException              when the service cannot be asked, or refuses; the message
     ///                                  says why, in words an application can show
     public static List<String> models(URI service, String key) throws IOException, InterruptedException {
-        return ModelList.of(service, Optional.of(key));
+        return InternalModelListUtil.of(service, Optional.of(key));
     }
 
     /// The models a service offers without a key, such as a model server on this machine or
     /// Eden AI, whose list is public. See [#models(URI, String)].
     public static List<String> models(URI service) throws IOException, InterruptedException {
-        return ModelList.of(service, Optional.empty());
+        return InternalModelListUtil.of(service, Optional.empty());
     }
 
     /// The lamp directory.

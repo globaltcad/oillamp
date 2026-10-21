@@ -146,10 +146,10 @@ class ListingAServicesModelsSpec extends Specification {
                 {"id":"somewhere/unknown"}]}'''
 
         expect:
-            ModelList.isEdenAi(URI.create('https://api.eu.edenai.run'))
-            !ModelList.isEdenAi(URI.create('https://ollama.example.com/v1'))
-            ModelList.parse(list, true) == ['mistral/mistral-small-latest', 'mistral/mistral-large-latest']
-            ModelList.parse(list, false).size() == 4
+            InternalModelListUtil.isEdenAi(URI.create('https://api.eu.edenai.run'))
+            !InternalModelListUtil.isEdenAi(URI.create('https://ollama.example.com/v1'))
+            InternalModelListUtil.parse(list, true) == ['mistral/mistral-small-latest', 'mistral/mistral-large-latest']
+            InternalModelListUtil.parse(list, false).size() == 4
     }
 
     private URI address(String path) { URI.create("http://127.0.0.1:${server.address.port}${path}") }
