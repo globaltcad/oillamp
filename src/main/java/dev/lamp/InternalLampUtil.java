@@ -35,12 +35,12 @@ class InternalLampUtil {
         return command.toArray(String[]::new);
     }
 
-    /// Like [#runToEnd(Lamp.Launcher , List , String...)], but also sets the environment variables in
+    /// Like [#runToEnd(LampLauncher , List , String...)], but also sets the environment variables in
     /// `environment` for the engine process. Used to pass texts, such as host-access
     /// requirements, that must not appear on the command line, where every user of the machine
     /// can read them in the process list.
     static Lamp.Ran runToEnd(
-        final Lamp.Launcher launcher,
+        final LampLauncher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Map<String, String> environment,
         final String... command

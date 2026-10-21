@@ -26,7 +26,7 @@ class TheShapeOfTheCodeSpec extends Specification {
             'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampStartupConf', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'LampJobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
             'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
-            'LampConversation'
+            'LampConversation', 'LampLauncher'
     ] as Set
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API
@@ -170,7 +170,8 @@ class TheShapeOfTheCodeSpec extends Specification {
                            'Harness', 'AgentRunner',
                            // An application's handle on a lamp: starts the engine's process
                            // and reads its output. It decides nothing about the sandbox.
-                           'Lamp',
+                           // LampLauncher is how it starts that process, and can be replaced.
+                           'Lamp', 'LampLauncher',
                            // Supervised host access. It binds the socket the sandbox asks on and
                            // touches the host once a request is allowed, as Control and Egress
                            // do, and decides nothing: what a request means is HostTool, what the

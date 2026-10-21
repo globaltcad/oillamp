@@ -87,7 +87,7 @@ public final class Lamp implements AutoCloseable {
 
 
     private final Path directory;
-    private final Launcher launcher;
+    private final LampLauncher launcher;
     private final Process engine;
     private final List<Consumer<LampEvent>> listeners;
     private final CountDownLatch runningOrEnded = new CountDownLatch(1);
@@ -101,7 +101,7 @@ public final class Lamp implements AutoCloseable {
 
     Lamp(
             final Path directory,
-            final Launcher launcher,
+            final LampLauncher launcher,
             final Process engine,
             final List<Consumer<LampEvent>> listeners,
             final boolean holding
@@ -120,16 +120,6 @@ public final class Lamp implements AutoCloseable {
                             Optional.empty());
     }
 
-    /// Starts the engine as a separate process, with `arguments` after the engine's main class
-    /// and `environment` added to the environment it inherits.
-    ///
-    /// Given a replacement with [LampStartupConf#launchedBy], for tests, or for an application that
-    /// runs the engine some other way.
-    @FunctionalInterface
-    public interface Launcher {
-        Process launch(List<String> arguments, Map<String, String> environment) throws IOException;
-    }
-
     /// Everything an engine said, and how it ended.
     record Ran(LampExitStatus status, List<LampEvent> events) {
 
@@ -145,7 +135,7 @@ public final class Lamp implements AutoCloseable {
     /// Runs the engine for one command that ends by itself, passes each event to the listeners,
     /// and waits for it to exit.
     static Ran runToEnd(
-        final Launcher launcher,
+        final LampLauncher launcher,
         final List<Consumer<LampEvent>> listeners,
         final String... command
     ) throws IOException, InterruptedException {
@@ -153,7 +143,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     static Optional<LampSave> save(
-        final Launcher launcher,
+        final LampLauncher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
         final String message
@@ -192,7 +182,7 @@ public final class Lamp implements AutoCloseable {
     static String onOff(boolean on) { return on ? "on" : "off"; }
 
     static LampEvent.Schedule schedule(
-        final Launcher launcher,
+        final LampLauncher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory
     ) throws IOException, InterruptedException, LampFailedException {
@@ -204,7 +194,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     static LampJob addJob(
-        final Launcher launcher,
+        final LampLauncher launcher,
         final List<Consumer<LampEvent>> listeners,
         final Path directory,
         final String option,
@@ -659,7 +649,7 @@ public final class Lamp implements AutoCloseable {
     }
 
     static LampEvent.RunFinished ask(
-            final Launcher launcher,
+            final LampLauncher launcher,
             final List<Consumer<LampEvent>> listeners,
             final Path directory,
             final LampPrompt question

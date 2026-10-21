@@ -14,7 +14,7 @@ public final class LampStartupConf {
 
     private final Path directory;
     private final List<Consumer<LampEvent>> listeners;
-    private final Lamp.Launcher launcher;
+    private final LampLauncher launcher;
     private final Optional<URI> modelService;
     private final Optional<String> modelKey;
     private final Optional<String> model;
@@ -39,7 +39,7 @@ public final class LampStartupConf {
     LampStartupConf(
             final Path directory,
             final List<Consumer<LampEvent>> listeners,
-            final Lamp.Launcher launcher,
+            final LampLauncher launcher,
             final Optional<URI> modelService,
             final Optional<String> modelKey,
             final Optional<String> model,
@@ -72,7 +72,7 @@ public final class LampStartupConf {
         return new LampStartupConf(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
 
-    public LampStartupConf launchedBy(Lamp.Launcher launcher) {
+    public LampStartupConf launchedBy(LampLauncher launcher) {
         return new LampStartupConf(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
     }
 
@@ -245,7 +245,7 @@ public final class LampStartupConf {
 
     /// Takes a snapshot of this lamp: the agent's home and its `oillamp.toml`, as they are
     /// now. [#restore] brings the lamp back to it later. Works whether or not the lamp's
-    /// sandbox is running; see [Lamp#save(Lamp.Launcher, List, Path, String)] for one this application holds.
+    /// sandbox is running; see [Lamp#save(LampLauncher, List, Path, String)] for one this application holds.
     ///
     /// Blocks until the engine is done. What it reports goes to the listeners.
     ///

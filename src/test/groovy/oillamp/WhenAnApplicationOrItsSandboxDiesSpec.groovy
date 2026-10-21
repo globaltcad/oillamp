@@ -3,6 +3,7 @@ package oillamp
 import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
+import dev.lamp.LampLauncher
 import spock.lang.Requires
 import spock.lang.Specification
 import spock.lang.Tag
@@ -117,7 +118,7 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
      * the pipe's writing end. The stand-in writes its own process id, then becomes {@code sleep}
      * (same process), which holds the pipe open and writes nothing, as a live application does.
      */
-    private static Lamp.Launcher engineWithInputHeldBy(Path pidFile) {
+    private static LampLauncher engineWithInputHeldBy(Path pidFile) {
         return { List<String> arguments, Map<String, String> environment ->
             var java = Path.of(System.getProperty('java.home'), 'bin', 'java').toString()
             var command = ['bash', '-c', '{ echo $BASHPID > "$0"; exec sleep infinity; } | exec "$@"',
@@ -127,6 +128,6 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
             var engine = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT).start()
             assert eventually(Duration.ofSeconds(10)) { Files.exists(pidFile) && Files.size(pidFile) > 0 }
             engine
-        } as Lamp.Launcher
+        } as LampLauncher
     }
 }
