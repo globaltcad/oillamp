@@ -294,11 +294,11 @@ try (Lamp lamp = Lamp.at(dir)
         .start()) { … }
 ```
 
-- `Starting.security(String requirements)`. A blank text, or one longer than 64 KiB, is refused
+- `LampStartupConf.security(String requirements)`. A blank text, or one longer than 64 KiB, is refused
   in the constructor, like `instructions`.
 - The engine receives the text in its environment (`OILLAMP_SECURITY_REQUIREMENTS`, named by
   `--security-requirements-env`), exactly like the instructions.
-- The model that judges is the one the application gives the agent, with `Starting.model` and
+- The model that judges is the one the application gives the agent, with `LampStartupConf.model` and
   later `Lamp.useModel`, unless the lamp's file names a `checker_model`. An application that turns
   the feature on in its own settings screen therefore needs no second model setting.
 - **The file still decides whether the door exists.** `security(...)` replaces the rules of a lamp
@@ -317,7 +317,7 @@ An application with a settings page of its own, such as Genies, writes the user'
 lamp's file instead, so the file stays what decides:
 
 ```java
-Lamp.Starting lamp = Lamp.at(dir);
+LampStartupConf lamp = Lamp.at(dir);
 Lamp.HostAccess now = lamp.hostAccess();   // enabled, requirements
 lamp.hostAccess(true, requirementsText);                // only while the lamp sleeps
 ```
@@ -431,7 +431,7 @@ That is deliberate: a feature that grants the host should not be one shell-histo
 ### The checker uses the agent's model
 
 A request is judged by the model the agent answers with: the one the session was started with
-(`--model`, `Starting.model`), and the new one once `oillamp model` or `Lamp.useModel` changes it,
+(`--model`, `LampStartupConf.model`), and the new one once `oillamp model` or `Lamp.useModel` changes it,
 from the next request on. The user chose one model for the lamp; that is the one they trust, and
 an application's settings screen should not need a second, separate choice for the guard. A lamp
 that names `checker_model` keeps that model whatever the agent answers with. A lamp with host

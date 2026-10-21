@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 
 @Narrative('''
 Choosing the model the agent answers with: `oillamp at --model` and `oillamp model` by hand, and
-`Lamp.Starting.model` and `Lamp.useModel` in an application such as Genies.
+`LampStartupConf.model` and `Lamp.useModel` in an application such as Genies.
 
 ## How a model gets from the application to an answer
 
@@ -318,7 +318,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
             answeredBy(finished.conversation().orElseThrow()) == [GPT]
     }
 
-    def 'An application gives the model with Lamp.Starting.model, and its questions are answered by it'() {
+    def 'An application gives the model with LampStartupConf.model, and its questions are answered by it'() {
         reportInfo """
             Genies has one model setting for all its genies, and starts a genie's lamp each time
             the genie is woken. It hands the model to the lamp the way it hands over the model

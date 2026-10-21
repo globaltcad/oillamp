@@ -18,7 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 @Narrative('''
-Giving the agent instructions for a whole session: `Lamp.Starting.instructions` in an
+Giving the agent instructions for a whole session: `LampStartupConf.instructions` in an
 application, and `oillamp at --instructions-env` by hand. They tell the agent about the world
 around its sandbox, such as how the user talks to it; the sandbox itself is explained to it by
 `~/AGENTS.md`, which every session writes.

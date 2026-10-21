@@ -36,11 +36,11 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp at <dir> --no-install` | Works. Reports missing packages instead of installing them. |
 | `oillamp at <dir> --no-viewer` | Works. |
 | `oillamp at <dir> --no-windows` | Works in the simulated scenarios. No window opens and no display is needed; the session ends as usual. Not yet tried under a real tmux. |
-| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does, and the harness's commands were checked against real pi 1.3.0 with a stand-in model service (see "Runs and the schedule"). Not yet tried in a real session. Also `Lamp.Starting.model`. |
+| `oillamp at <dir> --model <id>` | Works in the scenarios, against a stand-in pi that keeps track of its model as pi does, and the harness's commands were checked against real pi 1.3.0 with a stand-in model service (see "Runs and the schedule"). Not yet tried in a real session. Also `LampStartupConf.model`. |
 | `oillamp at <dir> --embedded` | Works in the simulated scenarios, also driven through `dev.lamp.Lamp`. No window opens; the session ends when standard input closes, unless the application wrote `leave-running` first. Not yet tried with a real application. |
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
-| `oillamp at <dir> --instructions-env <name>` | Works in the scenarios, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `Lamp.Starting.instructions`. |
+| `oillamp at <dir> --instructions-env <name>` | Works in the scenarios, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `LampStartupConf.instructions`. |
 | `oillamp shell <dir>` | Works. An extra shell in the current terminal. |
 | `oillamp stop <dir>` | Works. Also cleans up after a supervisor that was killed. |
 | `oillamp status <dir>` | Works. |
@@ -57,8 +57,8 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
-| `oillamp host-access <dir> [on\|off] [--requirements-env <name>]` | Works in the scenarios: writes `enabled` and `requirements` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `Lamp.Starting.hostAccess`. |
-| `oillamp autosave <dir> [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `Lamp.Starting.autosave`. |
+| `oillamp host-access <dir> [on\|off] [--requirements-env <name>]` | Works in the scenarios: writes `enabled` and `requirements` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `LampStartupConf.hostAccess`. |
+| `oillamp autosave <dir> [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `LampStartupConf.autosave`. |
 | `oillamp answer <dir> yes\|no "<question>"` | Works in the scenarios: answers a host-access question of a running session. Also `Lamp.decidePermission`. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |

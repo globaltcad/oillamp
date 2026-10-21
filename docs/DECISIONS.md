@@ -245,7 +245,7 @@ mistake, so oillamp can save by itself. *(added on 2026-09-29)*
 
 Four switches under `[autosave]` say whether oillamp saves as a session starts, as it ends, just
 before a run and as a run ends. The first two are off and the last two on unless the lamp says
-otherwise. `oillamp autosave` and `Lamp.Starting.autosave` read and write them, and nothing else in
+otherwise. `oillamp autosave` and `LampStartupConf.autosave` read and write them, and nothing else in
 the file, only while the lamp sleeps. `oillamp save` and the save before a restore happen whatever
 they say.
 
@@ -324,7 +324,7 @@ the user changed and what each run changed are separate snapshots, and any run c
 ### A session's model applies to every run, old conversations too, and pi is told only when it differs
 
 A session can be given a model, as the service names it: `oillamp at --model <id>`, or
-`Lamp.Starting.model(id)`. Every run of the session is then answered by that model, whether it
+`LampStartupConf.model(id)`. Every run of the session is then answered by that model, whether it
 starts a conversation or continues one. Two things see to that. The session writes the model as
 pi's default (`defaultProvider` `edenai` and `defaultModel` in pi's `settings.json`), once the
 sandbox is up and before pi starts, so that a new conversation starts on it by itself; see "The
@@ -389,8 +389,8 @@ the sandbox gets the session's model only as its default. *(added on 2026-10-18;
 What pi needs from a session goes into pi's own files in the agent's home, and the engine writes
 them, never an application: the session's model as pi's default in `~/.pi/agent/settings.json`,
 keeping every other key, and the session's instructions in `~/.pi/agent/APPEND_SYSTEM.md`, which
-pi adds to its system prompt. An application gives both to the lamp, with `Lamp.Starting.model`
-and `Lamp.Starting.instructions` (by hand: `--model` and `--instructions-env`), and `Lamp.useModel`
+pi adds to its system prompt. An application gives both to the lamp, with `LampStartupConf.model`
+and `LampStartupConf.instructions` (by hand: `--model` and `--instructions-env`), and `Lamp.useModel`
 later. `Harness` writes the files once the sandbox is up, before the first run starts pi, and
 again for the default whenever the model changes; `PiSetupUtil` decides what goes in them.
 
@@ -406,7 +406,7 @@ now goes for oillamp's pi extensions in `~/.pi/agent/extensions`, which followed
 Settings that are not a JSON object are left alone, with a warning (`OIL-LAMP-013`).
 
 The instructions reach the engine in its environment, in a variable the command line names:
-`Lamp.Starting.instructions` puts them in `OILLAMP_INSTRUCTIONS` and passes
+`LampStartupConf.instructions` puts them in `OILLAMP_INSTRUCTIONS` and passes
 `--instructions-env OILLAMP_INSTRUCTIONS`. `at` reads the variable before anything else and
 refuses one that is not set, empty or longer than 64 KiB.
 

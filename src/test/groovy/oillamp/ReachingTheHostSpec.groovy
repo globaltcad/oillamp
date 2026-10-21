@@ -72,7 +72,7 @@ the engine knows, not something the request says, so the checker always reads th
 the run the agent is really in.
 
 The feature is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`. An
-application may give its own requirements with `Lamp.Starting.security`, but only for a lamp
+application may give its own requirements with `LampStartupConf.security`, but only for a lamp
 whose file already turned it on.
 
 ## How the scenarios see it
