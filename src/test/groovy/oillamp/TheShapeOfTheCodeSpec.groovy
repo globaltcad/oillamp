@@ -83,6 +83,43 @@ class TheShapeOfTheCodeSpec extends Specification {
             exposed.sort() == EMBEDDING_API.sort()
     }
 
+    def 'A type in dev.lamp says by its name whether it is public: Lamp... if it is, Internal... if not'() {
+        reportInfo """
+            A program that uses oillamp imports from `dev.lamp` next to its own types and those
+            of other libraries. A prefix on every public type makes it obvious there which ones
+            are oillamp's: `LampRun` and `LampProblem` cannot be confused with a `Run` or
+            `Problem` of the program's own, and an IDE lists the whole API together when you
+            type `Lamp`.
+
+            The types that are not public get the prefix `Internal`, so that the name alone says
+            whether a type is a promise to those programs or free to change. A type called
+            `InternalSomething` that becomes public, or a `LampSomething` that is not, is a
+            mistake in one direction or the other, and this scenario says which.
+
+            Nested types are judged by the type they are nested in: `LampConversation.Entry` is
+            named through `LampConversation`. The engine, `dev.oillamp`, is not held to this; its
+            types are all internal, apart from the two the first scenario names.
+        """
+        given: 'every top-level type in dev.lamp'
+            var types = code.findAll { it.packageName == 'dev.lamp' }
+                            .findAll { it.enclosingClass.empty && !it.simpleName.contains('\$') }
+                            .findAll { it.simpleName != 'package-info' }
+
+        when: 'we compare each one\'s name with whether it is public'
+            var misnamed = types.findResults { type ->
+                boolean exposed = type.modifiers.contains(JavaModifier.PUBLIC)
+                if (exposed && !type.simpleName.startsWith('Lamp'))
+                    return "${type.simpleName} is public, so its name must start with 'Lamp'"
+                if (!exposed && !type.simpleName.startsWith('Internal'))
+                    return "${type.simpleName} is not public, so its name must start with 'Internal'"
+                return null
+            }
+
+        then: 'every name says which it is'
+            types.size() > 0
+            misnamed.isEmpty()
+    }
+
     def 'The embedding package does not depend on the engine'() {
         reportInfo """
             The engine runs in a process of its own, and an application talks to it. If
