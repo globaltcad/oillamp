@@ -1,6 +1,6 @@
 package gui
 
-import dev.gui.GeniesBackend
+import dev.gui.Main
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighter
 import dev.gui.genie.Lighter
@@ -569,9 +569,9 @@ class KeepingAGenieAliveSpec extends Specification {
             all. The question names the genies, and says what keeping them running means.
         """
         expect:
-            GeniesBackend.awakeQuestion(['Jafar']) == 'Jafar is awake. Put it to sleep, or keep it running in the background?\n' +
+            Main.awakeQuestion(['Jafar']) == 'Jafar is awake. Put it to sleep, or keep it running in the background?\n' +
                     'Kept running, it finishes what it is doing and keeps to its schedule, and Genies finds it again when it opens.'
-            GeniesBackend.awakeQuestion(['Jafar', 'Iago', 'Abu']).startsWith('Jafar, Iago and Abu are awake. Put them to sleep')
+            Main.awakeQuestion(['Jafar', 'Iago', 'Abu']).startsWith('Jafar, Iago and Abu are awake. Put them to sleep')
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────

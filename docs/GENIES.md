@@ -17,7 +17,7 @@ oillamp genies
 ```
 
 It runs as a program of its own, on oillamp's Java runtime and classpath, and the terminal waits
-until its window is closed. The engine names Genies' entry point, `dev.gui.GeniesBackend`, and never
+until its window is closed. The engine names Genies' entry point, `dev.gui.Main`, and never
 imports it. From the source, `./gradlew genies` opens it too.
 
 The settings offer two ways to a model. The simple way, shown first, is Ollama on this computer,
@@ -608,7 +608,7 @@ painted without smoothing, which does nothing for squares on whole pixels but sl
 | `dev.gui.desktop` | `RfbConnection`, `X11KeysymUtil`, `Desktop` (its socket and its own size) | `RfbConnection` only |
 | `dev.gui.genie` | `GenieRunner` (one genie's life), `LampLighter` (lamps through `dev.lamp`), `GenieFileTransferUtil` (files), `LampApiConversionUtil` (Lamp events and conversations as `PiEvent` values and tree rows), `GenieInstructionsUtil` (what a genie is told about living in Genies), `ScheduleKeeper` (the schedule, through the lamp), `HistoryKeeper` (the history, read and saved to through the lamp), `OllamaKeeper` (Ollama found, installed, started, and a model readied), `Shelf` (what is kept on disk) | yes |
 | `dev.gui.view` | `GeniesView` (the window, bound to `Var<GeniesState>` through lenses), `SchedulePage`, `HistoryPage`, `SettingsPage`, `DesktopScreen`, the look | Swing only |
-| `dev.gui` | `GeniesBackend`: the entry point, and the `Genies` the window calls | ties it together |
+| `dev.gui` | `Main` (the entry point, which gives the app its window), `Genies` (the app, as the window calls it) and `GeniesBackend` (which it is) | ties it together |
 
 The window never changes a genie by itself. It changes `GeniesState` through lenses (a draft, the
 settings, the selected genie), and asks `Genies` for everything that starts, stops or moves

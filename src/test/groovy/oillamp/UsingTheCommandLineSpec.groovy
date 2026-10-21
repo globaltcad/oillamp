@@ -671,7 +671,7 @@ class UsingTheCommandLineSpec extends Specification {
             problem.code().value() == 'OIL-GENIES-001'
             var tried = (problem.evidence().first() as LampProblem.Evidence.Command).argv()
             tried.toList() == [Path.of(System.getProperty('java.home'), 'bin', 'java').toString(),
-                               '-cp', System.getProperty('java.class.path'), 'dev.gui.GeniesBackend']
+                               '-cp', System.getProperty('java.class.path'), 'dev.gui.Main']
     }
 
     def 'Oillamp says why there is no `image` command when someone asks for one'() {
