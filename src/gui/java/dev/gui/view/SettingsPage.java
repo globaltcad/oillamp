@@ -139,7 +139,7 @@ final class SettingsPage {
     private static final double WORDS_BESIDE_TAKE = 1.2;
     private static final double CARD_BESIDE_AT = 9.8;
 
-    static UIForAnySwing<?, ?> of(Var<GeniesState> state, Actions actions, Val<Boolean> visible) {
+    static UIForAnySwing<?, ?> of(Var<GeniesState> state, Genies app, Val<Boolean> visible) {
         Var<Settings> settings = state.zoomTo(GeniesState::settings, GeniesState::withSettings);
         // Lenses all the way down: settings → Eden AI → its key, and so on. Each field
         // edits one value of the one GeniesState, and nothing else.
@@ -268,7 +268,7 @@ final class SettingsPage {
                             .add(button(ollama.viewAsString(OllamaSetup::todo)).group(Skin.FLAME_BUTTON)
                                  .isVisibleIf(state.viewAs(Boolean.class, it -> !it.ollama().step().isBusy() && it.ollama().step() != OllamaSetup.Step.LOOKING
                                                                              && !it.ollama().inUse(it.settings()) && !it.ollama().wanted().isBlank()))
-                                 .onClick(it -> actions.setUpOllama()))
+                                 .onClick(it -> app.setUpOllama()))
                             .add("growx, wmin 0", label(ollama.viewAsString(it -> "✓  Your genies use " + it.wanted().strip() + "."))
                                  .group(Skin.FINE).isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working)))
                             .add("growx, wmin 0",
@@ -276,7 +276,7 @@ final class SettingsPage {
                                 .add("growx, wmin 60, h 6!", progress(ollama.viewAs(Double.class, OllamaSetup::progress)))
                                 .add(button("Stop").group(Skin.QUIET_BUTTON)
                                      .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
-                                     .onClick(it -> actions.stopSettingUp())))
+                                     .onClick(it -> app.stopSettingUp())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
                                  SUBTEXT, ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
@@ -351,7 +351,7 @@ final class SettingsPage {
                                 .add("growx, wmin 0", comboBox(model, offered).isEditableIf(true))
                                 .add(button("Look up").group(Skin.QUIET_BUTTON)
                                      .withTooltip("Ask the service which models it offers")
-                                     .onClick(it -> actions.lookUpModels())))
+                                     .onClick(it -> app.lookUpModels())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(lookUpNote, Palette.SUBTEXT,
                                  lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())))))
 
@@ -361,11 +361,11 @@ final class SettingsPage {
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")
                         .add(button("Done").group(Skin.FLAME_BUTTON).isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
-                             .onClick(it -> actions.settingsDone()))
+                             .onClick(it -> app.settingsDone()))
                         .add(button("+  Your first genie").group(Skin.FLAME_BUTTON)
                              .withTooltip("A genie, with a sandboxed desktop of its own, that wakes at once")
                              .isVisibleIf(state.viewAs(Boolean.class, it -> !it.hasGenies() && it.settingsProblem().isEmpty() && !it.ollama().step().isBusy()))
-                             .onClick(it -> actions.newGenie())))));
+                             .onClick(it -> app.newGenie())))));
     }
 
     /// The welcome, above the settings while there are no genies: its picture, and its words. In
