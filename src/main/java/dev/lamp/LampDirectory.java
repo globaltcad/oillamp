@@ -95,8 +95,8 @@ public final class LampDirectory {
     }
 
     /// Starts the engine with `launcher` instead of the default, which runs `java` from this
-    /// JVM with this application's classpath. For tests, or for an application that runs the
-    /// engine some other way.
+    /// JVM with this application's classpath, and runs [Lamp#exec]'s commands with it. For
+    /// tests, or for an application that runs the engine some other way.
     public LampDirectory launchedBy(LampLauncher launcher) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security);
     }

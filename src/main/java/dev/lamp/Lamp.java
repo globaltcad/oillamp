@@ -506,7 +506,7 @@ public final class Lamp implements AutoCloseable {
     /// @throws IllegalStateException when the session is not running
     /// @throws IOException           when ssh could not be started at all
     public Process exec(String... command) throws IOException {
-        return new ProcessBuilder(commandLine(command)).start();
+        return launcher.exec(commandLine(command));
     }
 
     /// The command line [#exec] runs: the engine's ssh command, followed by `command`, each

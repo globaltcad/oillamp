@@ -207,7 +207,8 @@ class TheShapeOfTheCodeSpec extends Specification {
                            'Harness', 'AgentRunner',
                            // An application's handle on a lamp: starts the engine's process
                            // and reads its output. It decides nothing about the sandbox.
-                           // LampLauncher is how it starts that process, and can be replaced.
+                           // LampLauncher is how it starts that process, and the commands
+                           // it runs in the sandbox, and can be replaced.
                            'Lamp', 'LampLauncher',
                            // Supervised host access. It binds the socket the sandbox asks on and
                            // touches the host once a request is allowed, as Control and Egress
