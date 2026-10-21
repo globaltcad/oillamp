@@ -18,7 +18,7 @@ import dev.lamp.LampDirectory;
 ///
 /// [LampLighterImpl] does this with oillamp's [dev.lamp.Lamp].
 @FunctionalInterface
-public interface Lighter {
+public interface LampLighter {
 
     /// Starts the lamp in `directory` and returns once its sandbox runs.
     ///
@@ -78,8 +78,8 @@ public interface Lighter {
         @Override void close();
 
         /// Lets the sandbox run on after the app has closed, until the genie is put to sleep.
-        /// [Lighter#join] finds it again. A lamp that cannot be left running is put out instead,
-        /// so no sandbox is left running by mistake.
+        /// [LampLighter#join] finds it again. A lamp that cannot be left running is put out
+        /// instead, so no sandbox is left running by mistake.
         default void leaveRunning() { close(); }
     }
 }
