@@ -56,13 +56,14 @@ class KeepingAGeniesHistorySpec extends Specification {
         runner?.sleepAndWait(30)
     }
 
-    def 'Waking and answering are moments of the history, and a save by hand adds one'() {
+    def 'Answering a question is a moment of the history, and a save by hand adds one'() {
         reportInfo """
             The history page lists the moments oillamp saved the genie's home at, newest first,
-            in words: it woke, it answered a question (titled by the conversation, with what it
-            said last). oillamp saves only what changed, so going to sleep straight after an
-            answer adds no moment. The user can save by hand too, awake or asleep, with a few
-            words to remember the moment by; the new moment is picked, so it stands out. When
+            in words: it went to work on a question, it answered it (titled by the conversation,
+            with what it said last). Unless the lamp says otherwise, oillamp does not save as the
+            genie wakes or sleeps, only around its answers. The user can save by hand too, awake
+            or asleep, with a few words to remember the moment by; the new moment is picked, so
+            it stands out. When
             nothing changed since the newest moment, oillamp saves nothing, and the page says so
             rather than leaving the user to wonder. The chat says what came of a save too, since
             the user can save from there, through the genie's menu.
@@ -78,11 +79,9 @@ class KeepingAGeniesHistorySpec extends Specification {
         when:
             runner.history().read()
 
-        then: 'the moments are there, newest first; going to sleep changed nothing, so it made none'
+        then: 'the moments are there, newest first: before the answer and the answer, and none for waking or sleeping'
             waitUntil { genie.history().read() }
-            var kinds = genie.history().moments()*.kind()
-            kinds.first() == History.Kind.RAN
-            kinds.last() == History.Kind.WOKE
+            genie.history().moments()*.kind() == [History.Kind.RAN, History.Kind.BEFORE_RUN]
 
         and: 'the answer is titled by its conversation, with what the genie said'
             var answered = genie.history().moments().first()
