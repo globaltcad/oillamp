@@ -2,7 +2,7 @@ package gui
 
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
-import dev.gui.genie.Lighter
+import dev.gui.genie.LampLighter
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.JobDraft
@@ -254,12 +254,12 @@ class KeepingAGeniesScheduleSpec extends Specification {
     }
 
     /** oillamp's engine in this JVM, through the Lamp API; files move in the genie's home here. */
-    private Lighter lighter() {
+    private LampLighter lighter() {
         var real = new LampLighterImpl(sandbox.launcher)
-        return new Lighter() {
-            Lighter.Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
+        return new LampLighter() {
+            LampLighter.Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events) {
                 var lit = real.light(directory, name, settings, key, progress, events)
-                new Lighter.Lit() {
+                new LampLighter.Lit() {
                     Process exec(String... command) {
                         var home = Lamp.agentHome(lamp).orElseThrow()
                         var builder = new ProcessBuilder(command as List<String>)
