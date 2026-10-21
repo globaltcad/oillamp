@@ -8,9 +8,9 @@ import spock.lang.Shared
 import spock.lang.Specification
 
 /**
- *  Two structural promises that are easy to break by accident and expensive to notice late.
- *  They are checked here rather than left to review, because both are about what is *absent*,
- *  and absences are exactly what review misses.
+ *  Promises about the structure of the code that are easy to break by accident and expensive to
+ *  notice late. They are checked here rather than left to review: most are about what is
+ *  *absent*, and absences are exactly what review misses.
  */
 class TheShapeOfTheCodeSpec extends Specification {
 
