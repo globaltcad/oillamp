@@ -33,7 +33,7 @@ import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Settings;
-import dev.gui.view.Actions;
+import dev.gui.view.Genies;
 import dev.gui.view.GeniesView;
 import dev.lamp.LampExitStatus;
 import dev.lamp.Lamp;
@@ -56,9 +56,9 @@ import swingtree.dialogs.ConfirmAnswer;
 /// would use it: this package imports `dev.lamp` and never `dev.oillamp`.
 ///
 /// This class holds the app together. The window ([GeniesView]) draws one [GeniesState] and
-/// asks for everything else through [Actions]; each genie's [GenieRunner] reports what happens
+/// asks for everything else through [Genies]; each genie's [GenieRunner] reports what happens
 /// as changes to its genie, which are applied here, on Swing's event thread, one at a time.
-public final class Genies implements Actions {
+public final class GeniesBackend implements Genies {
 
     /// How long closing or deleting waits for a genie's lamp to go out or be let go.
     private static final long SECONDS_TO_LET_GO_OF_A_LAMP = 180;
@@ -95,7 +95,7 @@ public final class Genies implements Actions {
     /// same reason: the host access is read from its lamp when it comes on show.
     private final Val<UUID> hostAccessShown;
 
-    Genies(Var<GeniesState> state, Shelf shelf, Lighter lighter, OllamaKeeper ollama) {
+    GeniesBackend(Var<GeniesState> state, Shelf shelf, Lighter lighter, OllamaKeeper ollama) {
         this.state = state;
         this.shelf = shelf;
         this.lighter = lighter;
@@ -157,7 +157,7 @@ public final class Genies implements Actions {
         Settings settings = shelf.hasSettings() ? shelf.settings()
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
-        Genies app = new Genies(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
+        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
                                 shelf, new LampLighter(), ollama);
         JFrame frame = new JFrame("Genies");
         new JGlassPane(frame.getRootPane());

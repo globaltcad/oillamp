@@ -50,7 +50,7 @@ import static swingtree.UI.*;
 ///
 /// Everything shown is a function of one [GeniesState], reached through lenses. Typing, picking
 /// and toggling change that state directly; anything that starts, stops or moves something goes
-/// through [Actions]. The view keeps no state of its own, except the connection of the
+/// through [Genies]. The view keeps no state of its own, except the connection of the
 /// [DesktopScreen].
 public final class GeniesView extends JPanel {
 
@@ -59,7 +59,7 @@ public final class GeniesView extends JPanel {
     private static final int WAVE_LENGTH = 120;
 
     private final Var<GeniesState> state;
-    private final Actions actions;
+    private final Genies app;
     private final Look look = new Look();
     private final DesktopScreen desktop = new DesktopScreen();
 
@@ -92,9 +92,9 @@ public final class GeniesView extends JPanel {
     /// Set once the conversation's scroll pane exists.
     private Optional<FollowTheEnd> follow = Optional.empty();
 
-    public GeniesView(Var<GeniesState> state, Actions actions) {
+    public GeniesView(Var<GeniesState> state, Genies app) {
         this.state = state;
-        this.actions = actions;
+        this.app = app;
         genie        = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         draft        = genie.zoomTo(Genie::draft, Genie::withDraft);
         name         = genie.zoomTo(Genie::name, Genie::withName);
@@ -116,7 +116,7 @@ public final class GeniesView extends JPanel {
         watched      = genie.viewAs(UUID.class, it -> it.phase().isAwake() && it.desktopShown() ? it.id() : GeniesState.NONE);
         Viewable.cast(watched).onChange(From.ALL, it -> {
             UUID id = it.currentValue().orElse(GeniesState.NONE);
-            desktop.show(id.equals(GeniesState.NONE) ? Optional.empty() : actions.desktopOf(id));
+            desktop.show(id.equals(GeniesState.NONE) ? Optional.empty() : app.desktopOf(id));
         });
         zoom = state.zoomTo(GeniesState::zoom, GeniesState::withZoom);
         Viewable.cast(zoom).onChange(From.ALL, it -> desktop.zoom(it.currentValue().orElse(DesktopZoom.FIXED).scale()));
@@ -127,9 +127,9 @@ public final class GeniesView extends JPanel {
         });
         rows = new ChatRows(look, genie, this::saveHandout, pulse, this::askInstead,
                            phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY), this::showLeaf);
-        schedulePage = new SchedulePage(state, actions, look);
-        historyPage = new HistoryPage(state, actions, look);
-        hostAccessPage = new HostAccessPage(state, actions);
+        schedulePage = new SchedulePage(state, app, look);
+        historyPage = new HistoryPage(state, app, look);
+        hostAccessPage = new HostAccessPage(state, app);
 
         UI.use(look, () ->
             of(this).group(Skin.FRAME)
@@ -235,7 +235,7 @@ public final class GeniesView extends JPanel {
                 button(narrow.viewAsString(it -> it ? "New" : "New genie")).group(Skin.FLAME_BUTTON).withIconTextGap(6)
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, ON_FLAME)))
                 .withTooltip("A new genie, with a sandboxed desktop of its own")
-                .onClick(it -> actions.newGenie()))
+                .onClick(it -> app.newGenie()))
             .add(
                 toggleButton(narrow.viewAsString(it -> it ? "" : "Settings"), settingsShown).group(Skin.QUIET_BUTTON).withIconTextGap(6)
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SETTINGS, TEXT)))
@@ -460,7 +460,7 @@ public final class GeniesView extends JPanel {
                             .padding(1, 6, 1, 6)
                         )
                         .withTooltip("Start a new conversation with this genie; the others are kept")
-                        .onClick(_ -> actions.startAfresh(id))
+                        .onClick(_ -> app.startAfresh(id))
                     )
                 )
             )
@@ -662,7 +662,7 @@ public final class GeniesView extends JPanel {
             if (path.isEmpty() || row.isEmpty() || path.equals(genie.conversations().herePath())) return;
             genie.conversations().fileOf(path.first()).ifPresent(file -> {
                 follow.ifPresent(FollowTheEnd::toEnd);
-                actions.goTo(id, file, row.get().leaf());
+                app.goTo(id, file, row.get().leaf());
             });
         });
     }
@@ -672,7 +672,7 @@ public final class GeniesView extends JPanel {
             ConfirmAnswer answer = UI.confirmation("Delete the conversation \"" + doomed.title()
                     + "\" for good, with all its branches?").titled("Delete a conversation")
                     .yesOption("Delete").noOption("Keep").cancelOption("").show();
-            if (answer == ConfirmAnswer.YES) actions.forget(id, doomed.file());
+            if (answer == ConfirmAnswer.YES) app.forget(id, doomed.file());
         });
     }
 
@@ -693,7 +693,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0", schedulePage.view(Viewable.of(Boolean.class, onSchedule, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", historyPage.view(Viewable.of(Boolean.class, onHistory, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", hostAccessPage.view(Viewable.of(Boolean.class, onHostAccess, hasGenies, (a, b) -> a && b)))
-            .add("grow, push, wmin 0", SettingsPage.of(state, actions, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
+            .add("grow, push, wmin 0", SettingsPage.of(state, app, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
     }
 
     private UIForAnySwing<?, ?> header(Val<Boolean> visible) {
@@ -739,11 +739,11 @@ public final class GeniesView extends JPanel {
             .add(button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
                  .withTooltip("Stop what the genie is doing")
-                 .onClick(it -> actions.stop(genie.get().id())))
+                 .onClick(it -> app.stop(genie.get().id())))
             .add(button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(phase.viewAs(Boolean.class, Genie.Phase::isAwake))
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
                  .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
-                 .onClick(it -> actions.sleep(genie.get().id())))
+                 .onClick(it -> app.sleep(genie.get().id())))
             .add(button("").group(Skin.ICON_BUTTON)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, SUBTEXT)))
                  .withTooltip(roomForPages.viewAsString(it -> (it ? "" : "Chat, schedule, history or host access; ")
@@ -771,9 +771,9 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0", ViewPartsUtil.note("A model allowed it already; this one needs you too. "
                         + "Nothing happens until you decide, and after a minute it is refused.", Val.of(true))))
             .add(button("Refuse").group(Skin.QUIET_BUTTON)
-                 .onClick(it -> actions.decidePermission(genie.get().id(), request.get(), false)))
+                 .onClick(it -> app.decidePermission(genie.get().id(), request.get(), false)))
             .add(button("Allow").group(Skin.FLAME_BUTTON)
-                 .onClick(it -> actions.decidePermission(genie.get().id(), request.get(), true)));
+                 .onClick(it -> app.decidePermission(genie.get().id(), request.get(), true)));
     }
 
     /// The pages of a genie, its chat, its schedule, its history and its host access, as one
@@ -1130,7 +1130,7 @@ public final class GeniesView extends JPanel {
                      TROUBLE, phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)))
                 .add(button(genie.viewAsString(it -> it.phase() == Genie.Phase.BROKEN ? "Try again" : "✦  Wake"))
                      .group(Skin.FLAME_BUTTON).isVisibleIf(canWake)
-                     .onClick(it -> actions.wake(genie.get().id()))));
+                     .onClick(it -> app.wake(genie.get().id()))));
     }
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────
@@ -1230,14 +1230,14 @@ public final class GeniesView extends JPanel {
                 .add(ViewPartsUtil.choice("Host access", SignSvgUtil.sign(SignSvgUtil.HOST_ACCESS, on == GeniesState.Page.HOST_ACCESS ? TEXT : SUBTEXT), on == GeniesState.Page.HOST_ACCESS, () -> page.set(From.VIEW, GeniesState.Page.HOST_ACCESS)))
                 .peek(JPopupMenu::addSeparator))
                 .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
-                .add(ViewPartsUtil.item("New conversation", idle, () -> actions.startAfresh(id)))
+                .add(ViewPartsUtil.item("New conversation", idle, () -> app.startAfresh(id)))
                 .add(ViewPartsUtil.item("Save now…", shown.history().busy().isEmpty(), () -> historyPage.save(this)))
                 .peek(JPopupMenu::addSeparator)
                 .applyIf(now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item("Sleep", true, () -> actions.sleep(id)))
+                    .add(ViewPartsUtil.item("Sleep", true, () -> app.sleep(id)))
                 )
                 .applyIf(!now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item(now == Genie.Phase.BROKEN ? "Try waking again" : "Wake", now != Genie.Phase.WAKING, () -> actions.wake(id)))
+                    .add(ViewPartsUtil.item(now == Genie.Phase.BROKEN ? "Try waking again" : "Wake", now != Genie.Phase.WAKING, () -> app.wake(id)))
                 )
                 .peek(JPopupMenu::addSeparator)
                 .add(
@@ -1272,7 +1272,7 @@ public final class GeniesView extends JPanel {
             .add(UI.use(look, () ->
                 panel("fill, wrap 1, ins 16 18 16 18, gap 10", "[grow]", "[][][grow][]").group(Skin.FRAME)
                 .add("growx, wmin 0", label(what).group(Skin.TITLE))
-                .add("growx, wmin 0", label("Genies carried on. All of it is kept in " + actions.errorLog()
+                .add("growx, wmin 0", label("Genies carried on. All of it is kept in " + app.errorLog()
                                             + ", which helps whoever fixes it.").group(Skin.META))
                 .add("grow, push, w 760, h 380",
                     scrollPane().add(textArea(details.toString()).group(Skin.INPUT)
@@ -1289,7 +1289,7 @@ public final class GeniesView extends JPanel {
         state.get().find(id).ifPresent(doomed -> {
             ConfirmAnswer answer = UI.confirmation("Delete " + doomed.name() + " for good? Its home, everything it made "
                     + "and your conversations with it are deleted.").titled("Delete a genie").yesOption("Delete").noOption("Keep").cancelOption("").show();
-            if (answer == ConfirmAnswer.YES) actions.delete(id);
+            if (answer == ConfirmAnswer.YES) app.delete(id);
         });
     }
 
@@ -1304,28 +1304,28 @@ public final class GeniesView extends JPanel {
         String changed = text.getText().strip();
         if (answer == JOptionPane.OK_OPTION && !changed.isEmpty() && !changed.equals(question.text().strip())) {
             follow.ifPresent(FollowTheEnd::toEnd);
-            actions.askInstead(question.ref(), changed);
+            app.askInstead(question.ref(), changed);
         }
     }
 
     /// Sends the draft and scrolls the chat to the bottom, where the sent message appears.
     private void send() {
         follow.ifPresent(FollowTheEnd::toEnd);
-        actions.send();
+        app.send();
     }
 
     /// Shows the current conversation up to the entry `leaf`. The arrows under an edited user
     /// message call this to switch conversation versions.
     private void showLeaf(String leaf) {
         Genie shown = genie.get();
-        shown.conversations().current().ifPresent(it -> actions.goTo(shown.id(), it.file(), leaf));
+        shown.conversations().current().ifPresent(it -> app.goTo(shown.id(), it.file(), leaf));
     }
 
     private void giveFile() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Give " + genie.get().name() + " a file");
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
-            actions.giveFile(genie.get().id(), chooser.getSelectedFile().toPath());
+            app.giveFile(genie.get().id(), chooser.getSelectedFile().toPath());
     }
 
     private void saveHandout(String file) {
@@ -1334,7 +1334,7 @@ public final class GeniesView extends JPanel {
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), file));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             Path target = chooser.getSelectedFile().toPath();
-            actions.saveOutboxFile(genie.get().id(), file, target);
+            app.saveOutboxFile(genie.get().id(), file, target);
         }
     }
 
