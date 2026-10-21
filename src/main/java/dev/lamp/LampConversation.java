@@ -25,6 +25,7 @@ import sprouts.Tuple;
 ///                 beginning of it of at least four characters names it too
 /// @param name     the name it was given, such as `run-12 (job-3)`, or empty
 /// @param file     where pi keeps it, relative to the agent's home
+/// @param started  when pi started it
 /// @param modified when its last entry was written
 /// @param entries  every entry, in the order pi wrote them
 public record LampConversation(
