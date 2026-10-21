@@ -3,7 +3,7 @@ package gui
 import dev.gui.Main
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
-import dev.gui.genie.Lighter
+import dev.gui.genie.LampLighter
 import dev.gui.model.Conversations
 import dev.gui.model.Entry
 import dev.gui.model.Genie
@@ -421,7 +421,7 @@ class KeepingAGenieAliveSpec extends Specification {
             runner = new GenieRunner(lamp, { dir, name, settings, key, progress, events ->
                 progress.accept('checking this computer')
                 throw new IOException('podman is not installed')
-            } as Lighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
+            } as LampLighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
 
         when:
             runner.wake('Jafar', Settings.defaults(), 'sk-key')
@@ -609,7 +609,7 @@ class KeepingAGenieAliveSpec extends Specification {
      *  oillamp's engine in this JVM, through the Lamp API, except that a command run in the
      *  sandbox runs here, in the genie's home: the simulated machine has no sandbox to run it in.
      */
-    private Lighter lighter() {
+    private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
         var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
             here(real.light(directory, name, settings, key, progress, events))
@@ -618,12 +618,12 @@ class KeepingAGenieAliveSpec extends Specification {
             real.join(directory, events).map { here(it) }
         }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
-                unlit: { Path directory -> real.unlit(directory) }] as Lighter
+                unlit: { Path directory -> real.unlit(directory) }] as LampLighter
     }
 
     /** `lit`, except that its commands run here, in the genie's home. */
-    private Lighter.Lit here(Lighter.Lit lit) {
-            new Lighter.Lit() {
+    private LampLighter.Lit here(LampLighter.Lit lit) {
+            new LampLighter.Lit() {
                 Process exec(String... command) {
                     var builder = new ProcessBuilder(command as List<String>)
                     builder.environment().put('HOME', home().toString())

@@ -29,14 +29,14 @@ final class GenieFileTransferUtil {
     static final String READ = "cat -- \"$HOME/outbox/$1\"";
     static final String WRITE = "mkdir -p \"$HOME/inbox\" && cat > \"$HOME/inbox/$1\"";
 
-    static void makeDirectories(Lighter.Lit lamp) throws IOException, InterruptedException {
+    static void makeDirectories(LampLighter.Lit lamp) throws IOException, InterruptedException {
         Process making = lamp.exec("sh", "-c", MAKE_DIRECTORIES);
         making.getOutputStream().close();
         finish(making, "could not make ~/outbox and ~/inbox");
     }
 
     /// What is in the outbox, by name.
-    static Tuple<Handout> list(Lighter.Lit lamp) throws IOException, InterruptedException {
+    static Tuple<Handout> list(LampLighter.Lit lamp) throws IOException, InterruptedException {
         Process listing = lamp.exec("sh", "-c", LIST);
         listing.getOutputStream().close();
         String text = new String(listing.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -63,7 +63,7 @@ final class GenieFileTransferUtil {
 
     /// Copies the outbox file `name` to `target` on the host, which the user chose. The copy
     /// arrives under a temporary name first, so a failed transfer leaves no half file.
-    static void fetch(Lighter.Lit lamp, String name, Path target) throws IOException, InterruptedException {
+    static void fetch(LampLighter.Lit lamp, String name, Path target) throws IOException, InterruptedException {
         if (!isPlainName(name)) throw new IOException("not a file name: " + name);
         Path partial = target.resolveSibling("." + target.getFileName() + ".part");
         Process reading = lamp.exec("sh", "-c", READ, "sh", name);
@@ -80,7 +80,7 @@ final class GenieFileTransferUtil {
     }
 
     /// Puts the host file `source` into the genie's `~/inbox`, under the same name.
-    static void give(Lighter.Lit lamp, Path source) throws IOException, InterruptedException {
+    static void give(LampLighter.Lit lamp, Path source) throws IOException, InterruptedException {
         String name = source.getFileName().toString();
         if (!isPlainName(name)) throw new IOException("not a file name: " + name);
         Process writing = lamp.exec("sh", "-c", WRITE, "sh", name);
