@@ -1,7 +1,7 @@
 package gui
 
 import dev.gui.GeniesBackend
-import dev.gui.genie.LampLighter
+import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.OllamaKeeper
 import dev.gui.genie.Shelf
 import dev.gui.model.Entry
@@ -42,7 +42,7 @@ class UsingGeniesForRealSpec extends Specification {
     @Shared Shelf shelf = new Shelf(shelfDirectory)
     @Shared Var<GeniesState> state = Var.of(GeniesState.of(Tuple.of(Genie), Settings.defaults(),
                                                              Optional.of(KEY ?: 'sk-no-real-key')))
-    @Shared GeniesBackend app = new GeniesBackend(state, shelf, new LampLighter(), new OllamaKeeper(shelf.ollama()))
+    @Shared GeniesBackend app = new GeniesBackend(state, shelf, new LampLighterImpl(), new OllamaKeeper(shelf.ollama()))
     @Shared UUID id
 
     def cleanupSpec() {

@@ -2,7 +2,7 @@ package gui
 
 import dev.gui.Main
 import dev.gui.genie.GenieRunner
-import dev.gui.genie.LampLighter
+import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.Lighter
 import dev.gui.model.Conversations
 import dev.gui.model.Entry
@@ -515,7 +515,7 @@ class KeepingAGenieAliveSpec extends Specification {
             runner.sleepAndWait(30)
 
         then: 'its lamp is out'
-            !new LampLighter(host.launcher).isLit(lamp)
+            !new LampLighterImpl(host.launcher).isLit(lamp)
     }
 
     def 'A genie left running while it answers is found answering, and the answer comes in'() {
@@ -610,7 +610,7 @@ class KeepingAGenieAliveSpec extends Specification {
      *  sandbox runs here, in the genie's home: the simulated machine has no sandbox to run it in.
      */
     private Lighter lighter() {
-        var real = new LampLighter(host.launcher)
+        var real = new LampLighterImpl(host.launcher)
         var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
             here(real.light(directory, name, settings, key, progress, events))
         }
