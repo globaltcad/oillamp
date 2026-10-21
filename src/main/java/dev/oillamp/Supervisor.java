@@ -22,6 +22,7 @@ import dev.lamp.ExitStatus;
 import dev.lamp.LampEvent;
 import dev.lamp.LampSaveKind;
 import dev.lamp.Problem;
+import dev.lamp.LampSessionStatus;
 
 import sprouts.Tuple;
 
@@ -272,7 +273,7 @@ final class Supervisor {
     }
 
     private void announceState() {
-        context.sink().accept(new LampEvent.SessionStateChanged(new LampEvent.SessionStatus(
+        context.sink().accept(new LampEvent.SessionStateChanged(new LampSessionStatus(
                 state.name(), describeState(), uptime(), state.extraShells())));
     }
 

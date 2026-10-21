@@ -48,13 +48,7 @@ public sealed interface LampEvent {
     /// an answer is always shown.
     record Answer(String text)                          implements LampEvent {}
 
-    /// A summary of a session's state, such as "running, up 3 minutes, one extra shell".
-    ///
-    /// This is a description of the supervisor's internal state, not the state itself, so the
-    /// internal states can change without changing this public type.
-    record SessionStatus(String state, String detail, Duration uptime, int extraShells) {}
-
-    record SessionStateChanged(SessionStatus status)    implements LampEvent {}
+    record SessionStateChanged(LampSessionStatus status) implements LampEvent {}
 
     /// The session is running, and this is how to run a command in its sandbox.
     ///

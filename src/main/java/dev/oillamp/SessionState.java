@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Optional;
 
 import dev.lamp.ExitStatus;
-import dev.lamp.LampEvent;
 import dev.lamp.Problem;
 
 import sprouts.Tuple;
@@ -18,7 +17,7 @@ import sprouts.Tuple;
 ///
 /// Only the supervisor's event loop changes the state, and only by replacing it with a new value.
 /// [SessionMachine] decides each change. Users see a description of it as
-/// [LampEvent.SessionStatus].
+/// [LampSessionStatus].
 sealed interface SessionState {
 
     /// The container has been asked to start; nothing is known about it yet.

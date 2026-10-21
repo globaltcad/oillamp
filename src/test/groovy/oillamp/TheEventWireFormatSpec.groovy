@@ -8,6 +8,7 @@ import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
 import dev.lamp.Problem
 import dev.lamp.LampStep
+import dev.lamp.LampSessionStatus
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -83,7 +84,7 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.StepSkipped(STEP, 'already there'),
             new LampEvent.Output('sway', '[sway] 00:00:01 ✓ ünïcödé'),
             new LampEvent.Answer('multi\nline\nanswer'),
-            new LampEvent.SessionStateChanged(new LampEvent.SessionStatus('running', 'up', Duration.ofMinutes(2), 1)),
+            new LampEvent.SessionStateChanged(new LampSessionStatus('running', 'up', Duration.ofMinutes(2), 1)),
             new LampEvent.SessionOpened('20260928-120000', Tuple.of(String, 'ssh', '-T', 'lamp-k3v7x2ab'),
                                         Path.of('/run/user/1000/oillamp/k3v7x2ab/sockets/infra/vnc.sock'), 1920, 1080),
             new LampEvent.LookAtDesktop('the chart you asked for'),
