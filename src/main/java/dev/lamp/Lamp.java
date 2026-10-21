@@ -257,47 +257,6 @@ public final class Lamp implements AutoCloseable {
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 
-    /// Something to ask the agent, and where in its conversations it goes.
-    ///
-    /// @param conversation the conversation it continues, by its id or a unique start of it; empty
-    ///                     for a new conversation
-    /// @param after        an entry of that conversation to continue after, such as an earlier
-    ///                     answer, which starts a branch there if the conversation went on since
-    /// @param insteadOf    a question of that conversation to ask this instead of. The old question
-    ///                     and what followed stay, as a branch of their own
-    public record Question(
-        String prompt,
-        Optional<String> conversation,
-        Optional<String> after,
-        Optional<String> insteadOf
-    ) {
-        public Question {
-            if (prompt.isBlank()) throw new IllegalArgumentException("a question needs something to ask");
-            if ((after.isPresent() || insteadOf.isPresent()) && conversation.isEmpty())
-                throw new IllegalArgumentException("an entry belongs to a conversation; name the conversation too");
-            if (after.isPresent() && insteadOf.isPresent())
-                throw new IllegalArgumentException("a question goes after an entry or instead of a question, not both");
-        }
-
-        /// In a new conversation.
-        public static Question fresh(String prompt) {
-            return new Question(prompt, Optional.empty(), Optional.empty(), Optional.empty());
-        }
-
-        /// In `conversation`, where it stands: after the entry written last.
-        public static Question in(String conversation, String prompt) {
-            return new Question(prompt, Optional.of(conversation), Optional.empty(), Optional.empty());
-        }
-
-        public static Question after(String conversation, String entry, String prompt) {
-            return new Question(prompt, Optional.of(conversation), Optional.of(entry), Optional.empty());
-        }
-
-        public static Question insteadOf(String conversation, String entry, String prompt) {
-            return new Question(prompt, Optional.of(conversation), Optional.empty(), Optional.of(entry));
-        }
-    }
-
     /// One conversation the agent had, as pi keeps it in the agent's home.
     ///
     /// A conversation is a tree of entries: every entry names the one before it. Most of the time
@@ -322,8 +281,8 @@ public final class Lamp implements AutoCloseable {
     ) {
         /// One line of pi's session file.
         ///
-        /// @param id       unique within the conversation; what [Question#after] and
-        ///                 [Question#insteadOf] take
+        /// @param id       unique within the conversation; what [LampPrompt#after] and
+        ///                 [LampPrompt#insteadOf] take
         /// @param parent   the entry before this one; empty for the first. Entries with the same
         ///                 parent are where the conversation forks
         /// @param text     for a question, the message sent; for an answer, the agent's text, or the
@@ -594,7 +553,7 @@ public final class Lamp implements AutoCloseable {
     /// @throws LampFailedException      when the session is not running or is ending; the problem says why
     /// @throws IOException when the engine's process could not be started at all
     public LampEvent.RunFinished ask(String prompt) throws IOException, InterruptedException, LampFailedException {
-        return ask(Question.fresh(prompt));
+        return ask(LampPrompt.fresh(prompt));
     }
 
     /// Asks the agent `question`, where it says: in a new conversation, or in one of the agent's
@@ -603,7 +562,7 @@ public final class Lamp implements AutoCloseable {
     ///
     /// @throws LampFailedException when the conversation or the entry is not there, or the session is not
     ///                running; the problem says which
-    public LampEvent.RunFinished ask(Question question) throws IOException, InterruptedException, LampFailedException {
+    public LampEvent.RunFinished ask(LampPrompt question) throws IOException, InterruptedException, LampFailedException {
         return ask(launcher, listeners, directory, question);
     }
 
@@ -615,7 +574,7 @@ public final class Lamp implements AutoCloseable {
     /// run waits its turn, and [LampEvent.RunQueued] says so.
     ///
     /// @throws LampFailedException when the conversation or the entry is not there, or the session is ending
-    public LampRun send(Question question) throws IOException, InterruptedException, LampFailedException {
+    public LampRun send(LampPrompt question) throws IOException, InterruptedException, LampFailedException {
         var command = InternalLampUtil.askCommand(directory, question, "--no-wait");
         Ran ran = runToEnd(launcher, listeners, command);
         for ( LampEvent event : ran.events() )
@@ -832,7 +791,7 @@ public final class Lamp implements AutoCloseable {
             final Launcher launcher,
             final List<Consumer<LampEvent>> listeners,
             final Path directory,
-            final Question question
+            final LampPrompt question
     ) throws IOException, InterruptedException, LampFailedException
     {
         Ran ran = runToEnd(launcher, listeners, InternalLampUtil.askCommand(directory, question));

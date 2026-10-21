@@ -446,10 +446,10 @@ public final class LampStartupConf {
     }
 
     /// Asks the agent `question` in the session that is running this lamp, whoever started it,
-    /// and waits for the answer. See [Lamp#ask(Lamp.Question)].
+    /// and waits for the answer. See [Lamp#ask(LampPrompt)].
     ///
     /// @throws LampFailedException when no session is running, or the question has no place to go
-    public LampEvent.RunFinished ask(Lamp.Question question) throws IOException, InterruptedException, LampFailedException {
+    public LampEvent.RunFinished ask(LampPrompt question) throws IOException, InterruptedException, LampFailedException {
         return Lamp.ask(launcher, listeners, directory, question);
     }
 

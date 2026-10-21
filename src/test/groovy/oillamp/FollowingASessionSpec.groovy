@@ -2,7 +2,7 @@ package oillamp
 
 import dev.lamp.ExitStatus
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import spock.lang.Specification
 import spock.lang.Subject
@@ -62,8 +62,8 @@ class FollowingASessionSpec extends Specification {
             ending, which ends following too.
         """
         given: 'the agent is at work on one question, and another waits'
-            var first = held.send(Question.fresh('wait for me'))
-            var second = held.send(Question.fresh('and then this'))
+            var first = held.send(LampPrompt.fresh('wait for me'))
+            var second = held.send(LampPrompt.fresh('and then this'))
             eventually { held.agentStatus().waiting().any { it.id() == second.id() } }
 
         when: 'someone starts following'

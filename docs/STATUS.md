@@ -436,7 +436,7 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   `restore`.
 - Genies still starts its own pi, and does not use the session's. A lamp that Genies holds and
   that has jobs on its schedule runs two pis in one home. The Lamp API now has what Genies needs
-  (`conversations`, `send` with a `Question`, `RunProgress`, `cancel`, `agentStatus`); Genies does
+  (`conversations`, `send` with a `LampPrompt`, `RunProgress`, `cancel`, `agentStatus`); Genies does
   not use it yet.
 - The scheduling tools are pi's only. Another harness in the sandbox, such as opencode, has none.
 - The session writes its model and instructions into pi's files without following links, through

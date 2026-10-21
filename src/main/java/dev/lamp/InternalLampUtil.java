@@ -25,7 +25,7 @@ class InternalLampUtil {
                 Tuple.of(Problem.Evidence.class), Tuple.of(Problem.Fix.class), Optional.empty());
     }
 
-    static String[] askCommand(Path directory, Lamp.Question question, String... options) {
+    static String[] askCommand(Path directory, LampPrompt question, String... options) {
         List<String> command = new ArrayList<>(List.of("ask", directory.toString()));
         question.conversation().ifPresent(id -> command.addAll(List.of("--in", id)));
         question.after().ifPresent(id -> command.addAll(List.of("--after", id)));

@@ -1,7 +1,7 @@
 package oillamp
 
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampAgentProgress
 import dev.lamp.LampRunOutcome
@@ -73,7 +73,7 @@ class FollowingARunSpec extends Specification {
             are exactly the answer the run ends with.
         """
         when:
-            var run = held.send(Question.fresh('files, please'))
+            var run = held.send(LampPrompt.fresh('files, please'))
             var finished = waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
 
         then: 'the send came back with the run, before the run was done'
@@ -104,9 +104,9 @@ class FollowingARunSpec extends Specification {
             waiting. The status names the run in progress and the ones behind it.
         """
         when:
-            var first = held.send(Question.fresh('wait for me'))
+            var first = held.send(LampPrompt.fresh('wait for me'))
             waitFor(LampEvent.RunStarted) { it.run().id() == first.id() }
-            var second = held.send(Question.fresh('then me'))
+            var second = held.send(LampPrompt.fresh('then me'))
             var busy = held.agentStatus()
             release.countDown()
             waitFor(LampEvent.RunFinished) { it.run().id() == second.id() }
@@ -129,9 +129,9 @@ class FollowingARunSpec extends Specification {
             queue, and the agent never sees it. Cancelling when nothing runs says so.
         """
         when:
-            var working = held.send(Question.fresh('forever and ever'))
+            var working = held.send(LampPrompt.fresh('forever and ever'))
             waitFor(LampEvent.RunStarted) { it.run().id() == working.id() }
-            var waiting = held.send(Question.fresh('never asked'))
+            var waiting = held.send(LampPrompt.fresh('never asked'))
             held.cancel(waiting.id())
             held.cancel()
             var stopped = waitFor(LampEvent.RunFinished) { it.run().id() == working.id() }

@@ -3,7 +3,7 @@ package oillamp
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampFailedException
 import spock.lang.Narrative
@@ -208,7 +208,7 @@ class ReachingTheHostSpec extends Specification {
             start()
 
         when: 'the user asks'
-            var run = lamp.send(Question.fresh('Summarise my Q3 notes'))
+            var run = lamp.send(LampPrompt.fresh('Summarise my Q3 notes'))
             waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
 
         then: 'the checker saw this run, and what the user asked in it'

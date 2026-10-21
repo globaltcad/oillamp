@@ -1,7 +1,7 @@
 package oillamp
 
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
@@ -330,7 +330,7 @@ class ChoosingTheAgentsModelSpec extends Specification {
         when: 'an application starts the lamp with GPT, asks a question, and closes the lamp'
             var running = Lamp.at(lamp).model(GPT).launchedBy(host.launcher).start()
             assert running.awaitRunning(Duration.ofSeconds(30))
-            var answer = running.ask(Question.fresh('Name a colour'))
+            var answer = running.ask(LampPrompt.fresh('Name a colour'))
             running.close()
 
         then: 'the engine was told the model on its command line'

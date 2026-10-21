@@ -1,7 +1,7 @@
 package oillamp
 
 import dev.lamp.Lamp
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
 import spock.lang.Narrative
@@ -119,7 +119,7 @@ class GivingTheAgentInstructionsSpec extends Specification {
         when: 'an application starts a lamp with instructions and asks a question'
             var running = Lamp.at(lamp).instructions(INSTRUCTIONS).launchedBy(host.launcher).start()
             assert running.awaitRunning(Duration.ofSeconds(30))
-            var answer = running.ask(Question.fresh('Who are you?'))
+            var answer = running.ask(LampPrompt.fresh('Who are you?'))
             running.close()
 
         then: 'the engine was given the name of a variable on its command line, and the text in that variable'

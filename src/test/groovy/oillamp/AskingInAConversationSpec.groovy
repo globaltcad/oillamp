@@ -2,7 +2,7 @@ package oillamp
 
 import dev.lamp.Lamp
 import dev.lamp.Lamp.Conversation.Kind
-import dev.lamp.Lamp.Question
+import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampStartupConf
@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  *  Asking the agent in one of its conversations: {@code oillamp ask --in}, {@code --after},
- *  {@code --instead-of}, and {@code Lamp.Question}.
+ *  {@code --instead-of}, and {@code LampPrompt}.
  *
  *  <p>A chat is more than a string of questions each starting afresh. A person continues a
  *  conversation, goes back to an earlier answer and asks from there, or asks something else
@@ -126,7 +126,7 @@ class AskingInAConversationSpec extends Specification {
             var fruit = question(conversation, 'Name a fruit')
 
         when:
-            var asked = running().ask(Question.insteadOf(conversation, fruit.id(), 'Name an animal'))
+            var asked = running().ask(LampPrompt.insteadOf(conversation, fruit.id(), 'Name an animal'))
 
         then:
             asked.outcome() == LampRunOutcome.FINISHED
@@ -208,13 +208,13 @@ class AskingInAConversationSpec extends Specification {
             session.
         """
         when:
-            new Question('x', Optional.empty(), Optional.of('a1'), Optional.empty())
+            new LampPrompt('x', Optional.empty(), Optional.of('a1'), Optional.empty())
 
         then:
             thrown(IllegalArgumentException)
 
         when:
-            Question.fresh('  ')
+            LampPrompt.fresh('  ')
 
         then:
             thrown(IllegalArgumentException)
