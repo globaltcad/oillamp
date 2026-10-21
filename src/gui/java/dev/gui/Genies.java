@@ -16,9 +16,10 @@ public interface Genies {
 
     /// The app with the genies and the settings `shelf` keeps, without a window: each genie's
     /// tree of conversations and host access read, those left running when Genies last closed
-    /// joined again, and Ollama looked for. [Main] gives it its window.
-    static Genies open(Shelf shelf) {
-        return GeniesBackend.open(shelf);
+    /// joined again, and Ollama looked for. What goes wrong from then on, which `errors` is told,
+    /// is in its state too. [Main] gives it its window.
+    static Genies open(Shelf shelf, ErrorLog errors) {
+        return GeniesBackend.open(shelf, errors);
     }
 
     /// Everything the window shows. The window changes it through lenses, such as a draft, the
@@ -109,11 +110,12 @@ public interface Genies {
     /// The settings page closes. Leaving it, however, keeps the settings.
     void settingsDone();
 
-    /// Keeps the genies and the settings, then puts every genie to sleep, or leaves it running,
+    /// Keeps the genies and the settings at once. Then, once `first` has ended, such as the
+    /// window giving a desktop its own size back, puts every genie to sleep, or leaves it running,
     /// and calls `whenDone` on Swing's event thread once each lamp has gone out or been let go.
     /// (If Genies is killed instead, the lamps end by themselves: each notices its application
     /// is gone.)
-    void quit(boolean leaveRunning, Runnable whenDone);
+    void quit(boolean leaveRunning, Optional<Thread> first, Runnable whenDone);
 
     /// Where what went wrong that Genies did not expect is written.
     Path errorLog();

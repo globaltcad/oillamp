@@ -128,7 +128,7 @@ public final class GeniesBackend implements Genies {
     }
 
     /// The app as it is on the shelf, without a window. See [Genies#open].
-    static GeniesBackend open(Shelf shelf) {
+    static GeniesBackend open(Shelf shelf, ErrorLog errors) {
         Optional<String> environmentKey = Optional.ofNullable(System.getenv(Settings.KEY_VARIABLE)).filter(key -> !key.isBlank());
         OllamaKeeper ollama = new OllamaKeeper(shelf.ollama());
         // The first time, the genies' model is where this computer has one: Ollama, if it is
@@ -139,6 +139,7 @@ public final class GeniesBackend implements Genies {
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
         GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
                                 shelf, new LampLighter(), ollama);
+        errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
         // whether it may reach this computer, which its card says. A genie left running when
         // Genies last closed is awake again.
@@ -482,10 +483,15 @@ public final class GeniesBackend implements Genies {
         return genie.conversations().current().isPresent() ? genie.conversations().here().leaf() : "";
     }
 
-    @Override public void quit(boolean leaveRunning, Runnable whenDone) {
+    @Override public void quit(boolean leaveRunning, Optional<Thread> first, Runnable whenDone) {
         keepGenies();
         keepSettings();
         Thread.ofVirtual().name("quit").start(() -> {
+            try {
+                if (first.isPresent()) first.get().join();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
             for (GenieRunner runner : runners.values()) {
                 try {
                     if (leaveRunning) runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
