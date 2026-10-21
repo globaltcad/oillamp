@@ -753,7 +753,7 @@ class Using_The_Command_Line_Spec extends Specification {
             problem.code().value() == 'OIL-GENIES-001'
             var tried = (problem.evidence().first() as LampProblem.Evidence.Command).argv()
             tried.toList() == [Path.of(System.getProperty('java.home'), 'bin', 'java').toString(),
-                               '-cp', System.getProperty('java.class.path'), 'dev.gui.GeniesBackend']
+                               '-cp', System.getProperty('java.class.path'), 'dev.gui.Main']
     }
 
     def '`oillamp image` says why there is no such command, and what to use instead'() {
