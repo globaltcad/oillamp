@@ -79,10 +79,10 @@ public record Transcript(Tuple<Entry> entries) {
                 boolean told = !entries.isEmpty() && entries.last().kind() == Entry.Kind.NOTICE && entries.last().isFailed();
                 yield told ? notice(again) : problem(explained(retry.reason(), "") + " " + again);
             }
-            case PiEvent.Settled ignored -> settled();
+            case PiEvent.Settled _ -> settled();
             case PiEvent.Refused refused -> problem("The genie could not take that: " + refused.reason());
             case PiEvent.History history -> asksTheSame(history) ? learnIds(history) : replacedBy(history);
-            case PiEvent.Opened ignored -> this;
+            case PiEvent.Opened _ -> this;
         };
     }
 

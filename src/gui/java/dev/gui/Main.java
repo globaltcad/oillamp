@@ -44,7 +44,7 @@ final class Main {
             @Override public void windowClosing(WindowEvent event) { quit(app, frame, view); }
         });
         // The timeline, and anything else said relative to now, moves on with the clock.
-        new Timer(30_000, tick -> app.state().update(it -> it.withNow(Instant.now()))).start();
+        new Timer(30_000, _ -> app.state().update(it -> it.withNow(Instant.now()))).start();
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
