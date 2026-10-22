@@ -1,8 +1,6 @@
 package gui
 
-import dev.gui.ErrorLog
 import dev.gui.Genies
-import dev.gui.genie.Shelf
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.History
@@ -41,7 +39,6 @@ class KeepingAGeniesHistorySpec extends Specification {
 
     @TempDir Path tmp
     ScenarioHost sandbox
-    Shelf shelf
     Genies app
     UUID jafar
 
@@ -49,13 +46,10 @@ class KeepingAGeniesHistorySpec extends Specification {
         sandbox = new ScenarioHost(tmp)
         sandbox.machine { it.reallyRuns('ssh-keygen').clockAt(NOW).timeZone('Europe/Berlin')
                             .windowsStayOpenFor(Duration.ofSeconds(80)).agent { String prompt -> 'You said: ' + prompt } }
-        // Jafar on the shelf, never woken, and Genies opened with a key in its environment.
-        shelf = new Shelf(sandbox.home.resolve('genies'))
+        // Genies opens as it closed last, with Jafar on its shelf, never woken, and a key in its environment.
         var genie = Genie.named('Jafar')
         jafar = genie.id()
-        shelf.keep(Tuple.of(Genie, genie))
-        shelf.keep(Settings.defaults())
-        app = Genies.open(shelf, new ErrorLog(shelf.errorLog()), sandbox.launcher,
+        app = Genies.open(sandbox.home.resolve('genies'), Tuple.of(Genie, genie), Settings.defaults(), sandbox.launcher,
                           { name -> name == Settings.KEY_VARIABLE ? Optional.of('sk-key') : Optional.empty() })
     }
 
@@ -307,7 +301,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         }
     }
 
-    private Path lamp() { shelf.lampOf(jafar) }
+    private Path lamp() { app.lampOf(jafar) }
 
     private Path home() { Lamp.agentHome(lamp()).orElseThrow() }
 
