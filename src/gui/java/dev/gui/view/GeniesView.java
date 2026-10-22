@@ -139,16 +139,20 @@ public final class GeniesView extends JPanel {
             .withMinSize(0, 0)
             .onResize(it -> state.update(From.VIEW, s -> s.withViewWidth(it.getWidth())))
             .add(sidebar())
-            .add(main())
+            .add(mainArea())
         );
     }
 
     /// The genies beside the selected one, or, in a narrow window, above it. The genie keeps
     /// some height whatever the list's, so the list cannot push it out of the window.
     private static final Layout SIDE_BY_SIDE = Layout.mig("fill, ins 0, gap 0, hidemode 3",
-            MigAddConstraint.of("growy, width 250!"), MigAddConstraint.of("grow, push, wmin 0"));
+            MigAddConstraint.of("growy, width 250!"),
+            MigAddConstraint.of("grow, push, wmin 0")
+    );
     private static final Layout ONE_COLUMN = Layout.mig("fill, wrap 1, ins 0, gap 0, hidemode 3",
-            MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("grow, push, wmin 0, hmin 160"));
+            MigAddConstraint.of("growx, wmin 0"),
+            MigAddConstraint.of("grow, push, wmin 0, hmin 160")
+    );
 
     // ─── the sidebar: every genie ──────────────────────────────────────────────────────────
 
@@ -195,13 +199,18 @@ public final class GeniesView extends JPanel {
                 MigAddConstraint.of("cell 0 2, growx, gaptop 6"),           // "YOUR GENIES"
                 MigAddConstraint.of("cell 0 3, grow, push, wmin 0, hmin 0"),// the cards
                 MigAddConstraint.of("cell 0 4"),                            // the grip, hidden
-                MigAddConstraint.of("cell 0 5, growx, wmin 0"));            // what went wrong
+                MigAddConstraint.of("cell 0 5, growx, wmin 0")              // what went wrong
+            );
 
     /// The same parts, in the same order, as [#BESIDE_THE_GENIE].
     ///
     /// @param height the most the cards' area takes: the list's fold
     private static Layout aboveTheGenie(int height) {
-        return Layout.mig(LayoutConstraint.of("fill, ins 0, gap 8 6, hidemode 3"), LayoutConstraint.of("[grow][][]"), LayoutConstraint.of(""))
+        return Layout.mig(
+                LayoutConstraint.of("fill, ins 0, gap 8 6, hidemode 3"),
+                LayoutConstraint.of("[grow][][]"),
+                LayoutConstraint.of("")
+            )
             .withChildConstraints(
                 MigAddConstraint.of("cell 0 0, growx, wmin 0"),
                 MigAddConstraint.of("cell 1 0"),
@@ -244,22 +253,34 @@ public final class GeniesView extends JPanel {
             .add(label("YOUR GENIES").group(Skin.SECTION).isVisibleIf(wide))
             .add(
                 // As tall as the cards, so that above the genie a few of them take only their room.
-                scrollPanels(conf -> conf.fitWidth(true).unitIncrement(16).prefSize(Size.of(conf.view().getPreferredSize())))
+                scrollPanels(conf -> conf
+                    .fitWidth(true).unitIncrement(16).prefSize(Size.of(conf.view().getPreferredSize()))
+                )
                 .group(Skin.PAGE_SCROLL).withMinSize(0, 0).withEmptyBorder(0)
                 .peek(it -> cards[0] = it)
                 .withStyle(it -> it.backgroundColor(TRANSPARENT))
                 .addAll(genies, this::genieChip))
             .add(
-                grip(genieList, () -> UI.unscale(cards[0].getHeight()), narrow, "Drag to see more of your genies, or up to fold them away")
+                grip(
+                    genieList,
+                    () -> UI.unscale(cards[0].getHeight()),
+                    narrow,
+                    "Drag to see more of your genies, or up to fold them away"
+                )
             )
             .add(
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3")
                 .add("growx",
                     button(state.viewAsString(it -> troubleInfoMessage(it.troubles().size()))).group(Skin.QUIET_BUTTON)
-                    .withStyle(it -> it.backgroundColor(TROUBLE_WASH).border(1, TROUBLE).componentFont(f -> f.color(TROUBLE)))
+                    .withStyle(it -> it
+                        .backgroundColor(TROUBLE_WASH)
+                        .border(1, TROUBLE)
+                        .componentFont(f -> f.color(TROUBLE))
+                    )
                     .isVisibleIf(state.viewAs(Boolean.class, it -> !it.troubles().isEmpty()))
                     .withTooltip("Genies carried on. Click to see what happened")
-                    .onClick(it -> showTroubles()))
+                    .onClick(it -> showTroubles())
+                )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         state.viewAsString(it -> it.settingsProblem().orElse("")),
@@ -363,10 +384,16 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add("growx, wmin 0",
-                     label(Viewable.of(String.class, shown, state, (it, s) -> !it.hostAccess().waitingAt(s.now()).isEmpty()
-                             ? "⌂  asks you to allow something" : "⌂  may reach this computer"))
+                     html(
+                         Viewable.of(String.class, shown, state, (it, s) ->
+                             !it.hostAccess().waitingAt(s.now()).isEmpty()
+                                 ? "⌂  asks you to allow something"
+                                 : "⌂  may reach this computer"
+                         )
+                     )
                      .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
-                             it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty()))
+                             it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty())
+                     )
                      .withStyle(it -> it
                          .componentFont(f -> f
                              .family(FONT)
@@ -504,13 +531,14 @@ public final class GeniesView extends JPanel {
             @Override public void componentShown(ComponentEvent event)   { area[0].getParent().revalidate(); }
             @Override public void componentHidden(ComponentEvent event)  { area[0].getParent().revalidate(); }
         };
+        var treeFoldSymbolText = Viewable.of(String.class, open, count, (on, words) -> (on ? "▾  " : "▸  ") + words);
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
             .isVisibleIf(present)
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 0", "[grow][]")
                 .add("growx, wmin 0",
-                    label(Viewable.of(String.class, open, count, (on, words) -> (on ? "▾  " : "▸  ") + words))
+                    label(treeFoldSymbolText)
                     .group(Skin.META).withCursor(UI.Cursor.HAND)
                     .withStyle(lineHovered, (on, it) -> on ? it.componentFont(f -> f.color(TEXT)) : it)
                     .withTooltip(tip)
@@ -520,7 +548,8 @@ public final class GeniesView extends JPanel {
                 )
                 .applyIfPresent(beside.map(it -> line -> line.add(it))))
             .add("growx, wmin 0, hmin 0",
-                scrollPane(conf -> conf.fitWidth(true)).withEmptyBorder(0).withMinSize(0, 0)
+                scrollPane(conf -> conf.fitWidth(true))
+                .withEmptyBorder(0).withMinSize(0, 0)
                 .peek(it -> area[0] = it)
                 .peek(it -> it.addComponentListener(relayout))
                 .isVisibleIf(open)
@@ -679,7 +708,7 @@ public final class GeniesView extends JPanel {
 
     // ─── the main area: a conversation, a schedule, a history, or the settings ─────────────
 
-    private UIForAnySwing<?, ?> main() {
+    private UIForAnySwing<?, ?> mainArea() {
         Val<Boolean> onChat = page.viewAs(Boolean.class, it -> it == GeniesState.Page.CHAT);
         Val<Boolean> onSchedule = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SCHEDULE);
         Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
@@ -714,43 +743,62 @@ public final class GeniesView extends JPanel {
                  .isVisibleIf(genieList.viewAs(Boolean.class, it -> !it.shown()))
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
                  .withTooltip("Show your genies")
-                 .onClick(it -> genieList.update(From.VIEW, Fold::toggled)))
+                 .onClick(_ -> genieList.update(From.VIEW, Fold::toggled))
+            )
             // Not this genie's: what went wrong anywhere in Genies, so it stays beside ☰.
             .add("cell 1 0, gapright 10", button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
                  .isVisibleIf(hiddenTroubles)
                  .withStyle(it -> it.backgroundColor(TROUBLE_WASH).border(1, TROUBLE).padding(3, 8, 3, 8).componentFont(f -> f.color(TROUBLE)))
                  .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
-                 .onClick(it -> showTroubles()))
+                 .onClick(_ -> showTroubles())
+            )
             .add("cell 2 0", ViewPartsUtil.lamp(phase, 30))
             .add("cell 3 0, growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 0")
                 .add("growx, wmin 0", label(name).group(Skin.TITLE)
                      .withTooltip("Double-click to rename")
-                     .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); }))
-                .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie)))
+                     .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); })
+                )
+                .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
+            )
             // One group on the right, so buttons that are hidden leave no gap behind.
             .add("cell 4 0", box("ins 0, gap 10, hidemode 3, aligny center")
             .add(pages())
-            .add(label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens()))).group(Skin.META)
+            .add(
+                 label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens()))).group(Skin.META)
                  .isVisibleIf(wide)
-                 .withTooltip("Tokens the model counted for this genie since Genies started"))
-            .add(toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
+                 .withTooltip("Tokens the model counted for this genie since Genies started")
+            )
+            .add(
+                 toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, TEXT)))
-                 .withTooltip("Desktop: watch the genie's desktop, and use it"))
-            .add(button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
+                 .withTooltip("Desktop: watch the genie's desktop, and use it")
+            )
+            .add(
+                 button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
                  .withTooltip("Stop what the genie is doing")
-                 .onClick(it -> app.stop(genie.get().id())))
-            .add(button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(phase.viewAs(Boolean.class, Genie.Phase::isAwake))
+                 .onClick(_ -> app.stop(genie.get().id()))
+            )
+            .add(
+                 button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(phase.viewAs(Boolean.class, Genie.Phase::isAwake))
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
                  .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
-                 .onClick(it -> app.sleep(genie.get().id())))
-            .add(button("").group(Skin.ICON_BUTTON)
+                 .onClick(it -> app.sleep(genie.get().id()))
+            )
+            .add(
+                 button("").group(Skin.ICON_BUTTON)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, SUBTEXT)))
                  .withTooltip(roomForPages.viewAsString(it -> (it ? "" : "Chat, schedule, history or host access; ")
                          + "rename, save, wake or sleep, or delete this genie"))
-                 .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id())))
-                 .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id())))));
+                 .onMousePress(it ->
+                         ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id()))
+                 )
+                 .onPressed(Keyboard.Key.SPACE, it ->
+                         ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id()))
+                 )
+            )
+        );
     }
 
     /// A request the selected genie's lamp asks the user to allow, such as running a program,
@@ -759,7 +807,13 @@ public final class GeniesView extends JPanel {
     /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then.
     private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
         Val<String> request = Viewable.of(String.class, genie, state, (it, s) ->
-                it.hostAccess().waitingAt(s.now()).stream().findFirst().map(HostAccess.RequestForPermission::what).orElse(""));
+                                    it.hostAccess()
+                                        .waitingAt(s.now())
+                                        .stream()
+                                        .findFirst()
+                                        .map(HostAccess.RequestForPermission::what)
+                                        .orElse("")
+                                );
         Val<Boolean> shown = Viewable.of(Boolean.class, visible, request, (on, what) -> on && !what.isEmpty());
         return
             panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[grow][][]")
