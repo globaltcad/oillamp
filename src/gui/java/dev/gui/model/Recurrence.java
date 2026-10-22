@@ -71,7 +71,7 @@ public sealed interface Recurrence {
             case Daily daily       -> firstDayFrom(from, daily.at(), Tuple.of(DayOfWeek.class, DayOfWeek.values()));
             case Weekdays weekdays -> firstDayFrom(from, weekdays.at(), WORKING_DAYS);
             case Weekly weekly     -> firstDayFrom(from, weekly.at(), weekly.days());
-            case Custom ignored    -> Optional.empty();
+            case Custom _          -> Optional.empty();
         };
     }
 

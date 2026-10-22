@@ -109,7 +109,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
                         Optional.empty(), Optional.empty(), job.byGenie())));
             Map<LocalDate, List<LocalDateTime>> byDay = new TreeMap<>();
             for (Instant time : job.upcoming())
-                byDay.computeIfAbsent(LocalDateTime.ofInstant(time, schedule.zone()).toLocalDate(), day -> new ArrayList<>())
+                byDay.computeIfAbsent(LocalDateTime.ofInstant(time, schedule.zone()).toLocalDate(), _ -> new ArrayList<>())
                      .add(LocalDateTime.ofInstant(time, schedule.zone()));
             String how = job.repeats().map(Recurrence::describe).orElse("Once");
             for (List<LocalDateTime> times : byDay.values()) {

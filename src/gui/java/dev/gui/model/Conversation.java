@@ -116,7 +116,7 @@ public record Conversation(String id, String file, String name, String modified,
             // An entry whose parent is missing, as in a file cut short, starts a tree of its own.
             for (Step step : steps) {
                 if (step.parent().isEmpty() || !ids.contains(step.parent())) roots.add(step);
-                else children.computeIfAbsent(step.parent(), parent -> new ArrayList<>()).add(step);
+                else children.computeIfAbsent(step.parent(), _ -> new ArrayList<>()).add(step);
             }
         }
 

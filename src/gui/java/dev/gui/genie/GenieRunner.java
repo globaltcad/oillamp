@@ -437,7 +437,7 @@ public final class GenieRunner {
             }
             case LampEvent.RunFinished finished when runsOfThisChat.contains(finished.run().id()) -> chatRunFinished(finished);
             // Another run, such as a scheduled job's, may have added to the conversations.
-            case LampEvent.RunFinished ignored -> reloadConversations();
+            case LampEvent.RunFinished _ -> reloadConversations();
             case LampEvent.LookAtDesktop look -> changes.accept(genie -> genie.shows(look.what()));
             case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
                 lamp = Optional.empty();
