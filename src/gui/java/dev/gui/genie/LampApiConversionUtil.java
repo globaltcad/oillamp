@@ -70,7 +70,7 @@ final class LampApiConversionUtil {
     /// Empty for [LampAgentProgress.Opened], which the runner handles itself.
     static Optional<PiEvent> chatEventFor(LampAgentProgress progress) {
         return switch (progress) {
-            case LampAgentProgress.Opened ignored -> Optional.empty();
+            case LampAgentProgress.Opened _ -> Optional.empty();
             case LampAgentProgress.Said said -> Optional.of(new PiEvent.Said(said.text()));
             case LampAgentProgress.Thought thought -> Optional.of(new PiEvent.Thinking(thought.text()));
             case LampAgentProgress.Answered answered -> Optional.of(new PiEvent.Answered(

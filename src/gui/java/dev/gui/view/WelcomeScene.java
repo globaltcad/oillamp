@@ -270,7 +270,7 @@ final class WelcomeScene {
 
     private static BufferedImage glow(Color colour, double peak, double middle) {
         if (GLOWS.size() > COLOURS_KEPT) GLOWS.clear();
-        return GLOWS.computeIfAbsent(new Glow(colour, peak, middle), it -> {
+        return GLOWS.computeIfAbsent(new Glow(colour, peak, middle), _ -> {
             BufferedImage glow = new BufferedImage(GLOW, GLOW, BufferedImage.TYPE_INT_ARGB_PRE);
             Graphics2D on = glow.createGraphics();
             on.setPaint(new RadialGradientPaint(GLOW / 2f, GLOW / 2f, GLOW / 2f, new float[] { 0f, 0.3f, 1f },
@@ -376,7 +376,7 @@ final class WelcomeScene {
             if (part <= 0) continue;
             g.setComposite(AlphaComposite.SrcOver.derive((float) part));
             if (SHINES.size() > COLOURS_KEPT) SHINES.clear();
-            g.drawImage(SHINES.computeIfAbsent(new Shine(size, smoking, hues.hot(), hues.flame()), it -> {
+            g.drawImage(SHINES.computeIfAbsent(new Shine(size, smoking, hues.hot(), hues.flame()), _ -> {
                 BufferedImage shine = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB_PRE);
                 Graphics2D on = shine.createGraphics();
                 on.drawImage(lamp(new Lamp(size, smoking, false)), 0, 0, null);

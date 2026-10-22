@@ -142,7 +142,7 @@ final class GenieSvgUtil {
 
     /// The genie that `appearance` describes, in `frame` of `pose`, twenty pixels square.
     static IconDeclaration genie(Appearance appearance, Pose pose, int frame) {
-        return GENIES.computeIfAbsent(List.of(appearance, pose, frame), key -> IconDeclaration.ofSvg(svg(appearance, pose, frame)));
+        return GENIES.computeIfAbsent(List.of(appearance, pose, frame), _ -> IconDeclaration.ofSvg(svg(appearance, pose, frame)));
     }
 
     /// The SVG text of the genie: one path for each colour, each pixel a square of one unit.

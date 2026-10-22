@@ -237,9 +237,9 @@ final class SettingsPage {
                             box("ins 0, hidemode 3")
                             .add(ViewPartsUtil.link("Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
                                  .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
-                                 .onClick(it -> advanced.set(From.VIEW, true)))
+                                 .onClick(_ -> advanced.set(From.VIEW, true)))
                             .add(ViewPartsUtil.link("‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
-                                 .onClick(it -> advanced.set(From.VIEW, false)))))
+                                 .onClick(_ -> advanced.set(From.VIEW, false)))))
 
                     // ── the simple way: Ollama, set up by Genies ──
                     // What this computer has in one half, the model and setting it up in the other.
@@ -269,7 +269,7 @@ final class SettingsPage {
                             .add(button(ollama.viewAsString(OllamaSetup::todo)).group(Skin.FLAME_BUTTON)
                                  .isVisibleIf(state.viewAs(Boolean.class, it -> !it.ollama().step().isBusy() && it.ollama().step() != OllamaSetup.Step.LOOKING
                                                                              && !it.ollama().inUse(it.settings()) && !it.ollama().wanted().isBlank()))
-                                 .onClick(it -> app.setUpOllama()))
+                                 .onClick(_ -> app.setUpOllama()))
                             .add("growx, wmin 0", label(ollama.viewAsString(it -> "✓  Your genies use " + it.wanted().strip() + "."))
                                  .group(Skin.FINE).isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working)))
                             .add("growx, wmin 0",
@@ -277,7 +277,7 @@ final class SettingsPage {
                                 .add("growx, wmin 60, h 6!", progress(ollama.viewAs(Double.class, OllamaSetup::progress)))
                                 .add(button("Stop").group(Skin.QUIET_BUTTON)
                                      .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
-                                     .onClick(it -> app.stopSettingUp())))
+                                     .onClick(_ -> app.stopSettingUp())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
                                  SUBTEXT, ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
@@ -352,7 +352,7 @@ final class SettingsPage {
                                 .add("growx, wmin 0", comboBox(model, offered).isEditableIf(true))
                                 .add(button("Look up").group(Skin.QUIET_BUTTON)
                                      .withTooltip("Ask the service which models it offers")
-                                     .onClick(it -> app.lookUpModels())))
+                                     .onClick(_ -> app.lookUpModels())))
                             .add("growx, wmin 0", ViewPartsUtil.wrapped(lookUpNote, Palette.SUBTEXT,
                                  lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())))))
 
@@ -362,11 +362,11 @@ final class SettingsPage {
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")
                         .add(button("Done").group(Skin.FLAME_BUTTON).isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
-                             .onClick(it -> app.settingsDone()))
+                             .onClick(_ -> app.settingsDone()))
                         .add(button("+  Your first genie").group(Skin.FLAME_BUTTON)
                              .withTooltip("A genie, with a sandboxed desktop of its own, that wakes at once")
                              .isVisibleIf(state.viewAs(Boolean.class, it -> !it.hasGenies() && it.settingsProblem().isEmpty() && !it.ollama().step().isBusy()))
-                             .onClick(it -> app.newGenie())))));
+                             .onClick(_ -> app.newGenie())))));
     }
 
     /// The welcome, above the settings while there are no genies: its picture, and its words. In
@@ -476,7 +476,7 @@ final class SettingsPage {
         aside.set(0.0);
         scene.set(WelcomeScene.Play.first(0));
         if (playing.getAndSet(true)) return;
-        UI.animateFor(LifeTime.of(1, TimeUnit.SECONDS)).asLongAs(status -> welcome.get()).go(new Animation() {
+        UI.animateFor(LifeTime.of(1, TimeUnit.SECONDS)).asLongAs(_ -> welcome.get()).go(new Animation() {
             @Override public void run(AnimationStatus status) {
                 double now = (System.nanoTime() - began.get()) / 1e9;
                 double step = Math.max(0, now - clock.get()) / ASIDE_TAKES;

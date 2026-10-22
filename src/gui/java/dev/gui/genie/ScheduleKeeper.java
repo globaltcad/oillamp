@@ -130,9 +130,9 @@ public final class ScheduleKeeper {
                 change(it -> it.withRunning(Optional.empty()));
                 if (watched) read();
             }
-            case LampEvent.JobAdded ignored -> { if (watched) read(); }
-            case LampEvent.JobRemoved ignored -> { if (watched) read(); }
-            case LampEvent.ScheduleChanged ignored -> { if (watched) read(); }
+            case LampEvent.JobAdded _ -> { if (watched) read(); }
+            case LampEvent.JobRemoved _ -> { if (watched) read(); }
+            case LampEvent.ScheduleChanged _ -> { if (watched) read(); }
             default -> { }
         }
     }

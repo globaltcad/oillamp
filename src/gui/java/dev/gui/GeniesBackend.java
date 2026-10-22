@@ -91,7 +91,7 @@ public final class GeniesBackend implements Genies {
         this.ollama = ollama;
         this.names = state.viewAs(Tuple.classTyped(String.class),
                 it -> it.genies().mapTo(String.class, genie -> genie.id() + " " + genie.name()));
-        Viewable.cast(names).onChange(From.ALL, it -> keepGenies());
+        Viewable.cast(names).onChange(From.ALL, _ -> keepGenies());
         // The settings are kept however the user leaves them: with Done, or by clicking a genie.
         this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
         // Shown, they look again whether Ollama is there, and what it has.
