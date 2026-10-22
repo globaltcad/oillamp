@@ -1,6 +1,7 @@
 package dev.gui.genie;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -10,18 +11,25 @@ import java.util.function.UnaryOperator;
 
 import dev.gui.model.Genie;
 import dev.gui.model.History;
+import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampDirectory;
 import dev.lamp.LampFailedException;
 import dev.lamp.LampSave;
 
+import sprouts.Tuple;
+
 /// Reads a genie's history from its lamp, and saves its home there as a new moment, awake or
-/// asleep. Going back to a moment is [GenieRunner#goBackTo], which puts the lamp out first.
+/// asleep. Going back to a moment is [GenieRunner#goBackTo], which puts the lamp out first. Also
+/// reads and writes when oillamp saves by itself, with [LampDirectory#autosave()] and
+/// [LampDirectory#autosave(Lamp.Autosave)]; writing needs the genie asleep, and the page only
+/// offers it then.
 ///
 /// Each call starts an engine process that ends by itself, which takes a moment, so the work is
 /// done one piece after the other on a thread of its own, and the calls return at once.
 public final class HistoryKeeper {
 
+    private final Path directory;
     private final LampDirectory lamp;
     private final Consumer<UnaryOperator<Genie>> changes;
     private final ExecutorService work = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("history").factory());
@@ -32,7 +40,8 @@ public final class HistoryKeeper {
     private volatile boolean watched;
 
     /// @param lamp the genie's lamp, unlit: [LampLighter#unlit]
-    public HistoryKeeper(LampDirectory lamp, Consumer<UnaryOperator<Genie>> changes) {
+    public HistoryKeeper(Path directory, LampDirectory lamp, Consumer<UnaryOperator<Genie>> changes) {
+        this.directory = directory;
         this.lamp = lamp;
         this.changes = changes;
     }
@@ -42,6 +51,11 @@ public final class HistoryKeeper {
         if (!readingQueued.compareAndSet(false, true)) return;
         work.execute(() -> {
             readingQueued.set(false);
+            // A genie that never woke has no lamp yet, and so nothing saved.
+            if (Lamp.agentHome(directory).isEmpty()) {
+                change(it -> it.readAs(Tuple.of(History.Moment.class)));
+                return;
+            }
             try {
                 var moments = LampApiConversionUtil.moments(lamp.history());
                 change(it -> it.readAs(moments));
@@ -51,6 +65,48 @@ public final class HistoryKeeper {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    /// Reads when oillamp saves by itself from the lamp's file. A genie that never woke has no
+    /// lamp yet, and so nothing to read. Apart from [#read], which follows every save: these
+    /// change only when the user changes them, or when the genie goes back.
+    public void readAutosave() {
+        work.execute(() -> {
+            if (Lamp.agentHome(directory).isEmpty()) {
+                change(it -> it.withAutosave(Optional.empty()));
+                return;
+            }
+            try {
+                Lamp.Autosave read = lamp.autosave();
+                change(it -> it.withAutosave(Optional.of(asShown(read))));
+            } catch (IOException | LampFailedException failed) {
+                change(it -> it.withProblem("When it saves by itself could not be read: " + reason(failed)));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// Writes `wanted` into the lamp's file. The page shows it at once, then what the file has,
+    /// or, when it could not be written, what it had and why.
+    public void autosave(History.Autosave wanted) {
+        change(it -> it.withAutosave(Optional.of(wanted)).withProblem(""));
+        work.execute(() -> {
+            try {
+                Lamp.Autosave written = lamp.autosave(new Lamp.Autosave(wanted.waking(), wanted.sleeping(),
+                                                                         wanted.beforeRun(), wanted.afterRun()));
+                change(it -> it.withAutosave(Optional.of(asShown(written))));
+            } catch (IOException | LampFailedException failed) {
+                change(it -> it.withProblem("oillamp could not change when it saves: " + reason(failed)));
+                readAutosave();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private static History.Autosave asShown(Lamp.Autosave lamps) {
+        return new History.Autosave(lamps.startup(), lamps.shutdown(), lamps.beforeRun(), lamps.afterRun());
     }
 
     /// Saves the genie's home as a new moment, which is then picked. When nothing changed since
@@ -88,9 +144,12 @@ public final class HistoryKeeper {
         }
     }
 
-    /// The genie's lamp went out, and saved its home as it did.
+    /// The genie's lamp went out, and saved its home as it did. A genie that woke for the first
+    /// time has a lamp now, and so a file that says when oillamp saves.
     void wentOut() {
-        if (watched) read();
+        if (!watched) return;
+        read();
+        readAutosave();
     }
 
     private void change(UnaryOperator<History> change) {

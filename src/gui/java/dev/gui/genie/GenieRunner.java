@@ -91,7 +91,7 @@ public final class GenieRunner {
         this.lighter = lighter;
         this.changes = changes;
         this.schedule = new ScheduleKeeper(lighter.unlit(directory), changes);
-        this.history = new HistoryKeeper(lighter.unlit(directory), changes);
+        this.history = new HistoryKeeper(directory, lighter.unlit(directory), changes);
         this.hostAccess = new HostAccessKeeper(directory, lighter.unlit(directory), changes);
     }
 
@@ -576,6 +576,8 @@ public final class GenieRunner {
             }
             reloadConversations();
             history.read();
+            // The lamp's file went back too, and with it when oillamp saves by itself.
+            history.readAutosave();
         });
     }
 
