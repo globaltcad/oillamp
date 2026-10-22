@@ -151,7 +151,7 @@ final class ChatRows {
                     button("✎  Edit").group(Skin.ICON_BUTTON).isVisibleIf(editable)
                     .withTooltip("Ask this differently. What followed is kept, as a branch in the genie's conversations.")
                     .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT)))
-                    .onClick(it -> askInstead.accept(entry.get()))
+                    .onClick(_ -> askInstead.accept(entry.get()))
                 )
             );
     }
@@ -177,14 +177,14 @@ final class ChatRows {
             .add(
                 button("‹").group(Skin.ICON_BUTTON).isEnabledIf(hasEarlier)
                 .withTooltip("Previous conversation version")
-                .onClick(it -> showLeaf.accept(versions.get().leaves().get(versions.get().at() - 1))))
+                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() - 1))))
             .add(
                 label(versions.viewAsString(it -> (it.at() + 1) + " / " + it.leaves().size()))
                 .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))))
             .add(
                 button("›").group(Skin.ICON_BUTTON).isEnabledIf(hasLater)
                 .withTooltip("Next conversation version")
-                .onClick(it -> showLeaf.accept(versions.get().leaves().get(versions.get().at() + 1))));
+                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() + 1))));
     }
 
     // ─── what the genie answered ───────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ final class ChatRows {
                     button("⧉  Copy").group(Skin.ICON_BUTTON).isVisibleIf(copyable)
                     .withTooltip("Copy the answer, as the genie wrote it")
                     .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT)))
-                    .onClick(it -> copy(entry.get().text()))));
+                    .onClick(_ -> copy(entry.get().text()))));
     }
 
     // ─── what the genie thinks ─────────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ final class ChatRows {
         Val<Boolean> expanded = entry.viewAs(Boolean.class, Entry::expanded);
         return
             strip(
-                picture(it -> GenieSvgUtil.Pose.THINKING, it -> entry.get().isWriting()),
+                picture(_ -> GenieSvgUtil.Pose.THINKING, _ -> entry.get().isWriting()),
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
                 .add(label(entry.viewAsString(it -> it.isWriting() ? "✦ thinking" : "✦ thought")).withStyle(it -> it
                     .componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS))))
@@ -264,7 +264,7 @@ final class ChatRows {
                     .text(t -> t.content(StyledString.of(f -> f.family(FONT).size(12).posture(0.14f).color(SUBTEXT), thoughts))
                                 .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
             .withTooltip(entry.viewAsString(it -> it.expanded() ? "Click to fold the thoughts away" : "Click to see what the genie thinks"))
-            .onMouseClick(it -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
+            .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
 
     /// A bar that says what the user waits for while nothing of the answer has come yet: the
@@ -280,7 +280,7 @@ final class ChatRows {
                 box("fill, ins 4 18 4 18", "[grow]")
                 .add("growx, wmin 0",
                     strip(
-                        picture(GenieSvgUtil::poseOf, it -> true),
+                        picture(GenieSvgUtil::poseOf, _ -> true),
                         box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
                         .add("wmin 0", label(waiting.viewAsString(it -> "✦ " + it.what())).withStyle(it -> it
                             .componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS))))
@@ -399,7 +399,7 @@ final class ChatRows {
                                 .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
             .withTooltip(entry.viewAsString(it -> it.detail().isBlank() ? it.title() + ": " + it.text()
                                                                         : "Click to see what it printed"))
-            .onMouseClick(it -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
+            .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
 
     // ─── a file ────────────────────────────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ final class ChatRows {
                         .componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT))))
                     .add("growx, wmin 0", label(entry.get().text()).group(Skin.META)))
                 .add(handed
-                     ? button("⤓  Save…").group(Skin.QUIET_BUTTON).onClick(it -> saveHandout.accept(entry.get().title()))
+                     ? button("⤓  Save…").group(Skin.QUIET_BUTTON).onClick(_ -> saveHandout.accept(entry.get().title()))
                      : box()));
     }
 
@@ -432,7 +432,7 @@ final class ChatRows {
         return
             panel("fill, ins 6 0 6 0, gap 8", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
-            .add("top", failed ? picture(it -> GenieSvgUtil.Pose.DIZZY, it -> false) : box())
+            .add("top", failed ? picture(_ -> GenieSvgUtil.Pose.DIZZY, _ -> false) : box())
             .add("growx, wmin 0",
                 box().withMinSize(0, 0)
                 .withStyle(it -> it

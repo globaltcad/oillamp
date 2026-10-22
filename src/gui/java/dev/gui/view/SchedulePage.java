@@ -194,13 +194,13 @@ final class SchedulePage {
                 .withStyle(wide, (isWide, it) -> it.backgroundColor(TRANSPARENT).padding(isWide ? 4 : 0, 0, 0, 0))
                 .add(button("✦  Wake").group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
                      .withTooltip("Jobs run only while the genie is awake")
-                     .onClick(it -> app.wake(selected())))
+                     .onClick(_ -> app.wake(selected())))
                 .add(button(paused.viewAsString(it -> it ? "▶  Resume" : "❚❚  Pause")).group(Skin.QUIET_BUTTON)
                      .isVisibleIf(schedule.viewAs(Boolean.class, it -> it.paused() || !it.jobs().isEmpty()))
                      .withTooltip(paused.viewAsString(it -> it ? "Let the jobs run again" : "Hold every job until you resume; nothing is lost"))
-                     .onClick(it -> app.pauseSchedule(selected(), !schedule.get().paused())))
+                     .onClick(_ -> app.pauseSchedule(selected(), !schedule.get().paused())))
                 .add(button("＋  New job").group(Skin.FLAME_BUTTON)
-                     .onClick(it -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))));
+                     .onClick(_ -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))));
     }
 
     // ─── the timeline ──────────────────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ final class SchedulePage {
                                          : "Show " + more + " earlier " + (more == 1 ? "run" : "runs")))
                      .group(Skin.ICON_BUTTON).isVisibleIf(canFold)
                      .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(BRASS)))
-                     .onClick(it -> schedule.update(From.VIEW, s -> s.withEarlier(!s.earlier())))))
+                     .onClick(_ -> schedule.update(From.VIEW, s -> s.withEarlier(!s.earlier())))))
             .add("growx, wmin 0", label("Reading the schedule…").group(Skin.META).isVisibleIf(reading))
             .add("growx, wmin 0", label("Nothing ran this week, and nothing is planned.").group(Skin.META)
                  .isVisibleIf(Viewable.of(Boolean.class, timeline, reading, (it, isReading) -> !isReading
@@ -358,9 +358,9 @@ final class SchedulePage {
                                  : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress())))
                 .borderRadius(10)
                 .borderAt(UI.Edge.LEFT, 2, picked || working ? FLAME : TRANSPARENT))
-            .onMouseEnter(it -> hovered.set(true))
-            .onMouseExit(it -> hovered.set(false))
-            .onMouseClick(it -> {
+            .onMouseEnter(_ -> hovered.set(true))
+            .onMouseExit(_ -> hovered.set(false))
+            .onMouseClick(_ -> {
                 if (!moment.job().isEmpty()) schedule.update(From.VIEW, s -> s.pick(moment.job()));
             })
             .add("growx, wmin 0", ViewPartsUtil.words(moment.title(), 13, moment.kind() == Timeline.Kind.RAN ? 1f : 1.5f,
@@ -377,11 +377,11 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .isVisibleIf(moment.conversation().isPresent() || working)
                 .add(ViewPartsUtil.link("Open the conversation  →").isVisibleIf(moment.conversation().isPresent())
-                     .onClick(it -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id))))
+                     .onClick(_ -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id))))
                 .add(button("Stop").group(Skin.QUIET_BUTTON).isVisibleIf(working)
                      .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
                      .withTooltip("Stop this run; what the genie did so far is kept, and saved")
-                     .onClick(it -> app.stopRun(selected(), moment.run()))));
+                     .onClick(_ -> app.stopRun(selected(), moment.run()))));
     }
 
     // ─── the jobs ──────────────────────────────────────────────────────────────────────────
@@ -403,7 +403,7 @@ final class SchedulePage {
                         + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards."),
                         SUBTEXT, Val.of(true)))
                 .add("gaptop 6", button("＋  New job").group(Skin.FLAME_BUTTON)
-                     .onClick(it -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))))
+                     .onClick(_ -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))))
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 0, gap 10", "[grow]")
                 .withStyle(it -> it.backgroundColor(TRANSPARENT))
@@ -501,21 +501,21 @@ final class SchedulePage {
                     .add("growx, wmin 0", ViewPartsUtil.note("It gets the task at the time you choose, in a conversation of its own, "
                             + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.", Val.of(true))))
                 .add("top", button("✕").group(Skin.ICON_BUTTON).withTooltip("Close without saving")
-                     .onClick(it -> schedule.update(From.VIEW, Schedule::closeEditor))))
+                     .onClick(_ -> schedule.update(From.VIEW, Schedule::closeEditor))))
             .add(WIDE_SIDE, task())
             .add(NARROW_SIDE, when())
             .add(WHOLE,
                 box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(refused, TROUBLE, refused.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add("skip 0", button("Cancel").group(Skin.QUIET_BUTTON)
-                     .onClick(it -> schedule.update(From.VIEW, Schedule::closeEditor)))
+                     .onClick(_ -> schedule.update(From.VIEW, Schedule::closeEditor)))
                 .add(button(Viewable.of(String.class, changing, busy, (isChange, isBusy) ->
                             isBusy ? "Saving…" : isChange ? "Save the job" : "Add to the schedule"))
                      .group(Skin.FLAME_BUTTON).isEnabledIf(canSave)
                      .withTooltip(blocked.viewAsString(it -> it.isEmpty() ? "Ctrl and Return save too" : it))
                      .withStyle(canSave, (can, it) -> can ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
                          .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                     .onClick(it -> app.saveJob(selected()))));
+                     .onClick(_ -> app.saveJob(selected()))));
     }
 
     /// The task, with room to write a proper brief.
@@ -658,9 +658,9 @@ final class SchedulePage {
                         + month.month().getYear(), 13, 2f, TEXT))
                 .add(button("‹").group(Skin.ICON_BUTTON).withTooltip("The month before")
                      .isEnabledIf(month.month().isAfter(YearMonth.from(month.today())))
-                     .onClick(it -> draft.update(From.VIEW, d -> d.withMonth(d.month().minusMonths(1)))))
+                     .onClick(_ -> draft.update(From.VIEW, d -> d.withMonth(d.month().minusMonths(1)))))
                 .add(button("›").group(Skin.ICON_BUTTON).withTooltip("The month after")
-                     .onClick(it -> draft.update(From.VIEW, d -> d.withMonth(d.month().plusMonths(1))))));
+                     .onClick(_ -> draft.update(From.VIEW, d -> d.withMonth(d.month().plusMonths(1))))));
         for (DayOfWeek day : DayOfWeek.values())
             grid = grid.add("center", label(day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2)).group(Skin.META));
         int blank = month.month().atDay(1).getDayOfWeek().getValue() - 1;
@@ -684,7 +684,7 @@ final class SchedulePage {
                 .backgroundColor(picked ? FLAME : inStretch ? YOURS : TRANSPARENT)
                 .border(1, today && !picked ? BRASS : TRANSPARENT)
                 .componentFont(f -> f.color(picked ? ON_FLAME : past ? ViewPartsUtil.dim(SUBTEXT) : TEXT).weight(picked || today ? 2f : 1f)))
-            .onClick(it -> draft.update(From.VIEW, d -> d.pick(day)));
+            .onClick(_ -> draft.update(From.VIEW, d -> d.pick(day)));
     }
 
     /// The seven days of the week, each a round toggle, for a job that runs on some of them.
@@ -698,7 +698,7 @@ final class SchedulePage {
                 .withStyle(on, (isOn, it) -> it.borderRadius(18)
                     .backgroundColor(isOn ? FLAME : TRANSPARENT).border(1, isOn ? FLAME : BORDER)
                     .componentFont(f -> f.color(isOn ? ON_FLAME : TEXT).weight(isOn ? 2f : 1f)))
-                .onClick(it -> draft.update(From.VIEW, d -> d.toggle(day))));
+                .onClick(_ -> draft.update(From.VIEW, d -> d.toggle(day))));
         }
         return row;
     }
@@ -712,7 +712,7 @@ final class SchedulePage {
         return
             button(text).group(Skin.CHIP)
             .withStyle(chosen, (on, it) -> on ? it.backgroundColor(YOURS).border(1, FLAME).componentFont(f -> f.color(TEXT).weight(2f)) : it)
-            .onClick(it -> choose.run());
+            .onClick(_ -> choose.run());
     }
 
     private UIForButton<JButton> chip(JobDraft.Repeat how) {
@@ -723,7 +723,7 @@ final class SchedulePage {
     private UIForButton<JButton> quickPick(String text, UnaryOperator<LocalDateTime> from) {
         return
             button(text).group(Skin.CHIP)
-            .onClick(it -> {
+            .onClick(_ -> {
                 LocalDateTime at = from.apply(state.get().localNow());
                 draft.update(From.VIEW, d -> d.withDay(at.toLocalDate()).withTime(Recurrence.clock(at.toLocalTime()))
                                               .withMonth(YearMonth.from(at)));
@@ -752,7 +752,7 @@ final class SchedulePage {
                     g.setColor(mix(SUBTEXT, ON_FLAME, progress));
                     g.fill(new Ellipse2D.Double(3 + 14 * progress, 4, 12, 12));
                 })))
-            .onMouseClick(it -> flip.run());
+            .onMouseClick(_ -> flip.run());
     }
 
     /// Words in a colour, for text whose colour changes with it.

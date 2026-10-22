@@ -96,14 +96,14 @@ final class ViewPartsUtil {
     static JMenuItem item(String text, boolean enabled, Runnable action) {
         JMenuItem item = new JMenuItem(text);
         item.setEnabled(enabled);
-        item.addActionListener(event -> action.run());
+        item.addActionListener(_ -> action.run());
         return item;
     }
 
     /// One of several places to go, with its sign, marked while it is where the user is.
     static JRadioButtonMenuItem choice(String text, IconDeclaration sign, boolean chosen, Runnable action) {
         JRadioButtonMenuItem item = new JRadioButtonMenuItem(text, sign.find().orElse(null), chosen);
-        item.addActionListener(event -> action.run());
+        item.addActionListener(_ -> action.run());
         return item;
     }
 
@@ -164,7 +164,7 @@ final class ViewPartsUtil {
                 .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
                 .componentFont(f -> f.family(FONT).size(12).weight(part.chosen() ? 2f : 1f)
                     .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : dim(SUBTEXT))))
-            .onClick(it -> choose.run());
+            .onClick(_ -> choose.run());
     }
 
     /// `colour`, faded to step back.

@@ -190,7 +190,7 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// Writes the selected genie back. For the window's lenses; changes to a genie by id go
     /// through [#update].
     public GeniesState withGenie(Genie changed) {
-        return find(changed.id()).isPresent() ? update(changed.id(), ignored -> changed) : this;
+        return find(changed.id()).isPresent() ? update(changed.id(), _ -> changed) : this;
     }
 
     public boolean hasGenies() { return !genies.isEmpty(); }

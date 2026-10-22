@@ -138,8 +138,8 @@ public final class HistoryKeeper {
     /// While the genie is awake: a save, or a run's end, which saves too, adds a moment.
     void onLampEvent(LampEvent event) {
         switch (event) {
-            case LampEvent.Saved ignored -> { if (watched) read(); }
-            case LampEvent.RunFinished ignored -> { if (watched) read(); }
+            case LampEvent.Saved _ -> { if (watched) read(); }
+            case LampEvent.RunFinished _ -> { if (watched) read(); }
             default -> { }
         }
     }

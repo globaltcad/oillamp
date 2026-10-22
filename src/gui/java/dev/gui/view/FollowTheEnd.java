@@ -36,7 +36,7 @@ final class FollowTheEnd {
 
     private FollowTheEnd(JScrollPane pane) {
         this.range = pane.getVerticalScrollBar().getModel();
-        range.addChangeListener(event -> changed());
+        range.addChangeListener(_ -> changed());
         // Added after the look-and-feel's wheel listener, so it runs after that has moved the
         // scroll bar. A touchpad turns the wheel by fractions, so only the precise rotation says
         // which way.
