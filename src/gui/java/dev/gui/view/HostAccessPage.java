@@ -183,13 +183,13 @@ final class HostAccessPage {
             .add("growx, wmin 0", ViewPartsUtil.wrapped(warning, BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("skip 0", button("Undo changes").group(Skin.QUIET_BUTTON)
                  .isEnabledIf(canSave)
-                 .onClick(it -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved()))))
+                 .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved()))))
             .add(button(busy.viewAsString(it -> it ? "Saving…" : "Save")).group(Skin.FLAME_BUTTON)
                  .isEnabledIf(canSave)
                  .withTooltip("Write these rules into the genie's lamp")
                  .withStyle(canSave, (can, it) -> can ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
                      .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                 .onClick(it -> app.saveHostAccess(selected())));
+                 .onClick(_ -> app.saveHostAccess(selected())));
     }
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────

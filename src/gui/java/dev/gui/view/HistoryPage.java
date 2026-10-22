@@ -193,7 +193,7 @@ final class HistoryPage {
             .add("top", button("↶  Undo").group(Skin.QUIET_BUTTON).isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
                  .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
                  .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Go back to how it was before" : it))
-                 .onClick(it -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id()))));
+                 .onClick(_ -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id()))));
     }
 
     // ─── the moments ───────────────────────────────────────────────────────────────────────
@@ -235,7 +235,7 @@ final class HistoryPage {
                                     : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")))
                 .group(Skin.ICON_BUTTON).isVisibleIf(Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown))
                 .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(BRASS)))
-                .onClick(it -> history.update(From.VIEW, h -> h.withEarlier(!h.earlier()))));
+                .onClick(_ -> history.update(From.VIEW, h -> h.withEarlier(!h.earlier()))));
     }
 
     private static Painter rail(int height) {
@@ -359,9 +359,9 @@ final class HistoryPage {
                                               : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress())))
                 .borderRadius(10)
                 .borderAt(UI.Edge.LEFT, 2, picked.get() ? FLAME : TRANSPARENT))
-            .onMouseEnter(it -> hovered.set(true))
-            .onMouseExit(it -> hovered.set(false))
-            .onMouseClick(it -> history.update(From.VIEW, h -> h.pick(moment.id())))
+            .onMouseEnter(_ -> hovered.set(true))
+            .onMouseExit(_ -> hovered.set(false))
+            .onMouseClick(_ -> history.update(From.VIEW, h -> h.pick(moment.id())))
             .add("growx, wmin 0",
                 box().withMinSize(0, 0)
                 .withStyle(title, (words, it) -> it.padding(1, 0, 1, 0).text(t -> t
@@ -380,9 +380,9 @@ final class HistoryPage {
                      // words take the look's colour for what cannot be used.
                      .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
                      .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Bring its files and conversations back to how they were then" : it))
-                     .onClick(it -> confirmGoBack(moment)))
+                     .onClick(_ -> confirmGoBack(moment)))
                 .add(ViewPartsUtil.link("Open the conversation  →").isVisibleIf(canOpen)
-                     .onClick(it -> app.openConversation(selected(), moment.conversation()))));
+                     .onClick(_ -> app.openConversation(selected(), moment.conversation()))));
     }
 
     // ─── beside the moments: when it saves, and what a moment holds ────────────────────────

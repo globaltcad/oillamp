@@ -228,9 +228,9 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
         return switch (event) {
             case PiEvent.Answered answered -> heard.withTokens(tokens + answered.tokens());
             case PiEvent.ToolStarted tool  -> heard.withActivity("using " + tool.tool());
-            case PiEvent.Said ignored      -> heard.withActivity("writing");
-            case PiEvent.Thinking ignored  -> heard.withActivity("thinking");
-            case PiEvent.Settled ignored   -> phase.isAwake() ? heard.withPhase(Phase.READY).withActivity("ready") : heard;
+            case PiEvent.Said _            -> heard.withActivity("writing");
+            case PiEvent.Thinking _        -> heard.withActivity("thinking");
+            case PiEvent.Settled _         -> phase.isAwake() ? heard.withPhase(Phase.READY).withActivity("ready") : heard;
             case PiEvent.History history   -> heard.withConversations(conversations.withHere(
                     new Conversations.Here(conversations.here().file(), history.leaf())));
             case PiEvent.Opened opened     -> heard.withConversations(conversations.withHere(

@@ -70,7 +70,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
     private final Var<String> desktopSize = Var.of("");
     /// The size last asked of the desktop shown, so that one request is not sent again and again.
     private Optional<Dimension> asked = Optional.empty();
-    private final Timer sizeSettled = new Timer(SETTLING_MILLIS, settled -> sizeTheDesktop());
+    private final Timer sizeSettled = new Timer(SETTLING_MILLIS, _ -> sizeTheDesktop());
     /// The connection being let go of, while it gives the desktop its own size back.
     private Optional<Thread> lettingGo = Optional.empty();
     private String message = "The desktop shows here while the genie is awake.";
@@ -81,7 +81,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// The scale the desktop is drawn at; 0 means fit, less than 0 at the size of the room.
     private double zoom;
     /// Called with +1 or -1 when the user turns the wheel with Control held, to zoom.
-    private IntConsumer zoomSteps = steps -> {};
+    private IntConsumer zoomSteps = _ -> {};
 
     DesktopScreen() {
         sizeSettled.setRepeats(false);
@@ -283,7 +283,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
             RfbConnection opened = RfbConnection.open(desktop.socket(), new RfbConnection.Listener() {
                 @Override public void resized(int width, int height) {
                     SwingUtilities.invokeLater(() -> {
-                        connection.filter(it -> shown.equals(Optional.of(desktop))).ifPresent(DesktopScreen.this::sizeIs);
+                        connection.filter(_ -> shown.equals(Optional.of(desktop))).ifPresent(DesktopScreen.this::sizeIs);
                         revalidate();
                         repaint();
                     });
