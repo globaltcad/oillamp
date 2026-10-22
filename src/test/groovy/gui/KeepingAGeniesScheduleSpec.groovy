@@ -1,8 +1,6 @@
 package gui
 
-import dev.gui.ErrorLog
 import dev.gui.Genies
-import dev.gui.genie.Shelf
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
@@ -43,7 +41,6 @@ class KeepingAGeniesScheduleSpec extends Specification {
 
     @TempDir Path tmp
     ScenarioHost sandbox
-    Shelf shelf
     Genies app
     UUID jafar
     final CountDownLatch release = new CountDownLatch(1)
@@ -58,13 +55,10 @@ class KeepingAGeniesScheduleSpec extends Specification {
             }
             'You said: ' + prompt
         } }
-        // Jafar on the shelf, never woken, and Genies opened with a key in its environment.
-        shelf = new Shelf(sandbox.home.resolve('genies'))
+        // Genies opens as it closed last, with Jafar on its shelf, never woken, and a key in its environment.
         var genie = Genie.named('Jafar')
         jafar = genie.id()
-        shelf.keep(Tuple.of(Genie, genie))
-        shelf.keep(Settings.defaults())
-        app = Genies.open(shelf, new ErrorLog(shelf.errorLog()), sandbox.launcher,
+        app = Genies.open(sandbox.home.resolve('genies'), Tuple.of(Genie, genie), Settings.defaults(), sandbox.launcher,
                           { name -> name == Settings.KEY_VARIABLE ? Optional.of('sk-key') : Optional.empty() })
     }
 
@@ -265,7 +259,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
         }
     }
 
-    private Path lamp() { shelf.lampOf(jafar) }
+    private Path lamp() { app.lampOf(jafar) }
 
     /** As the window calls the app: on Swing's event thread. */
     private static void onTheWindowsThread(Closure action) {
