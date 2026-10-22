@@ -116,6 +116,8 @@ public final class GeniesBackend implements Genies {
             UUID shown = it.currentValue().orElse(GeniesState.NONE);
             // The schedule too, whose jobs give their runs' moments their titles.
             if (!shown.equals(GeniesState.NONE)) {
+                // When it saves first: until the moments are read, the page says it is reading.
+                runner(shown).history().readAutosave();
                 runner(shown).history().read();
                 runner(shown).schedule().read();
             }
@@ -307,6 +309,13 @@ public final class GeniesBackend implements Genies {
         if (target.isEmpty()) return;
         runner(id).goBackTo(target.get());
         if (genie.get().phase().isAwake()) wake(id);
+    }
+
+    /// Not while the genie is awake or waking: its lamp read the file as it woke.
+    @Override public void autosave(UUID id, History.Autosave wanted) {
+        Optional<Genie> genie = state.get().find(id);
+        if (genie.isEmpty() || genie.get().phase().isAwake() || genie.get().phase() == Genie.Phase.WAKING) return;
+        runner(id).history().autosave(wanted);
     }
 
     // ─── the host access ───────────────────────────────────────────────────────────────────

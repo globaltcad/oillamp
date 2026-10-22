@@ -10,6 +10,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -41,7 +43,8 @@ import static dev.gui.view.Palette.*;
 import static swingtree.UI.*;
 
 /// A genie's history: the moments oillamp saved its home at, newest first on a rail as the
-/// schedule's timeline draws its week, and the way back to any of them.
+/// schedule's timeline draws its week, the way back to any of them, and when oillamp saves by
+/// itself. The lamp reads that as it wakes, so it can only be changed while the genie sleeps.
 ///
 /// Like the rest of the window, a function of the [GeniesState]: a lens onto the selected genie's
 /// [History], and [Genies] for saving and going back.
@@ -56,6 +59,8 @@ final class HistoryPage {
      *      its buttons            12       12     12      4        4          4
      *      the moments            12       12     12      7        7          7
      *      what a moment holds    12       12     12      5        5          5
+     *
+     *  When oillamp saves by itself stands with what a moment holds, above it.
      */
     private static final int REFERENCE = 1100;
     private static final FlowCell WHOLE = AUTO_SPAN(it -> it
@@ -84,6 +89,11 @@ final class HistoryPage {
     private final Val<Boolean> wide;
     /// Why the genie cannot go back now, in a few words; empty when it can.
     private final Val<String> notNow;
+    /// When oillamp saves by itself, as the page shows it: what the lamp's file has, or what a
+    /// lamp has unless it says otherwise while there is none.
+    private final Val<History.Autosave> autosave;
+    /// Why when oillamp saves by itself cannot be changed now, in a sentence; empty when it can.
+    private final Val<String> autosaveLocked;
 
     HistoryPage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
@@ -97,6 +107,8 @@ final class HistoryPage {
                 : it.phase() == Genie.Phase.WORKING ? it.name() + " is working; go back once it is done"
                 : it.schedule().running().isPresent() ? "A job is running; go back once it is done"
                 : "");
+        autosave = history.viewAs(History.Autosave.class, it -> it.autosave().orElse(UNLESS_SAID));
+        autosaveLocked = genie.viewAsString(HistoryPage::autosaveLocked);
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
@@ -123,13 +135,15 @@ final class HistoryPage {
 
     private static Status status(Genie genie) {
         if (!genie.history().busy().isEmpty()) return new Status(BRASS, genie.history().busy());
+        String when = genie.history().autosave().orElse(UNLESS_SAID).when();
+        String saved = (when.isEmpty() ? genie.name() + " is saved only when you save it by hand. "
+                                       : "Saved whenever " + genie.name() + " " + when + ". ")
+                       + "Going back keeps how it is now, so you can always return.";
         return switch (genie.phase()) {
-            case READY -> new Status(CONTENT, "Saved whenever " + genie.name() + " wakes, answers or sleeps. "
-                    + "Going back keeps how it is now, so you can always return.");
+            case READY -> new Status(CONTENT, saved);
             case WORKING -> new Status(BRASS, genie.name() + " is working. You can go back once it is done.");
             case WAKING -> new Status(BRASS, genie.name() + " is waking. You can go back once it is awake.");
-            case ASLEEP, BROKEN -> new Status(SUBTEXT, "Saved whenever " + genie.name() + " wakes, answers or sleeps. "
-                    + "Going back keeps how it is now, so you can always return.");
+            case ASLEEP, BROKEN -> new Status(SUBTEXT, saved);
         };
     }
 
@@ -371,13 +385,41 @@ final class HistoryPage {
                      .onClick(it -> app.openConversation(selected(), moment.conversation()))));
     }
 
-    // ─── what a moment holds ───────────────────────────────────────────────────────────────
+    // ─── beside the moments: when it saves, and what a moment holds ────────────────────────
+
+    /// What a lamp's file has unless it says otherwise.
+    private static final History.Autosave UNLESS_SAID = new History.Autosave(false, false, true, true);
+
+    private static String autosaveLocked(Genie genie) {
+        if (genie.history().autosave().isEmpty())
+            return genie.history().read() ? "Wake " + genie.name() + " once first. When it saves is kept in its lamp, which it gets as it first wakes."
+                                          : "Reading when it saves…";
+        if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
+            return "Send " + genie.name() + " to sleep to change these. While it is awake, it keeps what it woke with.";
+        return "";
+    }
 
     private UIForAnySwing<?, ?> about() {
+        Val<Boolean> changeable = autosaveLocked.viewAs(Boolean.class, String::isEmpty);
         return
             box("fillx, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 12, 0, 0, isWide ? 14 : 0))
-            .add("growx, wmin 0", label("WHAT A MOMENT HOLDS").group(Skin.SECTION))
+            .add("growx, wmin 0", label("WHEN IT SAVES BY ITSELF").group(Skin.SECTION)
+                 .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT)))))
+            .add("growx, wmin 0",
+                panel("fill, wrap 2, gap 8 10, hidemode 3", "[grow][]").group(Skin.TILE)
+                .add("span 2, growx, wmin 0", ViewPartsUtil.wrapped(autosaveLocked, BRASS, changeable.viewAs(Boolean.class, it -> !it)))
+                .add("growx, wmin 0", ViewPartsUtil.words("As it wakes", 13, 1f, TEXT))
+                .add("top, right", autosaveSwitch(History.Autosave::waking, History.Autosave::withWaking, changeable))
+                .add("growx, wmin 0", ViewPartsUtil.words("After it went to sleep", 13, 1f, TEXT))
+                .add("top, right", autosaveSwitch(History.Autosave::sleeping, History.Autosave::withSleeping, changeable))
+                .add("growx, wmin 0", ViewPartsUtil.words("As it begins on a question or a job", 13, 1f, TEXT))
+                .add("top, right", autosaveSwitch(History.Autosave::beforeRun, History.Autosave::withBeforeRun, changeable))
+                .add("growx, wmin 0", ViewPartsUtil.words("As it answers, or ends a job", 13, 1f, TEXT))
+                .add("top, right", autosaveSwitch(History.Autosave::afterRun, History.Autosave::withAfterRun, changeable))
+                .add("span 2, growx, wmin 0", ViewPartsUtil.note("A job is told what its last runs said and changed from "
+                        + "what was saved as they ended. Saving by hand works whatever these say.", Val.of(true))))
+            .add("growx, wmin 0, gaptop 8", label("WHAT A MOMENT HOLDS").group(Skin.SECTION))
             .add("growx, wmin 0",
                 panel("fill, wrap 1, gap 8", "[grow]").group(Skin.TILE)
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + "'s home: the files it made, "
@@ -387,6 +429,15 @@ final class HistoryPage {
                         + "on this computer outside the genie's lamp."), SUBTEXT, Val.of(true)))
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(Val.of("Save by hand before something you might want to undo, "
                         + "such as a big change to a project."), SUBTEXT, Val.of(true))));
+    }
+
+    /// The switch for one of the moments oillamp saves at by itself, which it writes into the
+    /// lamp at once.
+    private UIForAnySwing<?, ?> autosaveSwitch(Function<History.Autosave, Boolean> on,
+                                               BiFunction<History.Autosave, Boolean, History.Autosave> with,
+                                               Val<Boolean> changeable) {
+        return ViewPartsUtil.yesOrNo(autosave.viewAs(Boolean.class, on), changeable,
+                                     yes -> app.autosave(selected(), with.apply(autosave.get(), yes)));
     }
 
     // ─── dialogs ───────────────────────────────────────────────────────────────────────────
