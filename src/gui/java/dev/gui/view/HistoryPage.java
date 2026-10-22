@@ -128,10 +128,10 @@ final class HistoryPage {
                     .backgroundColor(TRANSPARENT)
                     .padding(20, 22, 28, 22)
                 )
-                .add(WHOLE, top())
-                .add(WHOLE, undo())
-                .add(WIDE_SIDE, moments())
-                .add(NARROW_SIDE, about())
+                .add(WHOLE, header())
+                .add(WHOLE, undoBanner())
+                .add(WIDE_SIDE, momentsColumn())
+                .add(NARROW_SIDE, sideColumn())
             );
     }
 
@@ -154,7 +154,7 @@ final class HistoryPage {
         };
     }
 
-    private UIForAnySwing<?, ?> top() {
+    private UIForAnySwing<?, ?> header() {
         Val<Status> status = genie.viewAs(Status.class, HistoryPage::status);
         Val<String> problem = history.viewAsString(History::problem);
         Val<String> note = history.viewAsString(History::note);
@@ -201,7 +201,7 @@ final class HistoryPage {
     }
 
     /// Right after going back: what happened, and the way to undo it.
-    private UIForAnySwing<?, ?> undo() {
+    private UIForAnySwing<?, ?> undoBanner() {
         // The newest going back: a genie woken again after it may have saved a moment since.
         Val<String> wentBack = Viewable.of(String.class, genie, state, (it, s) ->
                                     it.history()
@@ -242,13 +242,18 @@ final class HistoryPage {
 
     // ─── the moments ───────────────────────────────────────────────────────────────────────
 
-    private UIForAnySwing<?, ?> moments() {
+    private UIForAnySwing<?, ?> momentsColumn() {
         Val<Tuple<History.Day>> days = Viewable.of(Tuple.classTyped(History.Day.class), history, genie,
                 (it, g) -> it.days(g.schedule().zone()));
         Val<Integer> hidden = history.viewAs(Integer.class, History::hidden);
         Val<Boolean> earlier = history.viewAs(Boolean.class, History::earlier);
         Val<Boolean> reading = history.viewAs(Boolean.class, it -> !it.read());
         Val<Boolean> none = history.viewAs(Boolean.class, it -> it.read() && it.moments().isEmpty());
+        Val<String> earlierButtonText = Viewable.of(String.class, hidden, earlier, (more, shown) ->
+                                            shown ? "Show only the newest moments"
+                                                  : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
+                                        );
+        Val<Boolean> earlierButtonShown = Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown);
         return
             box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(0, isWide ? 14 : 0, 0, 0))
@@ -290,12 +295,9 @@ final class HistoryPage {
                 )
             )
             .add("left",
-                button(Viewable.of(String.class, hidden, earlier, (more, shown) ->
-                    shown ? "Show only the newest moments"
-                          : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
-                ))
+                button(earlierButtonText)
                 .group(Skin.ICON_BUTTON)
-                .isVisibleIf(Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown))
+                .isVisibleIf(earlierButtonShown)
                 .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(BRASS)))
                 .onClick(_ -> history.update(From.VIEW, h -> h.withEarlier(!h.earlier())))
             );
@@ -372,16 +374,16 @@ final class HistoryPage {
                 .withStyle(picked, (isPicked, it) -> it
                     .backgroundColor(TRANSPARENT)
                     .painter(UI.Layer.BACKGROUND,
-                        Painter.of(moment.kind().name() + moment.outcome() + isPicked, node(moment, isPicked))
+                        Painter.of(moment.kind().name() + moment.outcome() + isPicked, railNode(moment, isPicked))
                     )
                 )
             )
-            .add("growx, wmin 0", card(moment, picked));
+            .add("growx, wmin 0", momentCard(moment, picked));
     }
 
     /// The node on the rail: the flame for a save by hand, the colour of how it ended for an
     /// answer or a job, brass for going back, and a quiet ring for waking and sleeping.
-    private static Painter node(History.Moment moment, boolean picked) {
+    private static Painter railNode(History.Moment moment, boolean picked) {
         return g -> {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             double x = RAIL / 2.0;
@@ -423,7 +425,7 @@ final class HistoryPage {
 
     /// A moment as a card: what it was, and more in a line below. Clicking it picks it, which
     /// shows the way back to it, and to its conversation.
-    private UIForPanel<JPanel> card(History.Moment moment, Val<Boolean> picked) {
+    private UIForPanel<JPanel> momentCard(History.Moment moment, Val<Boolean> picked) {
         Var<Boolean> hovered = Var.of(false);
         boolean quiet = moment.kind() == History.Kind.WOKE
                      || moment.kind() == History.Kind.SLEPT
@@ -436,13 +438,14 @@ final class HistoryPage {
         Val<Boolean> canOpen = genie.viewAs(Boolean.class, it -> !moment.conversation().isEmpty()
                 && it.conversations().find(moment.conversation()).isPresent());
         Val<Boolean> hot = Viewable.of(Boolean.class, picked, hovered, (isPicked, isHovered) -> isPicked || isHovered);
+        Val<String> tooltipText = picked.viewAsString(it ->
+                                      it ? "Click again to close" : "Click to go back to this moment, or to its conversation"
+                                  );
         return
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
             .withMinSize(0, 0)
             .withCursor(UI.Cursor.HAND)
-            .withTooltip(picked.viewAsString(it ->
-                it ? "Click again to close" : "Click to go back to this moment, or to its conversation"
-            ))
+            .withTooltip(tooltipText)
             .withTransitionalStyle(hot, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> it
                 .backgroundColor(picked.get() ? ViewPartsUtil.withAlpha(FLAME, 26 + (int) (20 * status.progress()))
                                               : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress())))
@@ -513,7 +516,7 @@ final class HistoryPage {
         return "";
     }
 
-    private UIForAnySwing<?, ?> about() {
+    private UIForAnySwing<?, ?> sideColumn() {
         Val<Boolean> changeable = autosaveLocked.viewAs(Boolean.class, String::isEmpty);
         return
             box("fillx, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
