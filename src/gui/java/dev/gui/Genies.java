@@ -7,6 +7,7 @@ import java.util.UUID;
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.Shelf;
 import dev.gui.model.GeniesState;
+import dev.gui.model.History;
 import sprouts.Var;
 
 /// The app as the window sees it: its state, which the window draws and changes, and what the
@@ -86,6 +87,9 @@ public interface Genies {
     /// Brings the genie's home back to its history's moment `moment`. An awake genie sleeps
     /// meanwhile, and wakes again after. The window has asked the user already.
     void goBack(UUID genie, String moment);
+
+    /// Writes when oillamp saves the genie's home by itself into its lamp. Only while it sleeps.
+    void autosave(UUID genie, History.Autosave wanted);
 
     /// Writes the rules the genie's host access page shows into its lamp. Only while it sleeps.
     void saveHostAccess(UUID genie);
