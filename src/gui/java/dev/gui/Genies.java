@@ -1,5 +1,6 @@
 package dev.gui;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
@@ -8,9 +9,12 @@ import java.util.function.Function;
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.LampLighterImpl;
 import dev.gui.genie.Shelf;
+import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
+import dev.gui.model.Settings;
 import dev.lamp.LampLauncher;
+import sprouts.Tuple;
 import sprouts.Var;
 
 /// The app as the window sees it: its state, which the window draws and changes, and what the
@@ -26,11 +30,18 @@ public interface Genies {
         return GeniesBackend.open(shelf, errors, new LampLighterImpl(), name -> Optional.ofNullable(System.getenv(name)));
     }
 
-    /// The app as [#open(Shelf, ErrorLog)] opens it, but with the genies' lamps started by
-    /// `launcher`, such as oillamp's engine in this JVM on a simulated machine, and as if Genies
-    /// was started from `environment`, by variable.
-    static Genies open(Shelf shelf, ErrorLog errors, LampLauncher launcher, Function<String, Optional<String>> environment) {
-        return GeniesBackend.open(shelf, errors, new LampLighterImpl(launcher), environment);
+    /// The app as [#open(Shelf, ErrorLog)] opens it, from the shelf in `directory` as if Genies had
+    /// left `genies` and `settings` on it when it last closed, its errors logged there too. The
+    /// genies' lamps are started by `launcher`, such as oillamp's engine in this JVM on a
+    /// simulated machine, and Genies is as if started from `environment`, by variable.
+    ///
+    /// @throws IOException when the genies or the settings could not be put on the shelf
+    static Genies open(Path directory, Tuple<Genie> genies, Settings settings, LampLauncher launcher,
+                       Function<String, Optional<String>> environment) throws IOException {
+        Shelf shelf = new Shelf(directory);
+        shelf.keep(genies);
+        shelf.keep(settings);
+        return GeniesBackend.open(shelf, new ErrorLog(shelf.errorLog()), new LampLighterImpl(launcher), environment);
     }
 
     /// Everything the window shows. The window changes it through lenses, such as a draft, the
@@ -136,4 +147,7 @@ public interface Genies {
 
     /// The genie's desktop, while it is awake.
     Optional<Desktop> desktopOf(UUID genie);
+
+    /// The genie's lamp: the directory oillamp keeps it in, whether or not it was ever lit.
+    Path lampOf(UUID genie);
 }
