@@ -113,19 +113,26 @@ final class HistoryPage {
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
         return
-            scrollPane(conf -> conf.fitWidth(true)).group(Skin.PAGE_SCROLL).withEmptyBorder(0)
+            scrollPane(conf -> conf.fitWidth(true))
+            .group(Skin.PAGE_SCROLL)
+            .withEmptyBorder(0)
             .isVisibleIf(visible)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
             .withVerticalScrollIncrement(24)
             .onResize(it -> state.update(From.VIEW, s -> s.withArea(it.getWidth(), it.getHeight())))
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 18)
-                .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).padding(20, 22, 28, 22))
+                .withMinSize(0, 0)
+                .withPrefSize(REFERENCE, 0)
+                .withStyle(it -> it
+                    .backgroundColor(TRANSPARENT)
+                    .padding(20, 22, 28, 22)
+                )
                 .add(WHOLE, top())
                 .add(WHOLE, undo())
                 .add(WIDE_SIDE, moments())
-                .add(NARROW_SIDE, about()));
+                .add(NARROW_SIDE, about())
+            );
     }
 
     // ─── on top: what is saved when, and saving now ────────────────────────────────────────
@@ -154,7 +161,8 @@ final class HistoryPage {
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
         return
             panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 10)
-            .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
+            .withMinSize(0, 0)
+            .withPrefSize(REFERENCE, 0)
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
             .add(SAYING,
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3", "[grow]")
@@ -162,38 +170,74 @@ final class HistoryPage {
                 .add("growx, wmin 0",
                     box("fill, ins 0, gap 8", "[10!][grow]")
                     .add("top, gaptop 5", ViewPartsUtil.dot(status.viewAs(Color.class, Status::colour), 8))
-                    .add("growx, wmin 0", ViewPartsUtil.wrapped(status.viewAsString(Status::words), SUBTEXT, Val.of(true))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(note, SUBTEXT, note.viewAs(Boolean.class, it -> !it.isEmpty())))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty()))))
+                    .add("growx, wmin 0",
+                        ViewPartsUtil.wrapped(status.viewAsString(Status::words), SUBTEXT, Val.of(true))
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(note, SUBTEXT, note.viewAs(Boolean.class, it -> !it.isEmpty()))
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(problem, TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty()))
+                )
+            )
             .add(BUTTONS,
                 // Right, beside what is said; left, under it, when there is no room beside it.
-                panel(wide.viewAs(Layout.class, isWide -> Layout.flow(isWide ? UI.HorizontalAlignment.RIGHT : UI.HorizontalAlignment.LEFT, 8, 4)))
-                .withStyle(wide, (isWide, it) -> it.backgroundColor(TRANSPARENT).padding(isWide ? 4 : 0, 0, 0, 0))
-                .add(button("＋  Save now…").group(Skin.FLAME_BUTTON).isEnabledIf(idle)
-                     .withTooltip("Keep how the genie is now as a moment to come back to, such as before a big change")
-                     .onClick(it -> save(it.getComponent()))));
+                panel(wide.viewAs(Layout.class, isWide ->
+                    Layout.flow(isWide ? UI.HorizontalAlignment.RIGHT : UI.HorizontalAlignment.LEFT, 8, 4)
+                ))
+                .withStyle(wide, (isWide, it) -> it
+                    .backgroundColor(TRANSPARENT)
+                    .padding(isWide ? 4 : 0, 0, 0, 0)
+                )
+                .add(
+                    button("＋  Save now…")
+                    .group(Skin.FLAME_BUTTON)
+                    .isEnabledIf(idle)
+                    .withTooltip("Keep how the genie is now as a moment to come back to, such as before a big change")
+                    .onClick(it -> save(it.getComponent()))
+                )
+            );
     }
 
     /// Right after going back: what happened, and the way to undo it.
     private UIForAnySwing<?, ?> undo() {
         // The newest going back: a genie woken again after it may have saved a moment since.
-        Val<String> wentBack = Viewable.of(String.class, genie, state, (it, s) -> it.history().moments().stream()
-                .filter(moment -> moment.kind() == History.Kind.WENT_BACK).findFirst()
-                .map(moment -> it.history().title(moment, it, s.localNow())).orElse(""));
+        Val<String> wentBack = Viewable.of(String.class, genie, state, (it, s) ->
+                                    it.history()
+                                        .moments()
+                                        .stream()
+                                        .filter(moment -> moment.kind() == History.Kind.WENT_BACK)
+                                        .findFirst()
+                                        .map(moment -> it.history().title(moment, it, s.localNow()))
+                                        .orElse("")
+                                );
         Val<Boolean> shown = history.viewAs(Boolean.class, it -> it.busy().isEmpty() && it.undo().isPresent());
         return
             panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[][grow][]")
             .isVisibleIf(shown)
-            .withStyle(it -> it.backgroundColor(YOURS).borderRadius(12).borderAt(UI.Edge.LEFT, 3, FLAME))
-            .add("top", label("↺").withStyle(it -> it.componentFont(f -> f.family(FONT).size(16).color(FLAME))))
+            .withStyle(it -> it
+                .backgroundColor(YOURS)
+                .borderRadius(12)
+                .borderAt(UI.Edge.LEFT, 3, FLAME)
+            )
+            .add("top",
+                label("↺")
+                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(16).color(FLAME)))
+            )
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(wentBack.viewAsString(it -> it + "."), TEXT, Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.note("How it was before is kept, so you can return to it.", Val.of(true))))
-            .add("top", button("↶  Undo").group(Skin.QUIET_BUTTON).isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
-                 .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
-                 .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Go back to how it was before" : it))
-                 .onClick(_ -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id()))));
+                .add("growx, wmin 0", ViewPartsUtil.note("How it was before is kept, so you can return to it.", Val.of(true)))
+            )
+            .add("top",
+                button("↶  Undo")
+                .group(Skin.QUIET_BUTTON)
+                .isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
+                .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
+                .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Go back to how it was before" : it))
+                .onClick(_ -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id())))
+            );
     }
 
     // ─── the moments ───────────────────────────────────────────────────────────────────────
@@ -211,31 +255,50 @@ final class HistoryPage {
             .add("growx, wmin 0", label("MOMENTS").group(Skin.SECTION))
             .add("growx, wmin 0", label("Reading the history…").group(Skin.META).isVisibleIf(reading))
             .add("growx, wmin 0",
-                panel("fill, wrap 1, ins 22 18 22 18, gap 8", "[grow, center]").group(Skin.TILE)
+                panel("fill, wrap 1, ins 22 18 22 18, gap 8", "[grow, center]")
+                .group(Skin.TILE)
                 .isVisibleIf(none)
                 .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.ASLEEP), 56))
-                .add("growx, wmin 0", ViewPartsUtil.words("Nothing saved yet", 15, 2f, TEXT).withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + "'s home is saved the first time "
-                        + "it wakes, and from then on whenever something changed. Each save is a moment you can bring it back to."),
-                        SUBTEXT, Val.of(true))))
+                .add("growx, wmin 0",
+                    ViewPartsUtil.words("Nothing saved yet", 15, 2f, TEXT)
+                    .withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP)))
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        genie.viewAsString(it -> it.name() + "'s home is saved the first time "
+                            + "it wakes, and from then on whenever something changed. Each save is a moment you can bring it back to."),
+                        SUBTEXT,
+                        Val.of(true)
+                    )
+                )
+            )
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 0, gap 0", "[grow]")
                 .withMinSize(0, 0)
                 .isVisibleIf(history.viewAs(Boolean.class, it -> !it.moments().isEmpty()))
                 // One rail down the whole history; each moment puts its node on it.
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).painter(UI.Layer.BACKGROUND,
-                        Painter.of(it.componentHeight(), rail(it.componentHeight()))))
+                .withStyle(it -> it
+                    .backgroundColor(TRANSPARENT)
+                    .painter(UI.Layer.BACKGROUND, Painter.of(it.componentHeight(), rail(it.componentHeight())))
+                )
                 .add("growx, wmin 0", nowRow())
                 // In a panel of their own: the days replace whatever is in the panel they go to.
                 .add("growx, wmin 0",
-                    panel("fill, wrap 1, ins 0, gap 0", "[grow]").withStyle(it -> it.backgroundColor(TRANSPARENT))
-                    .addAll("growx, wmin 0", days, day -> UI.of(UI.use(look, () -> dayView(day).get(JPanel.class))))))
+                    panel("fill, wrap 1, ins 0, gap 0", "[grow]")
+                    .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                    .addAll("growx, wmin 0", days, day -> UI.of(UI.use(look, () -> dayView(day).get(JPanel.class))))
+                )
+            )
             .add("left",
-                button(Viewable.of(String.class, hidden, earlier, (more, shown) -> shown ? "Show only the newest moments"
-                                    : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")))
-                .group(Skin.ICON_BUTTON).isVisibleIf(Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown))
+                button(Viewable.of(String.class, hidden, earlier, (more, shown) ->
+                    shown ? "Show only the newest moments"
+                          : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
+                ))
+                .group(Skin.ICON_BUTTON)
+                .isVisibleIf(Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown))
                 .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(BRASS)))
-                .onClick(_ -> history.update(From.VIEW, h -> h.withEarlier(!h.earlier()))));
+                .onClick(_ -> history.update(From.VIEW, h -> h.withEarlier(!h.earlier())))
+            );
     }
 
     private static Painter rail(int height) {
@@ -250,19 +313,29 @@ final class HistoryPage {
         return
             panel("fill, ins 2 0 2 0, gap 0", "[" + CLOCK + "!][" + RAIL + "!][grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
-            .add("top, gaptop 7, right", label("now").group(Skin.CLOCK).withStyle(it -> it.componentFont(f -> f.color(FLAME).weight(2f))))
+            .add("top, gaptop 7, right",
+                label("now")
+                .group(Skin.CLOCK)
+                .withStyle(it -> it.componentFont(f -> f.color(FLAME).weight(2f)))
+            )
             .add("top, growy, w " + RAIL + "!",
-                box().withPrefSize(RAIL, 28)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).painter(UI.Layer.BACKGROUND, Painter.of("now", g -> {
-                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    double x = RAIL / 2.0;
-                    g.setColor(ViewPartsUtil.withAlpha(FLAME, 60));
-                    g.fill(new Ellipse2D.Double(x - 9, NODE_Y - 9, 18, 18));
-                    g.setColor(FLAME);
-                    g.fill(new Ellipse2D.Double(x - 5, NODE_Y - 5, 10, 10));
-                }))))
+                box()
+                .withPrefSize(RAIL, 28)
+                .withStyle(it -> it
+                    .backgroundColor(TRANSPARENT)
+                    .painter(UI.Layer.BACKGROUND, Painter.of("now", g -> {
+                        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        double x = RAIL / 2.0;
+                        g.setColor(ViewPartsUtil.withAlpha(FLAME, 60));
+                        g.fill(new Ellipse2D.Double(x - 9, NODE_Y - 9, 18, 18));
+                        g.setColor(FLAME);
+                        g.fill(new Ellipse2D.Double(x - 5, NODE_Y - 5, 10, 10));
+                    }))
+                )
+            )
             .add("growx, wmin 0, gaptop 6, gapleft 10",
-                label(genie.viewAsString(it -> "How " + it.name() + " is now")).group(Skin.META));
+                label(genie.viewAsString(it -> "How " + it.name() + " is now")).group(Skin.META)
+            );
     }
 
     private UIForPanel<JPanel> dayView(History.Day day) {
@@ -277,7 +350,9 @@ final class HistoryPage {
                 .withStyle(it -> it.backgroundColor(TRANSPARENT))
                 .add("skip 1, center", ViewPartsUtil.dot(Val.of(day.date().equals(today) ? FLAME : SUBTEXT), 5))
                 .add("growx, wmin 0, gapleft 8",
-                    ViewPartsUtil.words(label + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""), 13, 2f, TEXT)));
+                    ViewPartsUtil.words(label + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""), 13, 2f, TEXT)
+                )
+            );
         for (History.Moment moment : day.moments()) view = view.add("growx, wmin 0", momentView(moment));
         return view;
     }
@@ -288,11 +363,19 @@ final class HistoryPage {
         return
             panel("fill, ins 2 0 2 0, gap 0", "[" + CLOCK + "!][" + RAIL + "!][grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
-            .add("top, gaptop 7, right", label(Recurrence.clock(LocalDateTime.ofInstant(moment.at(), zone).toLocalTime())).group(Skin.CLOCK))
+            .add("top, gaptop 7, right",
+                label(Recurrence.clock(LocalDateTime.ofInstant(moment.at(), zone).toLocalTime())).group(Skin.CLOCK)
+            )
             .add("top, growy, w " + RAIL + "!",
-                box().withPrefSize(RAIL, 28)
-                .withStyle(picked, (isPicked, it) -> it.backgroundColor(TRANSPARENT).painter(UI.Layer.BACKGROUND,
-                        Painter.of(moment.kind().name() + moment.outcome() + isPicked, node(moment, isPicked)))))
+                box()
+                .withPrefSize(RAIL, 28)
+                .withStyle(picked, (isPicked, it) -> it
+                    .backgroundColor(TRANSPARENT)
+                    .painter(UI.Layer.BACKGROUND,
+                        Painter.of(moment.kind().name() + moment.outcome() + isPicked, node(moment, isPicked))
+                    )
+                )
+            )
             .add("growx, wmin 0", card(moment, picked));
     }
 
@@ -342,8 +425,12 @@ final class HistoryPage {
     /// shows the way back to it, and to its conversation.
     private UIForPanel<JPanel> card(History.Moment moment, Val<Boolean> picked) {
         Var<Boolean> hovered = Var.of(false);
-        boolean quiet = moment.kind() == History.Kind.WOKE || moment.kind() == History.Kind.SLEPT || moment.kind() == History.Kind.BEFORE_RUN;
-        boolean failed = moment.outcome().filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT).isPresent();
+        boolean quiet = moment.kind() == History.Kind.WOKE
+                     || moment.kind() == History.Kind.SLEPT
+                     || moment.kind() == History.Kind.BEFORE_RUN;
+        boolean failed = moment.outcome()
+                               .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
+                               .isPresent();
         String detail = moment.detail();
         Val<String> title = Viewable.of(String.class, genie, state, (it, s) -> it.history().title(moment, it, s.localNow()));
         Val<Boolean> canOpen = genie.viewAs(Boolean.class, it -> !moment.conversation().isEmpty()
@@ -353,36 +440,62 @@ final class HistoryPage {
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
             .withMinSize(0, 0)
             .withCursor(UI.Cursor.HAND)
-            .withTooltip(picked.viewAsString(it -> it ? "Click again to close" : "Click to go back to this moment, or to its conversation"))
+            .withTooltip(picked.viewAsString(it ->
+                it ? "Click again to close" : "Click to go back to this moment, or to its conversation"
+            ))
             .withTransitionalStyle(hot, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> it
                 .backgroundColor(picked.get() ? ViewPartsUtil.withAlpha(FLAME, 26 + (int) (20 * status.progress()))
                                               : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress())))
                 .borderRadius(10)
-                .borderAt(UI.Edge.LEFT, 2, picked.get() ? FLAME : TRANSPARENT))
+                .borderAt(UI.Edge.LEFT, 2, picked.get() ? FLAME : TRANSPARENT)
+            )
             .onMouseEnter(_ -> hovered.set(true))
             .onMouseExit(_ -> hovered.set(false))
             .onMouseClick(_ -> history.update(From.VIEW, h -> h.pick(moment.id())))
             .add("growx, wmin 0",
-                box().withMinSize(0, 0)
-                .withStyle(title, (words, it) -> it.padding(1, 0, 1, 0).text(t -> t
-                    .content(StyledString.of(f -> f.family(FONT).size(13)
-                        .weight(moment.kind() == History.Kind.SAVED ? 2f : 1.5f)
-                        .color(quiet ? SUBTEXT : TEXT), words))
-                    .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
-            .add("growx, wmin 0, hidemode 3", ViewPartsUtil.words(detail, 12, 1f, failed ? TROUBLE : SUBTEXT)
-                 .isVisibleIf(!detail.isEmpty()))
+                box()
+                .withMinSize(0, 0)
+                .withStyle(title, (words, it) -> it
+                    .padding(1, 0, 1, 0)
+                    .text(t -> t
+                        .content(StyledString.of(f -> f
+                            .family(FONT)
+                            .size(13)
+                            .weight(moment.kind() == History.Kind.SAVED ? 2f : 1.5f)
+                            .color(quiet ? SUBTEXT : TEXT),
+                            words
+                        ))
+                        .placement(UI.Placement.TOP_LEFT)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    )
+                )
+            )
+            .add("growx, wmin 0, hidemode 3",
+                ViewPartsUtil.words(detail, 12, 1f, failed ? TROUBLE : SUBTEXT)
+                .isVisibleIf(!detail.isEmpty())
+            )
             .add("left, gaptop 4, hidemode 3",
                 box("ins 0, gap 10, hidemode 3")
                 .isVisibleIf(picked)
-                .add(button("↺  Go back to this moment…").group(Skin.QUIET_BUTTON)
-                     .isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
-                     // Not now, it steps back, as the Send button does with nothing to send; its
-                     // words take the look's colour for what cannot be used.
-                     .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
-                     .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Bring its files and conversations back to how they were then" : it))
-                     .onClick(_ -> confirmGoBack(moment)))
-                .add(ViewPartsUtil.link("Open the conversation  →").isVisibleIf(canOpen)
-                     .onClick(_ -> app.openConversation(selected(), moment.conversation()))));
+                .add(
+                    button("↺  Go back to this moment…")
+                    .group(Skin.QUIET_BUTTON)
+                    .isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
+                    // Not now, it steps back, as the Send button does with nothing to send; its
+                    // words take the look's colour for what cannot be used.
+                    .withStyle(notNow, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
+                    .withTooltip(notNow.viewAsString(it ->
+                        it.isEmpty() ? "Bring its files and conversations back to how they were then" : it
+                    ))
+                    .onClick(_ -> confirmGoBack(moment))
+                )
+                .add(
+                    ViewPartsUtil.link("Open the conversation  →")
+                    .isVisibleIf(canOpen)
+                    .onClick(_ -> app.openConversation(selected(), moment.conversation()))
+                )
+            );
     }
 
     // ─── beside the moments: when it saves, and what a moment holds ────────────────────────
@@ -392,8 +505,9 @@ final class HistoryPage {
 
     private static String autosaveLocked(Genie genie) {
         if (genie.history().autosave().isEmpty())
-            return genie.history().read() ? "Wake " + genie.name() + " once first. When it saves is kept in its lamp, which it gets as it first wakes."
-                                          : "Reading when it saves…";
+            return genie.history().read()
+                    ? "Wake " + genie.name() + " once first. When it saves is kept in its lamp, which it gets as it first wakes."
+                    : "Reading when it saves…";
         if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
             return "Send " + genie.name() + " to sleep to change these. While it is awake, it keeps what it woke with.";
         return "";
@@ -404,11 +518,17 @@ final class HistoryPage {
         return
             box("fillx, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 12, 0, 0, isWide ? 14 : 0))
-            .add("growx, wmin 0", label("WHEN IT SAVES BY ITSELF").group(Skin.SECTION)
-                 .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT)))))
             .add("growx, wmin 0",
-                panel("fill, wrap 2, gap 8 10, hidemode 3", "[grow][]").group(Skin.TILE)
-                .add("span 2, growx, wmin 0", ViewPartsUtil.wrapped(autosaveLocked, BRASS, changeable.viewAs(Boolean.class, it -> !it)))
+                label("WHEN IT SAVES BY ITSELF")
+                .group(Skin.SECTION)
+                .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT))))
+            )
+            .add("growx, wmin 0",
+                panel("fill, wrap 2, gap 8 10, hidemode 3", "[grow][]")
+                .group(Skin.TILE)
+                .add("span 2, growx, wmin 0",
+                    ViewPartsUtil.wrapped(autosaveLocked, BRASS, changeable.viewAs(Boolean.class, it -> !it))
+                )
                 .add("growx, wmin 0", ViewPartsUtil.words("As it wakes", 13, 1f, TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::waking, History.Autosave::withWaking, changeable))
                 .add("growx, wmin 0", ViewPartsUtil.words("After it went to sleep", 13, 1f, TEXT))
@@ -417,27 +537,57 @@ final class HistoryPage {
                 .add("top, right", autosaveSwitch(History.Autosave::beforeRun, History.Autosave::withBeforeRun, changeable))
                 .add("growx, wmin 0", ViewPartsUtil.words("As it answers, or ends a job", 13, 1f, TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::afterRun, History.Autosave::withAfterRun, changeable))
-                .add("span 2, growx, wmin 0", ViewPartsUtil.note("A job is told what its last runs said and changed from "
-                        + "what was saved as they ended. Saving by hand works whatever these say.", Val.of(true))))
+                .add("span 2, growx, wmin 0",
+                    ViewPartsUtil.note(
+                        "A job is told what its last runs said and changed from "
+                            + "what was saved as they ended. Saving by hand works whatever these say.",
+                        Val.of(true)
+                    )
+                )
+            )
             .add("growx, wmin 0, gaptop 8", label("WHAT A MOMENT HOLDS").group(Skin.SECTION))
             .add("growx, wmin 0",
-                panel("fill, wrap 1, gap 8", "[grow]").group(Skin.TILE)
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + "'s home: the files it made, "
-                        + "its notes and its conversations, and the settings of its lamp. Going back brings all of these back together."),
-                        TEXT, Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(Val.of("Its schedule stays as it is, and so does everything "
-                        + "on this computer outside the genie's lamp."), SUBTEXT, Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(Val.of("Save by hand before something you might want to undo, "
-                        + "such as a big change to a project."), SUBTEXT, Val.of(true))));
+                panel("fill, wrap 1, gap 8", "[grow]")
+                .group(Skin.TILE)
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        genie.viewAsString(it -> it.name() + "'s home: the files it made, "
+                            + "its notes and its conversations, and the settings of its lamp. Going back brings all of these back together."),
+                        TEXT,
+                        Val.of(true)
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        Val.of("Its schedule stays as it is, and so does everything "
+                            + "on this computer outside the genie's lamp."),
+                        SUBTEXT,
+                        Val.of(true)
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        Val.of("Save by hand before something you might want to undo, "
+                            + "such as a big change to a project."),
+                        SUBTEXT,
+                        Val.of(true)
+                    )
+                )
+            );
     }
 
     /// The switch for one of the moments oillamp saves at by itself, which it writes into the
     /// lamp at once.
-    private UIForAnySwing<?, ?> autosaveSwitch(Function<History.Autosave, Boolean> on,
-                                               BiFunction<History.Autosave, Boolean, History.Autosave> with,
-                                               Val<Boolean> changeable) {
-        return ViewPartsUtil.yesOrNo(autosave.viewAs(Boolean.class, on), changeable,
-                                     yes -> app.autosave(selected(), with.apply(autosave.get(), yes)));
+    private UIForAnySwing<?, ?> autosaveSwitch(
+        Function<History.Autosave, Boolean> on,
+        BiFunction<History.Autosave, Boolean, History.Autosave> with,
+        Val<Boolean> changeable
+    ) {
+        return ViewPartsUtil.yesOrNo(
+            autosave.viewAs(Boolean.class, on),
+            changeable,
+            yes -> app.autosave(selected(), with.apply(autosave.get(), yes))
+        );
     }
 
     // ─── dialogs ───────────────────────────────────────────────────────────────────────────
