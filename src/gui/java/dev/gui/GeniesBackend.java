@@ -420,6 +420,8 @@ public final class GeniesBackend implements Genies {
         return Optional.ofNullable(runners.get(id)).flatMap(GenieRunner::desktop);
     }
 
+    @Override public Path lampOf(UUID id) { return shelf.lampOf(id); }
+
     // ─── the rest ──────────────────────────────────────────────────────────────────────────
 
     /// Looks, off Swing's event thread, whether Ollama is installed and runs, and what it and the
