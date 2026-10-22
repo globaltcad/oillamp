@@ -30,6 +30,12 @@ import java.util.concurrent.TimeUnit
  *  with them, become what they were then. Here the app is driven as its window drives it,
  *  through {@link dev.gui.Genies}; its lamps are oillamp's real engine, in this JVM, on a
  *  simulated machine whose clock the scenario moves, with a stand-in pi.
+ *
+ *  <p>Each scenario reads on its own, and shows how the window talks to the app: every call to
+ *  Genies, and every read of its state, is written out where it happens, on Swing's event
+ *  thread as the window makes it. No helper method stands between a scenario and that API, as
+ *  one would hide the API the scenario is about; repeating a call is fine, hiding one is not.
+ *  Helpers that do not touch the app, such as waiting for a condition, are fine.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class KeepingAGeniesHistorySpec extends Specification {
@@ -55,7 +61,7 @@ class KeepingAGeniesHistorySpec extends Specification {
 
     def cleanup() {
         var done = new CountDownLatch(1)
-        onTheWindowsThread { app?.quit(false, Optional.empty(), { done.countDown() }) }
+        SwingUtilities.invokeAndWait { app?.quit(false, Optional.empty(), { done.countDown() }) }
         done.await(3, TimeUnit.MINUTES)
     }
 
@@ -72,48 +78,52 @@ class KeepingAGeniesHistorySpec extends Specification {
             the user can save from there, through the genie's menu.
         """
         given: 'a genie that woke, answered a question and went to sleep'
-            wake()
-            ask('Plot the sales figures')
-            waitUntil { genie().phase() == Genie.Phase.READY && genie().conversations().chatCount() == 1 }
-            onTheWindowsThread { app.sleep(jafar) }
-            waitUntil { genie().phase() == Genie.Phase.ASLEEP }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Plot the sales figures') } }
+                app.send()
+            }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 1 }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
         when: 'the user opens its history'
-            open(GeniesState.Page.HISTORY)
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
 
         then: 'the moments are there, newest first: before the answer and the answer, and none for waking or sleeping'
-            waitUntil { genie().history().read() }
-            genie().history().moments()*.kind() == [History.Kind.RAN, History.Kind.BEFORE_RUN]
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().read() }
+            app.state().get().find(jafar).orElseThrow().history().moments()*.kind() == [History.Kind.RAN, History.Kind.BEFORE_RUN]
 
         and: 'the answer is titled by its conversation, with what the genie said'
-            var answered = genie().history().moments().first()
+            var answered = app.state().get().find(jafar).orElseThrow().history().moments().first()
             var now = LocalDateTime.ofInstant(NOW, BERLIN)
-            genie().history().title(answered, genie(), now) == 'Answered: Plot the sales figures'
+            app.state().get().find(jafar).orElseThrow().history().title(answered, app.state().get().find(jafar).orElseThrow(), now) == 'Answered: Plot the sales figures'
             answered.detail() == 'You said: Plot the sales figures'
 
         when: 'the user saves with nothing changed'
-            onTheWindowsThread { app.save(jafar, 'before the big refactor') }
+            SwingUtilities.invokeAndWait { app.save(jafar, 'before the big refactor') }
 
         then: 'nothing is saved, the newest moment is picked, and the page says why'
-            waitUntil { genie().history().busy().isEmpty() && !genie().history().note().isEmpty() }
-            genie().history().picked() == genie().history().moments().first().id()
-            genie().history().moments().first().kind() == History.Kind.RAN
-            genie().transcript().entries().last().text() == genie().history().note()
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() && !app.state().get().find(jafar).orElseThrow().history().note().isEmpty() }
+            app.state().get().find(jafar).orElseThrow().history().picked() == app.state().get().find(jafar).orElseThrow().history().moments().first().id()
+            app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.RAN
+            app.state().get().find(jafar).orElseThrow().transcript().entries().last().text() == app.state().get().find(jafar).orElseThrow().history().note()
 
         when: 'a file changes in the genie\'s home, and the user saves again'
-            Files.writeString(home().resolve('plan.md'), 'refactor the parser')
-            onTheWindowsThread { app.save(jafar, 'before the big refactor') }
+            Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'refactor the parser')
+            SwingUtilities.invokeAndWait { app.save(jafar, 'before the big refactor') }
 
         then: 'the save is the newest moment, picked, and titled by what the user wrote'
-            waitUntil { genie().history().moments().first().kind() == History.Kind.SAVED }
-            var saved = genie().history().moments().first()
-            genie().history().title(saved, genie(), now) == 'before the big refactor'
-            waitUntil { genie().history().picked() == saved.id() }
-            genie().history().note().isEmpty()
-            genie().history().problem().isEmpty()
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.SAVED }
+            var saved = app.state().get().find(jafar).orElseThrow().history().moments().first()
+            app.state().get().find(jafar).orElseThrow().history().title(saved, app.state().get().find(jafar).orElseThrow(), now) == 'before the big refactor'
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().picked() == saved.id() }
+            app.state().get().find(jafar).orElseThrow().history().note().isEmpty()
+            app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
 
         and: 'the chat says so'
-            var told = genie().transcript().entries().last().text()
+            var told = app.state().get().find(jafar).orElseThrow().transcript().entries().last().text()
             told == 'Saved as a moment of the history: before the big refactor. The history page brings the genie back to it.'
     }
 
@@ -129,57 +139,67 @@ class KeepingAGeniesHistorySpec extends Specification {
             afterwards, since undoing would then lose them.
         """
         given: 'an awake genie, its history open, that answered once, then got a file, then answered again'
-            var questionsAsked = { genie().conversations().all().first().steps().count { it.asked() } }
-            wake()
-            open(GeniesState.Page.HISTORY)
-            ask('Write a parser')
-            waitUntil { genie().phase() == Genie.Phase.READY && genie().conversations().chatCount() == 1 }
+            var questionsAsked = { app.state().get().find(jafar).orElseThrow().conversations().all().first().steps().count { it.asked() } }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Write a parser') } }
+                app.send()
+            }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 1 }
             sandbox.machine { it.clockAt(NOW.plus(Duration.ofMinutes(20))) }
-            Files.writeString(home().resolve('plan.md'), 'refactor the parser')
-            ask('Now refactor it')
-            waitUntil { genie().phase() == Genie.Phase.READY && questionsAsked() == 2 }
-            waitUntil { genie().history().moments().count { it.kind() == History.Kind.RAN } == 2 }
+            Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'refactor the parser')
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Now refactor it') } }
+                app.send()
+            }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && questionsAsked() == 2 }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().count { it.kind() == History.Kind.RAN } == 2 }
 
         when: 'the user goes back to just after the first answer'
-            var afterTheFirstAnswer = genie().history().moments().findAll { it.kind() == History.Kind.RAN }.last()
-            onTheWindowsThread { app.goBack(jafar, afterTheFirstAnswer.id()) }
+            var afterTheFirstAnswer = app.state().get().find(jafar).orElseThrow().history().moments().findAll { it.kind() == History.Kind.RAN }.last()
+            SwingUtilities.invokeAndWait { app.goBack(jafar, afterTheFirstAnswer.id()) }
 
         then: 'the genie is awake again, and its home is as it was then'
-            waitUntil { genie().history().moments().first().kind() == History.Kind.WENT_BACK }
-            waitUntil { genie().phase() == Genie.Phase.READY && genie().history().busy().isEmpty() }
-            genie().history().problem() == ''
-            !Files.exists(home().resolve('plan.md'))
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.WENT_BACK }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() }
+            app.state().get().find(jafar).orElseThrow().history().problem() == ''
+            !Files.exists(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'))
 
         and: 'its conversation holds the first question only'
             waitUntil { questionsAsked() == 1 }
 
         and: 'the history says it went back, and offers to undo that'
-            var wentBack = genie().history().moments().first()
-            genie().history().wentBackTo(wentBack).get().id() == afterTheFirstAnswer.id()
-            var undo = genie().history().undo()
+            var wentBack = app.state().get().find(jafar).orElseThrow().history().moments().first()
+            app.state().get().find(jafar).orElseThrow().history().wentBackTo(wentBack).get().id() == afterTheFirstAnswer.id()
+            var undo = app.state().get().find(jafar).orElseThrow().history().undo()
             undo.isPresent()
 
         when: 'the user undoes it'
-            onTheWindowsThread { app.goBack(jafar, undo.get().id()) }
+            SwingUtilities.invokeAndWait { app.goBack(jafar, undo.get().id()) }
 
         then: 'the file and the second question are back'
-            waitUntil { genie().history().moments().first().id() != wentBack.id() }
-            waitUntil { genie().phase() == Genie.Phase.READY && questionsAsked() == 2 && genie().history().busy().isEmpty() }
-            Files.readString(home().resolve('plan.md')) == 'refactor the parser'
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().id() != wentBack.id() }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && questionsAsked() == 2 && app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() }
+            Files.readString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md')) == 'refactor the parser'
 
         and: 'the history says it undid the going back, and offers no undo of the undo'
-            var undone = genie().history().moments().first()
+            var undone = app.state().get().find(jafar).orElseThrow().history().moments().first()
             undone.kind() == History.Kind.WENT_BACK
-            genie().history().undid(undone).get().id() == wentBack.id()
-            genie().history().undo().isEmpty()
+            app.state().get().find(jafar).orElseThrow().history().undid(undone).get().id() == wentBack.id()
+            app.state().get().find(jafar).orElseThrow().history().undo().isEmpty()
 
         when: 'the genie answers again'
-            ask('Thanks')
-            waitUntil { genie().phase() == Genie.Phase.READY && questionsAsked() == 3 }
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Thanks') } }
+                app.send()
+            }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && questionsAsked() == 3 }
 
         then: 'there is nothing to undo any more'
-            waitUntil { genie().history().moments().first().kind() == History.Kind.RAN }
-            genie().history().undo().isEmpty()
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.RAN }
+            app.state().get().find(jafar).orElseThrow().history().undo().isEmpty()
     }
 
     def 'When oillamp saves by itself is read from the lamp, and the history page changes it'() {
@@ -192,36 +212,38 @@ class KeepingAGeniesHistorySpec extends Specification {
             change them only while the genie sleeps.
         """
         when: 'the user opens the history of a genie that never woke'
-            open(GeniesState.Page.HISTORY)
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
 
         then: 'nothing is saved, and there is nothing to say when it saves'
-            waitUntil { genie().history().read() }
-            genie().history().moments().isEmpty()
-            genie().history().autosave().isEmpty()
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().read() }
+            app.state().get().find(jafar).orElseThrow().history().moments().isEmpty()
+            app.state().get().find(jafar).orElseThrow().history().autosave().isEmpty()
 
         when: 'it wakes once, and goes to sleep, while the page is open'
-            wake()
-            onTheWindowsThread { app.sleep(jafar) }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
 
         then: 'the page shows that a new lamp saves around its runs only'
-            waitUntil { genie().phase() == Genie.Phase.ASLEEP && genie().history().autosave().isPresent() }
-            genie().history().autosave().get() == new History.Autosave(false, false, true, true)
-            genie().history().autosave().get().when() == 'answers'
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP && app.state().get().find(jafar).orElseThrow().history().autosave().isPresent() }
+            app.state().get().find(jafar).orElseThrow().history().autosave().get() == new History.Autosave(false, false, true, true)
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when() == 'answers'
 
         when: 'the user switches on saving as it wakes'
-            onTheWindowsThread { app.autosave(jafar, genie().history().autosave().get().withWaking(true)) }
+            SwingUtilities.invokeAndWait { app.autosave(jafar, app.state().get().find(jafar).orElseThrow().history().autosave().get().withWaking(true)) }
 
         then: 'the lamp\'s file has it'
-            waitUntil { Lamp.at(lamp()).autosave().startup() }
-            waitUntil { genie().history().autosave().get().waking() }
-            genie().history().autosave().get().when() == 'wakes or answers'
-            genie().history().problem().isEmpty()
+            waitUntil { Lamp.at(app.lampOf(jafar)).autosave().startup() }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().autosave().get().waking() }
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when() == 'wakes or answers'
+            app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
 
         when: 'the genie wakes again'
-            wake()
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
 
         then: 'oillamp saved as it woke, and the page shows it'
-            waitUntil { genie().history().moments().any { it.kind() == History.Kind.WOKE } }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().any { it.kind() == History.Kind.WOKE } }
     }
 
     def 'A long history shows its newest forty moments, day by day, and waking does not end the offer to undo'() {
@@ -280,43 +302,14 @@ class KeepingAGeniesHistorySpec extends Specification {
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
-    /** Jafar as the window shows him now. */
-    private Genie genie() { app.state().get().find(jafar).orElseThrow() }
-
-    private void wake() {
-        onTheWindowsThread { app.wake(jafar) }
-        waitUntil { genie().phase() == Genie.Phase.READY }
-    }
-
-    /** The user goes to Jafar's `page`. */
-    private void open(GeniesState.Page page) {
-        onTheWindowsThread { app.state().update { it.select(jafar).withPage(page) } }
-    }
-
-    /** The user types `text` to Jafar and sends it. */
-    private void ask(String text) {
-        onTheWindowsThread {
-            app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft(text) } }
-            app.send()
-        }
-    }
-
-    private Path lamp() { app.lampOf(jafar) }
-
-    private Path home() { Lamp.agentHome(lamp()).orElseThrow() }
-
-    /** As the window calls the app: on Swing's event thread. */
-    private static void onTheWindowsThread(Closure action) {
-        SwingUtilities.invokeAndWait(action)
-    }
-
     private void waitUntil(Closure<Boolean> condition) {
         var deadline = System.currentTimeMillis() + 40_000
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
             Thread.sleep(20)
         }
-        throw new AssertionError("never happened; the genie is ${genie().phase()} (${genie().activity()}), " +
-                                 "its history ${genie().history()}" as Object)
+        var shown = app.state().get().find(jafar).orElseThrow()
+        throw new AssertionError("never happened; the genie is ${shown.phase()} (${shown.activity()}), " +
+                                 "its history ${shown.history()}" as Object)
     }
 }

@@ -32,6 +32,12 @@ import java.util.concurrent.TimeUnit
  *  afterwards with what the genie said. Here the app is driven as its window drives it, through
  *  {@link dev.gui.Genies}; its lamps are oillamp's real engine, in this JVM, on a simulated
  *  machine whose clock the scenario moves, with a stand-in pi.
+ *
+ *  <p>Each scenario reads on its own, and shows how the window talks to the app: every call to
+ *  Genies, and every read of its state, is written out where it happens, on Swing's event
+ *  thread as the window makes it. No helper method stands between a scenario and that API, as
+ *  one would hide the API the scenario is about; repeating a call is fine, hiding one is not.
+ *  Helpers that do not touch the app, such as waiting for a condition, are fine.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class KeepingAGeniesScheduleSpec extends Specification {
@@ -65,7 +71,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
     def cleanup() {
         release.countDown()
         var done = new CountDownLatch(1)
-        onTheWindowsThread { app?.quit(false, Optional.empty(), { done.countDown() }) }
+        SwingUtilities.invokeAndWait { app?.quit(false, Optional.empty(), { done.countDown() }) }
         done.await(3, TimeUnit.MINUTES)
     }
 
@@ -77,49 +83,54 @@ class KeepingAGeniesScheduleSpec extends Specification {
             it is added, the editor closes and the new job is picked, so its times stand out.
         """
         given: 'a genie that has woken once, and sleeps'
-            awake()
-            asleep()
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
         when:
-            open(GeniesState.Page.SCHEDULE)
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.SCHEDULE) } }
 
         then:
-            waitUntil { genie().schedule().read() }
-            genie().schedule().jobs().isEmpty()
-            genie().schedule().zone() == BERLIN
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().read() }
+            app.state().get().find(jafar).orElseThrow().schedule().jobs().isEmpty()
+            app.state().get().find(jafar).orElseThrow().schedule().zone() == BERLIN
 
         when: 'the user writes a job for every weekday at nine'
             var draft = JobDraft.fresh(local()).withPrompt('  Check the build  ').withRepeats(true)
                     .withRepeat(JobDraft.Repeat.WEEKDAYS).withTime('9:00')
-            saveJob(draft)
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.update(jafar) { genie -> genie.withSchedule(genie.schedule().withDraft(Optional.of(draft))) } }
+                app.saveJob(jafar)
+            }
 
         then: 'it is on the schedule, as it was meant, with its times over the week'
-            waitUntil { genie().schedule().jobs().size() == 1 && genie().schedule().draft().isEmpty() }
-            with(genie().schedule().jobs().first()) {
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs().size() == 1 && app.state().get().find(jafar).orElseThrow().schedule().draft().isEmpty() }
+            with(app.state().get().find(jafar).orElseThrow().schedule().jobs().first()) {
                 id() == 'job-1'
                 repeats().get().describe() == 'Every weekday at 09:00'
                 prompt() == 'Check the build'
                 upcoming().size() == 5
             }
-            genie().schedule().picked() == 'job-1'
+            app.state().get().find(jafar).orElseThrow().schedule().picked() == 'job-1'
 
         when:
-            onTheWindowsThread { app.switchJob(jafar, 'job-1', false) }
+            SwingUtilities.invokeAndWait { app.switchJob(jafar, 'job-1', false) }
 
         then:
-            waitUntil { !genie().schedule().jobs().first().enabled() }
+            waitUntil { !app.state().get().find(jafar).orElseThrow().schedule().jobs().first().enabled() }
 
         when:
-            onTheWindowsThread { app.pauseSchedule(jafar, true) }
+            SwingUtilities.invokeAndWait { app.pauseSchedule(jafar, true) }
 
         then:
-            waitUntil { genie().schedule().paused() }
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().paused() }
 
         when:
-            onTheWindowsThread { app.removeJob(jafar, 'job-1') }
+            SwingUtilities.invokeAndWait { app.removeJob(jafar, 'job-1') }
 
         then:
-            waitUntil { genie().schedule().jobs().isEmpty() }
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs().isEmpty() }
     }
 
     def 'Changing a job replaces it, and one that cannot be added leaves the old one and says why'() {
@@ -129,29 +140,39 @@ class KeepingAGeniesScheduleSpec extends Specification {
             editor stays open with oillamp's reason.
         """
         given:
-            awake()
-            open(GeniesState.Page.SCHEDULE)
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.SCHEDULE) } }
             var daily = JobDraft.fresh(local()).withPrompt('Check the build').withRepeats(true).withTime('09:00')
-            saveJob(daily)
-            waitUntil { genie().schedule().jobs().size() == 1 }
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.update(jafar) { genie -> genie.withSchedule(genie.schedule().withDraft(Optional.of(daily))) } }
+                app.saveJob(jafar)
+            }
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs().size() == 1 }
 
         when: 'the user changes it to a cron expression oillamp cannot read'
             var wrong = daily.withReplaces(Optional.of('job-1')).withRepeat(JobDraft.Repeat.CUSTOM).withCron('0 25 * * *')
-            saveJob(wrong)
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.update(jafar) { genie -> genie.withSchedule(genie.schedule().withDraft(Optional.of(wrong))) } }
+                app.saveJob(jafar)
+            }
 
         then:
-            waitUntil { !genie().schedule().busy() && !genie().schedule().problem().isEmpty() }
-            genie().schedule().problem().contains('the hour 25 is not between 0 and 23')
-            genie().schedule().draft().isPresent()
-            genie().schedule().jobs()*.id() == ['job-1']
+            waitUntil { !app.state().get().find(jafar).orElseThrow().schedule().busy() && !app.state().get().find(jafar).orElseThrow().schedule().problem().isEmpty() }
+            app.state().get().find(jafar).orElseThrow().schedule().problem().contains('the hour 25 is not between 0 and 23')
+            app.state().get().find(jafar).orElseThrow().schedule().draft().isPresent()
+            app.state().get().find(jafar).orElseThrow().schedule().jobs()*.id() == ['job-1']
 
         when: 'they put it right'
             var right = wrong.withCron('0 7 * * *')
-            saveJob(right)
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.update(jafar) { genie -> genie.withSchedule(genie.schedule().withDraft(Optional.of(right))) } }
+                app.saveJob(jafar)
+            }
 
         then:
-            waitUntil { genie().schedule().jobs()*.id() == ['job-2'] && genie().schedule().draft().isEmpty() }
-            genie().schedule().jobs().first().repeats().get().describe() == 'Every day at 07:00'
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs()*.id() == ['job-2'] && app.state().get().find(jafar).orElseThrow().schedule().draft().isEmpty() }
+            app.state().get().find(jafar).orElseThrow().schedule().jobs().first().repeats().get().describe() == 'Every day at 07:00'
     }
 
     def 'A job that wakes the genie shows as running, then as a run with what the genie said'() {
@@ -163,24 +184,27 @@ class KeepingAGeniesScheduleSpec extends Specification {
             while the job ran.
         """
         given: 'a sleeping genie with a job for five minutes from now, and its schedule on show'
-            awake()
-            asleep()
-            var tidying = Lamp.at(lamp()).launchedBy(sandbox.launcher).once('in 5m', 'Tidy the downloads folder')
-            open(GeniesState.Page.SCHEDULE)
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            var tidying = Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).once('in 5m', 'Tidy the downloads folder')
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.SCHEDULE) } }
 
         when: 'it wakes ten minutes later, when the job is due'
             sandbox.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
-            awake()
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
 
         then: 'the page shows it running'
-            waitUntil { genie().schedule().running().filter { it.job() == tidying.id() }.isPresent() }
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().running().filter { it.job() == tidying.id() }.isPresent() }
 
         when:
             release.countDown()
 
         then: 'it ended, and is among the runs'
-            waitUntil { genie().schedule().running().isEmpty() && genie().schedule().runs().size() == 1 }
-            with(genie().schedule().runs().first()) {
+            waitUntil { app.state().get().find(jafar).orElseThrow().schedule().running().isEmpty() && app.state().get().find(jafar).orElseThrow().schedule().runs().size() == 1 }
+            with(app.state().get().find(jafar).orElseThrow().schedule().runs().first()) {
                 job() == 'job-1'
                 outcome() == Schedule.Outcome.FINISHED
                 said() == 'I tidied the downloads folder.'
@@ -188,18 +212,18 @@ class KeepingAGeniesScheduleSpec extends Specification {
             }
 
         and: 'the chat was left alone'
-            genie().transcript().isEmpty()
+            app.state().get().find(jafar).orElseThrow().transcript().isEmpty()
 
         and: 'its conversation is among the scheduled runs, not the user\'s conversations'
-            waitUntil { genie().conversations().jobCount() == 1 }
-            genie().conversations().jobRuns()*.id() == [genie().schedule().runs().first().conversation().get()]
-            genie().conversations().chatCount() == 0
+            waitUntil { app.state().get().find(jafar).orElseThrow().conversations().jobCount() == 1 }
+            app.state().get().find(jafar).orElseThrow().conversations().jobRuns()*.id() == [app.state().get().find(jafar).orElseThrow().schedule().runs().first().conversation().get()]
+            app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 0
 
         when: 'the user opens the run\'s conversation'
-            onTheWindowsThread { app.openConversation(jafar, genie().schedule().runs().first().conversation().get()) }
+            SwingUtilities.invokeAndWait { app.openConversation(jafar, app.state().get().find(jafar).orElseThrow().schedule().runs().first().conversation().get()) }
 
         then:
-            waitUntil { genie().transcript().entries().any { it.kind() == Entry.Kind.GENIE && it.text() == 'I tidied the downloads folder.' } }
+            waitUntil { app.state().get().find(jafar).orElseThrow().transcript().entries().any { it.kind() == Entry.Kind.GENIE && it.text() == 'I tidied the downloads folder.' } }
     }
 
     def 'A genie woken after a job ran opens the user\'s chat, not the job\'s run'() {
@@ -211,20 +235,25 @@ class KeepingAGeniesScheduleSpec extends Specification {
             job's conversation, among its prompt and its notes.
         """
         given: 'a genie that ran a job while it was awake, and was put to sleep'
-            awake()
-            asleep()
-            Lamp.at(lamp()).launchedBy(sandbox.launcher).once('in 5m', 'Water the plants')
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).once('in 5m', 'Water the plants')
             sandbox.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
-            awake()
-            waitUntil { Lamp.conversations(lamp()).any { it.job().isPresent() && it.entries().size() > 2 } }
-            asleep()
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            waitUntil { Lamp.conversations(app.lampOf(jafar)).any { it.job().isPresent() && it.entries().size() > 2 } }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
         when: 'it wakes again'
-            awake()
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
 
         then: 'the chat is empty, ready for a conversation of the user\'s own'
-            genie().transcript().isEmpty()
-            genie().conversations().current().isEmpty()
+            app.state().get().find(jafar).orElseThrow().transcript().isEmpty()
+            app.state().get().find(jafar).orElseThrow().conversations().current().isEmpty()
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
@@ -233,46 +262,14 @@ class KeepingAGeniesScheduleSpec extends Specification {
         LocalDateTime.ofInstant(NOW, BERLIN)
     }
 
-    /** Jafar as the window shows him now. */
-    private Genie genie() { app.state().get().find(jafar).orElseThrow() }
-
-    private void awake() {
-        onTheWindowsThread { app.wake(jafar) }
-        waitUntil { genie().phase() == Genie.Phase.READY }
-    }
-
-    private void asleep() {
-        onTheWindowsThread { app.sleep(jafar) }
-        waitUntil { genie().phase() == Genie.Phase.ASLEEP }
-    }
-
-    /** The user goes to Jafar's `page`. */
-    private void open(GeniesState.Page page) {
-        onTheWindowsThread { app.state().update { it.select(jafar).withPage(page) } }
-    }
-
-    /** The user writes `draft` in the schedule's editor and saves it. */
-    private void saveJob(JobDraft draft) {
-        onTheWindowsThread {
-            app.state().update { it.update(jafar) { genie -> genie.withSchedule(genie.schedule().withDraft(Optional.of(draft))) } }
-            app.saveJob(jafar)
-        }
-    }
-
-    private Path lamp() { app.lampOf(jafar) }
-
-    /** As the window calls the app: on Swing's event thread. */
-    private static void onTheWindowsThread(Closure action) {
-        SwingUtilities.invokeAndWait(action)
-    }
-
     private void waitUntil(Closure<Boolean> condition) {
         var deadline = System.currentTimeMillis() + 40_000
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
             Thread.sleep(20)
         }
-        throw new AssertionError("never happened; the genie is ${genie().phase()} (${genie().activity()}), " +
-                                 "its schedule ${genie().schedule()}" as Object)
+        var shown = app.state().get().find(jafar).orElseThrow()
+        throw new AssertionError("never happened; the genie is ${shown.phase()} (${shown.activity()}), " +
+                                 "its schedule ${shown.schedule()}" as Object)
     }
 }
