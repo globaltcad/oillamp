@@ -29,7 +29,7 @@ public final class ErrorLog implements Thread.UncaughtExceptionHandler {
 
     private final Path file;
     /// The window, once there is one. What went wrong before is only in the log.
-    private volatile Consumer<Trouble> shown = trouble -> { };
+    private volatile Consumer<Trouble> shown = _ -> { };
     /// The kind and place of the last exception, to know it when it comes again.
     private Optional<String> last = Optional.empty();
 
