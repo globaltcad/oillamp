@@ -184,6 +184,53 @@ class KeepingAGeniesHistorySpec extends Specification {
             genie.history().undo().isEmpty()
     }
 
+    def 'When oillamp saves by itself is read from the lamp, and the history page changes it'() {
+        reportInfo """
+            Under the hood oillamp saves by itself at four moments, which the lamp's file
+            switches on and off: as the genie wakes, after it went to sleep, as it begins on a
+            question or a job, and as it answers or ends one. The history page shows these
+            switches and writes them into the lamp. A genie that never woke has no lamp yet, and
+            so nothing to read. The lamp reads its file as it wakes, so the page lets the user
+            change them only while the genie sleeps.
+        """
+        when: 'the history of a genie that never woke is read'
+            runner.history().readAutosave()
+            runner.history().read()
+
+        then: 'there is nothing to say when it saves'
+            waitUntil { genie.history().read() }
+            genie.history().autosave().isEmpty()
+
+        when: 'it woke once, and sleeps'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key')
+            waitUntil { genie.phase() == Genie.Phase.READY }
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
+            runner.history().readAutosave()
+
+        then: 'a new lamp saves around its runs only'
+            waitUntil { genie.history().autosave().isPresent() }
+            genie.history().autosave().get() == new History.Autosave(false, false, true, true)
+            genie.history().autosave().get().when() == 'answers'
+
+        when: 'the user switches on saving as it wakes'
+            runner.history().autosave(genie.history().autosave().get().withWaking(true))
+
+        then: 'the lamp\'s file has it'
+            waitUntil { Lamp.at(lamp).autosave().startup() }
+            waitUntil { genie.history().autosave().get().waking() }
+            genie.history().autosave().get().when() == 'wakes or answers'
+            genie.history().problem().isEmpty()
+
+        when: 'the genie wakes again'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key')
+            waitUntil { genie.phase() == Genie.Phase.READY }
+            runner.history().read()
+
+        then: 'oillamp saved as it woke'
+            waitUntil { genie.history().moments().any { it.kind() == History.Kind.WOKE } }
+    }
+
     def 'A long history shows its newest forty moments, day by day, and waking does not end the offer to undo'() {
         reportInfo """
             A genie that is used a lot gathers a moment for every answer, so the page shows the

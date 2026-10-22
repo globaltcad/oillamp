@@ -5,6 +5,7 @@ import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.event.InputEvent;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javax.swing.JButton;
@@ -20,6 +21,7 @@ import javax.swing.event.PopupMenuListener;
 import dev.gui.model.Genie;
 
 import sprouts.Val;
+import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.UIForBox;
@@ -136,6 +138,33 @@ final class ViewPartsUtil {
     static UIForButton<JButton> link(String text) {
         return button(text).group(Skin.ICON_BUTTON)
                 .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(FONT).size(12).color(BRASS)));
+    }
+
+    /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
+    /// chosen part is lit; both are greyed while it cannot be changed.
+    static UIForAnySwing<?, ?> yesOrNo(Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
+        return
+            box("ins 2, gap 2")
+            .withStyle(changeable, (can, it) -> it.backgroundColor(SMOKE).border(1, can ? BORDER : SMOKE).borderRadius(11))
+            .add(part("No", yes.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
+            .add(part("Yes", yes, changeable, () -> choose.accept(true)));
+    }
+
+    /// How a part of a switch looks: whether it is chosen, and whether it can be changed.
+    private record Part(boolean chosen, boolean changeable) {}
+
+    /// One part of a switch: lit while chosen, and greyed, chosen or not, while it cannot be changed.
+    private static UIForButton<JButton> part(String text, Val<Boolean> chosen, Val<Boolean> changeable, Runnable choose) {
+        Val<Part> looks = Viewable.of(Part.class, chosen, changeable, Part::new);
+        return
+            button(text).group(Skin.ICON_BUTTON)
+            .isEnabledIf(changeable)
+            .withStyle(looks, (part, it) -> it.borderRadius(9).padding(4, 12, 4, 12)
+                .backgroundColor(!part.chosen() ? TRANSPARENT : part.changeable() ? RAISED : CARD)
+                .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
+                .componentFont(f -> f.family(FONT).size(12).weight(part.chosen() ? 2f : 1f)
+                    .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : dim(SUBTEXT))))
+            .onClick(it -> choose.run());
     }
 
     /// `colour`, faded to step back.
