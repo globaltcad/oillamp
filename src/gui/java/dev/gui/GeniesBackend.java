@@ -11,12 +11,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import javax.swing.SwingUtilities;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.GenieRunner;
-import dev.gui.genie.LampLighterImpl;
 import dev.gui.genie.LampLighter;
 import dev.gui.genie.OllamaKeeper;
 import dev.gui.genie.Shelf;
@@ -130,8 +130,11 @@ public final class GeniesBackend implements Genies {
     }
 
     /// The app as it is on the shelf, without a window. See [Genies#open].
-    static GeniesBackend open(Shelf shelf, ErrorLog errors) {
-        Optional<String> environmentKey = Optional.ofNullable(System.getenv(Settings.KEY_VARIABLE)).filter(key -> !key.isBlank());
+    ///
+    /// @param lighter     lights the genies' lamps
+    /// @param environment the environment Genies was started from, by variable
+    static GeniesBackend open(Shelf shelf, ErrorLog errors, LampLighter lighter, Function<String, Optional<String>> environment) {
+        Optional<String> environmentKey = environment.apply(Settings.KEY_VARIABLE).filter(key -> !key.isBlank());
         OllamaKeeper ollama = new OllamaKeeper(shelf.ollama());
         // The first time, the genies' model is where this computer has one: Ollama, if it is
         // installed; otherwise Eden AI, if a key for it was found; otherwise Ollama, which
@@ -140,7 +143,7 @@ public final class GeniesBackend implements Genies {
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
         GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
-                                shelf, new LampLighterImpl(), ollama);
+                                shelf, lighter, ollama);
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
         // whether it may reach this computer, which its card says. A genie left running when
