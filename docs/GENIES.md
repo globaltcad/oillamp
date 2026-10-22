@@ -113,6 +113,7 @@ with at most 8 billion parameters working on each word; otherwise `qwen3:1.7b`.
 | each genie's jobs | `.oillamp/schedule.json` in its lamp | oillamp; Genies changes it through `LampDirectory` |
 | each job's past runs: which job, how it ended, what the genie said last, its conversation | the lamp's history, as `run` snapshots | oillamp |
 | the moments a genie's home was saved at, which it can go back to | the lamp's history, as snapshots | oillamp; Genies saves and goes back through `LampDirectory` |
+| when oillamp saves a genie's home by itself: as it wakes, after it sleeps, before and after each run | `[autosave]` in its lamp's `oillamp.toml` | oillamp; the history page changes it through `LampDirectory.autosave`, only while the genie sleeps |
 
 `~/.local/share` is `$XDG_DATA_HOME` when that is set. The window itself keeps nothing: what it
 shows is one value, `GeniesState`, rebuilt from the files above when Genies starts. All genies

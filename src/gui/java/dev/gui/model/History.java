@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import sprouts.HasId;
@@ -22,8 +24,39 @@ import sprouts.Tuple;
 /// @param busy    what is on its way to the lamp, such as "Saving…"; empty while nothing is
 /// @param note    what the last save came to when it saved nothing; empty otherwise
 /// @param problem why the last save or going back failed, in the lamp's words; empty when it did not
+/// @param autosave when oillamp saves by itself, as the lamp's file says; empty before it was read,
+///                 and while the genie has no lamp yet, since one that never woke has none
 public record History(boolean read, Tuple<Moment> moments, String picked, boolean earlier, String busy,
-                      String note, String problem) {
+                      String note, String problem, Optional<Autosave> autosave) {
+
+    /// When oillamp saves the genie's home by itself, as `[autosave]` in its lamp's `oillamp.toml`
+    /// says. A save by hand and the save before going back happen whatever these say. The lamp
+    /// reads them as it wakes, so they can only be changed while the genie sleeps.
+    ///
+    /// @param waking    as its sandbox starts
+    /// @param sleeping  after its sandbox stopped
+    /// @param beforeRun as it begins on a question or a job, when something changed since the last moment
+    /// @param afterRun  as it ends one, with its last words. A job's prompt tells the genie what
+    ///                  its last runs said and changed from these
+    public record Autosave(boolean waking, boolean sleeping, boolean beforeRun, boolean afterRun) {
+
+        public Autosave withWaking(boolean waking)       { return new Autosave(waking, sleeping, beforeRun, afterRun); }
+        public Autosave withSleeping(boolean sleeping)   { return new Autosave(waking, sleeping, beforeRun, afterRun); }
+        public Autosave withBeforeRun(boolean beforeRun) { return new Autosave(waking, sleeping, beforeRun, afterRun); }
+        public Autosave withAfterRun(boolean afterRun)   { return new Autosave(waking, sleeping, beforeRun, afterRun); }
+
+        /// When it saves, as the end of a sentence such as "Saved whenever Jafar …": "wakes,
+        /// answers or sleeps", or "answers"; empty when it never saves by itself.
+        public String when() {
+            List<String> moments = new ArrayList<>();
+            if (waking) moments.add("wakes");
+            if (afterRun) moments.add("answers");
+            else if (beforeRun) moments.add("begins to answer");
+            if (sleeping) moments.add("sleeps");
+            if (moments.size() < 2) return String.join("", moments);
+            return String.join(", ", moments.subList(0, moments.size() - 1)) + " or " + moments.getLast();
+        }
+    }
 
     /// One saved state of the genie's home.
     ///
@@ -88,18 +121,19 @@ public record History(boolean read, Tuple<Moment> moments, String picked, boolea
     /// How many moments are shown while [#earlier] is off.
     public static final int SHOWN = 40;
 
-    public static final History UNREAD = new History(false, Tuple.of(Moment.class), "", false, "", "", "");
+    public static final History UNREAD = new History(false, Tuple.of(Moment.class), "", false, "", "", "", Optional.empty());
 
-    public History withPicked(String picked)    { return new History(read, moments, picked, earlier, busy, note, problem); }
-    public History withEarlier(boolean earlier) { return new History(read, moments, picked, earlier, busy, note, problem); }
-    public History withBusy(String busy)        { return new History(read, moments, picked, earlier, busy, note, problem); }
-    public History withNote(String note)        { return new History(read, moments, picked, earlier, busy, note, problem); }
-    public History withProblem(String problem)  { return new History(read, moments, picked, earlier, busy, note, problem); }
+    public History withPicked(String picked)    { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
+    public History withEarlier(boolean earlier) { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
+    public History withBusy(String busy)        { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
+    public History withNote(String note)        { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
+    public History withProblem(String problem)  { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
+    public History withAutosave(Optional<Autosave> autosave) { return new History(read, moments, picked, earlier, busy, note, problem, autosave); }
 
     /// What the lamp holds now. The picked moment stays picked while it is still there.
     public History readAs(Tuple<Moment> moments) {
         String stillPicked = moments.any(it -> it.id().equals(picked)) ? picked : "";
-        return new History(true, moments, stillPicked, earlier, busy, note, problem);
+        return new History(true, moments, stillPicked, earlier, busy, note, problem, autosave);
     }
 
     /// Picks `id`, or unpicks it when it is picked already.

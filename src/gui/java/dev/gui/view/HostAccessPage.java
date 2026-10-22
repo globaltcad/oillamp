@@ -2,8 +2,6 @@ package dev.gui.view;
 
 import java.util.UUID;
 
-import javax.swing.JButton;
-
 import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
@@ -15,7 +13,6 @@ import sprouts.Var;
 import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
-import swingtree.UIForButton;
 import swingtree.layout.FlowCell;
 
 import static dev.gui.view.Palette.*;
@@ -158,15 +155,10 @@ final class HostAccessPage {
 
     private UIForAnySwing<?, ?> onOrOff() {
         Val<Boolean> on = draft.viewAs(Boolean.class, HostAccess.PermissionRules::on);
-        Val<Boolean> off = on.viewAs(Boolean.class, it -> !it);
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
             .add("growx, wmin 0", section("MAY IT REACH THIS COMPUTER?"))
-            // The same switch as the one between a genie's pages, in the header.
-            .add(box("ins 2, gap 2")
-                .withStyle(changeable, (can, it) -> it.backgroundColor(SMOKE).border(1, can ? BORDER : SMOKE).borderRadius(11))
-                .add(part("No", off, () -> draft.update(From.VIEW, it -> it.withOn(false))))
-                .add(part("Yes", on, () -> draft.update(From.VIEW, it -> it.withOn(true)))));
+            .add(ViewPartsUtil.yesOrNo(on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
     }
 
     private UIForAnySwing<?, ?> experimental() {
@@ -229,23 +221,5 @@ final class HostAccessPage {
                         .padding(10, 12, 10, 12).cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
                         .componentFont(f -> f.family(FONT).size(14).color(can ? TEXT : ViewPartsUtil.dim(SUBTEXT))))))
             .add("growx, wmin 0", ViewPartsUtil.note(note, Val.of(true)));
-    }
-
-    /// How a part of the switch looks: whether it is chosen, and whether it can be changed.
-    private record Part(boolean chosen, boolean changeable) {}
-
-    /// One part of the switch: lit while chosen, and greyed, chosen or not, while the rules
-    /// cannot be changed.
-    private UIForButton<JButton> part(String text, Val<Boolean> chosen, Runnable choose) {
-        Val<Part> looks = Viewable.of(Part.class, chosen, changeable, Part::new);
-        return
-            button(text).group(Skin.ICON_BUTTON)
-            .isEnabledIf(changeable)
-            .withStyle(looks, (part, it) -> it.borderRadius(9).padding(4, 12, 4, 12)
-                .backgroundColor(!part.chosen() ? TRANSPARENT : part.changeable() ? RAISED : CARD)
-                .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
-                .componentFont(f -> f.family(FONT).size(12).weight(part.chosen() ? 2f : 1f)
-                    .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : ViewPartsUtil.dim(SUBTEXT))))
-            .onClick(it -> choose.run());
     }
 }
