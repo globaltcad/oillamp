@@ -17,20 +17,24 @@ import sprouts.Tuple;
 
 /// A lamp's schedule: its jobs, and the rules for changing them.
 ///
-/// Kept in `.oillamp/schedule.json`, beside the history and out of the agent's reach. The agent
-/// asks for changes through the session, and every change, whoever asks, goes through the
-/// methods here. They decide; [ScheduleBook] reads and writes the file.
+/// Kept in `.oillamp/schedule.json`, beside the history and out of the agent's reach, and saved
+/// with every snapshot, so that a restore brings back the jobs the lamp had then. The agent asks
+/// for changes through the session, and every change, whoever asks, goes through the methods
+/// here. They decide; [ScheduleBook] reads and writes the file.
 ///
 /// The user's jobs have no limits. The agent's have those in `[schedule]`: how many it may have,
 /// how often one may run, and how long one may stay. The agent may not change or remove the
 /// user's jobs.
 ///
+/// Runs are not numbered here. Their numbers come from the history, which a restore never
+/// takes back: a number kept in this file would go back with it, and be handed out twice.
+///
 /// @param paused  whether the user paused the whole schedule
-/// @param nextJob the number the next job gets, so that no id is used twice
-/// @param nextRun the number the next run gets, for the same reason
-record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jobs) {
+/// @param nextJob the number the next job gets, so that no id is used twice on the schedule.
+///                It goes back with a restore, like the jobs it counts
+record Schedule(boolean paused, int nextJob, Tuple<ScheduledJob> jobs) {
 
-    static Schedule empty() { return new Schedule(false, 1, 1, Tuple.of(ScheduledJob.class)); }
+    static Schedule empty() { return new Schedule(false, 1, Tuple.of(ScheduledJob.class)); }
 
     /// A job someone asked for, as they wrote it, before the rules have judged it.
     ///
@@ -108,7 +112,7 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         if (expires.isPresent() && first.isPresent() && !first.get().isBefore(expires.get()))
             return refused("the job would end at " + TimeNotationUtil.show(expires.get(), zone) + ", before it first runs at "
                          + TimeNotationUtil.show(first.get(), zone));
-        return Result.ok(new Changed(new Schedule(paused, nextJob + 1, nextRun, jobs.add(job)), job));
+        return Result.ok(new Changed(new Schedule(paused, nextJob + 1, jobs.add(job)), job));
     }
 
     /// Takes a job off the schedule. The agent may only remove its own.
@@ -128,7 +132,14 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         return Result.ok(new Changed(replace(changed), changed));
     }
 
-    Schedule paused(boolean pause) { return new Schedule(pause, nextJob, nextRun, jobs); }
+    /// Paused or resumed. Resuming counts every repeating job as if it had just run, as switching
+    /// one job back on does: a pause stops jobs on purpose, so the times it covered are not runs
+    /// they missed, and none of them runs at once on resume. A job that runs once keeps its time,
+    /// because it has no later one to wait for; found too late, it is missed like any late run.
+    Schedule paused(boolean pause, Instant now) {
+        if (pause || !paused) return new Schedule(pause, nextJob, jobs);
+        return new Schedule(false, nextJob, jobs.map(job -> job.when() instanceof ScheduledJob.When.Repeating ? job.ranAt(now) : job));
+    }
 
     /// The jobs whose time has come, oldest first. None while the schedule is paused.
     Tuple<ScheduledJob> due(Instant now, ZoneId zone) {
@@ -143,25 +154,18 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         return jobs.retainIf(job -> job.expiredAt(now) || job.next(zone).isEmpty());
     }
 
-    /// Records that a job ran, or began to.
+    /// Records that a job ran, or began to, or was passed over at `at`: it is not due again
+    /// until its next time after that.
     Schedule ran(String id, Instant at) {
         return job(id).map(job -> replace(job.ranAt(at))).orElse(this);
     }
 
-    /// The schedule, and the name for a new run, such as `run-12`.
-    record Numbered(Schedule schedule, String run) {}
-
-    Numbered numberRun() {
-        return new Numbered(new Schedule(paused, nextJob, nextRun + 1, jobs), "run-" + nextRun);
-    }
-
     Schedule without(String id) {
-        return new Schedule(paused, nextJob, nextRun, jobs.removeIf(job -> job.id().equals(id)));
+        return new Schedule(paused, nextJob, jobs.removeIf(job -> job.id().equals(id)));
     }
 
     private Schedule replace(ScheduledJob changed) {
-        return new Schedule(paused, nextJob, nextRun,
-                jobs.map(job -> job.id().equals(changed.id()) ? changed : job));
+        return new Schedule(paused, nextJob, jobs.map(job -> job.id().equals(changed.id()) ? changed : job));
     }
 
     private static <T> Result<T> refused(String why) {
@@ -179,7 +183,6 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         ObjectNode root = JsonUtil.object();
         root.put("paused", paused);
         root.put("next_job", nextJob);
-        root.put("next_run", nextRun);
         ArrayNode list = root.putArray("jobs");
         for (ScheduledJob job : jobs) {
             ObjectNode node = list.addObject();
@@ -198,7 +201,8 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
         return JsonUtil.readable(root) + "\n";
     }
 
-    /// Reads the file [#render] wrote.
+    /// Reads the file [#render] wrote. A file from an older oillamp also holds `next_run`, a
+    /// counter of runs; it is read past, and gone the next time the file is written.
     static Result<Schedule> parse(String text, Path file) {
         Optional<JsonNode> parsed = JsonUtil.parse(text);
         if (parsed.isEmpty() || !parsed.get().isObject())
@@ -223,7 +227,7 @@ record Schedule(boolean paused, int nextJob, int nextRun, Tuple<ScheduledJob> jo
                         optionalInstant(node, "last_run")));
             }
             return Result.ok(new Schedule(root.path("paused").asBoolean(false),
-                    Math.max(1, root.path("next_job").asInt(1)), Math.max(1, root.path("next_run").asInt(1)), jobs));
+                    Math.max(1, root.path("next_job").asInt(1)), jobs));
         } catch (RuntimeException unreadable) {
             return Result.err(ProblemCatalogUtil.scheduleDamaged(file, ProblemCatalogUtil.reason(unreadable)));
         }

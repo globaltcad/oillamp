@@ -60,7 +60,7 @@ These words have one meaning each, in the code and in the documents.
 | **plan**, **step** | A step describes one change oillamp intends to make, such as "create this directory with mode 0700". A plan is a list of steps. |
 | **problem** | oillamp's structured error: a code, what happened, why it matters, evidence, and fixes. |
 | **spike** | A test that runs real podman to confirm an assumption about a third-party tool. |
-| **snapshot** | The agent directory and `oillamp.toml` as they were at one moment, kept in the lamp's history. One git commit. |
+| **snapshot** | The agent directory, `oillamp.toml` and the schedule as they were at one moment, kept in the lamp's history. One git commit. |
 | **history** | `<lamp>/.oillamp/history/`: a git repository holding a lamp's snapshots, oldest to newest on one branch. |
 | **harness** | The agent program a session holds and prompts: pi, in RPC mode, started over ssh by the supervisor. One per session. |
 | **run** | One time the harness is woken with a prompt, by a job or by `oillamp ask`. Named `run-<n>`, counted per lamp. |
@@ -168,7 +168,7 @@ known lifetime:
 | `<lamp>/.oillamp/recordings/` | wf-recorder | you, the agent (read only) | until retention deletes them |
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
 | `<lamp>/.oillamp/history/` | `History`: at the start and end of every session, `oillamp save`, `oillamp restore` | `oillamp history`, `oillamp restore`, git by hand | until `oillamp remove`; only ever grows |
-| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start, and for the agent's requests | `oillamp schedule`, the session every 30 s | until `oillamp remove` |
+| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp restore` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save or restore runs | every other save and restore, which wait for it | the lock ends with the process |
 | `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`, and with host access on,
@@ -217,7 +217,7 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   ├── logs/                    network-<session>.jsonl, host-access-<session>.jsonl
 │   ├── history/                 the lamp's snapshots, a bare git repository; never attached
 │   ├── history.lock             locked while a save or a restore runs
-│   ├── schedule.json            the jobs that wake the agent; never attached
+│   ├── schedule.json            the jobs that wake the agent; never attached; in every snapshot
 │   └── schedule.lock            locked while the schedule is changed
 └── agent-lamp-<agent id>/       attached read-write at /home/agent
     ├── AGENTS.md                rewritten each session
@@ -272,12 +272,20 @@ commit, and its tree mirrors the lamp:
 ```
 agent-lamp-<agent id>/     the whole agent directory, nested .git directories included
 oillamp.toml
+.oillamp/schedule.json     the jobs, whether the schedule is paused, the next job's number
 .oillamp-modes             the exact permissions git cannot hold
 ```
 
 The container's root filesystem is read-only and made new each session, so the agent directory is
-everything the sandbox keeps. `.oillamp/` is left out: it holds keys, sockets and logs, and some of
-it belongs to the infra user, which the host user cannot even read.
+everything the sandbox keeps. Of `.oillamp/`, only `schedule.json` is saved. The rest holds keys,
+sockets and logs, and some of it belongs to the infra user, which the host user cannot even read.
+
+**What a snapshot holds** is the lamp as it was: the agent's home, the configuration, and the jobs.
+The schedule is part of it because a job belongs to the state it was written for. A job the agent
+added for work it later did, or that a restore undid, would otherwise wake it for work that no
+longer exists. A lamp that has no schedule file is saved with an empty schedule's file, so every
+snapshot made now holds one, and a snapshot without one was made by an older oillamp. The file is
+read while `ScheduleBook` holds `.oillamp/schedule.lock`, so a save never stores a change half made.
 
 **How it is written.** `History` writes git's objects itself; it does not run `git`. That is for
 two reasons. `git add` stores a directory that contains its own `.git` as a bare pointer to a
@@ -298,8 +306,9 @@ git's defaults (0644, 0755 for executables and directories), each ended by a NUL
 name may contain a line break.
 
 **Saving** walks the agent directory without following links, stores each file that is not stored
-yet, builds the trees, and compares the top tree with the newest commit's. If they are equal,
-nothing changed and no commit is made. Otherwise it writes a commit and moves `refs/heads/main` to
+yet, adds `oillamp.toml` and the schedule, builds the trees, and compares the top tree with the
+newest commit's. If they are equal, nothing changed and no commit is made; a change to the schedule
+alone, such as a new job, is a change. Otherwise it writes a commit and moves `refs/heads/main` to
 it, last. Every object goes to a temporary file first and is renamed into place, so a save that
 is cut short leaves the history as it was, plus some objects nothing refers to. Unreadable files
 are left out and reported (`OIL-HISTORY-004`). So are files that keep changing while they are read.
@@ -309,8 +318,13 @@ Sockets, pipes and devices are skipped without a word.
 compares the target snapshot's trees with the safety save's, directory by directory. A directory
 whose tree is the same in both is skipped whole, which is why restoring a large home takes about a
 second. Everything else is deleted and rewritten, then the permissions from `.oillamp-modes` are
-applied, directories last and deepest first. Finally a commit records the restore, with the
-target's tree. Nothing is ever removed from the history.
+applied, directories last and deepest first. The schedule comes back whole, under the schedule's
+lock: every job, the user's and the agent's, each one's enabled flag and last run, whether the
+schedule is paused, and the number the next job gets. A job added after the target snapshot is
+gone. A snapshot from before snapshots held the schedule says nothing about the jobs, so restoring
+it leaves the schedule as it is. Finally a commit records the restore, with the target's tree, or,
+for such an older target, the target's tree with the schedule the lamp kept. Nothing is ever
+removed from the history.
 
 **What made each snapshot** is in its commit message:
 
@@ -329,15 +343,18 @@ Oillamp-Session: 20260929-181200
 | `idle` | `oillamp save` while no session runs |
 | `before-restore` | `oillamp restore`, just before it changes anything |
 | `restore` | `oillamp restore`, recording which snapshot it went back to |
-| `before-run` | `AgentRunner`, just before the agent is woken, if anything changed since the last snapshot |
+| `before-run` | `AgentRunner`, just before the agent is woken, if anything changed since the last snapshot. For a job's run that is always so, because the job was just marked as run in the schedule |
 | `run` | `AgentRunner`, as a run ends, always, even when nothing changed: its message holds the agent's last message |
 
-A run's snapshots carry more trailers: `Oillamp-Run` (`run-12`), and on the `run` snapshot
+A run's snapshots carry more trailers: `Oillamp-Run` (`run-12`; what the next run's number is
+counted from, see "Runs and the schedule"), and on the `run` snapshot
 `Oillamp-Job`, `Oillamp-Author` (`user` or `agent`: who added the job), `Oillamp-Outcome`
 (`finished`, `failed`, `timed out`, `interrupted`, `cancelled`), `Oillamp-Conversation` (the id of
 the pi conversation the run had, when it got that far) and `Oillamp-Base` (the snapshot the lamp was
 in as the run began, so that what the run changed can be listed). `LampSave` carries the
-job, outcome and conversation, so an application can list past runs from `history`. Trailers are read only from a
+job, outcome and conversation, so an application can list past runs from `history`. What a run
+changed is listed from the agent directory and `oillamp.toml` only; the schedule changes with every
+run of a job, and is not a file of the agent's. Trailers are read only from a
 message's last paragraph, and only when every line in it is one: the agent's own words are in the
 message, and a line in them that looks like a trailer must not count.
 
@@ -869,10 +886,11 @@ the supervisor is dead and `oillamp stop` cleans up; in the second it is alive b
 
 | Place | What it holds |
 |---|---|
-| `<lamp>/.oillamp/schedule.json` | the jobs, whether the schedule is paused, and the numbers the next job and run get |
+| `<lamp>/.oillamp/schedule.json` | the jobs, whether the schedule is paused, and the number the next job gets; saved with every snapshot, and brought back by a restore |
 | `AgentRunner.queue`, `AgentRunner.current` (memory) | runs waiting, and the one in progress; lost when the session ends, which is fine: a job that did not run is still due next session |
 | the pi process (`Harness`) | one per session, started with the first run, kept for the next |
-| `<lamp>/.oillamp/history/` | every run's `before-run` and `run` snapshots: the only lasting record of runs |
+| `<lamp>/.oillamp/history/` | every run's `before-run` and `run` snapshots: the only lasting record of runs, and where run numbers are counted from |
+| `AgentRunner.lastNumbered` (memory) | the highest run number this session gave out |
 | `~/workspace/NOTES.md` (the agent's) | what the agent wants to remember from one run to the next |
 
 **The harness.** `Harness` runs `ssh … lamp-<id> 'cd ~/workspace; exec pi --mode rpc'` through the
@@ -945,6 +963,18 @@ names: `LampDirectory.instructions` puts them in `OILLAMP_INSTRUCTIONS`, as it p
 `OILLAMP_MODEL_KEY`. `at` reads the variable before anything else, and refuses one that is not
 set, empty, or longer than 64 KiB (`OIL-USAGE-001`).
 
+**Run numbers.** A run is named as it is queued, by `oillamp ask` or by the schedule: one above
+the highest number the history's `Oillamp-Run` trailers name and the highest this session has given
+out, whichever is higher. The history, because it only grows: a restore adds a snapshot and removes
+none, so a number taken from it is never handed out twice. A counter in `schedule.json`, as older
+versions kept (`next_run`, now read past and no longer written), would go back with a restore, and
+the next run would get a number an earlier run already has. The session's own count as well,
+because a run's snapshots come later than its number: the `before-run` snapshot only if something
+changed, the `run` snapshot as the run ends. Two runs queued before either is saved still get two
+numbers. With both `autosave.before_run` and `autosave.after_run` off, nothing in the history names
+a run, so numbers start at `run-1` again in the next session; there is then no record of runs that
+two runs could be confused in, but conversation names such as `run-1 (job-2)` can repeat.
+
 **A run**, on the `oillamp-runs` thread, one at a time:
 
 1. A job's `last_run` is set to now (a `once` job is removed instead), so it is not due again.
@@ -984,7 +1014,18 @@ left out, and lines that are not entries are passed over. `oillamp conversations
 removes jobs that expired or will never run again, and queues each job that is due and not
 already queued. A repeating job is due when its cron expression names a moment after its
 `last_run` (or its creation) that has passed. So a job missed while no session ran runs once when
-one does, not once for every time it missed. A job of the agent's is skipped when the agent's jobs
+one does, not once for every time it missed, and only when it is not too late: a job whose due
+time lies more than `schedule.max_delay_minutes` (30; 0 for no limit) in the past is not queued.
+The run is missed. The session reports `RunMissed`, with when the run was due and how late it
+found it, and does not wake the agent. A repeating job's `last_run` is set to now, so it waits for
+its next time after now; a job that runs once has no next time, and is removed, with `JobRemoved`.
+oillamp does not catch up on a missed run. An application that wants the job's prompt answered
+anyway can ask it itself, as `oillamp ask` does. This is what happens to an hourly job on a lamp
+started after a few days: it runs at its next full hour, not at once. A job switched back on with
+`oillamp schedule enable` counts as if it had just run, so the times it was off are not missed.
+`oillamp schedule resume` does the same for every repeating job, so a pause never makes one miss a
+run. A job that runs once keeps its time through a pause, because it has no later time to wait
+for: found more than `schedule.max_delay_minutes` after it, it is missed. A job of the agent's is skipped when the agent's jobs
 already ran `schedule.max_agent_runs_per_day` times in the last 24 hours, counted from the history.
 Nothing runs while the schedule is paused. Cron expressions (`CronExpression`) have the usual five
 fields, names for months and days, steps and ranges, and `@hourly`, `@daily`, `@weekly`; they and
@@ -1663,6 +1704,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `schedule.max_agent_runs_per_day` | 48 | runs of the agent's jobs in any 24 hours; more are skipped (0–1440) | yes |
 | `schedule.max_run_minutes` | 30 | any run, yours too, is stopped after this (1–1440) | yes |
 | `schedule.notes_max_kb` | 8 | how large the agent's `NOTES.md` may be; the prompt shows no more (1–1024) | yes |
+| `schedule.max_delay_minutes` | 30 | a job's run found later than this after its time is missed, not made, and reported as `RunMissed`; 0 = no limit (0–10080) | yes |
 | `host_access.enabled` | false | let the agent reach the host through oillamp, every request judged first; off unless set ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
 | `host_access.requirements` | `""` | the user's own words, the only thing the checker judges by; required when it is enabled | yes |
 | `host_access.checker_model` | `""` | the model that judges, as the service names it; empty means the model the agent answers with | yes |

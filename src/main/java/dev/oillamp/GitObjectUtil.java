@@ -247,6 +247,17 @@ final class GitObjectUtil {
                 split.trailers());
     }
 
+    /// The highest number among the runs `commits` name in their `Oillamp-Run` trailers, such as
+    /// 12 for `run-12`; 0 when none names a run. The next run is numbered one above it.
+    static int highestRun(Tuple<Commit> commits) {
+        int highest = 0;
+        for (Commit commit : commits) {
+            Optional<String> run = commit.snapshot().run().filter(name -> name.matches("run-[0-9]{1,9}"));
+            if (run.isPresent()) highest = Math.max(highest, Integer.parseInt(run.get().substring(4)));
+        }
+        return highest;
+    }
+
     /// The outcome an `Oillamp-Outcome` trailer names, as [AgentRunner] writes it: `timed out` for
     /// [LampRunOutcome#TIMED_OUT]. Empty for anything else.
     private static Optional<LampRunOutcome> outcome(String written) {

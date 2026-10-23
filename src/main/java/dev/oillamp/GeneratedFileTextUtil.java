@@ -153,6 +153,7 @@ final class GeneratedFileTextUtil {
             max_agent_runs_per_day     = 48   # agent jobs due beyond this, in any 24 hours, are skipped
             max_run_minutes            = 30   # any run that takes longer is stopped, yours included
             notes_max_kb               = 8    # how large the agent's ~/workspace/NOTES.md may grow
+            max_delay_minutes          = 30   # a run found later than this is missed, not made; 0 = no limit
 
             # When oillamp saves the lamp by itself, so that `oillamp restore` can go back there.
             # `oillamp save` works whatever these say. The next job's prompt tells the agent what

@@ -2,6 +2,7 @@ package dev.lamp;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import sprouts.Tuple;
@@ -119,6 +120,15 @@ public sealed interface LampEvent {
     record JobRemoved(LampJob job, String why)          implements LampEvent {}
     /// A job was switched on or off, or the whole schedule paused or resumed.
     record ScheduleChanged(String what)                 implements LampEvent {}
+    /// A job's run was missed: the session found it later than `schedule.max_delay_minutes`
+    /// allows, and did not wake the agent for it. oillamp does not catch up on it; an application
+    /// that wants the job's prompt answered all the same can ask it itself, as `oillamp ask` does.
+    ///
+    /// @param job  the job as it is now: a repeating one with its next time after now, a job that
+    ///             runs once with none, because it is off the schedule ([JobRemoved] follows)
+    /// @param due  when the run was due
+    /// @param late how long after `due` the session found it
+    record RunMissed(LampJob job, Instant due, Duration late) implements LampEvent {}
 
     /// A run waits, because the agent is busy.
     ///

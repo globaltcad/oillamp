@@ -11,6 +11,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import dev.lamp.LampEvent;
+import dev.lamp.LampJob;
 import dev.lamp.LampJobAuthor;
 import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSaveKind;
@@ -31,8 +32,12 @@ import sprouts.Tuple;
 /// always, so the history keeps what the user did apart from what the agent did. A run is stopped
 /// after `schedule.max_run_minutes`.
 ///
-/// Due jobs are queued only while `schedule.enabled` is on. The agent changes its own schedule
-/// through [#answerAgent], under the same rules as the user.
+/// Due jobs are queued only while `schedule.enabled` is on, and only while they are late by no more
+/// than `schedule.max_delay_minutes`; a later one is missed, and [LampEvent.RunMissed] says so. The
+/// agent changes its own schedule through [#answerAgent], under the same rules as the user.
+///
+/// A run is numbered as it is queued, one above the highest number the history and this session
+/// know of ([#numberRun]).
 ///
 /// The queue is kept in memory only: prompts still waiting when the session ends are dropped. The
 /// pi process belongs to [Harness], not to this class.
@@ -69,6 +74,9 @@ final class AgentRunner {
     /// Why the schedule could not be read the last time it was looked at, so that the same reason
     /// is reported once, not every half minute. Used only by the thread that watches the schedule.
     private Optional<String> unreadable = Optional.empty();
+    /// The highest run number this session has given out. A run's snapshots are made as it begins
+    /// and ends, if at all, so the history does not yet know the runs that wait or work now.
+    private int lastNumbered;
 
     /// A run waiting its turn, and whoever waits for its end.
     ///
@@ -113,14 +121,11 @@ final class AgentRunner {
     ///
     /// @param conversation the conversation it continues, or empty for a new one
     /// @param where        where in that conversation the question goes
-    /// @return the queued run; an error when the session is ending or the schedule file cannot be written
+    /// @return the queued run; an error when the session is ending
     Result<Asked> ask(String prompt, Optional<String> conversation, Optional<Harness.Target> where) {
         if (stopping) return Result.err(ProblemCatalogUtil.runRefused("the session is ending"));
-        Result<Schedule.Numbered> numbered = book.update(schedule -> Result.ok(schedule.numberRun()), Schedule.Numbered::schedule);
-        if (!(numbered instanceof Result.Ok<Schedule.Numbered>(Schedule.Numbered number, var _)))
-            return Result.err(numbered.problems());
         CompletableFuture<LampEvent.RunFinished> done = new CompletableFuture<>();
-        LampRun run = new LampRun(number.run(), Optional.empty(), prompt.strip(), conversation);
+        LampRun run = new LampRun(numberRun(), Optional.empty(), prompt.strip(), conversation);
         enqueue(new Pending(run, Optional.empty(), where, done));
         return Result.ok(new Asked(run, done));
     }
@@ -243,6 +248,11 @@ final class AgentRunner {
                         ? "it expired" : "it ran, and will not run again"));
         for (ScheduledJob due : schedule.due(now, zone)) {
             if (stopping || isQueued(due.id())) continue;
+            Optional<Instant> missed = due.missedAt(now, zone, config.maxDelay());
+            if (missed.isPresent()) {
+                passOver(due, missed.get(), now, zone);
+                continue;
+            }
             if (due.author() == LampJobAuthor.AGENT && agentRunsInADay(now) >= config.maxAgentRunsPerDay()) {
                 book.update(current -> Result.ok(current.ran(due.id(), now)), s -> s);
                 context.sink().accept(new LampEvent.Info("schedule",
@@ -251,11 +261,34 @@ final class AgentRunner {
                         + "`schedule.max_agent_runs_per_day` allows"));
                 continue;
             }
-            Result<Schedule.Numbered> numbered = book.update(current -> Result.ok(current.numberRun()), Schedule.Numbered::schedule);
-            if (numbered instanceof Result.Ok<Schedule.Numbered>(Schedule.Numbered number, var _))
-                enqueue(new Pending(new LampRun(number.run(), Optional.of(due.id()), due.prompt(), Optional.empty()),
-                        Optional.of(due), Optional.empty(), new CompletableFuture<>()));
+            enqueue(new Pending(new LampRun(numberRun(), Optional.of(due.id()), due.prompt(), Optional.empty()),
+                    Optional.of(due), Optional.empty(), new CompletableFuture<>()));
         }
+    }
+
+    /// Leaves out a run that is too late, and tells whoever listens, so that an application can
+    /// still have the job's prompt answered if it wants to. A repeating job then waits for its
+    /// next time after now; a job that runs once has none, and comes off the schedule.
+    private void passOver(ScheduledJob job, Instant due, Instant now, ZoneId zone) {
+        boolean once = job.when() instanceof ScheduledJob.When.Once;
+        if (!book.update(current -> Result.ok(once ? current.without(job.id()) : current.ran(job.id(), now)), s -> s).isOk())
+            return;
+        LampJob passed = job.ranAt(now).describe(zone, now);
+        context.sink().accept(new LampEvent.RunMissed(passed, due, Duration.between(due, now)));
+        if (once) context.sink().accept(new LampEvent.JobRemoved(passed, "its one run, due at "
+                + TimeNotationUtil.show(due, zone) + ", was missed: it was more than "
+                + config.maxDelayMinutes() + " minutes late, the most `schedule.max_delay_minutes` allows"));
+    }
+
+    /// The name of a new run, such as `run-12`: one above the highest number in the history and
+    /// the highest this session gave out, whichever is higher. Not a counter in the schedule
+    /// file, because a restore brings that file back, and the counter with it; the history only
+    /// grows. Not the history alone either, because the runs that wait or work now are not in it
+    /// yet. A history that cannot be read counts as one without runs.
+    private synchronized String numberRun() {
+        int saved = new History(layout).commitList().map(GitObjectUtil::highestRun).orElseGet(problems -> 0);
+        lastNumbered = Math.max(lastNumbered, saved) + 1;
+        return "run-" + lastNumbered;
     }
 
     private boolean isQueued(String job) {

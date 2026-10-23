@@ -35,7 +35,7 @@ final class ConfigDefaultsUtil {
                     Tuple.of(String.class)),
             new LampConfig.Host(true),
             new LampConfig.Timeouts(60, 60, 15),
-            new LampConfig.Schedule(false, 10, 15, 14, 48, 30, 8),
+            new LampConfig.Schedule(false, 10, 15, 14, 48, 30, 8, 30),
             new LampConfig.HostAccess(false, "", "",
                     Tuple.of(String.class), 65536, Tuple.of(String.class), true, false),
             new LampConfig.Autosave(false, false, true, true));

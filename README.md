@@ -141,7 +141,7 @@ agent put in its home directory.
 
 ### 6. Go back in time ⏪
 
-Save the agent's home and the lamp's `oillamp.toml` whenever you like, even while the session runs.
+Save the agent's home, the lamp's `oillamp.toml` and its jobs whenever you like, even while the session runs.
 oillamp can also save by itself as each session starts and ends, if anything changed: switch that on
 with `oillamp autosave ~/lamps/first startup on shutdown on`, or under `[autosave]` in `oillamp.toml`.
 
@@ -164,9 +164,9 @@ oillamp restore ~/lamps/first 3f2a9c1d
 ```
 
 Everything comes back as it was, including projects the agent cloned (with their own git history),
-file permissions and links. Whatever the agent made after the snapshot is removed. Before it
-changes anything, `restore` saves the lamp once more and prints how to undo the restore. The
-agent cannot see or change these snapshots.
+file permissions and links, and the jobs on the schedule. Whatever the agent made after the
+snapshot is removed, jobs included. Before it changes anything, `restore` saves the lamp once more
+and prints how to undo the restore. The agent cannot see or change these snapshots.
 
 ### 7. Let the agent work on a schedule ⏰
 
@@ -234,7 +234,10 @@ SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE
 The agent can add jobs for itself with its `schedule_add` tool. oillamp decides whether to accept
 them: the agent may have only a few jobs, which run at most every 15 minutes and expire after 14
 days, and it cannot touch yours. Jobs only run while the session runs: nothing wakes a lamp that
-is not lit. `oillamp schedule <dir> pause` stops all runs without stopping the session.
+is not lit. A run the session finds more than 30 minutes late (`max_delay_minutes` under
+`[schedule]`, 0 for no limit) is missed rather than made late: an hourly job on a lamp started after
+a weekend runs at its next full hour. `oillamp schedule <dir> pause` stops all runs without stopping
+the session; after `resume`, each repeating job runs at its next time from then.
 
 ### 8. Delete it when you are done 🧹
 
@@ -313,7 +316,7 @@ the image of the previous update is removed, as no other lamp uses it.
   keeps its previous image.
 - **Only the agent tools are refreshed.** Debian packages, the JDK and Node.js come from the
   earlier, cached part of the image. For those, see the next section.
-- **`restore` does not undo an update.** Snapshots hold the home and `oillamp.toml`, not the
+- **`restore` does not undo an update.** Snapshots hold the home, `oillamp.toml` and the jobs, not the
   image. After a restore, the lamp still runs the updated tools.
 
 To pin a version, edit the lamp's `oillamp.toml`. Each value is `latest` or an exact release:

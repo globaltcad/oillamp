@@ -335,6 +335,15 @@ final class FilesystemUtil {
         }
     }
 
+    /// A file's bytes exactly as they are; empty when there is no file.
+    public static Optional<byte[]> readBytes(Path path) throws IOException {
+        try {
+            return Optional.of(Files.readAllBytes(path));
+        } catch (NoSuchFileException absent) {
+            return Optional.empty();
+        }
+    }
+
     public static void deleteIfPresent(Path path) throws IOException {
         Files.deleteIfExists(path);
     }

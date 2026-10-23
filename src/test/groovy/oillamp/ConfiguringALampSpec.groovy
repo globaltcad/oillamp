@@ -633,4 +633,46 @@ class ConfiguringALampSpec extends Specification {
         and: 'with no checker model of its own, the lamp judges with the agent\'s'
             outcome.console().contains("checker the agent's model")
     }
+
+    def 'Oillamp #verdict schedule.max_delay_minutes = #value'() {
+        reportInfo """
+            `schedule.max_delay_minutes` says how late a job's run may start. A running session
+            checks the schedule as it starts, every 30 seconds after that, and whenever someone
+            changes the schedule. When it sees a job whose time lies more than this many minutes
+            in the past, oillamp does not wake the agent for it. The default is 30. 0 turns the
+            limit off, as 0 does for `recording.max_age_days` and `recording.max_total_gb`.
+
+            The largest value is 10080, the minutes of one week, the same upper bound
+            `schedule.min_agent_interval_minutes` has. Oillamp measures how late a run is from the
+            first time the job was due and did not run. With a limit of, say, ten days, a weekly
+            job due on a Monday and seen by a session on the Wednesday of the week after would
+            still run, nine days late, although its next Monday has passed too: the agent would do
+            last week's work. Up to a week, a run is never later than one period of a weekly job.
+            A negative number of minutes has no meaning.
+
+            The scenario checks the edges with `oillamp config <dir> check`: -1 and 10081 are
+            refused with `OIL-CONFIG-004`, naming the key and what it expects; 0 and 10080 pass.
+        """
+        given: 'a lamp whose file sets schedule.max_delay_minutes'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, "schema_version = 1\n[schedule]\nmax_delay_minutes = ${value}\n")
+
+        when: 'the user checks the file'
+            var outcome = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'a value from 0 to 10080 passes, and any other is refused, naming the key and the range'
+            (outcome.status() == LampExitStatus.SUCCESS) == accepted
+            outcome.reported('OIL-CONFIG-004') == !accepted
+            !accepted == outcome.console().contains('schedule.max_delay_minutes')
+            !accepted == outcome.console().contains('a number of minutes from 0 to 10080, 0 for no limit')
+
+        where:
+            value  || accepted
+            -1     || false
+            0      || true
+            10080  || true
+            10081  || false
+
+            verdict = accepted ? 'accepts' : 'refuses'
+    }
 }

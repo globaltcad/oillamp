@@ -420,7 +420,7 @@ final class ConfigLoadingUtil {
 
     private static LampConfig.Schedule readSchedule(ConfigSection s, LampConfig.Schedule fallback) {
         s.allowOnly("enabled", "max_agent_jobs", "min_agent_interval_minutes", "max_agent_days",
-                    "max_agent_runs_per_day", "max_run_minutes", "notes_max_kb");
+                    "max_agent_runs_per_day", "max_run_minutes", "notes_max_kb", "max_delay_minutes");
         return new LampConfig.Schedule(
                 s.bool("enabled", fallback.enabled()),
                 bounded(s, "max_agent_jobs", fallback.maxAgentJobs(), 0, 100, "a number of jobs from 0 to 100"),
@@ -431,7 +431,9 @@ final class ConfigLoadingUtil {
                         "a number of runs from 0 to 1440"),
                 bounded(s, "max_run_minutes", fallback.maxRunMinutes(), 1, 24 * 60,
                         "a number of minutes from 1 to 1440"),
-                bounded(s, "notes_max_kb", fallback.notesMaxKb(), 1, 1024, "a size in kilobytes from 1 to 1024"));
+                bounded(s, "notes_max_kb", fallback.notesMaxKb(), 1, 1024, "a size in kilobytes from 1 to 1024"),
+                bounded(s, "max_delay_minutes", fallback.maxDelayMinutes(), 0, 7 * 24 * 60,
+                        "a number of minutes from 0 to 10080, 0 for no limit"));
     }
 
     private static LampConfig.Autosave readAutosave(ConfigSection s, LampConfig.Autosave fallback) {

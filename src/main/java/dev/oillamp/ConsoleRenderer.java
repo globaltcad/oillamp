@@ -244,6 +244,10 @@ final class ConsoleRenderer {
             case LampEvent.JobRemoved removed -> printLine(area("schedule") + dim("· " + removed.job().id()
                     + " is off the schedule — " + removed.why()));
             case LampEvent.ScheduleChanged changed -> printLine(area("schedule") + colour(GREEN, "✓ ") + changed.what());
+            case LampEvent.RunMissed missed -> printLine(area("schedule") + colour(YELLOW, "! ") + missed.job().id()
+                    + " missed its run of " + when(missed.due()) + " UTC: it was " + span(missed.late())
+                    + " late, more than schedule.max_delay_minutes allows, so the agent was not woken"
+                    + missed.job().next().map(next -> "; it runs next " + when(next) + " UTC").orElse(""));
             case LampEvent.RunQueued queued -> printLine(area("run") + dim("· " + queued.run().id() + " ("
                     + describe(queued.run()) + ") waits: the agent is busy, and "
                     + (queued.ahead() == 0 ? "no other run is" : queued.ahead() + " more "
@@ -385,6 +389,16 @@ final class ConsoleRenderer {
     private static String seconds(Duration took) {
         long seconds = Math.max(0, took.toSeconds());
         return seconds < 60 ? seconds + "s" : seconds / 60 + "m " + seconds % 60 + "s";
+    }
+
+    /// A longer time, such as how late a run was: in whole minutes up to two hours, in whole
+    /// hours up to two days, and beyond that in days and hours.
+    private static String span(Duration time) {
+        long minutes = Math.max(0, time.toMinutes());
+        if (minutes < 120) return minutes == 1 ? "1 minute" : minutes + " minutes";
+        long hours = minutes / 60;
+        if (hours < 48) return hours + " hours";
+        return hours / 24 + " days" + (hours % 24 == 0 ? "" : hours % 24 == 1 ? " and 1 hour" : " and " + hours % 24 + " hours");
     }
 
     /// The jobs `oillamp schedule` lists, as a table, with a line saying whether they run.

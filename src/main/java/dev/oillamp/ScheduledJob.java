@@ -20,9 +20,11 @@ import sprouts.Tuple;
 /// @param expires when it is taken off the schedule; empty for a user's job that stays until removed.
 ///                An agent's job always has one
 /// @param enabled false for a job the user switched off
-/// @param lastRun when it last ran. A repeating job runs at the first time its expression names
-///                after this, or after `created` if it never ran. So a job that came due while no
-///                session ran runs once as soon as one does, not once for every time it missed
+/// @param lastRun when it last ran, or was last passed over. A repeating job runs at the first
+///                time its expression names after this, or after `created` if it never ran. So a
+///                job that came due while no session ran runs once as soon as one does, not once
+///                for every time it missed; and not even once when that is later than
+///                `schedule.max_delay_minutes` allows ([#missedAt])
 record ScheduledJob(String id, When when, String prompt, LampJobAuthor author, Instant created,
                     Optional<Instant> expires, boolean enabled, Optional<Instant> lastRun) {
 
@@ -60,12 +62,21 @@ record ScheduledJob(String id, When when, String prompt, LampJobAuthor author, I
         return enabled && !expiredAt(now) && next(zone).filter(at -> !at.isAfter(now)).isPresent();
     }
 
+    /// When it was due, if that lies more than `limit` before `now`. A run that late is not
+    /// made: the moment it was meant for has passed, and what it was meant to do may no longer
+    /// fit. Empty for a job that is not due, for one that is late by `limit` or less, and when
+    /// there is no limit.
+    Optional<Instant> missedAt(Instant now, ZoneId zone, Optional<Duration> limit) {
+        if (limit.isEmpty() || !dueAt(now, zone)) return Optional.empty();
+        return next(zone).filter(due -> now.isAfter(due.plus(limit.get())));
+    }
+
     ScheduledJob ranAt(Instant at) {
         return new ScheduledJob(id, when, prompt, author, created, expires, enabled, Optional.of(at));
     }
 
     /// Switched on or off. Switching a repeating job on counts from now, so it does not run at once
-    /// for every time it was off.
+    /// for the times it was off, and none of them counts as a run it missed.
     ScheduledJob enabled(boolean on, Instant now) {
         return new ScheduledJob(id, when, prompt, author, created, expires, on,
                 on && !enabled && when instanceof When.Repeating ? Optional.of(now) : lastRun);

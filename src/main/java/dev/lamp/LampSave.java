@@ -3,8 +3,8 @@ package dev.lamp;
 import java.time.Instant;
 import java.util.Optional;
 
-/// One saved state of a lamp: the agent's home and the lamp's `oillamp.toml`, as they were
-/// at one moment. `oillamp restore` brings a lamp back to it.
+/// One saved state of a lamp: the agent's home, the lamp's `oillamp.toml` and its schedule, as
+/// they were at one moment. `oillamp restore` brings a lamp back to it.
 ///
 /// @param id           the snapshot's name, 40 hexadecimal characters. Any unique beginning of it
 ///                     of at least four characters names it too, such as the eight `oillamp

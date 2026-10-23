@@ -52,8 +52,8 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp recordings <dir> [--open <session>] [--prune]` | Works. |
 | `oillamp save <dir> [--message <text>]` | Works in the scenarios and on a lamp made by hand (see below). |
 | `oillamp history <dir>` | Works. |
-| `oillamp restore <dir> <snapshot>` | Works in the scenarios and on a lamp made by hand. Refused while a session runs. |
-| `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). |
+| `oillamp restore <dir> <snapshot>` | Works in the scenarios and on a lamp made by hand. Refused while a session runs. Brings back the schedule too; that, and keeping the schedule when restoring a snapshot an older oillamp made without it, works in the scenarios only. |
+| `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). A run later than `schedule.max_delay_minutes` is missed and reported as `RunMissed`; that works in the scenarios, and has not been seen in a real session yet. |
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
@@ -353,7 +353,7 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Open questions
 
-- `oillamp restore` brings back the home and `oillamp.toml`, but not the image an update chose:
+- `oillamp restore` brings back the home, `oillamp.toml` and the schedule, but not the image an update chose:
   `.oillamp/image/tools-revision` is not in the snapshots. After a restore the lamp keeps its
   newest tools. Saving the revision in snapshots would not be enough, because the update after it
   removes the old image, so restoring would have to build that image again. That build installs
@@ -365,6 +365,11 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   it are new and Debian's packages are as old as before. Telling the two apart would mean
   reading the age of the cached apt layers (`podman history`), or remembering the last
   `--system` build per lamp. Undecided.
+
+- Run numbers are counted from the `Oillamp-Run` trailers in the history and from the session's
+  own count. With both `autosave.before_run` and `autosave.after_run` off, the history names no
+  run, so the next session starts again at `run-1`, and pi's conversations can get the same name
+  (`run-1 (job-2)`) in two sessions.
 
 ### Host access, still missing
 

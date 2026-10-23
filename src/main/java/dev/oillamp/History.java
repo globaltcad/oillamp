@@ -40,14 +40,15 @@ import dev.lamp.LampSave;
 import sprouts.Association;
 import sprouts.Tuple;
 
-/// A lamp's history: snapshots of its agent directory and its `oillamp.toml`, kept as a git
-/// repository in `.oillamp/history`.
+/// A lamp's history: snapshots of its agent directory, its `oillamp.toml` and its schedule, kept
+/// as a git repository in `.oillamp/history`.
 ///
 /// Each snapshot is one commit. Its tree mirrors the lamp: the agent directory under its own name,
-/// `oillamp.toml`, and `.oillamp-modes`, a list of the exact permissions git cannot hold (git
-/// knows only "executable or not", and ssh refuses a private key that others may read). The
-/// commits form one line, each the parent of the next, on the branch `main`. A restore never
-/// removes a commit: it adds one whose tree is the older snapshot's.
+/// `oillamp.toml`, `.oillamp/schedule.json`, and `.oillamp-modes`, a list of the exact
+/// permissions git cannot hold (git knows only "executable or not", and ssh refuses a private key
+/// that others may read). The commits form one line, each the parent of the next, on the branch
+/// `main`. A restore never removes a commit: it adds one whose tree is the older snapshot's, with
+/// the schedule the lamp kept when that snapshot is older than snapshots that hold one.
 ///
 /// Everything here is written in git's own format by this class, not by running `git`; why is
 /// explained in [GitObjectUtil]. Objects are only ever added, each written to a temporary file and
@@ -61,6 +62,11 @@ final class History {
     /// The name of the list of exact permissions, at the top of every snapshot's tree.
     static final String MODES_FILE = ".oillamp-modes";
     static final String CONFIG_FILE = "oillamp.toml";
+    /// Where the schedule is in a snapshot's tree: `.oillamp/schedule.json`, as in the lamp. The
+    /// rest of `.oillamp/` is never saved. A snapshot made before the schedule was saved with it
+    /// has no `.oillamp` at all.
+    static final String STATE_DIR = ".oillamp";
+    static final String SCHEDULE_FILE = "schedule.json";
     private static final String BRANCH = "refs/heads/main";
     /// How long a save waits for another save or restore of the same lamp to finish.
     private static final Duration LOCK_WAIT = Duration.ofMinutes(10);
@@ -158,7 +164,9 @@ final class History {
         for (GitObjectUtil.Entry entry : old.values()) names.add(entry.name());
         for (GitObjectUtil.Entry entry : now.values()) names.add(entry.name());
         for (String name : names) {
-            if (top && name.equals(MODES_FILE)) continue;
+            // Neither is a file of the agent's: one is oillamp's list of permissions, and the
+            // other the schedule, which changes with every run of a job.
+            if (top && (name.equals(MODES_FILE) || name.equals(STATE_DIR))) continue;
             // The agent's home, whatever its name in the lamp, is `~` to the agent.
             String path = top && name.startsWith(LampLayout.AGENT_DIR_PREFIX) ? "~"
                         : top ? name : prefix + "/" + name;
@@ -227,13 +235,19 @@ final class History {
             }
             Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
                     : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
-            if (current.tree().equals(wanted.tree()))
+            String restored;
+            try {
+                restored = withScheduleOf(wanted.tree(), current.tree());
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+            if (current.tree().equals(restored))
                 return Result.ok(new Restoring(target, safety.made(), Optional.empty(), safety.skipped()), warnings);
             try {
-                bringBack(wanted.tree(), current.tree());
+                bringBack(restored, current.tree());
                 String message = GitObjectUtil.message(LampSaveKind.RESTORE, "back to " + target.shortId()
                         + " (" + target.kind().label() + ", " + target.at() + ")", Optional.empty());
-                LampSave result = commit(wanted.tree(), Optional.of(current.id()), now, message);
+                LampSave result = commit(restored, Optional.of(current.id()), now, message);
                 return Result.ok(new Restoring(target, safety.made(), Optional.of(result), safety.skipped()), warnings);
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.restoreFailed(layout.root(), ProblemCatalogUtil.reason(e),
@@ -272,6 +286,10 @@ final class History {
         if (Files.isRegularFile(layout.config(), LinkOption.NOFOLLOW_LINKS))
             top = top.add(new GitObjectUtil.Entry(CONFIG_FILE, GitObjectUtil.EntryMode.FILE,
                     storeSmall("blob", Files.readAllBytes(layout.config()))));
+        String schedule = storeSmall("blob", new ScheduleBook(layout).stored());
+        top = top.add(new GitObjectUtil.Entry(STATE_DIR, GitObjectUtil.EntryMode.DIRECTORY, storeSmall("tree",
+                GitObjectUtil.tree(Tuple.of(GitObjectUtil.Entry.class,
+                        new GitObjectUtil.Entry(SCHEDULE_FILE, GitObjectUtil.EntryMode.FILE, schedule))))));
         top = top.add(new GitObjectUtil.Entry(MODES_FILE, GitObjectUtil.EntryMode.FILE,
                 storeSmall("blob", tally.modes.toString().getBytes(StandardCharsets.UTF_8))));
         String tree = storeSmall("tree", GitObjectUtil.tree(top));
@@ -567,8 +585,32 @@ final class History {
         if (configThen.isPresent() && !configThen.equals(now.get(CONFIG_FILE)))
             FilesystemUtil.writeBytes(layout.config(), readObject(configThen.get().id(), "blob"), PosixMode.PRIVATE_FILE);
 
+        Optional<GitObjectUtil.Entry> scheduleThen = scheduleIn(wanted.get(STATE_DIR));
+        if (scheduleThen.isPresent() && !scheduleThen.equals(scheduleIn(now.get(STATE_DIR))))
+            new ScheduleBook(layout).restore(readObject(scheduleThen.get().id(), "blob"));
+
         applyModes(modesIn(now.get(MODES_FILE)), modesIn(wanted.get(MODES_FILE)),
                    agentThen.map(GitObjectUtil.Entry::name).orElse(agentName));
+    }
+
+    /// The tree a restore to `target` brings the lamp to. That is `target` itself, unless it was
+    /// saved before snapshots held the schedule: then the lamp keeps the schedule it has, which
+    /// the tree `current` holds, because an older snapshot says nothing about which jobs the lamp
+    /// had, and an empty schedule would be a guess.
+    private String withScheduleOf(String target, String current) throws IOException {
+        Association<String, GitObjectUtil.Entry> wanted = entriesOf(Optional.of(target));
+        Optional<GitObjectUtil.Entry> kept = entriesOf(Optional.of(current)).get(STATE_DIR);
+        if (wanted.containsKey(STATE_DIR) || kept.isEmpty()) return target;
+        Tuple<GitObjectUtil.Entry> entries = Tuple.of(GitObjectUtil.Entry.class, kept.get());
+        for (GitObjectUtil.Entry entry : wanted.values()) entries = entries.add(entry);
+        return storeSmall("tree", GitObjectUtil.tree(entries));
+    }
+
+    /// The schedule file in a snapshot's `.oillamp` directory, if it has one.
+    private Optional<GitObjectUtil.Entry> scheduleIn(Optional<GitObjectUtil.Entry> state) throws IOException {
+        if (state.isEmpty() || !state.get().isDirectory()) return Optional.empty();
+        return entriesOf(state.map(GitObjectUtil.Entry::id)).get(SCHEDULE_FILE)
+                .filter(entry -> entry.mode() == GitObjectUtil.EntryMode.FILE);
     }
 
     private void restoreDirectory(Path directory, String target, Optional<String> current) throws IOException {

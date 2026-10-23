@@ -268,8 +268,8 @@ public final class LampDirectory {
         return Lamp.runToEnd(launcher, listeners, "remove", directory.toString(), "--yes").status();
     }
 
-    /// Takes a snapshot of this lamp: the agent's home and its `oillamp.toml`, as they are
-    /// now. [#restore] brings the lamp back to it later. Works whether or not the lamp's
+    /// Takes a snapshot of this lamp: the agent's home, its `oillamp.toml` and its schedule, as
+    /// they are now. [#restore] brings the lamp back to it later. Works whether or not the lamp's
     /// sandbox is running; see [Lamp#save(LampLauncher, List, Path, String)] for one this application holds.
     ///
     /// Blocks until the engine is done. What it reports goes to the listeners.
@@ -298,8 +298,9 @@ public final class LampDirectory {
         return List.of();
     }
 
-    /// Brings this lamp back to `snapshot`: the agent's home and `oillamp.toml` become what
-    /// they were when it was saved. The lamp is saved first, so a restore can be undone by
+    /// Brings this lamp back to `snapshot`: the agent's home, `oillamp.toml` and the schedule
+    /// become what they were when it was saved; a snapshot from before oillamp saved the schedule
+    /// leaves the schedule as it is. The lamp is saved first, so a restore can be undone by
     /// restoring that save. A lamp whose sandbox is running is refused: close it first.
     ///
     /// @param snapshot a snapshot's [id][LampSave#id()], or a unique beginning of
@@ -451,7 +452,8 @@ public final class LampDirectory {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "pause").orThrow();
     }
 
-    /// Lets the schedule run again after [#pause].
+    /// Lets the schedule run again after [#pause]. Each repeating job counts as if it had just
+    /// run, and runs at its next time from now; the times the pause covered are not missed.
     public void resume() throws IOException, InterruptedException, LampFailedException {
         Lamp.runToEnd(launcher, listeners, "schedule", directory.toString(), "resume").orThrow();
     }

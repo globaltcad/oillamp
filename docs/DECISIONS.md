@@ -234,8 +234,8 @@ as data means adding one is a new table row. *(D-22)*
 
 A lamp can be saved (`oillamp save`), listed (`oillamp history`) and brought back to an earlier
 snapshot (`oillamp restore`). oillamp can also save by itself as each session starts and as it
-ends, when anything changed. A snapshot holds the agent directory and `oillamp.toml`, never
-`.oillamp/`.
+ends, when anything changed. A snapshot holds the agent directory, `oillamp.toml` and
+`.oillamp/schedule.json`, never the rest of `.oillamp/`.
 
 *Why:* the sandbox keeps an agent away from the host, but inside its home an agent can still
 delete a project or break its tools, and that work is lost. Nobody remembers to save before the
@@ -304,6 +304,50 @@ run costs model tokens.
 *Given up:* a schedule does nothing while the lamp is not running, and the terminal it was started
 from has to stay open. A pi the user starts by hand in the sandbox's shell is not counted as busy;
 running one alongside a run is the user's own risk. *(added on 2026-09-29)*
+
+### The schedule travels with the history, and run numbers come from the history
+
+Every snapshot holds `.oillamp/schedule.json`, and a restore brings it back: the jobs, the user's
+and the agent's, each one's enabled flag and last run, whether the schedule is paused, and the
+number the next job gets. A snapshot made before this holds no schedule; restoring it leaves the
+schedule as it is. Runs are no longer numbered by a counter in that file. A new run gets the
+number above the highest `Oillamp-Run` trailer in the history and the highest the session has
+given out.
+
+*Why:* a job belongs to the state of the lamp it was written for. Restoring the home but keeping
+today's jobs could wake the agent for work that a restore undid, or that the agent planned for a
+state that no longer exists. It also prepares for several alternative states of one lamp, each
+with its own jobs. A counter in the schedule file would go back with every restore and hand out a
+run's number a second time; the history only grows, so a number taken from it is new. The
+session's own count covers the runs that are queued or working but not yet saved.
+
+*Given up:* a job someone added after a snapshot is gone after restoring it, even one that had
+nothing to do with what the restore undid; the safety save before the restore still holds it.
+The number the next job gets goes back too, because the numbering belongs to the state like the
+jobs it counts, so a job added after a restore can get an id that a job removed by the restore
+had, and older `Oillamp-Job` trailers in the history then name two jobs.
+With the saves around runs both off, the history names no run, and numbers start at `run-1` again
+in the next session. *(added on 2026-10-23)*
+
+### A run found too late is missed, and oillamp only says so
+
+When a session finds a job whose time lies more than `schedule.max_delay_minutes` (30 by default,
+0 for no limit) in the past, it does not wake the agent. It reports `RunMissed`, with when the run
+was due and how late it was. A repeating job waits for its next time after now; a job that runs
+once is removed. Switching a job back on, and resuming the paused schedule, count every repeating
+job as if it had just run, so neither makes it miss anything: a job switched off or paused was not
+meant to run. A job that runs once keeps its time through a pause, since it has no later time to
+count from, and is missed when found later than the limit allows.
+
+*Why:* a run hours or days late does what was meant for another moment, such as a morning report
+in the evening, and costs model tokens for it. The same happens after a restore to an old
+snapshot, whose jobs' times have long passed. Whether a missed run is still worth making depends
+on the job, which oillamp cannot judge; an application built on top of it can, and can ask the
+job's prompt itself. Keeping that out of oillamp keeps the schedule simple.
+
+*Given up:* a lamp started after a break no longer catches up at once on an overdue job; a job
+that matters whatever the delay needs `max_delay_minutes = 0`, or an application that catches up.
+*(added on 2026-10-23)*
 
 ### Every run starts a fresh conversation, and the agent remembers through its notes
 

@@ -953,11 +953,11 @@ final class CommandExecutionUtil {
             case Command.Schedule.Action.Disable disable -> book.update(schedule -> schedule.enable(disable.job(),
                             false, now, layout.root()), Schedule.Changed::schedule)
                     .map(changed -> new LampEvent.ScheduleChanged(changed.job().id() + " is switched off"));
-            case Command.Schedule.Action.Pause _ -> book.update(schedule -> Result.ok(schedule.paused(true)),
+            case Command.Schedule.Action.Pause _ -> book.update(schedule -> Result.ok(schedule.paused(true, now)),
                             Function.<Schedule>identity())
                     .map(paused -> new LampEvent.ScheduleChanged(
                             "the schedule is paused: no job runs until `oillamp schedule " + layout.root() + " resume`"));
-            case Command.Schedule.Action.Resume _ -> book.update(schedule -> Result.ok(schedule.paused(false)),
+            case Command.Schedule.Action.Resume _ -> book.update(schedule -> Result.ok(schedule.paused(false, now)),
                             Function.<Schedule>identity())
                     .map(resumed -> new LampEvent.ScheduleChanged("the schedule runs again"));
         };

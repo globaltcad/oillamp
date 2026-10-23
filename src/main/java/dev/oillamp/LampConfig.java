@@ -181,9 +181,11 @@ record LampConfig(
     /// @param maxAgentRunsPerDay      how many of the agent's jobs may run in any 24 hours
     /// @param maxRunMinutes           how long any run may take before it is stopped
     /// @param notesMaxKb              how large the agent's notes may grow, in kilobytes
+    /// @param maxDelayMinutes         how late a job's run may start; a run found later than this
+    ///                                is missed, not made. 0 for no limit
     public record Schedule(boolean enabled, int maxAgentJobs, int minAgentIntervalMinutes,
                            int maxAgentDays, int maxAgentRunsPerDay, int maxRunMinutes,
-                           int notesMaxKb) {
+                           int notesMaxKb, int maxDelayMinutes) {
         public Schedule {
             if (maxAgentJobs < 0)            throw new IllegalArgumentException("schedule.max_agent_jobs cannot be negative");
             if (minAgentIntervalMinutes < 1) throw new IllegalArgumentException("schedule.min_agent_interval_minutes");
@@ -191,14 +193,19 @@ record LampConfig(
             if (maxAgentRunsPerDay < 0)      throw new IllegalArgumentException("schedule.max_agent_runs_per_day cannot be negative");
             if (maxRunMinutes < 1)           throw new IllegalArgumentException("schedule.max_run_minutes");
             if (notesMaxKb < 1)              throw new IllegalArgumentException("schedule.notes_max_kb");
+            if (maxDelayMinutes < 0)         throw new IllegalArgumentException("schedule.max_delay_minutes cannot be negative");
         }
         public Schedule switchedOn() {
             return new Schedule(true, maxAgentJobs, minAgentIntervalMinutes, maxAgentDays,
-                                maxAgentRunsPerDay, maxRunMinutes, notesMaxKb);
+                                maxAgentRunsPerDay, maxRunMinutes, notesMaxKb, maxDelayMinutes);
         }
         public Duration minAgentInterval() { return Duration.ofMinutes(minAgentIntervalMinutes); }
         public Duration maxAgentLife()     { return Duration.ofDays(maxAgentDays); }
         public Duration maxRun()           { return Duration.ofMinutes(maxRunMinutes); }
+        /// How late a run may start, or empty when there is no limit.
+        public Optional<Duration> maxDelay() {
+            return maxDelayMinutes == 0 ? Optional.empty() : Optional.of(Duration.ofMinutes(maxDelayMinutes));
+        }
     }
 
     /// `[autosave]`: the moments oillamp saves the lamp by itself. `oillamp save` and the save

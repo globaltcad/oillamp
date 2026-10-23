@@ -5,26 +5,37 @@ import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampSaveKind
 import dev.lamp.LampFailedException
+import dev.lamp.LampJobAuthor
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import spock.lang.IgnoreIf
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
 
+import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.security.MessageDigest
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.TimeUnit
+import java.util.zip.DeflaterOutputStream
+import java.util.zip.InflaterInputStream
 
 /**
  *  {@code save}, {@code history} and {@code restore}: a lamp's history.
  *
  *  <p>An agent can wreck its own home: delete a project, break a toolchain, fill a config file
  *  with nonsense. The sandbox keeps that away from the user's machine, but the work inside is
- *  still lost. A lamp therefore keeps snapshots of the agent's home and its configuration, in a
- *  git repository beside the home that the agent cannot see, and can go back to any of them.
+ *  still lost. A lamp therefore keeps snapshots of the agent's home, its configuration and its
+ *  schedule, in a git repository beside the home that the agent cannot see, and can go back to
+ *  any of them.
  *
  *  <p>The files are real, in a temporary directory, as everywhere in these scenarios. A snapshot
  *  is only worth something if exact bytes, permissions and links come back, and a simulated disk
@@ -519,13 +530,380 @@ class TravellingBackInTimeSpec extends Specification {
             check.waitFor() == 0 || said.readLines().every { it.contains('hasDotgit') }
     }
 
+    // ─── the schedule in the snapshots ─────────────────────────────────────────────────────
+
+    def 'Oillamp makes a snapshot when only the schedule changed'() {
+        reportInfo """
+            A lamp's jobs are kept in `.oillamp/schedule.json`, outside the agent's home. Every
+            snapshot holds that file too, among the files it holds, at the path
+            `.oillamp/schedule.json`, so that a restore can bring back the jobs the lamp had. A
+            save compares the files it would store with those of the newest snapshot, and makes no
+            new snapshot when nothing changed.
+
+            Let's consider a lamp saved a moment ago, after which the user adds a job with
+            `oillamp schedule add` and changes nothing else. The schedule file is among the files
+            compared, so the next `oillamp save` must make a snapshot. A save straight after it,
+            with nothing changed, must make none.
+        """
+        given: 'a lamp saved a moment ago'
+            var lamp = aLampThatHasRun()
+            assert host.oillamp.run('save', lamp.toString()).succeeded()
+
+        when: 'the user adds a job, and saves'
+            assert host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up').succeeded()
+            var afterTheJob = host.oillamp.run('save', lamp.toString(), '-m', 'with a job')
+
+        then: 'the save made a snapshot'
+            afterTheJob.succeeded()
+            afterTheJob.events().find { it instanceof LampEvent.Saved }.snapshot().message() == 'with a job'
+
+        when: 'the user saves again, with nothing changed'
+            var again = host.oillamp.run('save', lamp.toString())
+
+        then: 'that save made none'
+            again.succeeded()
+            !again.events().any { it instanceof LampEvent.Saved }
+    }
+
+    def 'Oillamp brings the jobs back with the snapshot it restores'() {
+        reportInfo """
+            A snapshot holds the lamp's schedule, and a restore brings it back as the snapshot
+            holds it: every job, the user's and the agent's alike, each switched on or off as it
+            was. A job added after the snapshot is gone after the restore, whoever added it. The
+            jobs belong to the state the lamp is brought back to; a job the agent added for work
+            it did after the snapshot would otherwise wake it for work that no longer exists.
+
+            The number the next job gets is kept in the same file, and comes back with it. The
+            numbering belongs to the restored state, like the jobs it counts: in that state
+            `job-3` was never added, so the next job added is `job-3`.
+
+            In this scenario the snapshot holds the user's `job-1`, switched off, and `job-2`,
+            which the agent added through the session. After the snapshot the user switches
+            `job-1` on, removes `job-2` and adds `job-3`. The restore must bring back `job-1`,
+            switched off, and the agent's `job-2`, and take away `job-3`. A job added after the
+            restore is called `job-3` again.
+        """
+        given: 'a lamp with a daily job of the user\'s'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
+
+        and: 'a job the agent added in a session'
+            startASession(lamp)
+            assert agentAsks(op: 'add', cron: '0 9 * * *', prompt: 'Check the build').ok
+            stopTheSession(lamp)
+
+        and: 'a snapshot made once the user switched their job off'
+            host.oillamp.run('schedule', lamp.toString(), 'disable', 'job-1')
+            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+
+        and: 'later, the user switched it on, removed the agent\'s job and added another'
+            host.oillamp.run('schedule', lamp.toString(), 'enable', 'job-1')
+            host.oillamp.run('schedule', lamp.toString(), 'remove', 'job-2')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
+
+        when: 'the user restores the snapshot'
+            var restored = host.oillamp.run('restore', lamp.toString(), saved.shortId())
+
+        then: 'the user\'s job is back, switched off, and so is the agent\'s; the later one is gone'
+            restored.succeeded()
+            var jobs = jobsOf(lamp)
+            jobs*.id() == ['job-1', 'job-2']
+            !jobs[0].enabled()
+            jobs[0].author() == LampJobAuthor.USER
+            jobs[1].enabled()
+            jobs[1].author() == LampJobAuthor.AGENT
+            jobs[1].prompt() == 'Check the build'
+
+        when: 'the user adds a job after the restore'
+            var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2h', 'Send the summary')
+
+        then: 'it gets the number the next job had in the snapshot'
+            added.events().find { it instanceof LampEvent.JobAdded }.job().id() == 'job-3'
+    }
+
+    def 'Oillamp brings back a schedule that was #state when the snapshot was made'() {
+        reportInfo """
+            `oillamp schedule pause` stops every job from running, without changing any; `oillamp
+            schedule resume` lets them run again. Whether the schedule is paused is kept in
+            `.oillamp/schedule.json`, beside the jobs, and a snapshot holds it with them.
+
+            A restore puts back the whole schedule file as the snapshot holds it, and keeps
+            nothing of the schedule from the present. That gives one rule to know: after a
+            restore, the schedule is the snapshot's. It follows that a restore can switch a paused
+            schedule back on: restoring a snapshot made while the schedule ran lets the jobs run
+            again, whether or not the user paused it since.
+
+            The scenario saves a lamp whose schedule is ${state}, then ${change} it, restores the
+            snapshot, and reads the paused flag with `oillamp schedule`.
+        """
+        given: 'a lamp with one job, saved while its schedule is paused or not'
+            var lamp = aLampThatHasRun()
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
+            if (pausedThen) host.oillamp.run('schedule', lamp.toString(), 'pause')
+            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+
+        and: 'later, the user changed that'
+            host.oillamp.run('schedule', lamp.toString(), pausedThen ? 'resume' : 'pause')
+
+        when: 'the user restores the snapshot'
+            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+
+        then: 'the schedule is paused, or not, as it was in the snapshot'
+            host.oillamp.run('schedule', lamp.toString()).events()
+                    .find { it instanceof LampEvent.Schedule }.paused() == pausedThen
+
+        where:
+            pausedThen << [true, false]
+            state = pausedThen ? 'paused' : 'running'
+            change = pausedThen ? 'resumes' : 'pauses'
+    }
+
+    def 'Oillamp brings back when each job last ran'() {
+        reportInfo """
+            Oillamp computes a repeating job's next time from the moment it last ran, or from when
+            it was added if it never ran. That moment is kept with the job in
+            `.oillamp/schedule.json`, so a snapshot holds it, and a restore brings it back.
+
+            Let's consider an `@hourly` job, added on Tuesday at 16:15 in Berlin. The lamp is
+            saved at once: in that snapshot the job has never run, and runs next at 17:00. A
+            session at 17:05 runs it, after which it runs next at 18:00. Restoring the snapshot
+            brings the lamp back to the moment before that run, so the job runs next at 17:00
+            again, as `oillamp schedule` must list it.
+        """
+        given: 'an hourly job, added on Tuesday at 16:15 in Berlin, and a snapshot made at once'
+            host.machine { it.clockAt(TUESDAY).timeZone('Europe/Berlin') }
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
+            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+
+        and: 'a session at 17:05, in which the job ran'
+            host.machine { it.agent { String prompt -> 'Looked.' }.clockAt(Instant.parse('2026-09-22T15:05:00Z')) }
+            startASession(lamp)
+            waitFor(LampEvent.RunFinished)
+            stopTheSession(lamp)
+            assert jobsOf(lamp).first().next() == Optional.of(Instant.parse('2026-09-22T16:00:00Z'))
+
+        when: 'the user restores the snapshot'
+            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+
+        then: 'the job runs next at 17:00 again'
+            jobsOf(lamp).first().next() == Optional.of(Instant.parse('2026-09-22T15:00:00Z'))
+    }
+
+    def 'Oillamp keeps the current jobs when it restores a snapshot that holds no schedule'() {
+        reportInfo """
+            Snapshots an older version of oillamp made hold only the agent's home and
+            `oillamp.toml`, and no schedule. Such a snapshot says nothing about which jobs the
+            lamp had, and an empty schedule would be a guess that deletes the user's jobs. So
+            oillamp restores the home and `oillamp.toml` from it, and keeps the schedule as it is.
+            The snapshot that records the restore holds that schedule, so when the user saves
+            straight after the restore, oillamp makes no new snapshot, because nothing changed.
+
+            The current oillamp no longer makes such a snapshot, so this scenario writes one into
+            the lamp's history by hand, as a git commit: the newest snapshot, without the
+            `.oillamp/schedule.json` among its files. Then the user changes a file and adds a job,
+            and restores the older snapshot. The file must be as the snapshot holds it, the job
+            must still be on the schedule, and `oillamp save` must make no new snapshot.
+        """
+        given: 'a lamp whose newest snapshot was made by an older oillamp, without the schedule'
+            var lamp = aLampThatHasRun()
+            write(home(lamp), 'workspace/story.txt', 'chapter one\n')
+            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            var older = aSnapshotWithoutTheSchedule(lamp)
+
+        and: 'later, the user changed a file and added a job'
+            Files.writeString(home(lamp).resolve('workspace/story.txt'), 'chapter two\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
+
+        when: 'the user restores the older snapshot'
+            var restored = host.oillamp.run('restore', lamp.toString(), older.substring(0, 8))
+
+        then: 'the home is as the snapshot holds it'
+            restored.succeeded()
+            Files.readString(home(lamp).resolve('workspace/story.txt')) == 'chapter one\n'
+
+        and: 'the job is still there'
+            jobsOf(lamp)*.id() == ['job-1']
+
+        and: 'oillamp makes no new snapshot when the user saves right after, because nothing changed'
+            !host.oillamp.run('save', lamp.toString()).events().any { it instanceof LampEvent.Saved }
+    }
+
+    def 'Oillamp does not give a run number out a second time after a restore'() {
+        reportInfo """
+            Every run has a name, such as `run-12`. Each snapshot of a run carries that name in a
+            trailer: a `key: value` line at the end of the snapshot's commit message, such as
+            `Oillamp-Run: run-12`, which `oillamp history` reads. So the history reads as a log of
+            the runs, and two runs must never share a name, or the log would mix up what two
+            different runs did.
+
+            A restore brings back the schedule file, but not the history: the history only grows,
+            and a restore adds a snapshot rather than removing the ones after its target. So
+            oillamp numbers runs from the history, one above the highest `Oillamp-Run` line in it.
+            A counter in the schedule file would go back with the restore and give out the same
+            numbers again.
+
+            Let's consider a lamp saved before any run. In a session, the user sends two prompts
+            with `oillamp ask`, whose runs are `run-1` and `run-2`. Then the user restores the
+            snapshot from before them, and sends a third prompt in a new session. Its run must be
+            `run-3`, and the history must hold one `run` snapshot each for `run-1`, `run-2` and
+            `run-3`.
+        """
+        given: 'a lamp saved before any run'
+            var lamp = aLampThatHasRun()
+            write(home(lamp), 'workspace/plan.md', '# the plan\n')
+            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+            host.machine { it.agent { String prompt -> 'Done.' } }
+
+        and: 'a session in which the user asked two questions'
+            startASession(lamp)
+            assert runOf(host.oillamp.run('ask', lamp.toString(), 'First?')) == 'run-1'
+            assert runOf(host.oillamp.run('ask', lamp.toString(), 'Second?')) == 'run-2'
+            stopTheSession(lamp)
+
+        when: 'the user restores the snapshot from before them, and asks again in a new session'
+            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+            reported.clear()
+            startASession(lamp)
+            var third = runOf(host.oillamp.run('ask', lamp.toString(), 'Third?'))
+
+        then: 'the third question is run-3'
+            third == 'run-3'
+
+        and: 'the history holds one run snapshot for each run'
+            var snapshots = host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots()
+            snapshots.findAll { it.kind() == LampSaveKind.RUN }*.run()*.get().sort() == ['run-1', 'run-2', 'run-3']
+    }
+
+    @IgnoreIf({ !['/usr/bin/git', '/bin/git', '/usr/local/bin/git'].any { Files.isExecutable(Path.of(it)) } })
+    def 'A person can read the jobs a snapshot holds with git, without oillamp'() {
+        reportInfo """
+            Let's consider a user who wants to see which jobs a snapshot holds before restoring
+            it, because a restore replaces the whole schedule with the snapshot's. The history is
+            an ordinary git repository, each snapshot one git commit, and among the files a
+            snapshot holds is the schedule, at the path `.oillamp/schedule.json`, the same path
+            the file has in the lamp. So `git show <snapshot>:.oillamp/schedule.json` prints it.
+            The scenario saves a lamp with one job and reads that job's prompt from the newest
+            snapshot with git.
+        """
+        given: 'a lamp with one job, saved'
+            var lamp = aLampThatHasRun()
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
+            assert host.oillamp.run('save', lamp.toString()).succeeded()
+
+        expect: 'git show reads the job from the newest snapshot'
+            git(lamp.resolve('.oillamp/history'), 'show', 'HEAD:.oillamp/schedule.json').contains('Tidy up')
+    }
+
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
+
+    /** Tuesday afternoon: 16:15 in Berlin. */
+    static final Instant TUESDAY = Instant.parse('2026-09-22T14:15:03Z')
 
     /** A lamp that exists and has run one session, with the file a new lamp gets. */
     private Path aLampThatHasRun() {
         var lamp = host.lampPath()
         assert host.oillamp.run('at', lamp.toString()).succeeded()
         lamp
+    }
+
+    /** A lamp that exists and has run one session, with these settings. */
+    private Path aLampThatHasRun(String toml) {
+        var lamp = host.lampPath()
+        host.givenConfig(lamp, 'schema_version = 1\n' + toml)
+        assert host.oillamp.run('at', lamp.toString()).succeeded()
+        lamp
+    }
+
+    /** The jobs on a lamp's schedule, as `oillamp schedule` lists them. */
+    private List jobsOf(Path lamp) {
+        var listing = host.oillamp.run('schedule', lamp.toString())
+        assert listing.succeeded()
+        listing.events().find { it instanceof LampEvent.Schedule }.jobs().collect()
+    }
+
+    private static String runOf(outcome) {
+        outcome.events().find { it instanceof LampEvent.RunFinished }.run().id()
+    }
+
+    private void stopTheSession(Path lamp) {
+        assert host.oillamp.run('stop', lamp.toString()).succeeded()
+        session.join(30_000)
+        assert !session.alive
+    }
+
+    private <T extends LampEvent> T waitFor(Class<T> kind) {
+        var deadline = System.currentTimeMillis() + 60_000
+        while (true) {
+            var found = reported.find { kind.isInstance(it) }
+            if (found != null) return (T) found
+            assert System.currentTimeMillis() < deadline : "no ${kind.simpleName} came"
+            Thread.sleep(50)
+        }
+    }
+
+    /** What the agent's scheduling tools do: one JSON line to the session's schedule socket, one line back. */
+    private Map agentAsks(Map request) {
+        var socket = host.runtime.resolve('oillamp/k3v7x2ab/sockets/host/schedule.sock')
+        SocketChannel.open(UnixDomainSocketAddress.of(socket)).withCloseable { channel ->
+            channel.write(ByteBuffer.wrap((JsonOutput.toJson(request) + '\n').getBytes(StandardCharsets.UTF_8)))
+            channel.shutdownOutput()
+            var answer = new ByteArrayOutputStream()
+            var buffer = ByteBuffer.allocate(8192)
+            while (channel.read(buffer) >= 0) {
+                answer.write(buffer.array(), 0, buffer.position())
+                buffer.clear()
+            }
+            (Map) new JsonSlurper().parseText(answer.toString(StandardCharsets.UTF_8).readLines().first())
+        }
+    }
+
+    /**
+     * Adds a snapshot to the lamp's history as an oillamp from before snapshots held the schedule
+     * made them: the newest snapshot's tree without its {@code .oillamp} directory, committed on
+     * top of it in git's own format. Returns the new snapshot's id.
+     */
+    private static String aSnapshotWithoutTheSchedule(Path lamp) {
+        var repository = lamp.resolve('.oillamp/history')
+        var branch = repository.resolve('refs/heads/main')
+        var head = Files.readString(branch).strip()
+        var tree = new String(readObject(repository, head), StandardCharsets.ISO_8859_1).readLines().first().substring(5)
+        var entries = readObject(repository, tree)
+        var kept = new ByteArrayOutputStream()
+        for (int at = 0; at < entries.length; ) {
+            int nul = at
+            while (entries[nul] != 0) nul++
+            var name = new String(entries, at, nul - at, StandardCharsets.UTF_8).split(' ', 2)[1]
+            if (name != '.oillamp') kept.write(entries, at, nul + 21 - at)
+            at = nul + 21
+        }
+        var older = writeObject(repository, 'tree', kept.toByteArray())
+        var stamp = "oillamp <oillamp@localhost> ${Instant.now().epochSecond} +0000"
+        var commit = writeObject(repository, 'commit', ("tree ${older}\nparent ${head}\nauthor ${stamp}\ncommitter ${stamp}\n\n"
+                + 'idle save: as an older oillamp made it\n\nOillamp-Save: idle\n').getBytes(StandardCharsets.UTF_8))
+        Files.writeString(branch, commit + '\n')
+        commit
+    }
+
+    private static byte[] readObject(Path repository, String id) {
+        var file = repository.resolve('objects').resolve(id.substring(0, 2)).resolve(id.substring(2))
+        var content = new InflaterInputStream(Files.newInputStream(file)).withCloseable { it.readAllBytes() }
+        int nul = 0
+        while (content[nul] != 0) nul++
+        Arrays.copyOfRange(content, nul + 1, content.length)
+    }
+
+    private static String writeObject(Path repository, String type, byte[] content) {
+        var whole = new ByteArrayOutputStream()
+        whole.write("${type} ${content.length}\u0000".getBytes(StandardCharsets.US_ASCII))
+        whole.write(content)
+        var id = MessageDigest.getInstance('SHA-1').digest(whole.toByteArray()).encodeHex().toString()
+        var file = repository.resolve('objects').resolve(id.substring(0, 2)).resolve(id.substring(2))
+        Files.createDirectories(file.parent)
+        if (!Files.exists(file))
+            new DeflaterOutputStream(Files.newOutputStream(file)).withCloseable { it.write(whole.toByteArray()) }
+        id
     }
 
     /** A lamp that does not exist yet, whose sessions save as they start and as they end. */

@@ -562,14 +562,15 @@ sealed interface Command {
                     be removed, none is. Needed because parts of a lamp belong to the sandbox's
                     own users and `rm -rf` cannot remove them.
               save <dir> [--message <text>]
-                    Take a snapshot of the lamp: the agent's home and oillamp.toml. Works while
-                    a session runs. oillamp also saves as each session starts and ends, when
-                    anything changed.
+                    Take a snapshot of the lamp: the agent's home, oillamp.toml and the
+                    schedule. Works while a session runs. oillamp also saves as each session
+                    starts and ends, when anything changed.
               history <dir>
                     List the lamp's snapshots, newest first.
               restore <dir> <snapshot>
-                    Bring the lamp back to a snapshot, named by the start of its id. The
-                    session must be stopped. The lamp is saved first, so this can be undone.
+                    Bring the lamp back to a snapshot, named by the start of its id: the
+                    home, oillamp.toml and the jobs. The session must be stopped. The lamp is
+                    saved first, so this can be undone.
               schedule <dir> [add | remove <job> | enable <job> | disable <job> | pause | resume]
                     List the jobs that wake the agent while a session runs, or change them.
                     Jobs run only in a session started with --enable-scheduling, or with

@@ -25,7 +25,12 @@ import java.time.Instant
  *  How events travel from an embedded oillamp to the application that started it: one line of
  *  JSON each.
  *
- *  <p>The engine writes them in one process and the application reads them in another. If the
+ *  <p>An application here is a program built on oillamp, such as a desktop app, that starts the
+ *  engine as a separate process with {@code oillamp at <dir> --embedded}, through
+ *  {@code dev.lamp.Lamp}. The engine writes each event it reports to that process's standard
+ *  output as one line of JSON ({@code LampEvent.toJson}), and the application turns each line back
+ *  into an event with {@code LampEvent.fromJson}. The engine writes them in one process and the
+ *  application reads them in another. If the
  *  two ever disagreed, the application would show the player nonsense or nothing at all, so
  *  every kind of event is written and read back here.
  */
@@ -109,6 +114,10 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.JobAdded(JOB),
             new LampEvent.JobRemoved(JOB, 'it expired'),
             new LampEvent.ScheduleChanged('the schedule is paused'),
+            new LampEvent.RunMissed(JOB, Instant.parse('2026-09-30T07:00:00Z'), Duration.ofMinutes(31)),
+            new LampEvent.RunMissed(new LampJob('job-4', 'once at 2026-10-01 09:00', Optional.empty(), 'x',
+                    LampJobAuthor.USER, Instant.EPOCH, Optional.empty(), true, Tuple.of(Instant)),
+                    Instant.parse('2026-10-01T07:00:00Z'), Duration.ofDays(3)),
             new LampEvent.RunQueued(new LampRun('run-13', Optional.empty(), 'what now?', Optional.of('01a0ec69-de1c')), 0),
             new LampEvent.RunStarted(RUN),
             new LampEvent.RunFinished(RUN, LampRunOutcome.FINISHED, 'All green.\n\nNothing to do.',
