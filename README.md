@@ -143,10 +143,10 @@ agent put in its home directory.
 
 Save the agent's home, the lamp's `oillamp.toml` and its jobs whenever you like, even while the session runs.
 oillamp can also save by itself as each session starts and ends, if anything changed: switch that on
-with `oillamp autosave ~/lamps/first startup on shutdown on`, or under `[autosave]` in `oillamp.toml`.
+with `oillamp history ~/lamps/first autosave startup on shutdown on`, or under `[autosave]` in `oillamp.toml`.
 
 ```sh
-oillamp save ~/lamps/first -m "before the big refactor"
+oillamp history ~/lamps/first save -m "before the big refactor"
 oillamp history ~/lamps/first
 ```
 
@@ -160,7 +160,7 @@ If the agent wrecks something, stop the session and go back:
 
 ```sh
 oillamp stop ~/lamps/first
-oillamp restore ~/lamps/first 3f2a9c1d
+oillamp history ~/lamps/first restore 3f2a9c1d
 ```
 
 Everything comes back as it was, including projects the agent cloned (with their own git history),
@@ -221,9 +221,10 @@ INSTRUCTIONS="$(cat ~/notes/about-the-project.md)" oillamp at ~/lamps/first --in
 The session writes the text to `~/.pi/agent/APPEND_SYSTEM.md` in the sandbox, which pi adds to its
 system prompt in every conversation. A session started without it leaves that file as it is.
 
-Every run is saved just before and just after, so `oillamp history` reads as a log of what the agent
-did, and `oillamp restore` undoes any run. `oillamp autosave <dir> before-run off after-run off`
-switches that off; the agent's next prompt then says nothing about its earlier runs:
+Every run is saved just before and just after, so `oillamp history <dir>` reads as a log of what the
+agent did, and `oillamp history <dir> restore` undoes any run.
+`oillamp history <dir> autosave before-run off after-run off` switches that off; the agent's next
+prompt then says nothing about its earlier runs:
 
 ```
 SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE
@@ -267,9 +268,10 @@ oillamp status <dir>             # what a running session is doing
 oillamp stop <dir>               # end a session from anywhere
 oillamp list                     # every oillamp sandbox running on this machine
 oillamp remove <dir>... [--yes]  # delete one or more lamps
-oillamp save <dir> [-m <text>]   # take a snapshot of the lamp, even while it runs
 oillamp history <dir>            # list the lamp's snapshots
-oillamp restore <dir> <snapshot> # go back to a snapshot (stop the session first)
+oillamp history <dir> save [-m <text>]    # take a snapshot of the lamp, even while it runs
+oillamp history <dir> restore <snapshot>  # go back to a snapshot (stop the session first)
+oillamp history <dir> autosave [<moment> on|off]...  # when oillamp saves by itself
 oillamp schedule <dir> [add ...] # list or change the jobs that wake the agent
 oillamp ask <dir> "<prompt>"     # wake the agent in a running session, print its answer
 oillamp cancel <dir> [<run>]     # stop the agent's run

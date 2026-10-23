@@ -50,15 +50,15 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp update <dir> [--system]` | Works in the simulated scenarios. Not yet run against real npm, Eden AI and Debian mirrors. |
 | `oillamp remove <dir> [--yes]` | Works. Without `--yes`, lists what would be deleted and exits 2. |
 | `oillamp recordings <dir> [--open <session>] [--prune]` | Works. |
-| `oillamp save <dir> [--message <text>]` | Works in the scenarios and on a lamp made by hand (see below). |
 | `oillamp history <dir>` | Works. |
-| `oillamp restore <dir> <snapshot>` | Works in the scenarios and on a lamp made by hand. Refused while a session runs. Brings back the schedule too; that, and keeping the schedule when restoring a snapshot an older oillamp made without it, works in the scenarios only. |
+| `oillamp history <dir> save [--message <text>]` | Works in the scenarios and on a lamp made by hand (see below). |
+| `oillamp history <dir> restore <snapshot>` | Works in the scenarios and on a lamp made by hand. Refused while a session runs. Brings back the schedule too; that, and keeping the schedule when restoring a snapshot an older oillamp made without it, works in the scenarios only. |
+| `oillamp history <dir> autosave [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.autosave`. |
 | `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). A run later than `schedule.max_delay_minutes` is missed and reported as `RunMissed`; that works in the scenarios, and has not been seen in a real session yet. |
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
 | `oillamp host-access <dir> [on\|off] [--requirements-env <name>]` | Works in the scenarios: writes `enabled` and `requirements` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.hostAccess`. |
-| `oillamp autosave <dir> [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.autosave`. |
 | `oillamp answer <dir> yes\|no "<question>"` | Works in the scenarios: answers a host-access question of a running session. Also `Lamp.decidePermission`. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
@@ -353,7 +353,7 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Open questions
 
-- `oillamp restore` brings back the home, `oillamp.toml` and the schedule, but not the image an update chose:
+- `oillamp history <dir> restore` brings back the home, `oillamp.toml` and the schedule, but not the image an update chose:
   `.oillamp/image/tools-revision` is not in the snapshots. After a restore the lamp keeps its
   newest tools. Saving the revision in snapshots would not be enough, because the update after it
   removes the old image, so restoring would have to build that image again. That build installs

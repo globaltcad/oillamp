@@ -429,7 +429,7 @@ final class ConsoleRenderer {
     private static String describe(Tuple<LampSave> snapshots) {
         if (snapshots.isEmpty())
             return "no snapshots yet — oillamp saves when a session starts and ends, "
-                 + "or run `oillamp save <dir>`";
+                 + "or run `oillamp history <dir> save`";
         StringBuilder out = new StringBuilder("SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE");
         for (LampSave snapshot : snapshots) {
             String note = !snapshot.message().isBlank() ? snapshot.message().lines().findFirst().orElse("")

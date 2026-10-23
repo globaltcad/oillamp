@@ -208,8 +208,8 @@ record LampConfig(
         }
     }
 
-    /// `[autosave]`: the moments oillamp saves the lamp by itself. `oillamp save` and the save
-    /// before a restore happen whatever these say.
+    /// `[autosave]`: the moments oillamp saves the lamp by itself. `oillamp history <dir> save`
+    /// and the save before a restore happen whatever these say.
     ///
     /// @param startup   as a session starts, before the sandbox runs
     /// @param shutdown  as a session ends, after the sandbox has stopped

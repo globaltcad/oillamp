@@ -155,9 +155,9 @@ final class GeneratedFileTextUtil {
             notes_max_kb               = 8    # how large the agent's ~/workspace/NOTES.md may grow
             max_delay_minutes          = 30   # a run found later than this is missed, not made; 0 = no limit
 
-            # When oillamp saves the lamp by itself, so that `oillamp restore` can go back there.
-            # `oillamp save` works whatever these say. The next job's prompt tells the agent what
-            # its last runs said and changed, from the saves after them.
+            # When oillamp saves the lamp by itself, so that `oillamp history <dir> restore` can go
+            # back there. `oillamp history <dir> save` works whatever these say. The next job's
+            # prompt tells the agent what its last runs said and changed, from the saves after them.
             [autosave]
             startup    = false   # as a session starts, before the sandbox runs
             shutdown   = false   # as a session ends, after the sandbox has stopped
@@ -202,7 +202,7 @@ final class GeneratedFileTextUtil {
             # For this shell only:      eval "$(oillamp completion bash)"
             # For every future shell:   echo 'eval "$(oillamp completion bash)"' >> ~/.bashrc
             _oillamp() {
-                local commands='at update view shell stop status follow list remove save history restore schedule ask cancel model host-access autosave answer conversations recordings doctor config completion guide about version help'
+                local commands='at update view shell stop status follow list remove history schedule ask cancel model host-access answer conversations recordings doctor config completion guide about version help'
                 local current="${COMP_WORDS[COMP_CWORD]}"
                 local before=""
                 [ "$COMP_CWORD" -ge 2 ] && before="${COMP_WORDS[COMP_CWORD-2]}"
@@ -217,11 +217,17 @@ final class GeneratedFileTextUtil {
                     COMPREPLY=($(compgen -W 'add remove enable disable pause resume' -- "$current"))
                     return
                 fi
+                # `oillamp history <dir> save`: the same.
+                if [ "$before" = history ]; then
+                    COMPREPLY=($(compgen -W 'save restore autosave' -- "$current"))
+                    return
+                fi
 
                 # The first word that is a command is the command; the words after it are lamps.
-                local command="" word
-                for word in "${COMP_WORDS[@]:1:COMP_CWORD-1}"; do
-                    case " $commands " in *" $word "*) command=$word; break ;; esac
+                local command="" word at=0 i
+                for ((i = 1; i < COMP_CWORD; i++)); do
+                    word="${COMP_WORDS[i]}"
+                    case " $commands " in *" $word "*) command=$word; at=$i; break ;; esac
                 done
 
                 # Only the options this command takes, as `oillamp help` lists them.
@@ -232,7 +238,7 @@ final class GeneratedFileTextUtil {
                             at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling" ;;
                             view)          options="$options --view-only" ;;
                             remove)        options="$options --yes --dry-run" ;;
-                            save)          options="$options --message" ;;
+                            history)       options="$options --message" ;;
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
                             host-access)   options="$options --requirements-env" ;;
@@ -243,6 +249,16 @@ final class GeneratedFileTextUtil {
                         COMPREPLY=($(compgen -W "$options" -- "$current"))
                         return ;;
                 esac
+
+                # `oillamp history <dir> autosave startup on`: moments, each followed by on or off.
+                if [ "$command" = history ] && [ "${COMP_WORDS[at+2]}" = autosave ] && [ "$COMP_CWORD" -gt $((at + 2)) ]; then
+                    if [ $(( (COMP_CWORD - at - 3) % 2 )) -eq 0 ]; then
+                        COMPREPLY=($(compgen -W 'startup shutdown before-run after-run' -- "$current"))
+                    else
+                        COMPREPLY=($(compgen -W 'on off' -- "$current"))
+                    fi
+                    return
+                fi
 
                 case "$command" in
                     "")                              COMPREPLY=($(compgen -W "$commands" -- "$current")) ;;

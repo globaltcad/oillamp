@@ -456,7 +456,7 @@ final class ProblemCatalogUtil {
 
     // ─── history ───────────────────────────────────────────────────────────────────────────
 
-    /// `oillamp restore` named a snapshot that is not there, or not only one.
+    /// `oillamp history <dir> restore` named a snapshot that is not there, or not only one.
     public static LampProblem noSuchSnapshot(String given, Path lamp, String why) {
         return error(NO_SUCH_SNAPSHOT, "No such snapshot",
                 "'" + given + "' does not name one snapshot of " + lamp + ": " + why,
@@ -486,7 +486,7 @@ final class ProblemCatalogUtil {
                 "no snapshot was made, so the lamp's state right now cannot be restored later; "
               + "the history holds what it held before")
             .withEvidence(new Evidence.File(lamp, "the lamp"))
-            .withFix(Fix.run("try again once the cause is fixed", "oillamp save " + lamp));
+            .withFix(Fix.run("try again once the cause is fixed", "oillamp history " + lamp + " save"));
     }
 
     /// A save made its snapshot, but had to leave some files out.
@@ -505,7 +505,7 @@ final class ProblemCatalogUtil {
                           + "a database of a program that was running"));
     }
 
-    /// `oillamp restore` on a lamp whose session is running.
+    /// `oillamp history <dir> restore` on a lamp whose session is running.
     public static LampProblem restoreWhileRunning(Path lamp) {
         return error(RESTORE_WHILE_RUNNING, "Stop the session before restoring",
                 "a session is running on " + lamp,
@@ -523,7 +523,7 @@ final class ProblemCatalogUtil {
               + "as snapshot " + safetySnapshot)
             .withEvidence(new Evidence.File(lamp, "the lamp"))
             .withFix(Fix.run("put it back as it was before the restore",
-                    "oillamp restore " + lamp + " " + safetySnapshot));
+                    "oillamp history " + lamp + " restore " + safetySnapshot));
     }
 
     /// Another save or restore held the history for longer than oillamp waited.

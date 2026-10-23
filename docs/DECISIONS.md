@@ -232,8 +232,8 @@ as data means adding one is a new table row. *(D-22)*
 
 ### A lamp keeps a history, and goes back to it
 
-A lamp can be saved (`oillamp save`), listed (`oillamp history`) and brought back to an earlier
-snapshot (`oillamp restore`). oillamp can also save by itself as each session starts and as it
+A lamp can be saved (`oillamp history <dir> save`), listed (`oillamp history <dir>`) and brought
+back to an earlier snapshot (`oillamp history <dir> restore`). oillamp can also save by itself as each session starts and as it
 ends, when anything changed. A snapshot holds the agent directory, `oillamp.toml` and
 `.oillamp/schedule.json`, never the rest of `.oillamp/`.
 
@@ -245,9 +245,9 @@ mistake, so oillamp can save by itself. *(added on 2026-09-29)*
 
 Four switches under `[autosave]` say whether oillamp saves as a session starts, as it ends, just
 before a run and as a run ends. The first two are off and the last two on unless the lamp says
-otherwise. `oillamp autosave` and `LampDirectory.autosave` read and write them, and nothing else in
-the file, only while the lamp sleeps. `oillamp save` and the save before a restore happen whatever
-they say.
+otherwise. `oillamp history <dir> autosave` and `LampDirectory.autosave` read and write them, and
+nothing else in the file, only while the lamp sleeps. `oillamp history <dir> save` and the save
+before a restore happen whatever they say.
 
 *Why:* saving a large home at every start and stop costs time and disk, and most sessions are not
 worth going back to; a person saves by hand before the moments that matter. The saves around runs
@@ -277,8 +277,8 @@ links are not kept; exact permissions are, in a list of their own. *(added on 20
 
 ### A restore needs the session stopped; a save does not
 
-`oillamp restore` refuses while a session runs (`OIL-HISTORY-005`). `oillamp save` works either
-way, and a save made while a session runs is marked as a running save. A restore always saves
+`oillamp history <dir> restore` refuses while a session runs (`OIL-HISTORY-005`).
+`oillamp history <dir> save` works either way, and a save made while a session runs is marked as a running save. A restore always saves
 first, and records itself as a new snapshot, so the history only grows and every restore can be
 undone.
 
@@ -286,6 +286,20 @@ undone.
 changed beneath them. Saving while the session runs is the case that matters most, just before
 letting the agent try something risky, and the worst it can do is catch a file half written, which
 the mark warns about. *(added on 2026-09-29)*
+
+### The history commands are actions of `oillamp history <dir>`
+
+Saving, listing, restoring and the autosave settings are one command group:
+`oillamp history <dir>` lists the snapshots, and `save`, `restore` and `autosave` after the lamp do
+the rest. There are no top-level `save`, `restore` or `autosave` commands, and no aliases for them.
+
+*Why:* the four act on the same history, and oillamp already groups commands by what they act on,
+with the lamp before the action: `oillamp schedule <dir> add`, `oillamp config <dir> check`. One
+group keeps the list of commands short and leaves room for more history actions. No aliases,
+because nothing depends on the old names yet: oillamp is not in use outside its own development,
+and a second spelling would have to be documented, completed and kept working.
+
+*Given up:* `oillamp save <dir>` was shorter to type. *(added on 2026-10-23)*
 
 ### The session holds the agent, and wakes it on a schedule only while it runs
 
@@ -361,7 +375,7 @@ its commit message, unless `autosave.before_run` or `autosave.after_run` is off.
 fills with detail that no longer matters. Notes the agent rewrites stay small, and they are in its
 home, where the user can read and correct them. The two saves make the history a log of runs: what
 the user changed and what each run changed are separate snapshots, and any run can be undone with
-`oillamp restore`.
+`oillamp history <dir> restore`.
 
 *Given up:* the agent only knows what it chose to write down. *(added on 2026-09-29)*
 

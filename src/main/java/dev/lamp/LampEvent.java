@@ -95,7 +95,7 @@ public sealed interface LampEvent {
     /// @param files how many files the snapshot holds; 0 where that was not counted
     record Saved(LampSave snapshot, int files)          implements LampEvent {}
 
-    /// A lamp's snapshots, newest first. What `oillamp history` answers.
+    /// A lamp's snapshots, newest first. What `oillamp history <dir>` answers.
     record History(Tuple<LampSave> snapshots)           implements LampEvent {}
 
     /// The lamp was brought back to `target`, and `result` is the snapshot that records it.
@@ -218,7 +218,8 @@ public sealed interface LampEvent {
     record HostAccessSettings(boolean enabled, String requirements) implements LampEvent {}
 
     /// The values under `[autosave]` in a lamp's `oillamp.toml`: when oillamp saves the lamp by
-    /// itself. Reported by `oillamp autosave`, after reading them or after writing them.
+    /// itself. Reported by `oillamp history <dir> autosave`, after reading them or after
+    /// writing them.
     ///
     /// @param startup   as a session starts
     /// @param shutdown  as a session ends

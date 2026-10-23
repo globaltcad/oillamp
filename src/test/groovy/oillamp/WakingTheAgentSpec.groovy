@@ -1191,7 +1191,7 @@ class WakingTheAgentSpec extends Specification {
         given: 'a job for five minutes from now, on a lamp that saves runs only as they end'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nbefore_run = false\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 5m', 'Look around, change nothing')
-            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             anAgent { prompt -> 'Nothing to do.' }
 
         when: 'a session runs the job ten minutes later, and the agent asks what run-1 changed'

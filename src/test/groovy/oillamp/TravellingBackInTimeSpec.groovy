@@ -157,8 +157,8 @@ class TravellingBackInTimeSpec extends Specification {
 
     def 'A save by hand keeps what the person wrote, and saves nothing when nothing changed'() {
         reportInfo """
-            A person saves by hand with `oillamp save` to mark a moment, such as "before the
-            upgrade", and will look for that moment by what they wrote. A second save with
+            A person saves by hand with `oillamp history <dir> save` to mark a moment, such as
+            "before the upgrade", and will look for that moment by what they wrote. A second save with
             nothing changed would only add a line to the history that is identical to the one
             before, so oillamp makes none.
         """
@@ -167,8 +167,8 @@ class TravellingBackInTimeSpec extends Specification {
             Files.writeString(home(lamp).resolve('workspace/plan.md'), '# the plan\n')
 
         when:
-            var first = host.oillamp.run('save', lamp.toString(), '--message', 'before the upgrade')
-            var second = host.oillamp.run('save', lamp.toString(), '-m', 'again')
+            var first = host.oillamp.run('history', lamp.toString(), 'save', '--message', 'before the upgrade')
+            var second = host.oillamp.run('history', lamp.toString(), 'save', '-m', 'again')
 
         then: 'the first made a snapshot, marked as saved while no session ran'
             first.succeeded()
@@ -204,11 +204,11 @@ class TravellingBackInTimeSpec extends Specification {
         when: 'the lamp changes before each save, so each one makes a snapshot'
             var notes = home(lamp).resolve('workspace/notes.txt')
             Files.writeString(notes, 'first')
-            var joined = host.oillamp.run('save', lamp.toString(), '--message=before the upgrade')
+            var joined = host.oillamp.run('history', lamp.toString(), 'save', '--message=before the upgrade')
             Files.writeString(notes, 'second')
-            var dashed = host.oillamp.run('save', lamp.toString(), '-m', '-- after the upgrade --')
+            var dashed = host.oillamp.run('history', lamp.toString(), 'save', '-m', '-- after the upgrade --')
             Files.writeString(notes, 'third')
-            var bare = host.oillamp.run('save', lamp.toString(), '--message', '--')
+            var bare = host.oillamp.run('history', lamp.toString(), 'save', '--message', '--')
 
         then:
             [joined, dashed, bare].every { it.succeeded() }
@@ -222,7 +222,7 @@ class TravellingBackInTimeSpec extends Specification {
             bareSnapshot.message() == '--'
     }
 
-    def 'Oillamp\'s `restore` brings back exactly what was saved, and removes what came after'() {
+    def 'Oillamp\'s `history <dir> restore` brings back exactly what was saved, and removes what came after'() {
         reportInfo """
             The whole point of a snapshot is that the agent's home comes back as it was: every
             byte, and the things git on its own would lose. A project the agent cloned has its
@@ -250,7 +250,7 @@ class TravellingBackInTimeSpec extends Specification {
             Files.createDirectories(home.resolve('empty/inside'))
             write(home, 'go/pkg/mod/lib@v1/lib.go', 'package lib\n')
             chmod(home.resolve('go/pkg/mod/lib@v1'), 'r-xr-xr-x')
-            var save = host.oillamp.run('save', lamp.toString())
+            var save = host.oillamp.run('history', lamp.toString(), 'save')
             assert save.succeeded()
             var saved = save.events().find { it instanceof LampEvent.Saved }.snapshot()
 
@@ -265,7 +265,7 @@ class TravellingBackInTimeSpec extends Specification {
             chmod(home.resolve('go/pkg/mod/lib@v1'), 'r-xr-xr-x')
 
         when: 'the person restores the snapshot, by the first eight characters of its id'
-            var restored = host.oillamp.run('restore', lamp.toString(), saved.shortId())
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId())
 
         then:
             restored.succeeded()
@@ -295,31 +295,32 @@ class TravellingBackInTimeSpec extends Specification {
 
     def 'Oillamp saves the lamp before it restores a snapshot, so the restore can be undone'() {
         reportInfo """
-            Restoring the wrong snapshot must not be a second disaster. So `oillamp restore` first
-            saves the lamp as it is, and prints the command that goes back to that. The history only ever grows: the
-            restore adds a snapshot of its own rather than removing the ones after its target.
+            Restoring the wrong snapshot must not be a second disaster. So
+            `oillamp history <dir> restore` first saves the lamp as it is, and prints the command
+            that goes back to that. The history only ever grows: the restore adds a snapshot of its
+            own rather than removing the ones after its target.
         """
         given:
             var lamp = aLampThatHasRun()
             var home = home(lamp)
             write(home, 'workspace/story.txt', 'chapter one\n')
-            var save = host.oillamp.run('save', lamp.toString())
+            var save = host.oillamp.run('history', lamp.toString(), 'save')
             assert save.succeeded()
             var early = save.events().find { it instanceof LampEvent.Saved }.snapshot()
             Files.writeString(home.resolve('workspace/story.txt'), 'chapter two\n')
 
         when: 'the person restores the early snapshot'
-            var restored = host.oillamp.run('restore', lamp.toString(), early.shortId())
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', early.shortId())
 
         then: 'the lamp was saved first, and the way back is printed'
             restored.succeeded()
             var safety = restored.events().find { it instanceof LampEvent.Saved }.snapshot()
             safety.kind() == LampSaveKind.BEFORE_RESTORE
-            restored.console().contains('oillamp restore ' + lamp + ' ' + safety.shortId())
+            restored.console().contains('oillamp history ' + lamp + ' restore ' + safety.shortId())
             Files.readString(home.resolve('workspace/story.txt')) == 'chapter one\n'
 
         when: 'they change their mind'
-            var undone = host.oillamp.run('restore', lamp.toString(), safety.shortId())
+            var undone = host.oillamp.run('history', lamp.toString(), 'restore', safety.shortId())
 
         then: 'chapter two is back'
             undone.succeeded()
@@ -332,7 +333,7 @@ class TravellingBackInTimeSpec extends Specification {
             snapshots*.kind().take(4) == [LampSaveKind.RESTORE, LampSaveKind.RESTORE, LampSaveKind.BEFORE_RESTORE, LampSaveKind.IDLE]
     }
 
-    def 'Oillamp\'s `restore` brings back the lamp\'s `oillamp.toml` too'() {
+    def 'Oillamp\'s `history <dir> restore` brings back the lamp\'s `oillamp.toml` too'() {
         reportInfo """
             oillamp.toml says what the sandbox may reach and how it looks. A snapshot that brought
             back the agent's home but kept today's network rules would not be the lamp as it was.
@@ -341,14 +342,14 @@ class TravellingBackInTimeSpec extends Specification {
             var lamp = aLampThatHasRun()
             var config = lamp.resolve('oillamp.toml')
             var original = Files.readString(config)
-            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             var listed = host.oillamp.run('history', lamp.toString())
             assert listed.succeeded()
             var saved = listed.events().find { it instanceof LampEvent.History }.snapshots().first()
             Files.writeString(config, original + '\n# changed later\n')
 
         when:
-            var restored = host.oillamp.run('restore', lamp.toString(), saved.shortId())
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId())
 
         then:
             restored.succeeded()
@@ -368,13 +369,13 @@ class TravellingBackInTimeSpec extends Specification {
         """
         given: 'a running session, on a lamp saved earlier'
             var lamp = aLampThatHasRun()
-            var earlier = host.oillamp.run('save', lamp.toString()).events()
+            var earlier = host.oillamp.run('history', lamp.toString(), 'save').events()
                     .find { it instanceof LampEvent.Saved }.snapshot()
             startASession(lamp)
             write(home(lamp), 'workspace/risky.txt', 'about to try something\n')
 
         when:
-            var restore = host.oillamp.run('restore', lamp.toString(), earlier.shortId())
+            var restore = host.oillamp.run('history', lamp.toString(), 'restore', earlier.shortId())
 
         then:
             restore.status() == LampExitStatus.LAMP_BUSY
@@ -382,7 +383,7 @@ class TravellingBackInTimeSpec extends Specification {
             Files.exists(home(lamp).resolve('workspace/risky.txt'))
 
         when:
-            var save = host.oillamp.run('save', lamp.toString(), '-m', 'before the risky part')
+            var save = host.oillamp.run('history', lamp.toString(), 'save', '-m', 'before the risky part')
 
         then:
             save.succeeded()
@@ -391,18 +392,18 @@ class TravellingBackInTimeSpec extends Specification {
             made.session().isPresent()
     }
 
-    def 'Oillamp refuses to restore a snapshot id it does not know, and points to `oillamp history`'() {
+    def 'Oillamp refuses to restore a snapshot id it does not know, and points to `oillamp history <dir>`'() {
         reportInfo """
             A restore replaces the agent's home, so it happens only for a snapshot oillamp is
             sure the person meant: a unique beginning of an id, at least four characters long.
             Oillamp refuses anything else with `OIL-HISTORY-001`, the reason, and the command
-            that lists the snapshots, `oillamp history`.
+            that lists the snapshots, `oillamp history <dir>`.
         """
         given:
             var lamp = aLampThatHasRun()
 
         when:
-            var outcome = host.oillamp.run('restore', lamp.toString(), given)
+            var outcome = host.oillamp.run('history', lamp.toString(), 'restore', given)
 
         then:
             outcome.status() == LampExitStatus.USAGE
@@ -450,7 +451,7 @@ class TravellingBackInTimeSpec extends Specification {
         reportInfo """
             An application, a program built on oillamp's Java API, has a settings page that shows
             when the lamp saves itself, and changes it. It reads and writes the four values under
-            [autosave] with `LampDirectory.autosave`, which runs `oillamp autosave`. The file is
+            [autosave] with `LampDirectory.autosave`, which runs `oillamp history <dir> autosave`. The file is
             also the user's, so their comments and the alignment of the values stay.
         """
         given: 'a lamp with the file a new lamp gets'
@@ -471,19 +472,19 @@ class TravellingBackInTimeSpec extends Specification {
             file.contains('after_run  = false    # as a run ends, with the agent\'s last message\n')
 
         and: 'the command line says the same'
-            var shown = host.oillamp.run('autosave', lamp.toString())
+            var shown = host.oillamp.run('history', lamp.toString(), 'autosave')
             shown.succeeded()
             shown.console().contains('startup on, shutdown on, before a run off, after a run off')
 
         when: 'one moment is switched on the command line'
-            var one = host.oillamp.run('autosave', lamp.toString(), 'after-run', 'on')
+            var one = host.oillamp.run('history', lamp.toString(), 'autosave', 'after-run', 'on')
 
         then: 'only that one changed'
             one.succeeded()
             settings.autosave() == new Lamp.Autosave(true, true, false, true)
 
         when: 'a moment oillamp does not know is given'
-            var wrong = host.oillamp.run('autosave', lamp.toString(), 'lunch', 'on')
+            var wrong = host.oillamp.run('history', lamp.toString(), 'autosave', 'lunch', 'on')
 
         then:
             wrong.status() == LampExitStatus.USAGE
@@ -521,7 +522,7 @@ class TravellingBackInTimeSpec extends Specification {
             var lamp = aLampThatHasRun()
             write(home(lamp), 'workspace/game/.git/HEAD', 'ref: refs/heads/main\n')
             write(home(lamp), 'workspace/readme.txt', 'hello\n')
-            assert host.oillamp.run('save', lamp.toString(), '--message', 'with a nested repository').succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save', '--message', 'with a nested repository').succeeded()
             var repository = lamp.resolve('.oillamp/history')
             var agentDir = home(lamp).fileName.toString()
 
@@ -550,23 +551,23 @@ class TravellingBackInTimeSpec extends Specification {
 
             Let's consider a lamp saved a moment ago, after which the user adds a job with
             `oillamp schedule add` and changes nothing else. The schedule file is among the files
-            compared, so the next `oillamp save` must make a snapshot. A save straight after it,
-            with nothing changed, must make none.
+            compared, so the next `oillamp history <dir> save` must make a snapshot. A save
+            straight after it, with nothing changed, must make none.
         """
         given: 'a lamp saved a moment ago'
             var lamp = aLampThatHasRun()
-            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
 
         when: 'the user adds a job, and saves'
             assert host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up').succeeded()
-            var afterTheJob = host.oillamp.run('save', lamp.toString(), '-m', 'with a job')
+            var afterTheJob = host.oillamp.run('history', lamp.toString(), 'save', '-m', 'with a job')
 
         then: 'the save made a snapshot'
             afterTheJob.succeeded()
             afterTheJob.events().find { it instanceof LampEvent.Saved }.snapshot().message() == 'with a job'
 
         when: 'the user saves again, with nothing changed'
-            var again = host.oillamp.run('save', lamp.toString())
+            var again = host.oillamp.run('history', lamp.toString(), 'save')
 
         then: 'that save made none'
             again.succeeded()
@@ -602,7 +603,7 @@ class TravellingBackInTimeSpec extends Specification {
 
         and: 'a snapshot made once the user switched their job off'
             host.oillamp.run('schedule', lamp.toString(), 'disable', 'job-1')
-            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+            var saved = host.oillamp.run('history', lamp.toString(), 'save').events().find { it instanceof LampEvent.Saved }.snapshot()
 
         and: 'later, the user switched it on, removed the agent\'s job and added another'
             host.oillamp.run('schedule', lamp.toString(), 'enable', 'job-1')
@@ -610,7 +611,7 @@ class TravellingBackInTimeSpec extends Specification {
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
 
         when: 'the user restores the snapshot'
-            var restored = host.oillamp.run('restore', lamp.toString(), saved.shortId())
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId())
 
         then: 'the user\'s job is back, switched off, and so is the agent\'s; the later one is gone'
             restored.succeeded()
@@ -648,13 +649,13 @@ class TravellingBackInTimeSpec extends Specification {
             var lamp = aLampThatHasRun()
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
             if (pausedThen) host.oillamp.run('schedule', lamp.toString(), 'pause')
-            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+            var saved = host.oillamp.run('history', lamp.toString(), 'save').events().find { it instanceof LampEvent.Saved }.snapshot()
 
         and: 'later, the user changed that'
             host.oillamp.run('schedule', lamp.toString(), pausedThen ? 'resume' : 'pause')
 
         when: 'the user restores the snapshot'
-            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId()).succeeded()
 
         then: 'the schedule is paused, or not, as it was in the snapshot'
             host.oillamp.run('schedule', lamp.toString()).events()
@@ -682,7 +683,7 @@ class TravellingBackInTimeSpec extends Specification {
             host.machine { it.clockAt(TUESDAY).timeZone('Europe/Berlin') }
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
-            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+            var saved = host.oillamp.run('history', lamp.toString(), 'save').events().find { it instanceof LampEvent.Saved }.snapshot()
 
         and: 'a session at 17:05, in which the job ran'
             host.machine { it.agent { String prompt -> 'Looked.' }.clockAt(Instant.parse('2026-09-22T15:05:00Z')) }
@@ -692,7 +693,7 @@ class TravellingBackInTimeSpec extends Specification {
             assert jobsOf(lamp).first().next() == Optional.of(Instant.parse('2026-09-22T16:00:00Z'))
 
         when: 'the user restores the snapshot'
-            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId()).succeeded()
 
         then: 'the job runs next at 17:00 again'
             jobsOf(lamp).first().next() == Optional.of(Instant.parse('2026-09-22T15:00:00Z'))
@@ -711,12 +712,13 @@ class TravellingBackInTimeSpec extends Specification {
             the lamp's history by hand, as a git commit: the newest snapshot, without the
             `.oillamp/schedule.json` among its files. Then the user changes a file and adds a job,
             and restores the older snapshot. The file must be as the snapshot holds it, the job
-            must still be on the schedule, and `oillamp save` must make no new snapshot.
+            must still be on the schedule, and `oillamp history <dir> save` must make no new
+            snapshot.
         """
         given: 'a lamp whose newest snapshot was made by an older oillamp, without the schedule'
             var lamp = aLampThatHasRun()
             write(home(lamp), 'workspace/story.txt', 'chapter one\n')
-            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             var older = aSnapshotWithoutTheSchedule(lamp)
 
         and: 'later, the user changed a file and added a job'
@@ -724,7 +726,7 @@ class TravellingBackInTimeSpec extends Specification {
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
 
         when: 'the user restores the older snapshot'
-            var restored = host.oillamp.run('restore', lamp.toString(), older.substring(0, 8))
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', older.substring(0, 8))
 
         then: 'the home is as the snapshot holds it'
             restored.succeeded()
@@ -734,7 +736,7 @@ class TravellingBackInTimeSpec extends Specification {
             jobsOf(lamp)*.id() == ['job-1']
 
         and: 'oillamp makes no new snapshot when the user saves right after, because nothing changed'
-            !host.oillamp.run('save', lamp.toString()).events().any { it instanceof LampEvent.Saved }
+            !host.oillamp.run('history', lamp.toString(), 'save').events().any { it instanceof LampEvent.Saved }
     }
 
     def 'Oillamp does not give a run number out a second time after a restore'() {
@@ -760,7 +762,7 @@ class TravellingBackInTimeSpec extends Specification {
         given: 'a lamp saved before any run'
             var lamp = aLampThatHasRun()
             write(home(lamp), 'workspace/plan.md', '# the plan\n')
-            var saved = host.oillamp.run('save', lamp.toString()).events().find { it instanceof LampEvent.Saved }.snapshot()
+            var saved = host.oillamp.run('history', lamp.toString(), 'save').events().find { it instanceof LampEvent.Saved }.snapshot()
             host.machine { it.agent { String prompt -> 'Done.' } }
 
         and: 'a session in which the user asked two questions'
@@ -770,7 +772,7 @@ class TravellingBackInTimeSpec extends Specification {
             stopTheSession(lamp)
 
         when: 'the user restores the snapshot from before them, and asks again in a new session'
-            assert host.oillamp.run('restore', lamp.toString(), saved.shortId()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'restore', saved.shortId()).succeeded()
             reported.clear()
             startASession(lamp)
             var third = runOf(host.oillamp.run('ask', lamp.toString(), 'Third?'))
@@ -798,7 +800,7 @@ class TravellingBackInTimeSpec extends Specification {
         given: 'a lamp with one job, saved'
             var lamp = aLampThatHasRun()
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
-            assert host.oillamp.run('save', lamp.toString()).succeeded()
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
 
         expect: 'git show reads the job from the newest snapshot'
             git(lamp.resolve('.oillamp/history'), 'show', 'HEAD:.oillamp/schedule.json').contains('Tidy up')

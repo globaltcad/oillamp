@@ -49,20 +49,29 @@ sealed interface Command {
     /// the agent's home, not a general "assume yes".
     record Remove(Tuple<Path> lamps, boolean confirmed, Context.Options options) implements Command {}
     record Recordings(Path lamp, Optional<String> open, boolean prune, Context.Options options) implements Command {}
-    record Save(Path lamp, String message, Context.Options options) implements Command {}
-    record History(Path lamp, Context.Options options) implements Command {}
-    record Restore(Path lamp, String snapshot, Context.Options options) implements Command {}
+    record History(Path lamp, History.Action action, Context.Options options) implements Command {
+        /// What `oillamp history <dir>` is asked to do; `ListSnapshots` when nothing is asked.
+        sealed interface Action {
+            record ListSnapshots() implements History.Action {}
+            record Save(String message) implements History.Action {}
+            record Restore(String snapshot) implements History.Action {}
+            /// The moments to switch on or off, each on or off; with none, the action only says
+            /// what the lamp's file has.
+            record Autosave(Optional<Boolean> startup, Optional<Boolean> shutdown,
+                            Optional<Boolean> beforeRun, Optional<Boolean> afterRun) implements History.Action {}
+        }
+    }
     record Schedule(Path lamp, Schedule.Action action, Context.Options options) implements Command {
         /// What `oillamp schedule <dir>` is asked to do; `ListJobs` when nothing is asked.
         sealed interface Action {
-            record ListJobs() implements Action {}
+            record ListJobs() implements Schedule.Action {}
             record Add(String prompt, Optional<String> cron, Optional<String> at,
-                       Optional<String> expires) implements Action {}
-            record Remove(String job) implements Action {}
-            record Enable(String job) implements Action {}
-            record Disable(String job) implements Action {}
-            record Pause() implements Action {}
-            record Resume() implements Action {}
+                       Optional<String> expires) implements Schedule.Action {}
+            record Remove(String job) implements Schedule.Action {}
+            record Enable(String job) implements Schedule.Action {}
+            record Disable(String job) implements Schedule.Action {}
+            record Pause() implements Schedule.Action {}
+            record Resume() implements Schedule.Action {}
         }
     }
     record Conversations(Path lamp, Optional<String> conversation, Context.Options options) implements Command {}
@@ -80,11 +89,6 @@ sealed interface Command {
     /// requirements; with neither, the command only says what the lamp's file has.
     record HostAccess(Path lamp, Optional<Boolean> enabled, Optional<String> requirementsEnv,
                       Context.Options options) implements Command {}
-    /// The moments to switch on or off, each on or off; with none, the command only says what
-    /// the lamp's file has.
-    record Autosave(Path lamp, Optional<Boolean> startup, Optional<Boolean> shutdown,
-                    Optional<Boolean> beforeRun, Optional<Boolean> afterRun,
-                    Context.Options options) implements Command {}
     /// The person's answer to a host-access question, named by its text as the event gave it.
     record Answer(Path lamp, boolean yes, String question, Context.Options options) implements Command {}
 
@@ -162,7 +166,7 @@ sealed interface Command {
         if (pending.isPresent()) return Result.err(switch (pending.get()) {
             case "--message" -> ProblemCatalogUtil.usage(
                     "--message needs the text to save with, for example --message \"before the upgrade\"",
-                    usageOf("save"));
+                    usageOf("history <dir> save"));
             case "--in" -> ProblemCatalogUtil.usage(
                     "--in needs a conversation, as `oillamp conversations` lists them", usageOf("ask"));
             case "--after", "--instead-of" -> ProblemCatalogUtil.usage(pending.get()
@@ -302,15 +306,34 @@ sealed interface Command {
             case "remove" -> Result.ok(new Remove(rest.mapTo(Path.class, Path::of), confirmed, options));
             case "recordings" -> Result.ok(new Recordings(Path.of(rest.first()), values.get("--open"),
                     prune, options));
-            case "save" -> Result.ok(new Save(Path.of(rest.first()), values.get("--message").orElse(""),
-                    options));
-            case "history" -> Result.ok(new History(Path.of(rest.first()), options));
-            case "restore" -> {
-                if (rest.size() < 2)
+            case "history" -> {
+                Optional<String> action = rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty();
+                Tuple<String> after = rest.size() > 2 ? rest.removeFirst().removeFirst() : Tuple.of(String.class);
+                Optional<String> message = values.get("--message");
+                if (action.isPresent() && !HISTORY_ACTIONS.contains(action.get()))
+                    yield Result.err(ProblemCatalogUtil.usage("'" + action.get() + "' is not something "
+                            + "`oillamp history <dir>` does; it does save, restore and autosave", usageOf("history")));
+                if (message.isPresent() && !action.equals(Optional.of("save")))
                     yield Result.err(ProblemCatalogUtil.usage(
-                            "`oillamp restore` needs the snapshot to go back to, as `oillamp history` names it",
-                            usageOf("restore")));
-                yield Result.ok(new Restore(Path.of(rest.first()), rest.get(1), options));
+                            "--message only goes with `oillamp history <dir> save`", usageOf("history <dir> save")));
+                Path lamp = Path.of(rest.first());
+                if (action.isEmpty())
+                    yield Result.ok(new History(lamp, new History.Action.ListSnapshots(), options));
+                String usage = usageOf("history <dir> " + action.get());
+                yield switch (action.get()) {
+                    case "save" -> after.isEmpty()
+                            ? Result.ok(new History(lamp, new History.Action.Save(message.orElse("")), options))
+                            : Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> save` takes nothing "
+                                    + "more, but was given '" + after.first() + "'", usage));
+                    case "restore" -> after.isEmpty()
+                            ? Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> restore` needs the "
+                                    + "snapshot to go back to, as `oillamp history <dir>` lists them", usage))
+                            : after.size() > 1
+                            ? Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> restore` takes one "
+                                    + "snapshot, but was also given '" + after.get(1) + "'", usage))
+                            : Result.ok(new History(lamp, new History.Action.Restore(after.first()), options));
+                    default -> autosave(lamp, after, options);
+                };
             }
             case "schedule" -> {
                 String action = rest.size() > 1 ? rest.get(1) : "list";
@@ -387,24 +410,6 @@ sealed interface Command {
                             "`oillamp host-access` \"" + switched.get() + "\": expected on or off", usageOf("host-access")));
                 yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv, options));
             }
-            case "autosave" -> {
-                java.util.Map<String, Boolean> moments = new java.util.HashMap<>();
-                for (int i = 1; i < rest.size(); i += 2) {
-                    String moment = rest.get(i);
-                    if (!AUTOSAVE_MOMENTS.contains(moment))
-                        yield Result.err(ProblemCatalogUtil.usage("`oillamp autosave` \"" + moment
-                                + "\": expected startup, shutdown, before-run or after-run", usageOf("autosave")));
-                    String switched = i + 1 < rest.size() ? rest.get(i + 1) : "";
-                    if (!switched.equals("on") && !switched.equals("off"))
-                        yield Result.err(ProblemCatalogUtil.usage("`oillamp autosave` " + moment
-                                + " needs on or off after it", usageOf("autosave")));
-                    moments.put(moment, switched.equals("on"));
-                }
-                yield Result.ok(new Autosave(Path.of(rest.first()),
-                        Optional.ofNullable(moments.get("startup")), Optional.ofNullable(moments.get("shutdown")),
-                        Optional.ofNullable(moments.get("before-run")), Optional.ofNullable(moments.get("after-run")),
-                        options));
-            }
             case "answer" -> {
                 if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
                     yield Result.err(ProblemCatalogUtil.usage(
@@ -413,6 +418,27 @@ sealed interface Command {
             }
             default -> Result.err(ProblemCatalogUtil.usage("'" + command + "' is not an oillamp command", usage()));
         };
+    }
+
+    /// `oillamp history <dir> autosave [<moment> (on | off)]...`, from the words after `autosave`.
+    private static Result<Command> autosave(Path lamp, Tuple<String> words, Context.Options options) {
+        String usage = usageOf("history <dir> autosave");
+        java.util.Map<String, Boolean> moments = new java.util.HashMap<>();
+        for (int i = 0; i < words.size(); i += 2) {
+            String moment = words.get(i);
+            if (!AUTOSAVE_MOMENTS.contains(moment))
+                return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> autosave` \"" + moment
+                        + "\": expected startup, shutdown, before-run or after-run", usage));
+            String switched = i + 1 < words.size() ? words.get(i + 1) : "";
+            if (!switched.equals("on") && !switched.equals("off"))
+                return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> autosave` " + moment
+                        + " needs on or off after it", usage));
+            moments.put(moment, switched.equals("on"));
+        }
+        return Result.ok(new History(lamp, new History.Action.Autosave(
+                Optional.ofNullable(moments.get("startup")), Optional.ofNullable(moments.get("shutdown")),
+                Optional.ofNullable(moments.get("before-run")), Optional.ofNullable(moments.get("after-run"))),
+                options));
     }
 
     /// The options each command takes, besides `--verbose`, `--debug` and `--no-color`, which
@@ -430,17 +456,14 @@ sealed interface Command {
                 .put("recordings", ValueSet.of("--open", "--prune", "--dry-run"))
                 .put("doctor",     ValueSet.of("--dry-run", "--no-install"))
                 .put("config",     ValueSet.of("--dry-run", "--no-install"))
-                .put("save",       ValueSet.of("--message", "--embedded"))
-                .put("history",    ValueSet.of("--embedded"))
+                .put("history",    ValueSet.of("--message", "--embedded"))
                 .put("schedule",   ValueSet.of("--cron", "--at", "--expires", "--embedded"))
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
                 .put("model",      ValueSet.of("--embedded"))
                 .put("host-access", ValueSet.of("--requirements-env", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
-                .put("autosave",   ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
-                .put("restore",    ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of(String.class))
                 .put("stop",       ValueSet.of("--embedded"))
                 .put("status",     ValueSet.of("--embedded"))
@@ -458,32 +481,39 @@ sealed interface Command {
             "--security-requirements-env", "--requirements-env",
             "--in", "--after", "--instead-of");
 
-    /// What `oillamp autosave` switches: the moments oillamp saves a lamp by itself.
+    /// What `oillamp history <dir>` does besides listing the snapshots.
+    ValueSet<String> HISTORY_ACTIONS = ValueSet.of("save", "restore", "autosave");
+
+    /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
 
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
-            "save", "history", "restore", "schedule", "ask", "conversations", "cancel", "model", "update",
-            "host-access", "answer", "autosave");
+            "history", "schedule", "ask", "conversations", "cancel", "model", "update",
+            "host-access", "answer");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
-            "at", "view", "shell", "stop", "status", "follow", "recordings", "doctor", "save", "history", "update");
+            "at", "view", "shell", "stop", "status", "follow", "recordings", "doctor", "update");
 
     /// How many arguments may follow the other commands.
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
-                .put("config", 2).put("completion", 1).put("restore", 2).put("schedule", 3).put("ask", 2)
+                .put("config", 2).put("completion", 1).put("schedule", 3).put("ask", 2)
                 .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
-                .put("autosave", 1 + 2 * AUTOSAVE_MOMENTS.size())
+                .put("history", 2 + 2 * AUTOSAVE_MOMENTS.size())
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
-    /// The line of [#usage] that describes `command`, such as `oillamp stop <dir>`.
+    /// The lines of [#usage] that describe `command`, such as `oillamp stop <dir>`, or the four
+    /// of `oillamp history`. Only the lines indented by two spaces name a command; the lines
+    /// below them describe it.
     static String usageOf(String command) {
-        return usage().lines().map(String::strip)
+        java.util.List<String> lines = usage().lines()
+                .filter(line -> line.startsWith("  ") && !line.startsWith("   ")).map(String::strip)
                 .filter(line -> line.equals(command) || line.startsWith(command + " "))
-                .findFirst().map(line -> "oillamp " + line).orElse(usage());
+                .map(line -> "oillamp " + line).toList();
+        return lines.isEmpty() ? usage() : String.join("\n", lines);
     }
 
     static String usage() {
@@ -561,16 +591,20 @@ sealed interface Command {
                     --yes it only says what would go. Every lamp is checked first; if any cannot
                     be removed, none is. Needed because parts of a lamp belong to the sandbox's
                     own users and `rm -rf` cannot remove them.
-              save <dir> [--message <text>]
+              history <dir>
+                    List the lamp's snapshots, newest first.
+              history <dir> save [--message <text>]
                     Take a snapshot of the lamp: the agent's home, oillamp.toml and the
                     schedule. Works while a session runs. oillamp also saves as each session
                     starts and ends, when anything changed.
-              history <dir>
-                    List the lamp's snapshots, newest first.
-              restore <dir> <snapshot>
+              history <dir> restore <snapshot>
                     Bring the lamp back to a snapshot, named by the start of its id: the
                     home, oillamp.toml and the jobs. The session must be stopped. The lamp is
                     saved first, so this can be undone.
+              history <dir> autosave [(startup | shutdown | before-run | after-run) (on | off)]...
+                    Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
+                    With moments and on or off, write those there, and change nothing else
+                    in the file. Writing needs the session to be stopped.
               schedule <dir> [add | remove <job> | enable <job> | disable <job> | pause | resume]
                     List the jobs that wake the agent while a session runs, or change them.
                     Jobs run only in a session started with --enable-scheduling, or with
@@ -601,10 +635,6 @@ sealed interface Command {
                     [host_access] in oillamp.toml. With on or off, or the requirements this
                     variable holds, write them there, and change nothing else in the file.
                     Writing needs the session to be stopped.
-              autosave <dir> [(startup | shutdown | before-run | after-run) (on | off)]...
-                    Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
-                    With moments and on or off, write those there, and change nothing else
-                    in the file. Writing needs the session to be stopped.
               answer <dir> (yes | no) "<question>"
                     Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]

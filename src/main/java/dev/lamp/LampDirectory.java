@@ -311,7 +311,7 @@ public final class LampDirectory {
     ///                     restore did not finish; the problem says which
     /// @throws IOException when the engine's process could not be started at all
     public LampSave restore(String snapshot) throws IOException, InterruptedException, LampFailedException {
-        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "restore", directory.toString(), snapshot);
+        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "restore", snapshot);
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.Restored restored) return restored.result();
@@ -364,20 +364,20 @@ public final class LampDirectory {
     /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of
     /// its `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads them.
     ///
-    /// Runs `oillamp autosave <dir>` as a short-lived engine process. It only reads the file,
-    /// so it works whether or not a session is running.
+    /// Runs `oillamp history <dir> autosave` as a short-lived engine process. It only reads the
+    /// file, so it works whether or not a session is running.
     ///
     /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
     ///                     valid; the problem says which
     /// @throws IOException when the engine's process could not be started at all
     public Lamp.Autosave autosave() throws IOException, InterruptedException, LampFailedException {
-        return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "autosave", directory.toString()));
+        return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "autosave"));
     }
 
     /// Sets when oillamp saves this lamp by itself: all four values in the `[autosave]` table
     /// of its `oillamp.toml`. Returns them as the file now has them.
     ///
-    /// Runs `oillamp autosave <dir> startup on|off shutdown on|off before-run on|off
+    /// Runs `oillamp history <dir> autosave startup on|off shutdown on|off before-run on|off
     /// after-run on|off` as a short-lived engine process. The engine replaces only those
     /// keys and keeps every other line of the file, comments included.
     ///
@@ -388,7 +388,7 @@ public final class LampDirectory {
     ///                     problem says which
     /// @throws IOException when the engine's process could not be started at all
     public Lamp.Autosave autosave(Lamp.Autosave wanted) throws IOException, InterruptedException, LampFailedException {
-        return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "autosave", directory.toString(),
+        return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "autosave",
                 "startup", Lamp.onOff(wanted.startup()), "shutdown", Lamp.onOff(wanted.shutdown()),
                 "before-run", Lamp.onOff(wanted.beforeRun()), "after-run", Lamp.onOff(wanted.afterRun())));
     }

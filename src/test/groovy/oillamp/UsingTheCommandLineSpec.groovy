@@ -90,13 +90,15 @@ class UsingTheCommandLineSpec extends Specification {
             'guide extra'                      | "`oillamp guide` takes no arguments"     | 'oillamp guide'
             'config LAMP path extra'           | "'extra'"                                | 'oillamp config <dir> (check | show-effective | path)'
             'completion bash zsh'              | "'zsh'"                                  | 'oillamp completion bash'
-            'restore LAMP a1b2c3d4 extra'      | "'extra'"                                | 'oillamp restore <dir> <snapshot>'
+            'history LAMP restore a1b2c3d4 extra' | "'extra'"                             | 'oillamp history <dir> restore <snapshot>'
+            'history LAMP save extra'          | "'extra'"                                | 'oillamp history <dir> save [--message <text>]'
             'ask LAMP hello extra'             | "'extra'"                                | 'oillamp ask <dir> [--in'
             'conversations LAMP c1 extra'      | "'extra'"                                | 'oillamp conversations <dir>'
             'cancel LAMP run-1 extra'          | "'extra'"                                | 'oillamp cancel <dir>'
             'schedule LAMP remove job-1 extra' | "'extra'"                                | 'oillamp schedule <dir>'
             'stop LAMP -y'                     | "`oillamp stop` does not take --yes"     | 'oillamp stop <dir>'
-            'history LAMP -m note'             | "`oillamp history` does not take --message" | 'oillamp history <dir>'
+            'history LAMP -m note'             | '--message only goes with `oillamp history <dir> save`' | 'oillamp history <dir> save'
+            'history LAMP restore a1 -m note'  | '--message only goes with `oillamp history <dir> save`' | 'oillamp history <dir> save'
             'stop LAMP --message=note'         | "`oillamp stop` does not take --message" | 'oillamp stop <dir>'
             'shell LAMP --embedded'            | "`oillamp shell` does not take --embedded" | 'oillamp shell <dir>'
             'list --embedded'                  | "`oillamp list` does not take --embedded"  | 'oillamp list'
@@ -115,9 +117,9 @@ class UsingTheCommandLineSpec extends Specification {
             'history LAMP --after e1'          | "`oillamp history` does not take --after" | 'oillamp history <dir>'
             'history LAMP --instead-of e1'     | "`oillamp history` does not take --instead-of" | 'oillamp history <dir>'
             'stop LAMP --no-wait'              | "`oillamp stop` does not take --no-wait" | 'oillamp stop <dir>'
-            'save LAMP --cron @daily'          | "`oillamp save` does not take --cron"    | 'oillamp save <dir>'
-            'save LAMP --at in-2h'             | "`oillamp save` does not take --at"      | 'oillamp save <dir>'
-            'save LAMP --expires in-3d'        | "`oillamp save` does not take --expires" | 'oillamp save <dir>'
+            'history LAMP save --cron @daily'  | "`oillamp history` does not take --cron" | 'oillamp history <dir> save'
+            'history LAMP save --at in-2h'     | "`oillamp history` does not take --at"   | 'oillamp history <dir> save'
+            'history LAMP save --expires in-3d' | "`oillamp history` does not take --expires" | 'oillamp history <dir> save'
             'status LAMP --prune'              | "`oillamp status` does not take --prune" | 'oillamp status <dir>'
     }
 
@@ -138,8 +140,8 @@ class UsingTheCommandLineSpec extends Specification {
                      'at LAMP --dry-run --enable-scheduling', 'doctor --no-install',
                      'config LAMP check --dry-run --no-install', 'view LAMP --view-only',
                      'recordings LAMP --open 20260101-120000', 'remove LAMP --yes --embedded',
-                     'save LAMP --message note --embedded', 'history LAMP --embedded',
-                     'restore LAMP a1b2c3d4 --embedded', 'stop LAMP --embedded', 'status LAMP --embedded',
+                     'history LAMP save --message note --embedded', 'history LAMP --embedded',
+                     'history LAMP restore a1b2c3d4 --embedded', 'history LAMP autosave --embedded', 'stop LAMP --embedded', 'status LAMP --embedded',
                      'follow LAMP --embedded', 'cancel LAMP --embedded', 'model LAMP azure/gpt-6.1-sol --embedded', 'conversations LAMP --embedded',
                      'schedule LAMP --embedded', 'schedule LAMP add --at in-2h --expires in-3d hello',
                      'ask LAMP --no-wait --embedded hello']
@@ -315,8 +317,9 @@ class UsingTheCommandLineSpec extends Specification {
         reportInfo """
             `eval "\$(oillamp completion bash)"` runs whatever oillamp prints, so the output must
             be the script and nothing else: no banner, no colour. And the completions must match
-            the command line oillamp parses. In `oillamp config <dir> check`, the directory comes
-            first, so the word after `config` is a path and the one after that is the action.
+            the command line oillamp parses. In `oillamp config <dir> check` and
+            `oillamp history <dir> save`, the directory comes first, so the word after `config` or
+            `history` is a path and the one after that is the action.
         """
         when:
             var outcome = host.oillamp.run('completion', 'bash')
@@ -334,6 +337,15 @@ class UsingTheCommandLineSpec extends Specification {
             complete(script, 'oillamp', 'at', '/x', '--model').containsAll(['--model', '--model-service', '--model-key-env'])
             !complete(script, 'oillamp', 'config', '').contains('check')
             complete(script, 'oillamp', 'config', '/x', '').containsAll(['check', 'show-effective', 'path'])
+
+        and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
+            !complete(script, 'oillamp', 'history', '').contains('save')
+            complete(script, 'oillamp', 'history', '/x', '') == ['save', 'restore', 'autosave']
+            complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
+            complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
+            complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
+            complete(script, 'oillamp', 'history', '/x', 'save', '--m') == ['--message']
+            !complete(script, 'oillamp', 'sa').contains('save')
 
         and: 'it offers each command only the options that command takes'
             complete(script, 'oillamp', 'stop', '/x', '--d') == ['--debug']
@@ -397,8 +409,8 @@ class UsingTheCommandLineSpec extends Specification {
 
         where:
             line                           | complaint                                                         | usage
-            'save LAMP --message'          | '--message needs the text to save with, for example --message "before the upgrade"' | 'oillamp save <dir>'
-            'save LAMP -m'                 | '--message needs the text to save with'                           | 'oillamp save <dir>'
+            'history LAMP save --message'  | '--message needs the text to save with, for example --message "before the upgrade"' | 'oillamp history <dir> save'
+            'history LAMP save -m'         | '--message needs the text to save with'                           | 'oillamp history <dir> save'
             'ask LAMP hello --in'          | '--in needs a conversation, as `oillamp conversations` lists them' | 'oillamp ask <dir>'
             'ask LAMP hello --after'       | '--after needs an entry, as `oillamp conversations <dir> <conversation>` shows them' | 'oillamp ask <dir>'
             'ask LAMP hello --instead-of'  | '--instead-of needs an entry'                                     | 'oillamp ask <dir>'
@@ -502,7 +514,7 @@ class UsingTheCommandLineSpec extends Specification {
 
         where:
             command << ['at', 'view', 'shell', 'stop', 'status', 'follow', 'recordings', 'config', 'remove',
-                        'save', 'history', 'restore', 'schedule', 'ask', 'conversations', 'cancel']
+                        'history', 'schedule', 'ask', 'conversations', 'cancel']
     }
 
     def 'A command that works on one lamp refuses several, rather than acting on the first: oillamp #command'() {
@@ -525,7 +537,7 @@ class UsingTheCommandLineSpec extends Specification {
                     .contains("`oillamp ${command}` works on one lamp, but was given 2 directories (${first}, ${second}); run it once for each")
 
         where:
-            command << ['at', 'view', 'shell', 'stop', 'status', 'follow', 'recordings', 'doctor', 'save', 'history']
+            command << ['at', 'view', 'shell', 'stop', 'status', 'follow', 'recordings', 'doctor']
     }
 
     def 'The first line names the lamp the command works on'() {
@@ -540,8 +552,8 @@ class UsingTheCommandLineSpec extends Specification {
         expect:
             host.oillamp.run('doctor', lamp).console().contains("oillamp 0.2.0 — ${lamp}")
             host.oillamp.run('at', lamp, '--dry-run').console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('save', lamp).console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('restore', lamp, 'a1b2c3d4').console().contains("oillamp 0.2.0 — ${lamp}")
+            host.oillamp.run('history', lamp, 'save').console().contains("oillamp 0.2.0 — ${lamp}")
+            host.oillamp.run('history', lamp, 'restore', 'a1b2c3d4').console().contains("oillamp 0.2.0 — ${lamp}")
             host.oillamp.run('remove', lamp, host.lampPath('other').toString()).console().contains('oillamp 0.2.0 — 2 lamps')
     }
 
@@ -627,11 +639,12 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.errors().first().whatHappened().contains('oillamp update <dir> --system')
     }
 
-    def 'Oillamp refuses an `ask`, `restore` or `schedule` line that leaves out what the command acts on: oillamp #line'() {
+    def 'Oillamp refuses an `ask`, `history` or `schedule` line that leaves out what the command acts on: oillamp #line'() {
         reportInfo """
             These lines name a lamp but leave out the one thing the command needs to act: the
-            question to ask, the snapshot to go back to, the prompt for a new job, or the job to
-            change; or, for `schedule <dir> pause`, give it a word it does not take. Oillamp
+            question to ask, the snapshot to go back to, whether to switch a moment of autosave on
+            or off, the prompt for a new job, or the job to change; or, for
+            `schedule <dir> pause`, give it a word it does not take. Oillamp
             refuses each with a usage error that says what is missing or extra, before it looks
             for a lamp or a session.
         """
@@ -645,7 +658,8 @@ class UsingTheCommandLineSpec extends Specification {
         where:
             line                    | complaint
             'ask LAMP'              | '`oillamp ask` needs something to ask the agent, in quotes'
-            'restore LAMP'          | '`oillamp restore` needs the snapshot to go back to'
+            'history LAMP restore'  | '`oillamp history <dir> restore` needs the snapshot to go back to'
+            'history LAMP autosave startup' | '`oillamp history <dir> autosave` startup needs on or off after it'
             'schedule LAMP add'     | '`oillamp schedule <dir> add` needs the prompt the agent is woken with, in quotes'
             'schedule LAMP remove'  | '`oillamp schedule <dir> remove` needs the job, such as job-3'
             'schedule LAMP enable'  | '`oillamp schedule <dir> enable` needs the job, such as job-3'
@@ -665,6 +679,102 @@ class UsingTheCommandLineSpec extends Specification {
         then:
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains("'tidy' is not something `oillamp schedule` does")
+    }
+
+    def 'Oillamp saves, lists, restores and sets autosave under `history <dir>`'() {
+        reportInfo """
+            Let's consider a person who looks after one lamp's snapshots. Taking one, listing
+            them, going back to one and saying when oillamp takes one by itself all act on the
+            same history, so they share one command, `oillamp history <dir>`, as the jobs share
+            `oillamp schedule <dir>`. The lamp comes first and the action after it:
+            `oillamp history <dir>` alone lists, and `save`, `restore` and `autosave` do the rest.
+            Here the person does each of the four in turn, and each one succeeds.
+        """
+        given: 'a lamp that has run one session'
+            host.machine { it.reallyRuns('ssh-keygen') }
+            var lamp = host.lampPath().toString()
+            assert host.oillamp.run('at', lamp).succeeded()
+
+        when: 'the person saves the lamp with a message'
+            var saved = host.oillamp.run('history', lamp, 'save', '--message', 'before the upgrade')
+
+        then: 'oillamp makes a snapshot with that message'
+            saved.succeeded()
+            var snapshot = saved.events().find { it instanceof dev.lamp.LampEvent.Saved }.snapshot()
+            snapshot.message() == 'before the upgrade'
+
+        when: 'the person lists the snapshots'
+            var listed = host.oillamp.run('history', lamp)
+
+        then: 'the new snapshot is the newest one'
+            listed.succeeded()
+            listed.events().find { it instanceof dev.lamp.LampEvent.History }.snapshots().first().id() == snapshot.id()
+
+        when: 'the person goes back to it'
+            var restored = host.oillamp.run('history', lamp, 'restore', snapshot.shortId())
+
+        then:
+            restored.succeeded()
+            restored.events().any { it instanceof dev.lamp.LampEvent.Restored }
+
+        when: 'the person reads when oillamp saves by itself, and switches one moment on'
+            var shown = host.oillamp.run('history', lamp, 'autosave')
+            var switched = host.oillamp.run('history', lamp, 'autosave', 'startup', 'on')
+
+        then: 'the first reports the settings, and the second writes the one moment to the file'
+            shown.succeeded()
+            shown.events().any { it instanceof dev.lamp.LampEvent.AutosaveSettings }
+            switched.succeeded()
+            switched.events().find { it instanceof dev.lamp.LampEvent.AutosaveSettings }.startup()
+    }
+
+    def 'Oillamp refuses a word after `history <dir>` that is not one of its actions: oillamp #line'() {
+        reportInfo """
+            Let's consider a person who types `oillamp history <dir> list`, expecting the word
+            that `schedule` takes. `oillamp history <dir>` lists on its own, and after the lamp it
+            knows three actions: `save`, `restore` and `autosave`. Any other word is a usage
+            error that names those three and shows how each is written, and oillamp reports it
+            before it looks for the lamp, so a typo is reported as a typo and not as a lamp that
+            is missing.
+        """
+        when:
+            var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
+
+        then:
+            outcome.status() == LampExitStatus.USAGE
+            outcome.errors().first().whatHappened().contains(
+                    "'${word}' is not something `oillamp history <dir>` does; it does save, restore and autosave")
+            ['oillamp history <dir>', 'oillamp history <dir> save [--message <text>]',
+             'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave ['].every { outcome.console().contains(it) }
+
+        where:
+            line                        | word
+            'history LAMP list'         | 'list'
+            'history LAMP tidy'         | 'tidy'
+            'history LAMP undo a1b2c3d4' | 'undo'
+    }
+
+    def 'Oillamp refuses `save`, `restore` and `autosave` as commands of their own: oillamp #line'() {
+        reportInfo """
+            Let's consider a person who types `oillamp save ~/lamps/first`. Taking a snapshot is
+            an action of the lamp's history, so it is written `oillamp history <dir> save`, next
+            to `restore` and `autosave`. Oillamp has one way to write each command line, so it
+            knows no `save`, `restore` or `autosave` of their own: it refuses each as it refuses
+            any word it does not know, with the list of commands, and the lamp stays as it was.
+        """
+        when:
+            var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
+
+        then:
+            outcome.status() == LampExitStatus.USAGE
+            outcome.errors().first().whatHappened().contains("'${line.split(' ')[0]}' is not an oillamp command")
+            outcome.console().contains('history <dir> save [--message <text>]')
+
+        and: 'no lamp was made'
+            !Files.exists(host.lampPath())
+
+        where:
+            line << ['save LAMP', 'save LAMP --message note', 'restore LAMP a1b2c3d4', 'autosave LAMP', 'autosave LAMP startup on']
     }
 
     /** What bash offers for the last word, using the completion script oillamp printed. */

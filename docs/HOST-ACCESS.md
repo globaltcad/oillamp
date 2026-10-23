@@ -378,8 +378,8 @@ deterministic check refused it.
   requirements, the run's instruction, the path names, and a file's contents when it is being
   judged. Eden AI's EU endpoint is the default. State this where the feature is turned on: a user
   turning it on is deciding that their model service may see these things.
-- **Host effects are outside the lamp's history.** `oillamp restore` cannot undo a file written on
-  the host. The log is the record; the additive tools are the ones that matter.
+- **Host effects are outside the lamp's history.** `oillamp history <dir> restore` cannot undo a
+  file written on the host. The log is the record; the additive tools are the ones that matter.
 - **The agent can still ask a person to do it.** The feature governs the way out; it does not stop
   the agent from writing a script in its home and asking the user to run it. That is the user's
   decision, made by looking at the screen.

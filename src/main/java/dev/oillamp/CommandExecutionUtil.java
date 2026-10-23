@@ -133,16 +133,20 @@ final class CommandExecutionUtil {
             }
             case Command.Recordings recordings ->
                     recordings(machine, context, recordings.lamp(), recordings.open(), recordings.prune());
-            // The lamp's history. `restore` needs the lamp stopped; the other two do not.
-            case Command.Save save -> {
-                console.banner(version, save.lamp().toString());
-                yield save(machine, context, save.lamp(), save.message());
-            }
-            case Command.History history -> history(machine, context, history.lamp());
-            case Command.Restore restore -> {
-                console.banner(version, restore.lamp().toString());
-                yield restore(machine, context, restore.lamp(), restore.snapshot());
-            }
+            // The lamp's history. `restore` and writing `autosave` need the lamp stopped; the
+            // others do not.
+            case Command.History history -> switch (history.action()) {
+                case Command.History.Action.ListSnapshots _ -> history(machine, context, history.lamp());
+                case Command.History.Action.Save save -> {
+                    console.banner(version, history.lamp().toString());
+                    yield save(machine, context, history.lamp(), save.message());
+                }
+                case Command.History.Action.Restore restore -> {
+                    console.banner(version, history.lamp().toString());
+                    yield restore(machine, context, history.lamp(), restore.snapshot());
+                }
+                case Command.History.Action.Autosave asked -> autosave(machine, context, history.lamp(), asked);
+            };
             // The schedule, and the agent it wakes. `schedule` works with or without a session;
             // `ask` needs one, since the session is what holds the agent.
             case Command.Schedule schedule -> schedule(machine, context, schedule.lamp(), schedule.action());
@@ -153,7 +157,6 @@ final class CommandExecutionUtil {
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
             case Command.HostAccess access -> hostAccess(machine, context, access.lamp(), access.enabled(),
                                                           access.requirementsEnv());
-            case Command.Autosave asked -> autosave(machine, context, asked);
             case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
     }
@@ -795,7 +798,7 @@ final class CommandExecutionUtil {
 
     // ─── the lamp's history ────────────────────────────────────────────────────────────────
 
-    /// `oillamp save <dir> [--message <text>]`: take a snapshot of the lamp now.
+    /// `oillamp history <dir> save [--message <text>]`: take a snapshot of the lamp now.
     ///
     /// Works while a session is running, so a person can save just before letting the agent try
     /// something risky. The snapshot then says it was taken while the session ran, because a
@@ -849,7 +852,7 @@ final class CommandExecutionUtil {
         return LampExitStatus.SUCCESS;
     }
 
-    /// `oillamp restore <dir> <snapshot>`: bring the lamp back to an earlier snapshot.
+    /// `oillamp history <dir> restore <snapshot>`: bring the lamp back to an earlier snapshot.
     ///
     /// Refused while a session runs. The lamp is saved first, so every restore can be undone by
     /// restoring that save.
@@ -885,8 +888,8 @@ final class CommandExecutionUtil {
             context.sink().accept(new LampEvent.Restored(done.target(), done.result().orElse(done.target())));
             if (done.result().isEmpty()) return LampExitStatus.SUCCESS;
             done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Info("history",
-                    "to undo this, run: oillamp restore "
-                    + layout.root() + " " + safety.shortId())));
+                    "to undo this, run: oillamp history "
+                    + layout.root() + " restore " + safety.shortId())));
             return LampExitStatus.SUCCESS;
         } finally {
             release(lock.get());
@@ -1163,11 +1166,12 @@ final class CommandExecutionUtil {
                 () -> context.sink().accept(new LampEvent.HostAccessSettings(wanted.enabled(), wanted.requirements())));
     }
 
-    /// `oillamp autosave <dir> [<moment> on|off]...`: when the lamp's file says oillamp saves the
-    /// lamp by itself, after writing what was given into it. Only those keys under `[autosave]`
-    /// change, as with [#hostAccess].
-    private static LampExitStatus autosave(Machine machine, Context context, Command.Autosave asked) {
-        Result<LampLayout> found = layoutOf(machine, asked.lamp());
+    /// `oillamp history <dir> autosave [<moment> on|off]...`: when the lamp's file says oillamp
+    /// saves the lamp by itself, after writing what was given into it. Only those keys under
+    /// `[autosave]` change, as with [#hostAccess].
+    private static LampExitStatus autosave(Machine machine, Context context, Path lampPath,
+                                           Command.History.Action.Autosave asked) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());

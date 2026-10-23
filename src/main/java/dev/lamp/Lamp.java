@@ -151,8 +151,8 @@ public final class Lamp implements AutoCloseable {
         final String message
     ) throws IOException, InterruptedException, LampFailedException {
         Ran ran = message.isBlank()
-                ? runToEnd(launcher, listeners, "save", directory.toString())
-                : runToEnd(launcher, listeners, "save", directory.toString(), "--message", message);
+                ? runToEnd(launcher, listeners, "history", directory.toString(), "save")
+                : runToEnd(launcher, listeners, "history", directory.toString(), "save", "--message", message);
         ran.orThrow();
         for ( LampEvent event : ran.events() )
             if (event instanceof LampEvent.Saved saved)

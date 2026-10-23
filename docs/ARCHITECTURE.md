@@ -167,8 +167,8 @@ known lifetime:
 | `<lamp>/.oillamp/sockets/*/` | the proxy (host); wayvnc and the ssh listener (container) | relays, viewer, socat | files outlive their servers; deleted before the next session |
 | `<lamp>/.oillamp/recordings/` | wf-recorder | you, the agent (read only) | until retention deletes them |
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
-| `<lamp>/.oillamp/history/` | `History`: at the start and end of every session, `oillamp save`, `oillamp restore` | `oillamp history`, `oillamp restore`, git by hand | until `oillamp remove`; only ever grows |
-| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp restore` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
+| `<lamp>/.oillamp/history/` | `History`: at the start and end of every session, `oillamp history <dir> save`, `oillamp history <dir> restore` | `oillamp history <dir>`, `oillamp history <dir> restore`, git by hand | until `oillamp remove`; only ever grows |
+| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir> restore` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save or restore runs | every other save and restore, which wait for it | the lock ends with the process |
 | `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`, and with host access on,
@@ -339,10 +339,10 @@ Oillamp-Session: 20260929-181200
 |---|---|
 | `startup` | `CommandExecutionUtil.at`, after taking the lock and before the sandbox starts, with `autosave.startup` on |
 | `shutdown` | `Supervisor.shutDown`, after the container is removed, also after Ctrl-C, with `autosave.shutdown` on |
-| `running` | `oillamp save` while a session runs; a program may have been writing |
-| `idle` | `oillamp save` while no session runs |
-| `before-restore` | `oillamp restore`, just before it changes anything |
-| `restore` | `oillamp restore`, recording which snapshot it went back to |
+| `running` | `oillamp history <dir> save` while a session runs; a program may have been writing |
+| `idle` | `oillamp history <dir> save` while no session runs |
+| `before-restore` | `oillamp history <dir> restore`, just before it changes anything |
+| `restore` | `oillamp history <dir> restore`, recording which snapshot it went back to |
 | `before-run` | `AgentRunner`, just before the agent is woken, if anything changed since the last snapshot. For a job's run that is always so, because the job was just marked as run in the schedule |
 | `run` | `AgentRunner`, as a run ends, always, even when nothing changed: its message holds the agent's last message |
 

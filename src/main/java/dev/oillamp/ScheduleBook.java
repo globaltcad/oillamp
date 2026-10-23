@@ -9,11 +9,11 @@ import java.util.function.Function;
 /// Reads and changes a lamp's schedule file, `.oillamp/schedule.json`.
 ///
 /// Four kinds of caller change it: `oillamp schedule` from a terminal, the session as jobs run,
-/// the agent through the session, and `oillamp restore`, which puts back the file a snapshot
-/// holds. Each change reads the file, applies a [Schedule] method and writes the result, all
-/// while holding `.oillamp/schedule.lock`, so that no change is lost to another made at the same
-/// moment. A save reads the file under the same lock, so that it never stores a change half
-/// made. A lamp that has no file has an empty schedule.
+/// the agent through the session, and `oillamp history <dir> restore`, which puts back the file
+/// a snapshot holds. Each change reads the file, applies a [Schedule] method and writes the
+/// result, all while holding `.oillamp/schedule.lock`, so that no change is lost to another made
+/// at the same moment. A save reads the file under the same lock, so that it never stores a
+/// change half made. A lamp that has no file has an empty schedule.
 final class ScheduleBook {
 
     /// How long a change waits for another one to finish. Changes take milliseconds.
