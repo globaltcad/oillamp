@@ -54,9 +54,10 @@ class TheSessionCommandsSpec extends Specification {
         }
     }
 
-    def 'status asks the running session what it is doing'() {
+    def 'Oillamp\'s `status` command asks the running session what it is doing'() {
         reportInfo """
-            Asked of the supervisor rather than worked out from the outside, because only the
+            `oillamp status` asks the supervisor, the `oillamp at` process that runs the session,
+            over its control socket, rather than working it out from the outside, because only the
             supervisor knows the two things that are not written down anywhere: which state the
             session is in, and how many extra shells are attached to it.
         """
@@ -78,13 +79,15 @@ class TheSessionCommandsSpec extends Specification {
             answer.contains(lamp.toString())
     }
 
-    def 'stop asks the session to shut down, rather than killing its container'() {
+    def 'Oillamp\'s `stop` command asks the session to shut down, rather than removing its container'() {
         reportInfo """
-            The difference matters. Removing the container directly would leave the supervisor
-            holding a lock over a sandbox that no longer exists, with its relays still bound and
-            its recording unfinished. Asking it instead runs the full, ordered shutdown - stop the
-            recorder so the video file is properly closed, take down the relays, stop and remove
-            the container, release the lock - which is the same sequence Ctrl-C sets off.
+            `oillamp stop` asks the supervisor, the `oillamp at` process that runs the session,
+            over its control socket. The difference matters. Removing the container directly would
+            leave the supervisor holding a lock over a sandbox that no longer exists, with its
+            relays still bound and its recording unfinished. Asking it instead runs the full,
+            ordered shutdown - stop the recorder so the video file is properly closed, take down
+            the relays, stop and remove the container, release the lock - which is the same
+            sequence Ctrl-C sets off.
         """
         given:
             var lamp = host.lampPath()
@@ -103,10 +106,11 @@ class TheSessionCommandsSpec extends Specification {
                            it.lines().toList().any { line -> line.contains('asked to stop by') } }
     }
 
-    def 'an extra shell attaches to the session, and closing it ends nothing'() {
+    def 'An extra shell from `oillamp shell` attaches to the session, and closing it ends nothing'() {
         reportInfo """
-            No shell decides when the session ends. Extra shells are useful, unlimited in number,
-            and powerless to end anything, and so is the window oillamp opened itself.
+            `oillamp shell <lamp>` opens an extra shell into a running session. No shell decides
+            when the session ends. Extra shells are useful, unlimited in number, and powerless to
+            end anything, and so is the window oillamp opened itself.
         """
         given:
             var lamp = host.lampPath()
@@ -128,7 +132,7 @@ class TheSessionCommandsSpec extends Specification {
             reported.every { !(it instanceof LampEvent.Summary && it.title().startsWith('session ')) }
     }
 
-    def '--no-windows runs a session where there is no display, and says how to get in'() {
+    def 'Oillamp\'s `at --no-windows` runs a session where there is no display, and says how to get in'() {
         reportInfo """
             For someone who starts oillamp under tmux, so that it outlives the desktop they are
             logged into, and who attaches to it on their own terms. oillamp opens nothing, so it
@@ -172,7 +176,7 @@ class TheSessionCommandsSpec extends Specification {
             sessionOutcome.status() == LampExitStatus.SUCCESS
     }
 
-    def 'after the shell window closes, the session keeps running and another shell can attach'() {
+    def 'After the shell window closes, the session keeps running and another shell can attach'() {
         reportInfo """
             The user closed the shell window oillamp opened, perhaps because a program in it hung.
             That is not the user saying they are finished. The sandbox, the agent's programs and
@@ -206,7 +210,7 @@ class TheSessionCommandsSpec extends Specification {
             reported.every { !(it instanceof LampEvent.Summary && it.title().startsWith('session ')) }
     }
 
-    def 'view opens another window onto the same desktop'() {
+    def 'Oillamp\'s `view` command opens another window onto the same desktop'() {
         reportInfo """
             The viewer is how the user watches, and they may want to watch from more than one
             window - or to reopen the one they closed. Neither changes the session, which is why
@@ -230,7 +234,7 @@ class TheSessionCommandsSpec extends Specification {
                     .count { it.what().contains('viewer') } == 2
     }
 
-    def 'view --view-only opens a viewer that only watches'() {
+    def 'Oillamp\'s `view --view-only` opens a viewer that only watches'() {
         reportInfo """
             A person who wants to watch the agent work, without a stray key press reaching the
             desktop, opens the viewer with --view-only. It takes nothing typed or clicked. A
@@ -260,11 +264,11 @@ class TheSessionCommandsSpec extends Specification {
             !ordinaryViewer.argv().contains('-ViewOnly=1')
     }
 
-    def 'list reports the sandboxes running on this host, and says so plainly when there are none'() {
+    def 'Oillamp\'s `list` command reports the sandboxes running on this host, and says so plainly when there are none'() {
         reportInfo """
-            Asked of podman, not of a list oillamp keeps. A second list beside the one the
-            container runtime already maintains is a list that can be wrong, and it would be
-            wrong in exactly the case it is needed: after a supervisor was killed.
+            `oillamp list` asks podman, not a list oillamp keeps. A second list beside the one the
+            container runtime already maintains is a list that can be wrong, and it would be wrong
+            in exactly the case it is needed: after a supervisor was killed.
         """
         when:
             var outcome = host.oillamp.run('list')
@@ -275,7 +279,7 @@ class TheSessionCommandsSpec extends Specification {
                    .text().contains('no oillamp sandboxes are running')
     }
 
-    def 'stop cleans up after a supervisor that was killed without tidying up'() {
+    def 'Oillamp\'s `stop` command cleans up after a supervisor that was killed without tidying up'() {
         reportInfo """
             Killing the supervising process outright (a crash, a `kill -9`, a power cut) must
             never leave a mess that the user has to clear up by hand. The lock goes with the
@@ -341,12 +345,13 @@ class TheSessionCommandsSpec extends Specification {
             silent?.close()
     }
 
-    def 'A session that accepts a connection but never answers is reported, not waited on forever'() {
+    def 'Oillamp\'s `status` and `stop` give up on a session that accepts a connection but never answers'() {
         reportInfo """
             A supervisor that is frozen, stopped with Ctrl-Z or stuck, still has its socket, and
             the kernel still accepts connections to it. `status` and `stop` then waited for an
             answer that never came, with no way to tell the user anything. They now give up after
-            a few seconds and say the session did not answer.
+            a few seconds, report `OIL-SESSION-002`, and remove nothing of a session that may
+            still be alive.
         """
         given: 'a control socket that accepts connections and never answers them'
             var lamp = host.lampPath()

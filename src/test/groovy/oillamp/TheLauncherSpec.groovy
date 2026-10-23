@@ -19,7 +19,7 @@ class TheLauncherSpec extends Specification {
 
     @TempDir Path tmp
 
-    def 'A cache directory damaged by an earlier run is replaced, not left to fail every time'() {
+    def 'The launcher replaces a cache directory that an earlier run left without a Java runtime'() {
         reportInfo """
             The launcher unpacks into a directory named after its exact build, and skips unpacking
             when that directory already holds a Java runtime. A directory without one, left by
@@ -44,7 +44,7 @@ class TheLauncherSpec extends Specification {
             leftoversUnder(unpacked.parent).isEmpty()
     }
 
-    def 'Several launchers started at once leave one copy, not a stray one each'() {
+    def 'Launchers started at the same moment leave one unpacked copy, not a stray one each'() {
         reportInfo """
             The first run of a new build unpacks about 100 MB. Two oillamp commands started at the
             same moment, say a session and a `status` in another terminal, both unpack, and the

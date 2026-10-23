@@ -54,7 +54,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
         assert host.oillamp.run('at', lamp.toString()).status() == LampExitStatus.SUCCESS
     }
 
-    def 'An update builds a new image that the following sessions start from'() {
+    def 'Oillamp\'s `update` command builds a new image that the following sessions start from'() {
         reportInfo """
             The point of an update is that the next session runs the newer tools. So update builds
             an image and starts nothing, and the next `oillamp at` must start from that image,
@@ -186,7 +186,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             Files.readString(revisionFile()) != firstRevision
     }
 
-    def 'A dry run shows the update and changes nothing'() {
+    def 'Oillamp\'s `update --dry-run` shows the update and changes nothing'() {
         reportInfo """
             `--dry-run` works the same way for every oillamp command: it prints the plan and does
             nothing. For update, that means no image is built and the lamp keeps the image it
@@ -229,7 +229,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             Files.readString(revisionFile()) == current
     }
 
-    def 'A lamp that is in use is not updated, and the user is told which session holds it'() {
+    def 'Oillamp refuses to update a lamp that is in use, and names the session that holds it'() {
         reportInfo """
             A running session holds the lamp's lock. Building a new image underneath it would
             not change the running sandbox, and would leave the user unsure which tools they are
@@ -263,12 +263,13 @@ class UpdatingTheAgentToolsSpec extends Specification {
             channel.close()
     }
 
-    def 'A version that is not a release number is refused before anything is built'() {
+    def 'Oillamp refuses a harness version that is not a release number, before it builds anything'() {
         reportInfo """
             `agent_tools.versions` accepts `latest` or an exact release number such as `1.2.0`.
             Anything else would reach npm as an argument, and fail there after minutes of
-            building, with a message from npm instead of oillamp. So a wrong value is a
-            configuration error, reported straight away, and the lamp is not changed.
+            building, with a message from npm instead of oillamp. So oillamp reports a wrong value
+            straight away as a configuration error, with the usage exit status, and leaves the
+            lamp unchanged.
         """
         given:
             pinPiTo('some release')
@@ -346,7 +347,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             installer(bin, true, '@earendil-works/pi-coding-agent@1.3.0').exit == 1
     }
 
-    def 'update --system builds the whole image again, from a freshly pulled Debian'() {
+    def 'Oillamp\'s `update --system` builds the whole image again, from a freshly pulled Debian'() {
         reportInfo """
             A plain update renews only the agent tools. Everything else in the image, Debian
             itself, Firefox, openssh, Mesa's graphics libraries and the JDK, stays as it was on
@@ -392,16 +393,16 @@ class UpdatingTheAgentToolsSpec extends Specification {
             update.stepDetails().every { !it.contains('--pull=always') && !it.contains('--no-cache') }
     }
 
-    def 'A session started from an old image says so'() {
+    def 'Oillamp warns when a session starts from an image built more than 30 days ago'() {
         reportInfo """
             Nothing in the image ever gets newer by itself, and nothing would tell the user. A
             sandbox can run for months with an unpatched Firefox and openssh without anyone
             noticing.
 
             So when a session starts from an image that was built more than 30 days ago, oillamp
-            warns, and names the command that renews it. The session starts anyway: an old
-            image still works, and only the user can decide when to spend the minutes a full
-            rebuild takes.
+            warns with `OIL-IMAGE-002`, and names the command that renews it. The session starts
+            anyway: an old image still works, and only the user can decide when to spend the
+            minutes a full rebuild takes.
         """
         given: "the lamp's image was built 45 days before today"
             host.machine { it.commandSucceeding('podman image exists', '')
@@ -480,7 +481,7 @@ class UpdatingTheAgentToolsSpec extends Specification {
             !reused.reported('OIL-IMAGE-003')
     }
 
-    def 'A dry run does not warn about old images, since it builds none'() {
+    def 'Oillamp\'s `update --dry-run` does not warn about old images, since it builds none'() {
         reportInfo """
             `--dry-run` shows what would happen and does nothing. No image is made, so there is
             nothing new on the disk to warn about.

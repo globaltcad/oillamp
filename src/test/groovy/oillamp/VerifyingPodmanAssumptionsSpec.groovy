@@ -189,10 +189,11 @@ class VerifyingPodmanAssumptionsSpec extends Specification {
 
     def 'A Unix socket the host creates is connectable from the container'() {
         reportInfo """
-            The other direction, which the network design depends on: the agent
-            has no route and no DNS, and reaches the egress proxy only through a socket the host
-            supervisor is listening on. If this did not work, `--network=none` would have to go,
-            and with it the guarantee that nothing leaves the sandbox unseen.
+            A socket the host creates must be connectable from inside the container: the network
+            design depends on this direction. The agent has no route and no DNS, and reaches the
+            egress proxy only through a socket the host supervisor is listening on. If this did
+            not work, `--network=none` would have to go, and with it the guarantee that nothing
+            leaves the sandbox unseen.
         """
         given: 'the host listening on a socket in a shared directory'
             var sockets = Files.createDirectories(scratch.resolve('sockets'))

@@ -34,7 +34,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.status().code() == 2
     }
 
-    def 'A mistyped command or option is refused before anything happens'() {
+    def 'Oillamp refuses a mistyped command or option before anything happens'() {
         reportInfo """
             oillamp installs packages and writes to the user's home. Acting on a half-understood
             command line would be the worst possible moment to be helpful, so an unrecognised
@@ -56,7 +56,7 @@ class UsingTheCommandLineSpec extends Specification {
             option.errors().first().whatHappened().contains('--fix-everything')
     }
 
-    def 'An option or argument the command does not take is refused, not ignored: oillamp #line'() {
+    def 'Oillamp refuses an option or argument the command does not take, rather than ignoring it: oillamp #line'() {
         reportInfo """
             Each option means something to only some commands, and the others used to ignore
             it. That is worst when the option is a safety: `oillamp stop <dir> --dry-run` stopped
@@ -154,7 +154,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.console().contains('oillamp at <dir>')
     }
 
-    def 'The version is reported without needing a machine or a lamp'() {
+    def 'Oillamp reports its version without needing a machine or a lamp'() {
         when:
             var outcome = host.oillamp.run('version')
 
@@ -254,7 +254,7 @@ class UsingTheCommandLineSpec extends Specification {
             !java.nio.file.Files.exists(lamp)
     }
 
-    def '--open without a session to play is a usage error, not a silent listing'() {
+    def 'Oillamp\'s `recordings --open` without a session to play is a usage error, not a silent listing'() {
         when:
             var outcome = host.oillamp.run('recordings', host.lampPath().toString(), '--open')
 
@@ -263,7 +263,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.console().contains('--open needs the session to play')
     }
 
-    def '--no-color leaves no colour codes in the output'() {
+    def 'Oillamp\'s `--no-color` leaves no colour codes in the output'() {
         reportInfo """
             Colour codes are invisible on a terminal but end up as junk in a log file or a
             pasted bug report. `NO_COLOR=1` turned them off before; the `--no-color` option was
@@ -302,7 +302,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.console().contains('size')
     }
 
-    def 'config path prints where the lamp\'s configuration lives'() {
+    def 'Oillamp\'s `config <dir> path` prints where the lamp\'s configuration lives'() {
         when:
             var outcome = host.oillamp.run('config', host.lampPath().toString(), 'path')
 
@@ -410,7 +410,7 @@ class UsingTheCommandLineSpec extends Specification {
             'at LAMP --model'              | '--model needs a value, for example --model azure/gpt-6.1-sol' | 'oillamp at <dir>'
     }
 
-    def 'A model service, key variable or model that cannot be right is refused before anything starts: oillamp #line'() {
+    def 'Oillamp refuses a model service, key variable or model that cannot be right, before anything starts: oillamp #line'() {
         reportInfo """
             `--model-service` and `--model-key-env` override the lamp's [model] settings for one
             session. The key is sent to that service, so an address that is not https, or a
@@ -463,7 +463,7 @@ class UsingTheCommandLineSpec extends Specification {
             option.errors().first().whatHappened().contains("'--list the open tickets' is not an option oillamp knows")
     }
 
-    def '-v is --verbose, and --debug turns it on too'() {
+    def 'Oillamp\'s `-v` is short for `--verbose`, and `--debug` turns verbose output on too'() {
         reportInfo """
             `--verbose` shows each step oillamp takes as it goes, not only the outcome. `-v` is
             its short form. `--debug` does nothing more than `--verbose` yet, but it promises at
@@ -545,7 +545,7 @@ class UsingTheCommandLineSpec extends Specification {
             host.oillamp.run('remove', lamp, host.lampPath('other').toString()).console().contains('oillamp 0.2.0 — 2 lamps')
     }
 
-    def 'config checks the lamp when no action is given, and refuses an action it does not know'() {
+    def 'Oillamp\'s `config` command checks the lamp when no action is given, and refuses an action it does not know'() {
         reportInfo """
             `oillamp config <dir>` on its own checks the configuration, which is what someone
             who just edited oillamp.toml wants. `show-effective` prints every setting as a
@@ -597,7 +597,7 @@ class UsingTheCommandLineSpec extends Specification {
             zsh.errors().first().whatHappened().contains("oillamp only ships a completion script for bash, not 'zsh'")
     }
 
-    def '`help` lists the commands, and is not an error'() {
+    def 'Oillamp\'s `help` command lists the commands, and is not an error'() {
         reportInfo """
             Running oillamp with nothing lists the commands too, but as a usage error, since
             nothing was asked. `oillamp help` asked for the list, so it succeeds.
@@ -611,7 +611,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.console().contains('doctor [<dir>]')
     }
 
-    def 'Asking for the image command says why there is none'() {
+    def 'Oillamp says why there is no `image` command when someone asks for one'() {
         reportInfo """
             An `image` command was planned and then dropped. oillamp builds the sandbox image
             again by itself when its settings change, and `oillamp update` renews what is in it.
@@ -627,12 +627,13 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.errors().first().whatHappened().contains('oillamp update <dir> --system')
     }
 
-    def 'ask needs a prompt, and schedule needs what its action acts on: oillamp #line'() {
+    def 'Oillamp refuses an `ask`, `restore` or `schedule` line that leaves out what the command acts on: oillamp #line'() {
         reportInfo """
             These lines name a lamp but leave out the one thing the command needs to act: the
             question to ask, the snapshot to go back to, the prompt for a new job, or the job to
-            change. Each is refused, and says what is missing, before oillamp looks for a lamp
-            or a session.
+            change; or, for `schedule <dir> pause`, give it a word it does not take. Oillamp
+            refuses each with a usage error that says what is missing or extra, before it looks
+            for a lamp or a session.
         """
         when:
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
@@ -652,11 +653,11 @@ class UsingTheCommandLineSpec extends Specification {
             'schedule LAMP pause x' | "`oillamp schedule <dir> pause` takes nothing more, but was given 'x'"
     }
 
-    def 'An action schedule does not know is refused before oillamp looks for the lamp'() {
+    def 'Oillamp refuses an action that `schedule` does not know, before it looks for the lamp'() {
         reportInfo """
             `oillamp schedule <dir>` lists, adds, removes, enables, disables, pauses and resumes.
-            Any other word is a usage error, and it is said before oillamp looks for the lamp,
-            so a typo is reported as a typo and not as a lamp that is missing.
+            Oillamp reports any other word as a usage error before it looks for the lamp, so a
+            typo is reported as a typo and not as a lamp that is missing.
         """
         when:
             var outcome = host.oillamp.run('schedule', host.lampPath().toString(), 'tidy')

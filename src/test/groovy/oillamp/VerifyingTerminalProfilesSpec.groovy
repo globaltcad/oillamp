@@ -31,10 +31,10 @@ class VerifyingTerminalProfilesSpec extends Specification {
 
     def 'The terminals installed here accept the arguments oillamp gives them'() {
         reportInfo """
-            The profile table is nine argument templates, each one a guess until something runs it.
-            A wrong template is not a subtle bug: the terminal window simply never opens, and the
-            session dies at AwaitingTerminal with OIL-TERM-002 telling the user their terminal
-            failed - which is true and unhelpful.
+            The profile table is nine argument templates, each one a guess until something runs
+            it. A wrong template is not a subtle bug: the terminal window simply never opens, and
+            the session ends while oillamp waits for the shell window to connect, with
+            OIL-TERM-002 telling the user their terminal failed - which is true and unhelpful.
 
             This checks the installed terminals by reading their own `--help`, rather than by
             launching windows, so it can run unattended. It reports which terminals it could not

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 /**
  * What happens to floating windows when the desktop changes size.
  *
- * <p>A viewer, such as Genies showing the desktop in a panel, may ask for the desktop to take the
+ * <p>A viewer, such as Genies (a desktop app built on oillamp) showing the desktop in a panel, may ask for the desktop to take the
  * panel's size. sway lays out fullscreen and tiled windows again by itself, but leaves floating
  * windows where they were, which on a smaller desktop can be out of reach. The helper
  * {@code keep-windows-on-screen} brings them back. These scenarios run the real helper against a
@@ -63,11 +63,13 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
         directory.toFile().deleteDir()
     }
 
-    def 'A floating window the smaller desktop cuts off is moved back onto it, at the size it has'() {
+    def 'The helper moves a floating window that a smaller desktop cuts off back onto it, at the size it has'() {
         reportInfo """
-            The desktop shrinks from 1920x1080 to 800x500. A window at 1000,300, 600 wide and 400
-            high with its title bar, now begins beyond the right edge. It still fits, so it keeps
-            its size and only moves, as little as it must: to the right and bottom edges.
+            The helper `keep-windows-on-screen` runs in the sandbox and moves floating windows
+            back onto sway's desktop when the desktop changes size. Here the desktop shrinks from
+            1920x1080 to 800x500. A window at 1000,300, 600 wide and 400 high with its title bar,
+            now begins beyond the right edge. It still fits, so it keeps its size and only moves,
+            as little as it must: to the right and bottom edges.
         """
         given:
             desktop 1, 800, 500, window(5, 1000, 300, 600, 400)
@@ -79,10 +81,12 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
             commands == ['after tree 1: [con_id=5] move absolute position 200 100']
     }
 
-    def 'A window larger than the desktop is made as large as the desktop'() {
+    def 'The helper makes a window larger than the desktop as large as the desktop'() {
         reportInfo """
-            A window 1200x900 cannot fit on a desktop of 800x500 by moving. It is made 800x500,
-            which is the whole desktop, title bar included, and moved to its corner.
+            The helper `keep-windows-on-screen` runs in the sandbox and moves floating windows
+            back onto sway's desktop when the desktop changes size. A window 1200x900 cannot fit
+            on a desktop of 800x500 by moving, so the helper makes it 800x500, which is the whole
+            desktop, title bar included, and moved to its corner.
         """
         given:
             desktop 1, 800, 500, window(5, 100, 100, 1200, 900)
@@ -94,10 +98,12 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
             commands == ['after tree 1: [con_id=5] resize set width 800 px height 500 px; [con_id=5] move absolute position 0 0']
     }
 
-    def 'Windows that fit, fullscreen windows, and the windows of no screen are left alone'() {
+    def 'The helper leaves alone windows that fit, fullscreen windows, and windows on sway\'s scratchpad'() {
         reportInfo """
-            Only what is out of reach is touched. A window that fits stays put, a fullscreen
-            window is already sized by sway, and sway's scratchpad is not a screen.
+            The helper `keep-windows-on-screen`, which runs in the sandbox, touches only windows
+            that are out of reach after the desktop changed size. A window that fits stays put, a
+            fullscreen window is already sized by sway, and sway's scratchpad, the place for
+            hidden windows that sway lists as the output `__i3`, is not a screen.
         """
         given:
             tree 1, output('HEADLESS-1', 800, 500, [window(5, 10, 10, 300, 200),
@@ -108,10 +114,12 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
             arrange() == []
     }
 
-    def 'When the desktop grows again, a window goes back to where it was'() {
+    def 'When the desktop grows again, the helper puts a window back where it was'() {
         reportInfo """
-            The user closes the panel, and the desktop goes back to its own size. A window that
-            was moved to fit the panel goes back to where it was before, and to the size it had.
+            Let's consider a viewer that showed the desktop in a small panel. The user closes the
+            panel, and the desktop goes back to its own size. The helper `keep-windows-on-screen`
+            had moved and shrunk a window to fit the panel; now it puts the window back where it
+            was before, at the size it had.
         """
         given: 'a window moved and shrunk to fit a small desktop'
             desktop 1, 800, 500, window(5, 900, 300, 1000, 700)
@@ -126,10 +134,11 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
                          'after tree 2: [con_id=5] resize set width 1000 px height 700 px; [con_id=5] move absolute position 900 300']
     }
 
-    def 'A window someone moved in the meantime stays where they put it'() {
+    def 'The helper leaves a window that someone moved in the meantime where they put it'() {
         reportInfo """
-            While the desktop was small, the user dragged the window somewhere else. That is now
-            where it belongs: when the desktop grows, it is not taken back to where it once was.
+            The helper `keep-windows-on-screen` moved a window to fit a small desktop. While the
+            desktop was small, the user dragged the window somewhere else. That is now where it
+            belongs: when the desktop grows, it is not taken back to where it once was.
         """
         given:
             desktop 1, 800, 500, window(5, 1000, 300, 600, 400)
@@ -140,11 +149,12 @@ class KeepingWindowsOnTheDesktopSpec extends Specification {
             arrange() == ['after tree 1: [con_id=5] move absolute position 200 100']
     }
 
-    def 'No text of a window ever becomes part of a command'() {
+    def 'The helper never puts a window\'s title or app id into a sway command'() {
         reportInfo """
-            The helper runs as the infra user, who owns sway, and sway runs whatever command it
-            is given. The agent names its windows, so a window title must never reach a command.
-            Commands are made of the numbers sway gave: a window's id and its position.
+            The helper `keep-windows-on-screen` runs as the infra user, who owns sway, and sway
+            runs whatever command it is given. The agent names its windows, so a window title must
+            never reach a command. Commands are made of the numbers sway gave: a window's id and
+            its position.
         """
         given:
             desktop 1, 800, 500, window(5, 1000, 300, 600, 400) + [name: 'x"]; exec rm -rf ~', app_id: 'evil; exit']

@@ -19,11 +19,12 @@ import java.util.concurrent.TimeUnit
 
 @Narrative('''
 Giving the agent instructions for a whole session: `LampDirectory.instructions` in an
-application, and `oillamp at --instructions-env` by hand. They tell the agent about the world
+application (a program built on oillamp's Java API, `dev.lamp`), and `oillamp at
+--instructions-env` by hand. They tell the agent about the world
 around its sandbox, such as how the user talks to it; the sandbox itself is explained to it by
 `~/AGENTS.md`, which every session writes.
 
-## How the instructions travel
+## How the instructions get to pi
 
 ```
  application                        engine (host)                     sandbox: /home/agent
@@ -44,8 +45,8 @@ around its sandbox, such as how the user talks to it; the sandbox itself is expl
 **Why the environment.** Instructions can run to many lines and a few kilobytes. On the
 engine's command line they would be visible to every user of the machine in `ps`, and limited in
 length; the engine's standard input already has a job, since the session lasts as long as it is
-open; and a file would have to be made, found and cleaned up by someone. The model key already
-travels in the environment, which only this user can read. The instructions go the same way, in
+open; and a file would have to be made, found and cleaned up by someone. The model key is already
+passed in the environment, which only this user can read. The instructions go the same way, in
 a variable of their own. By hand: `GENIE="$(cat about.md)" oillamp at <dir> --instructions-env GENIE`.
 
 **Why the engine writes the file, not the application.** `APPEND_SYSTEM.md` is pi's own file, in
@@ -110,11 +111,12 @@ class GivingTheAgentInstructionsSpec extends Specification {
 
     def 'An application\'s instructions reach the agent\'s pi before pi starts, by way of the engine\'s environment'() {
         reportInfo """
-            The application gives the text to the lamp and nothing else: it does not know where
-            pi keeps its instructions. The lamp hands the text to the engine in a variable of the
-            engine's environment and names the variable on the command line, as it does for the
-            key. The engine writes the text into pi's `APPEND_SYSTEM.md` once the sandbox is up,
-            before the first run starts pi, so pi has it from its very first question.
+            An application, a program built on oillamp's Java API, gives the text to the lamp with
+            `LampDirectory.instructions` and nothing else: it does not know where pi keeps its
+            instructions. The lamp hands the text to the engine in a variable of the engine's
+            environment and names the variable on the command line, as it does for the key. The
+            engine writes the text into pi's `APPEND_SYSTEM.md` once the sandbox is up, before the
+            first run starts pi, so pi has it from its very first question.
         """
         when: 'an application starts a lamp with instructions and asks a question'
             var running = Lamp.at(lamp).instructions(INSTRUCTIONS).launchedBy(host.launcher).start()
@@ -172,13 +174,13 @@ class GivingTheAgentInstructionsSpec extends Specification {
             !Files.exists(piFile('settings.json'))
     }
 
-    def 'A link the agent put in place of pi\'s directory is not followed, and the session says what it refused'() {
+    def 'The session does not follow a link the agent put in place of `~/.pi`, and warns about each file it did not write'() {
         reportInfo """
             Had the agent replaced `~/.pi` with a symbolic link to a directory of the user's, a
-            session that followed it would write pi's settings, its instructions and oillamp's
-            pi extensions there, on the host, as the user. The session refuses each of those
-            files with a warning that names the link, and goes on: the sandbox works, only pi
-            lacks what the session would have written.
+            session that followed it would write pi's settings, its instructions and oillamp's pi
+            extensions there, on the host, as the user. The session writes none of those files,
+            warns about each with `OIL-LAMP-012`, naming the link, and goes on: the sandbox works,
+            only pi lacks what the session would have written.
         """
         given: 'the agent replaced its ~/.pi with a link to a directory of the user\'s'
             aLampThatHasHadASession()
@@ -205,13 +207,15 @@ class GivingTheAgentInstructionsSpec extends Specification {
     }
 
     @Rollup
-    def 'Instructions that cannot be used stop the session before it starts'() {
+    def 'Oillamp refuses to start a session whose instructions variable is unset, empty or over 64 KiB'() {
         reportInfo """
-            A session whose instructions did not arrive would run an agent that does not know
-            what it is for, and nobody would notice until it behaved oddly. So the engine reads
-            the variable first, and a variable that is not set, is empty, or holds more than
-            64 KiB stops the session before anything on the machine changes. 64 KiB is far more
-            than any useful instructions, and half of what Linux lets one variable hold.
+            `oillamp at --instructions-env ADA` takes the session's instructions from the
+            environment variable `ADA`. A session whose instructions did not arrive would run an
+            agent that does not know what it is for, and the user would learn of it only from the
+            agent's odd answers. So the engine reads the variable first, and refuses the command
+            line with `OIL-USAGE-001` if the variable is not set, is empty, or holds more than 64
+            KiB, before anything on the machine changes. 64 KiB is far more than any useful
+            instructions, and half of what Linux lets one variable hold.
         """
         given: 'the variable ADA, as the row below says'
             VARIABLES[variable].ifPresent { value -> host.machine { it.environmentVariable('ADA', value) } }
@@ -219,7 +223,7 @@ class GivingTheAgentInstructionsSpec extends Specification {
         when: 'a session is started with --instructions-env ADA'
             var outcome = host.oillamp.run('at', lamp.toString(), '--instructions-env', 'ADA')
 
-        then: 'the command line is refused, saying why, and no lamp was made'
+        then: 'oillamp refuses the command line, saying why, and makes no lamp'
             outcome.reported('OIL-USAGE-001')
             outcome.errors().first().whatHappened() == "--instructions-env ADA: ${why}".toString()
             !Files.exists(lamp)
@@ -234,8 +238,10 @@ class GivingTheAgentInstructionsSpec extends Specification {
     @Rollup
     def 'An application cannot give instructions that are blank or longer than 64 KiB'() {
         reportInfo """
-            The lamp checks what the engine would check, at once, so the application learns of
-            it where it gives the text, before any engine is started.
+            An application, a program built on oillamp's Java API, gives the instructions with
+            `LampDirectory.instructions`. It checks what the engine would check, at once, and
+            throws `IllegalArgumentException`, so the application learns of the mistake where it
+            gives the text, before any engine is started.
         """
         when: 'an application gives the lamp the instructions the row below describes'
             Lamp.at(lamp).instructions(TEXTS[text])
@@ -248,7 +254,7 @@ class GivingTheAgentInstructionsSpec extends Specification {
             text << TEXTS.keySet()
     }
 
-    def '`oillamp help` says where the instructions go, and what happens without them'() {
+    def 'Oillamp\'s `help` command says where the instructions go, and what happens without them'() {
         reportInfo """
             Whoever starts a session by hand needs to know which file the instructions end up
             in, so they can look at it, and that a session without them leaves that file alone.

@@ -31,12 +31,13 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'By default the agent commits as a genie of its lamp, and nothing about the user enters the sandbox'() {
+    def 'By default the agent commits as `genie agent`, with its lamp\'s id in the email, and nothing about the user enters the sandbox'() {
         reportInfo """
-            The user's name and address are the user's, and the sandbox is where untrusted text
-            is read. So by default the agent gets oillamp's own identity, genie agent, with the
-            lamp's id in the email: a commit then says both that an agent made it and which
-            lamp. The console says whose name the commits will carry.
+            The user's name and address are the user's, and the sandbox is where untrusted text is
+            read. So by default oillamp gives the agent its own identity: the name `genie agent`,
+            and `genie@<agent id>` as the email, with the lamp's eight-character agent id: a
+            commit then says both that an agent made it and which lamp. The console says whose
+            name the commits will carry.
         """
         given: 'a user whose git knows who they are'
             host.machine { it.gitIdentity('Ada Lovelace', 'ada@example.com') }
@@ -138,7 +139,7 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             outcome.console().contains('the agent has no git identity')
     }
 
-    def 'A user who asks for their own identity but has none is told the agent cannot commit, and the session still starts'() {
+    def 'Oillamp warns that the agent cannot commit when the user\'s own identity is asked for but missing, and still starts'() {
         reportInfo """
             Without git, or without an identity in it, there is nothing to copy. That is no reason
             to stop a session, but it is the reason the agent's first commit will fail, so the
@@ -161,11 +162,12 @@ class GivingTheAgentAGitIdentitySpec extends Specification {
             outcome.console().contains('your git configuration has no user.name and user.email')
     }
 
-    def 'A custom identity without a name or an email is refused, before anything starts'() {
+    def 'Oillamp refuses to start a session for a custom git identity without an email'() {
         reportInfo """
-            `identity = "custom"` with an empty email would give git a half identity, and a commit
-            would fail inside the sandbox for a reason set on the host. Configuration mistakes are
-            reported where they are made, with the file and the key.
+            `identity = "custom"` with no email would give git a half identity, and a commit would
+            fail inside the sandbox for a reason set on the host. So oillamp refuses to start, and
+            reports the mistake where it was made, with the key: `git.identity` needs both
+            `git.name` and `git.email`.
         """
         given:
             host.givenConfig(host.lampPath(), '''

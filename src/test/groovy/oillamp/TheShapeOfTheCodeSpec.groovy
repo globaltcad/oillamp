@@ -98,7 +98,8 @@ class TheShapeOfTheCodeSpec extends Specification {
 
             Nested types are judged by the type they are nested in: `LampConversation.Entry` is
             named through `LampConversation`. The engine, `dev.oillamp`, is not held to this; its
-            types are all internal, apart from the two the first scenario names.
+            types are all internal, apart from its two public ones, the entry point `OilLamp` and
+            the `Machine` it runs against.
         """
         given: 'every top-level type in dev.lamp'
             var types = code.findAll { it.packageName == 'dev.lamp' }
@@ -140,7 +141,7 @@ class TheShapeOfTheCodeSpec extends Specification {
             reaching.isEmpty()
     }
 
-    def 'Nothing internal leaks out through the types that are public'() {
+    def 'No public method takes or returns a type that is not public'() {
         reportInfo """
             A small public API is not small if one of its methods returns an internal type: the
             caller can then reach everything that type touches, and the freedom to change it is

@@ -38,11 +38,13 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
 
     def 'When the application is killed, its sandbox shuts itself down cleanly'() {
         reportInfo """
-            An application killed with `kill -9` runs no shutdown code at all. It cannot close its
-            lamps, and nothing it planned for its last moments happens. What the kernel does
-            is close every file the process held, and one of them is the engine's standard input.
-            The engine notices that its input has ended and shuts the session down, exactly as if
-            it had been asked: the container stops, the session's files go, the lock is released.
+            An application, a program such as a game built on oillamp's Java API, runs the engine
+            as a child process and holds its standard input. An application killed with `kill -9`
+            runs no shutdown code at all. It cannot close its lamps, and nothing it planned for
+            its last moments happens. What the kernel does is close every file the process held,
+            and one of them is the engine's standard input. The engine notices that its input has
+            ended and shuts the session down, exactly as if it had been asked: the container
+            stops, the session's files go, the lock is released.
 
             The application here is played by a stand-in process that holds the engine's input,
             and it is that process which is killed. From the engine's side there is no difference:
@@ -64,7 +66,7 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
             eventually(Duration.ofSeconds(90)) { lamp.exitStatus().isPresent() }
             lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
 
-        and: 'it says why: the application that started it let go'
+        and: 'it says why: the application that started it closed its standard input'
             heard.any { it instanceof LampEvent.Summary
                         && it.lines().toList().any { line -> line.contains('asked to stop by the application') } }
 
@@ -78,9 +80,11 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
         reportInfo """
             The container can die under a running session: killed for using too much memory, or
             removed by hand with podman. The engine checks on it every two seconds, so the
-            application learns within moments rather than finding out when its next command
-            hangs. The session is reported as failed, not as a normal end, the container is
-            removed, and the lamp refuses further commands instead of sending them nowhere.
+            application, the program built on oillamp's Java API that holds the lamp, learns
+            within moments rather than finding out when its next command hangs. The engine reports
+            the session as failed, not as a normal end, and removes the container, and the lamp
+            throws `IllegalStateException` for further commands instead of handing out an ssh
+            command that cannot connect.
         """
         given:
             directory = newLampPath('killed-sandbox')
@@ -106,7 +110,7 @@ class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
         when: 'the application tries to use the lamp anyway'
             lamp.commandLine('true')
 
-        then: 'it is refused plainly'
+        then: 'the lamp refuses with an IllegalStateException'
             thrown(IllegalStateException)
     }
 

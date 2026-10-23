@@ -41,11 +41,13 @@ class ReadingTheAgentsConversationsSpec extends Specification {
 
     def 'An application reads the agent\'s conversations as values, the most recent first'() {
         reportInfo """
-            An application that shows a lamp's conversations, such as a chat app, needs them as
-            values it can list and draw, not as pi's files. They are read straight from the agent's
-            home, so they are there while the lamp sleeps too, and the list is quick enough to read
-            again whenever something may have changed. A conversation a scheduled job's run had
-            is named after the run and the job by oillamp, and says which job it was.
+            An application, a program built on oillamp's Java API such as a chat app, that shows a
+            lamp's conversations needs them as values it can list and draw, not as pi's files.
+            `Lamp.conversations` reads them straight from the agent's home, so they are there
+            while no session runs too, and the list is quick enough to read again whenever
+            something may have changed. A conversation a scheduled job's run had is named after
+            the run and the job by oillamp, and says which job it was. Each conversation's
+            `line()` is the path of entries from its start to where it stands now.
         """
         given:
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
@@ -65,7 +67,7 @@ class ReadingTheAgentsConversationsSpec extends Specification {
             found*.title() == ['run-3 (job-1)', 'How big is the repository?']
             found*.id() == ['01a0ed10-aaaa-7234-914c-b970a862c13e', '01a0ec69-de1c-7234-914c-b970a862c13e']
 
-        and: 'each is the whole line of entries, question and answer'
+        and: 'each holds its line: the entries from its start to where it stands, question and answer'
             var first = found[1]
             first.line()*.kind() == [Kind.OTHER, Kind.MESSAGE_TO_AGENT, Kind.MESSAGE_FROM_AGENT]
             first.line()*.text().takeRight(2) == ['How big is the repository?', 'About 12,000 lines.']
@@ -83,8 +85,9 @@ class ReadingTheAgentsConversationsSpec extends Specification {
         reportInfo """
             Asking something else instead of an earlier question does not throw the first answer
             away: pi starts a second branch from the same point, and the conversation forks there.
-            The conversation stands at the entry written last, which is where the next question
-            goes unless it says otherwise. Every other branch can still be walked to.
+            The conversation stands at the entry written last, its leaf, which is where the next
+            question goes unless it says otherwise; its `line()` is the path from the start to
+            that entry. Every other branch can still be read with `lineTo`.
         """
         given:
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
@@ -149,12 +152,13 @@ class ReadingTheAgentsConversationsSpec extends Specification {
             failed.text() == '403: model not allowed'
     }
 
-    def 'What the agent left in its home cannot lead the reader astray'() {
+    def 'Lamp.conversations does not follow links or trust files that the agent left among its conversations'() {
         reportInfo """
             The agent writes these files and can write anything there: a link to a file of the
             user's elsewhere, a directory that is a link, lines that are not JSON, a file that is
-            not a conversation at all. None of that is followed or trusted. The conversations that
-            are real are still read.
+            not a conversation at all. `Lamp.conversations` follows no link and skips what is not
+            a conversation. It still reads the conversations that are real, without their lines
+            that are not JSON.
         """
         given: 'a real conversation, with a line of rubbish in it'
             var file = conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
@@ -180,11 +184,14 @@ class ReadingTheAgentsConversationsSpec extends Specification {
             found.first().line()*.text().contains('Hello')
     }
 
-    def 'oillamp conversations lists them, and shows one with the ids to ask after'() {
+    def 'Oillamp\'s `conversations` command lists the conversations, and shows one with the ids that `oillamp ask` takes'() {
         reportInfo """
-            From a terminal, a person lists the conversations and looks into one. The ids next to
-            each question and answer are what oillamp ask takes, to continue after an answer or to
-            ask something instead of a question. A fork is marked where it happens.
+            From a terminal, a person lists the agent's conversations with `oillamp conversations
+            <lamp>`, and looks into one by giving the start of its id. The ids next to each
+            question and answer are what `oillamp ask` takes, with `--after` to continue after an
+            answer or `--instead-of` to ask something instead of a question. A fork is marked
+            where it happens. A terminal escape sequence in an answer is not printed, and an id
+            that matches no conversation is reported as `OIL-CONVERSATION-001`.
         """
         given:
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
@@ -217,10 +224,12 @@ class ReadingTheAgentsConversationsSpec extends Specification {
             missing.reported('OIL-CONVERSATION-001')
     }
 
-    def 'A conversation can be forgotten for good'() {
+    def 'LampDirectory.forget deletes a conversation for good'() {
         reportInfo """
-            A person tidying up deletes the conversations they no longer want. Nothing else of the
-            agent's home changes.
+            A person tidying up deletes the conversations they no longer want; an application, a
+            program built on oillamp's Java API, does it with `LampDirectory.forget`, given the
+            start of the conversation's id. The other conversations stay. An id that matches no
+            conversation throws `IOException`.
         """
         given:
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') { question 'q1', 'One' }

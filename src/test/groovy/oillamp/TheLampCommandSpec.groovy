@@ -83,7 +83,7 @@ class TheLampCommandSpec extends Specification {
          calls : Files.exists(calls) ? Files.readString(calls).trim().readLines() : []]
     }
 
-    def 'lamp key turns a combination into wtype modifiers and a final key'() {
+    def 'The `lamp key` command turns a key combination into wtype modifiers and a final key'() {
         reportInfo """
             This is the one piece of real logic in the script, and the one most likely to be wrong:
             wtype takes every modifier as its own -M and only the last key as -k, so `ctrl+shift+t`
@@ -107,7 +107,7 @@ class TheLampCommandSpec extends Specification {
             'ctrl+alt+shift+f' || 'wtype [-s] [150] [-M] [ctrl] [-M] [alt] [-M] [shift] [-k] [f]'
     }
 
-    def 'lamp screenshot --region converts the documented X,Y,W,H into grim geometry'() {
+    def 'The `lamp screenshot --region` command converts the documented X,Y,W,H into grim\'s geometry'() {
         reportInfo """
             The agent guide documents `--region X,Y,W,H` because that is what an agent will guess.
             grim wants `X,Y WxH`. The translation is one line and it is worth a scenario, because
@@ -126,7 +126,7 @@ class TheLampCommandSpec extends Specification {
             result.output.trim().endsWith('shot.png')
     }
 
-    def 'lamp screenshot with no arguments writes into the screenshots directory and says where'() {
+    def 'The `lamp screenshot` command with no arguments writes into the screenshots directory and says where'() {
         when:
             var result = runLamp('screenshot')
 
@@ -136,7 +136,7 @@ class TheLampCommandSpec extends Specification {
             result.output.trim().endsWith('.png')
     }
 
-    def 'lamp click clicks at the position it was given, not relative to the pointer'() {
+    def 'The `lamp click` command clicks at the position it was given, not relative to the pointer'() {
         reportInfo """
             `lamp click X Y` used to pass X and Y to `wlrctl pointer move`, which moves the pointer
             *by* that amount. So every click landed somewhere unrelated to what was asked, and
@@ -154,7 +154,7 @@ class TheLampCommandSpec extends Specification {
             result.calls.every { !it.startsWith('wlrctl') }
     }
 
-    def 'lamp scroll without a position scrolls where the pointer was last put'() {
+    def 'The `lamp scroll` command without a position scrolls where the pointer was last put'() {
         when:
             var result = runLamp('scroll', '3')
 
@@ -162,7 +162,7 @@ class TheLampCommandSpec extends Specification {
             result.calls == ['lamp-pointer [where]', 'lamp-pointer [scroll] [700] [400] [3]']
     }
 
-    def 'lamp drag goes from one position to the other'() {
+    def 'The `lamp drag` command drags from one position to the other'() {
         when:
             var result = runLamp('drag', '10', '20', '30', '40')
 
@@ -170,7 +170,7 @@ class TheLampCommandSpec extends Specification {
             result.calls == ['lamp-pointer [drag] [10] [20] [30] [40]']
     }
 
-    def 'lamp type passes the text through as a single argument, spaces and all'() {
+    def 'The `lamp type` command passes the text to wtype as a single argument, spaces and all'() {
         when:
             var result = runLamp('type', 'hello world  with   spaces')
 
@@ -178,7 +178,7 @@ class TheLampCommandSpec extends Specification {
             result.calls == ['wtype [-s] [150] [--] [hello world  with   spaces]']
     }
 
-    def 'a missing tool is reported as a missing tool, not as a broken lamp'() {
+    def 'When a tool such as wtype is missing, the `lamp` command names that tool instead of failing in general'() {
         reportInfo """
             If a tool such as `wtype` is ever missing from the image, the agent must be told which
             tool is absent and that everything else still works, not left with a generic failure
@@ -195,12 +195,12 @@ class TheLampCommandSpec extends Specification {
             result.output.contains('thin wrapper')
     }
 
-    def 'lamp info says the size the desktop has now, and its own size when that differs'() {
+    def 'The `lamp info` command says the size the desktop has now, and its own size when that differs'() {
         reportInfo """
-            The user may watch the desktop in a panel of Genies, and have it take the panel's
-            size. The agent clicks by screen positions, so `lamp info` asks the desktop for its
-            size now rather than repeating the size it started with, and says which size it goes
-            back to.
+            The user may watch the desktop in a panel of Genies, a desktop app built on oillamp,
+            and have it take the panel's size. The agent clicks by screen positions, so `lamp
+            info` asks the desktop for its size now rather than repeating the size it started
+            with, and says which size it goes back to.
         """
         when: 'the desktop has its own size'
             var own = runLamp('info')
@@ -215,7 +215,7 @@ class TheLampCommandSpec extends Specification {
                     'own size   1920x1080, which it goes back to when the user stops showing it in a panel']
     }
 
-    def 'lamp dock add puts a button in the file the dock reads, where it stays'() {
+    def 'The `lamp dock add` command puts a button in the file the dock reads, where it stays'() {
         reportInfo """
             The agent puts buttons on the dock at the bottom of the desktop for the user to click.
             They are kept in a file in the agent's home, which outlives the session, so a button
@@ -239,7 +239,7 @@ class TheLampCommandSpec extends Specification {
             listed.output.contains('Notes: foot -e nano "my notes.txt"')
     }
 
-    def 'a button added under a label that is already there replaces that button'() {
+    def 'A dock button added under a label that is already there replaces that button'() {
         reportInfo """
             A label names a button, so adding "Report" again is how the agent changes what its
             Report button does. The button keeps its place on the dock, and the user does not
@@ -258,7 +258,7 @@ class TheLampCommandSpec extends Specification {
                     [label: 'Notes', command: 'foot']]
     }
 
-    def 'an icon-only button can be added, replaced and removed by its command'() {
+    def 'The agent adds, replaces and removes an icon-only dock button by its command'() {
         reportInfo """
             An icon can be enough to identify a tool. The agent can omit the label to keep its
             button compact, and still list, replace and remove the button by its command.
@@ -285,7 +285,7 @@ class TheLampCommandSpec extends Specification {
             Files.readString(temporary.resolve('home/.config/lamp/dock.json')).trim() == '[]'
     }
 
-    def 'a button without a label needs an icon'() {
+    def 'The `lamp dock add` command refuses a button that has neither a label nor an icon'() {
         when:
             var result = runLamp('dock', 'add', 'foot')
 
@@ -295,7 +295,7 @@ class TheLampCommandSpec extends Specification {
             !Files.exists(temporary.resolve('home/.config/lamp/dock.json'))
     }
 
-    def 'a label and an icon-only command with the same text identify separate buttons'() {
+    def 'A label and an icon-only command with the same text name separate dock buttons'() {
         reportInfo """
             An existing labelled launcher must not be overwritten when an icon-only command
             happens to have the same text as its label, or the other way around. Removal prefers
@@ -338,7 +338,7 @@ class TheLampCommandSpec extends Specification {
             iconFirst << [false, true]
     }
 
-    def 'lamp dock remove takes a button away, and says so when there is none by that name'() {
+    def 'The `lamp dock remove` command takes a button away, and says so when there is none by that name'() {
         reportInfo """
             Removing a button that is not there is a mistake the agent should hear about, with a
             way to see what is there instead, rather than a silent success.
@@ -358,7 +358,7 @@ class TheLampCommandSpec extends Specification {
             missing.output.contains('`lamp dock` lists what is there')
     }
 
-    def 'lamp dock does not write over a file it cannot read'() {
+    def 'The `lamp dock` command does not write over a dock file it cannot read'() {
         reportInfo """
             The agent may also edit the file by hand. If that left it broken, writing a new list
             over it would quietly throw away every button in it. lamp dock refuses and says which
@@ -378,7 +378,7 @@ class TheLampCommandSpec extends Specification {
             Files.readString(file) == '[{"label": "Report",'
     }
 
-    def 'lamp dock tells the agent when the user cannot see the dock'() {
+    def 'The `lamp dock` command tells the agent when the user cannot see the dock'() {
         reportInfo """
             A button on a dock that is not running is a button nobody can click. The dock writes
             its process id when it starts; lamp dock checks it, so the agent can tell the user
@@ -398,7 +398,7 @@ class TheLampCommandSpec extends Specification {
             !running.output.contains('not running')
     }
 
-    def 'lamp help tells the agent how to bypass lamp entirely'() {
+    def 'The `lamp help` command tells the agent how to bypass `lamp` entirely'() {
         reportInfo """
             `lamp` is a thin script, and an agent may need something it does not do. That only
             helps if the agent knows what is available, so the help names the underlying tools
@@ -415,7 +415,7 @@ class TheLampCommandSpec extends Specification {
             result.output.contains('cat $(command -v lamp)')
     }
 
-    def 'an unknown command fails loudly rather than doing nothing'() {
+    def 'The `lamp` command fails with an error on a subcommand it does not know, rather than doing nothing'() {
         when:
             var result = runLamp('teleport')
 
@@ -425,7 +425,7 @@ class TheLampCommandSpec extends Specification {
             result.output.contains('lamp help')
     }
 
-    def 'a missing or malformed value is explained, not left to bash: lamp #line'() {
+    def 'The `lamp` command explains a missing or malformed value instead of leaving it to bash: lamp #line'() {
         reportInfo """
             The agent reads what lamp says and tries again, so an error must say what to write
             instead. A missing value used to stop bash with "unbound variable", and a

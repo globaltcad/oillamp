@@ -139,12 +139,13 @@ class SupervisingASessionSpec extends Specification {
             lines.contains('oillamp stop ')
     }
 
-    def 'A viewer that will not open is a warning; the session carries on without it'() {
+    def 'When the desktop viewer will not open, oillamp warns and the session goes on without it'() {
         reportInfo """
-            The viewer's lifetime is deliberately independent of the session's, and this is why. A
-            session with no view of the desktop is degraded, not broken: the shell still works,
-            the agent is still running, the recording is still being made. Ending it would throw
-            away working state over a window the user can reopen with `oillamp view`.
+            The viewer is the window, `vncviewer`, that shows the sandbox's desktop. Its lifetime
+            is deliberately independent of the session's, and this is why. A session with no view
+            of the desktop is degraded, not broken: the shell still works, the agent is still
+            running, the recording is still being made. Ending it would throw away working state
+            over a window the user can reopen with `oillamp view`.
         """
         given: 'a machine whose viewer refuses to start'
             host.machine { it.windowRefusing('vncviewer') }
@@ -155,7 +156,7 @@ class SupervisingASessionSpec extends Specification {
         then: 'the session still ran, and still ended cleanly'
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'but the user was told, with the command that failed'
+        and: 'but oillamp warned the user, with the command that failed'
             outcome.reported('OIL-VIEW-001')
             outcome.warnings().any { it.code().value() == 'OIL-VIEW-001' }
 
@@ -164,13 +165,13 @@ class SupervisingASessionSpec extends Specification {
                    .any { it.what().contains('terminal') }
     }
 
-    def 'A terminal that will not open ends the session, because it did not start as asked'() {
+    def 'When the shell\'s terminal window will not open, oillamp ends the session'() {
         reportInfo """
-            The other half of the same decision, and it goes the other way. A terminal that cannot
-            open almost always means the terminal setting is wrong, and it would be wrong in every
-            session. So the session is ended and the failure is reported with the exact command
-            that would not start, and the user fixes the setting now, rather than working around
-            a missing window every time.
+            Oillamp opens the agent's shell in a new window of a terminal program, here ptyxis. A
+            terminal that cannot open almost always means the terminal setting is wrong, and it
+            would be wrong in every session. So oillamp ends the session and reports the failure
+            as `OIL-TERM-003`, with the exact command that would not start, and the user fixes the
+            setting now, rather than working around a missing window every time.
         """
         given: 'a machine whose terminal emulator refuses to start'
             host.machine { it.windowRefusing('ptyxis') }
@@ -192,15 +193,17 @@ class SupervisingASessionSpec extends Specification {
             !java.nio.file.Files.exists(sessionFile)
     }
 
-    def 'A terminal window that opens but never connects does not hold the lamp forever'() {
+    def 'Oillamp gives up on a terminal window that opens but never connects, and frees the lamp'() {
         reportInfo """
             The failure that has no obvious symptom: the terminal emulator starts, its window
             appears, and the ssh inside it fails on something of its own. Nothing is wrong with
             the sandbox, nothing is wrong with oillamp, and the session would wait for a shell
-            that is never coming - holding the lamp's lock while it waits.
+            that is never coming - holding the lamp's lock, which keeps any other session from
+            starting on it, while it waits.
 
-            The answer is a timeout, which is the one rule in the session machine that
-            needs time to actually pass. This is the scenario that asks for a clock that moves.
+            The answer is a timeout, `timeouts.terminal_connect_seconds`, after which oillamp
+            reports `OIL-TERM-002`. It is the one rule of a session that needs time to actually
+            pass. This is the scenario that asks for a clock that moves.
         """
         given: 'a terminal that opens and never reaches the sandbox, and a short patience'
             host.machine { it.terminalThatNeverConnects().clockRuns()
@@ -223,7 +226,7 @@ class SupervisingASessionSpec extends Specification {
             second.status() != LampExitStatus.LAMP_BUSY
     }
 
-    def '--no-viewer opens the shell and nothing else'() {
+    def 'Oillamp\'s `at --no-viewer` opens the shell window and nothing else'() {
         reportInfo """
             For the person running an agent on a machine they are not sitting at, or who simply
             does not want a desktop window in the way. The session is otherwise identical, which
@@ -248,9 +251,10 @@ class SupervisingASessionSpec extends Specification {
             desktop that died an hour into a session would look fine to any cheaper check.
 
             So the session keeps opening all three sockets while it runs (the desktop, the shell
-            and the egress proxy) and keeps saying so in the terminal it was started
-            from. Connecting is the only check that distinguishes a server from a file with the
-            right name, which is the whole lesson of OIL-SANDBOX-004.
+            and the egress proxy) and keeps saying so in the terminal it was started from.
+            Connecting is the only check that distinguishes a server from a file with the right
+            name, which is why oillamp reports OIL-SANDBOX-004 at startup when a socket file is
+            there but nothing answers on it.
         """
         given: 'a session that stays up long enough to report on itself'
             host.machine { it.windowsStayOpenFor(Duration.ofSeconds(4)) }
@@ -303,8 +307,9 @@ class SupervisingASessionSpec extends Specification {
             way out for a loop that was gone. So a failing event loop is reported as a bug, and
             the session is shut down at once, as it is for any other ending.
 
-            Here the bug is in an application listening to the session, which fails the moment
-            the session is up: the listener is called on the event loop's thread.
+            Here the bug is in a listener, code that receives oillamp's events as they happen, the
+            way an application built on oillamp's Java API listens to the session, which fails the
+            moment the session is up: the listener is called on the event loop's thread.
         """
         given: 'a listener that fails once, when the session is up'
             var failed = new java.util.concurrent.atomic.AtomicBoolean()
@@ -329,13 +334,13 @@ class SupervisingASessionSpec extends Specification {
             !java.nio.file.Files.exists(host.lampPath().resolve('.oillamp/session.json'))
     }
 
-    def 'A second connection to the shell window\'s socket is refused, and the session goes on'() {
+    def 'Oillamp refuses a second connection to the shell window\'s socket, and the session goes on'() {
         reportInfo """
             The socket the terminal window connects through accepts exactly one connection per
             session, because that connection is what tells oillamp the user's shell is up. The
-            socket is outside anything the sandbox can see, so a second connection is a mistake
-            on the host, such as a copied ssh command. It is refused with a warning that points to
-            `oillamp shell`, and the session carries on.
+            socket is outside anything the sandbox can see, so a second connection is a mistake on
+            the host, such as a copied ssh command. Oillamp refuses it with a warning,
+            `OIL-SSH-002`, that points to `oillamp shell`, and the session carries on.
         """
         given: 'a session whose shell window stays open'
             host.machine { it.windowsStayOpenFor(Duration.ofSeconds(60)) }
@@ -349,7 +354,7 @@ class SupervisingASessionSpec extends Specification {
                                                  .resolve('run/ssh-primary.sock')
             java.nio.channels.SocketChannel.open(java.net.UnixDomainSocketAddress.of(primary)).close()
 
-        then: 'it is refused with a warning naming the command to use instead'
+        then: 'oillamp refuses it with a warning naming the command to use instead'
             waitUntil { reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-SSH-002' } }
             reported.find { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-SSH-002' }
                     .problem().toString().contains('oillamp shell')
@@ -408,11 +413,12 @@ class SupervisingASessionSpec extends Specification {
             !outcome.console().contains('did not stop cleanly: \n')
     }
 
-    def 'A container that truly cannot be removed is reported, and not as an internal error'() {
+    def 'Oillamp reports a container it truly cannot remove as `OIL-SANDBOX-005`, not as an internal error'() {
         reportInfo """
-            The other half. If neither stopping nor removing works the container really is still
-            there, and that is worth telling the user about: it holds its memory and CPU
-            reservations, and the next session on this lamp will find the name taken.
+            At the end of a session oillamp stops the container with `podman stop` and removes it
+            with `podman rm -f`. If neither works, the container really is still there, and that
+            is worth telling the user about: it holds its memory and CPU reservations, and the
+            next session on this lamp will find the name taken.
 
             But it is still not a bug to report - it is podman or the machine - so it gets its own
             code and the command that fixes it, rather than "please file a bug".

@@ -52,14 +52,15 @@ class FollowingASessionSpec extends Specification {
         held?.close()
     }
 
-    def 'Someone who follows late catches up on the run in progress, then hears the rest as it happens'() {
+    def 'Oillamp\'s `follow` command, started late, reports the runs in progress first, then each event as it happens'() {
         reportInfo """
-            The agent is working on one question, and another waits its turn, when someone starts
-            following. They are not told about the session's past, only about its present: how
-            to reach the sandbox, the run in progress from its start, and the run waiting, and
-            last what the agent is doing, which marks the end of the catching up. Then
-            they hear everything else as it happens, both runs finishing, and at last the session
-            ending, which ends following too.
+            `oillamp follow <lamp>` asks a running session, over its control socket, for its
+            events. Let's consider the agent working on one question, with another waiting its
+            turn, when someone starts following. The session does not repeat its past to them,
+            only its present: how to reach the sandbox, the run in progress from its start, and
+            the run waiting, and last what the agent is doing, which marks the end of the catching
+            up. Then they hear everything else as it happens, both runs finishing, and at last the
+            session ending, which ends following too.
         """
         given: 'the agent is at work on one question, and another waits'
             var first = held.send(LampPrompt.fresh('wait for me'))
@@ -98,11 +99,13 @@ class FollowingASessionSpec extends Specification {
             followed.any { it instanceof LampEvent.Summary }
     }
 
-    def 'An application that stops following ends nothing'() {
+    def 'When an application stops following a session, the session keeps running'() {
         reportInfo """
-            An application follows with `oillamp follow --embedded`, and stops by closing its
-            standard input, the same signal that ends a session it started. Here that signal only
-            ends the following: the session, which someone else holds, keeps running.
+            An application, a program built on oillamp such as a desktop app, follows a session by
+            running `oillamp follow <lamp> --embedded` as a child process, and stops by closing
+            that process's standard input, the same signal that ends a session it started with
+            `oillamp at --embedded`. Here that signal only ends the following: the session, which
+            someone else holds, keeps running.
         """
         when: 'an application follows, and closes its end a second later'
             host.machine { it.standardInput(closingAfter(Duration.ofSeconds(1))) }
@@ -117,10 +120,10 @@ class FollowingASessionSpec extends Specification {
             held.agentStatus() != null
     }
 
-    def 'There is nothing to follow where no session runs'() {
+    def 'Oillamp\'s `follow` command reports that no session runs, rather than waiting for one'() {
         reportInfo """
-            Following a lamp that is not running says so, as `oillamp status` does, rather than
-            waiting for a session that is not coming.
+            `oillamp follow` for a lamp with no session running reports `OIL-SESSION-001`, as
+            `oillamp status` does, rather than waiting for a session that is not coming.
         """
         given:
             held.close()

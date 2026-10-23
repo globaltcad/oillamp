@@ -36,10 +36,11 @@ class HoldingALampSpec extends Specification {
 
     def 'An application starts a lamp, sees it running, and ends it by closing it'() {
         reportInfo """
-            This is the whole life of a lamp in an application: start it, hear what it does, know
-            when it is usable, and end it. Closing the lamp is all it takes to end the session,
-            and it returns only once the sandbox is gone, so the application can exit knowing
-            nothing is left running.
+            An application is a program, such as a game that hosts an agent, built on oillamp's
+            Java API. This is the whole life of a lamp in an application: start it, hear what it
+            does, know when it is usable, and end it. Closing the lamp is all it takes to end the
+            session, and it returns only once the sandbox is gone, so the application can exit
+            knowing nothing is left running.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).onEvent { received << it }
@@ -60,13 +61,15 @@ class HoldingALampSpec extends Specification {
             !Files.exists(host.lampPath().resolve('.oillamp/session.json'))
     }
 
-    def 'A listener that throws does not keep the lamp, or the other listeners, from hearing the session'() {
+    def 'A listener that throws does not stop the lamp or its other listeners from receiving the session\'s events'() {
         reportInfo """
-            An application's listener is its own code, and may have a bug. When it throws, the
-            exception goes to the uncaught exception handler, where the application can log and
-            show it, and nothing else changes: the lamp still learns that the session is up, and
-            every other listener still hears every event. A broken listener once left the reading
-            thread dead, and the application waiting for a session that was long running.
+            An application, a program built on oillamp's Java API, registers listeners with
+            `LampDirectory.onEvent`. A listener is the application's own code, and may have a bug.
+            When it throws, the exception goes to the uncaught exception handler, where the
+            application can log and show it, and nothing else changes: the lamp still learns that
+            the session is up, and every other listener still receives every event. A throwing
+            listener once ended the thread that reads the engine's output, and left the
+            application waiting for a session that was long running.
         """
         given: 'the application collects what goes wrong, as a Swing application might log it'
             var failures = new CopyOnWriteArrayList<Throwable>()
@@ -100,14 +103,15 @@ class HoldingALampSpec extends Specification {
 
     def 'An application can leave its lamp running when it closes, until oillamp stop ends it'() {
         reportInfo """
-            An agent with a schedule should keep working after the application that started it
-            is closed. The application says so with leaveRunning(), which tells the engine on its
-            standard input before closing it. The end of the input, which otherwise ends the
-            session, then ends nothing: the sandbox runs on its own, and `oillamp status` says so.
-            It ends as any session does, with `oillamp stop`.
+            An agent with jobs on its schedule should keep working after the application (a
+            program built on oillamp's Java API) that started it is closed. The application says
+            so with `Lamp.leaveRunning()`, which tells the engine on its standard input before
+            closing it. The end of the input, which otherwise ends the session, then ends nothing:
+            the sandbox runs on its own, and `oillamp status` says so. It ends as any session
+            does, with `oillamp stop`.
 
-            Only an application that says so leaves its lamp running. One that closes, or
-            crashes, without a word still takes its sandbox with it.
+            Only an application that calls `leaveRunning()` leaves its lamp running. One that
+            closes, or crashes, without calling it still ends its session and its sandbox.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).onEvent { received << it }
@@ -140,9 +144,11 @@ class HoldingALampSpec extends Specification {
 
     def 'An application that left its lamp running joins it again, and can stop it'() {
         reportInfo """
-            Closed and opened again, an application finds the session it left running with
-            isRunning(), and joins it. The lamp it gets is used as one it started: it hears what
-            the session reports, runs commands in the sandbox, and asks the agent. Closing it
+            Let's consider an application, a program built on oillamp's Java API, that left its
+            lamp running and was closed. Opened again, it finds the session with
+            `LampDirectory.isRunning()`, and joins it with `join()`, which follows the session
+            with `oillamp follow --embedded`. The lamp it gets is used as one it started: it hears
+            what the session reports, runs commands in the sandbox, and asks the agent. Closing it
             only stops following. stop() ends the session, and returns once it has.
         """
         given: 'a lamp left running by an application that has closed'
@@ -172,10 +178,12 @@ class HoldingALampSpec extends Specification {
             received.any { it instanceof LampEvent.Summary }
     }
 
-    def 'Joining a lamp that is not running says so'() {
+    def 'Joining a lamp that is not running reports `OIL-SESSION-001` as an event'() {
         reportInfo """
-            An application may try to join every lamp it knows. One that is not running is not
-            an error to crash on: the lamp never comes up, and the events say why.
+            An application, a program built on oillamp's Java API, may try to join every lamp it
+            knows with `LampDirectory.join()`. A lamp that is not running is not an error to crash
+            on: the joined lamp never comes up, and a `Failure` event with `OIL-SESSION-001` says
+            why.
         """
         given: 'a lamp whose session has ended'
             assert host.oillamp.run('at', host.lampPath().toString()).succeeded()
@@ -192,9 +200,11 @@ class HoldingALampSpec extends Specification {
 
     def 'A command for the sandbox goes over ssh, with each argument arriving exactly as given'() {
         reportInfo """
-            ssh joins its arguments with spaces and hands them to a shell in the sandbox, which
-            would split "hello world" in two and expand a dollar sign. The lamp quotes every
-            argument, so the application passes what it means and the sandbox receives that.
+            An application, a program built on oillamp's Java API, asks `Lamp.commandLine` for the
+            command that runs something in the sandbox. ssh joins its arguments with spaces and
+            hands them to a shell in the sandbox, which would split "hello world" in two and
+            expand a dollar sign. The lamp quotes every argument, so the application passes what
+            it means and the sandbox receives that.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
@@ -216,10 +226,12 @@ class HoldingALampSpec extends Specification {
 
     def 'A command run in the sandbox gets its input, and gives its output, byte for byte'() {
         reportInfo """
-            An application runs a command in the sandbox to move files in and out, or to speak a
-            protocol with a program there, over the command's standard input and output. The
-            lamp starts it with its launcher, as it starts the engine, so a lamp launched some
-            other way, as this one is on a simulated machine, runs it there too.
+            An application, a program built on oillamp's Java API, runs a command in the sandbox
+            with `Lamp.exec` to move files in and out, or to speak a protocol with a program
+            there, over the command's standard input and output. The lamp starts it with its
+            launcher, the part of the lamp that starts processes, as it starts the engine, so a
+            lamp launched some other way, as this one is on a simulated machine, runs it there
+            too.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
@@ -241,11 +253,11 @@ class HoldingALampSpec extends Specification {
 
     def 'An application can show the sandbox\'s desktop, through the socket the lamp names'() {
         reportInfo """
-            An application that wants the player to watch the agent work draws the sandbox's
-            desktop in a window of its own. The desktop is served as VNC on a Unix socket that
-            only this user can open, so no password is needed and nothing listens on the network.
-            The lamp names the socket once the session is running; the engine is the one that
-            knows where it is.
+            An application, a program built on oillamp's Java API such as a game, that wants its
+            user to watch the agent work draws the sandbox's desktop in a window of its own. The
+            desktop is served as VNC on a Unix socket that only this user can open, so no password
+            is needed and nothing listens on the network. `Lamp.desktop()` names the socket once
+            the session is running; the engine is the one that knows where it is.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
@@ -259,11 +271,13 @@ class HoldingALampSpec extends Specification {
             lamp?.close()
     }
 
-    def 'A lamp that is not running has no desktop to show'() {
+    def 'Lamp.desktop() throws for a lamp that is not running'() {
         reportInfo """
-            Asking for the desktop of a lamp that never started, or has ended, is a mistake in
-            the application, and it says so at once instead of handing out a socket path that
-            nothing listens on.
+            Asking for the desktop of a lamp that never started, or has ended, is a mistake in the
+            application, the program built on oillamp's Java API. `Lamp.desktop()` throws
+            `IllegalStateException` at once instead of handing out a socket path that nothing
+            listens on. Here the lamp never started, because oillamp refused its directory, the
+            home directory itself.
         """
         given:
             var lamp = Lamp.at(host.home).launchedBy(host.launcher).start()
@@ -281,10 +295,11 @@ class HoldingALampSpec extends Specification {
 
     def 'An application deletes a lamp it no longer needs through the engine'() {
         reportInfo """
-            An application that lets its user make lamps, one per conversation say, must also
-            let them delete one. Part of a lamp belongs to the sandbox's own users, so the
-            application cannot delete the files itself; the engine can, and the lamp asks it
-            to, reporting what it did as events, like everything else.
+            An application, a program built on oillamp's Java API, that lets its user make lamps,
+            one per conversation say, must also let them delete one. Part of a lamp belongs to the
+            sandbox's own users, so the application cannot delete the files itself; the engine
+            can, and `LampDirectory.remove()` runs `oillamp remove <dir> --yes --embedded`,
+            reporting what it did as events, like everything else.
         """
         given: 'a lamp that ran once, and is closed'
             Lamp.at(host.lampPath()).launchedBy(host.launcher).start().withCloseable {
@@ -306,11 +321,11 @@ class HoldingALampSpec extends Specification {
 
     def 'An application finds the agent\'s home in a lamp, whether the lamp runs or not'() {
         reportInfo """
-            What the agent keeps, such as its harness's saved conversations, is in its home,
-            which is a directory in the lamp named after the agent's id. An application that
-            shows those conversations, even while the sandbox is off, asks the lamp where that
-            home is instead of knowing how oillamp names it. Before the lamp first ran, there is
-            no home yet.
+            What the agent keeps, such as its harness's saved conversations, is in its home, which
+            is a directory in the lamp named after the agent's id. An application that shows those
+            conversations, even while the sandbox is off, asks `Lamp.agentHome` where that home is
+            instead of knowing how oillamp names it. Before the lamp first ran, there is no home
+            yet.
         """
         expect: 'no home before the first start'
             Lamp.agentHome(host.lampPath()).isEmpty()
@@ -327,10 +342,11 @@ class HoldingALampSpec extends Specification {
             Files.exists(home.get().resolve('AGENTS.md'))
     }
 
-    def 'Deleting a directory that is not a lamp says why, and deletes nothing'() {
+    def 'The engine refuses to delete a directory that is not a lamp, and says why'() {
         reportInfo """
-            An application with a wrong path must not delete the wrong thing. The engine refuses
-            a directory that is not a lamp, and says so in an event the application can show.
+            An application, a program built on oillamp's Java API, with a wrong path must not
+            delete the wrong thing. The engine refuses a directory that is not a lamp, leaves its
+            files where they are, and says so in a `Failure` event the application can show.
         """
         given:
             Files.createDirectories(host.lampPath())
@@ -345,12 +361,13 @@ class HoldingALampSpec extends Specification {
             received.any { it instanceof LampEvent.Failure && it.problem().whatHappened().contains('not an oillamp lamp') }
     }
 
-    def 'A lamp that is not running refuses commands, rather than sending them nowhere'() {
+    def 'Lamp.commandLine throws for a lamp that is not running, rather than giving an ssh command that cannot connect'() {
         reportInfo """
-            Here the lamp never started, because oillamp refused its directory. An application
-            that asked it to run a command anyway would otherwise get an ssh process that fails
-            with an error about sockets, which says nothing about the real cause. Refusing at
-            once, with a message saying the lamp is not running, points at what actually went
+            Here the lamp never started, because oillamp refused its directory, the home directory
+            itself. An application, a program built on oillamp's Java API, that asked it for a
+            command line anyway would otherwise get an ssh process that fails with an error about
+            sockets, which says nothing about the real cause. Refusing at once with
+            `IllegalStateException`, saying the lamp is not running, points at what actually went
             wrong, and the application can show the problem the events already carried.
         """
         given:
@@ -370,10 +387,12 @@ class HoldingALampSpec extends Specification {
     def 'The engine is started with the lamp directory, in embedded mode'() {
         reportInfo """
             The lamp runs the same engine a person runs on a terminal, as `oillamp at <dir>`.
-            `--embedded` is what makes it suitable for an application: no windows on the player's
-            desktop, events as JSON the application can read, and a session that ends when the
-            application lets go. Without that one option, the application would get a terminal
-            window it never asked for, and output it could not read.
+            `--embedded` is what makes it suitable for an application, a program built on
+            oillamp's Java API: no windows on the user's desktop, one event per line of JSON on
+            standard output for the application to read, and a session that ends when the
+            application closes the engine's standard input. Without that one option, the
+            application would get a terminal window it never asked for, and output it could not
+            read.
         """
         given:
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
@@ -385,11 +404,12 @@ class HoldingALampSpec extends Specification {
             lamp?.close()
     }
 
-    def 'A lamp that cannot start says why, and does not claim to be running'() {
+    def 'A lamp whose engine refuses to start reports the problem as an event, and does not claim to be running'() {
         reportInfo """
-            The application needs to tell the player what went wrong, in the same words oillamp
-            uses on a terminal: the problem, with its evidence and fixes, arrives as an event.
-            Here the lamp directory is the home directory itself, which oillamp refuses.
+            An application, a program built on oillamp's Java API, needs to tell its user what
+            went wrong, in the same words oillamp uses on a terminal: the problem, with its
+            evidence and fixes, arrives as an event. Here the lamp directory is the home directory
+            itself, which oillamp refuses with `OIL-LAMP-003`.
         """
         given:
             var lamp = Lamp.at(host.home).onEvent { received << it }

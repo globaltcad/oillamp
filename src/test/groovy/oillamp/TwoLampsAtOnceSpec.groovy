@@ -78,12 +78,12 @@ class TwoLampsAtOnceSpec extends Specification {
             inSandbox(second, 'cat', 'secret.txt').out == 'south secret'
     }
 
-    def 'The same lamp cannot be opened twice, and the refusal leaves the running one alone'() {
+    def 'Oillamp refuses to open a lamp that is already running, and leaves the running session alone'() {
         reportInfo """
             One lamp is one sandbox. A second start on a directory that is already running, for
             example from a second window of the same game, would fight the first over its
-            container and its sockets. oillamp refuses it with a problem that says the lamp is
-            busy, and the session already running is not disturbed.
+            container and its sockets. oillamp refuses it with a problem, `OIL-LOCK-001`, that
+            says the lamp is busy, and the session already running is not disturbed.
         """
         given: 'a running lamp'
             first = Lamp.at(north).start()

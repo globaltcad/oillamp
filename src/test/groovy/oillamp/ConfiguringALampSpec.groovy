@@ -23,9 +23,9 @@ class ConfiguringALampSpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'Three mistakes in one file produce three located problems, in one run'() {
+    def 'Oillamp reports all three mistakes in one file at once, each with where it is'() {
         reportInfo """
-            This is the behaviour a configuration file lives or dies by. A user with three
+            This is the behaviour a configuration file depends on most. A user with three
             mistakes should be told about all three, each with the file, the key path, the value
             they wrote and what was expected - so they fix the file once.
 
@@ -82,14 +82,15 @@ class ConfiguringALampSpec extends Specification {
             outcome.console().contains('already used by "llm"')
     }
 
-    def 'An unknown key is an error, not something quietly ignored'() {
+    def 'Oillamp refuses an unknown key in `oillamp.toml` rather than ignoring it'() {
         reportInfo """
             This looks strict, and it is deliberate. The most dangerous typo in this file is one
             in a network rule: a rule key that oillamp silently ignores is a rule that does not
             apply, which is a hole in the sandbox that nothing announces.
 
-            Since oillamp cannot tell a harmless typo from a dangerous one, every unknown key is
-            refused - with the nearest known key suggested, because it is almost always a typo.
+            Since oillamp cannot tell a harmless typo from a dangerous one, it refuses every
+            unknown key with `OIL-CONFIG-002` - and suggests the nearest known key, because it is
+            almost always a typo.
         """
         given:
             var lamp = host.lampPath()
@@ -108,7 +109,7 @@ class ConfiguringALampSpec extends Specification {
             outcome.console().contains("did you mean 'network'?")
     }
 
-    def 'A lamp configuration must say which schema it was written for'() {
+    def 'Oillamp refuses an `oillamp.toml` that does not say which schema it was written for'() {
         reportInfo """
             The version marker is what lets a future oillamp migrate an old file instead of
             guessing at it. Requiring it costs the user one line and buys the project the
@@ -129,11 +130,12 @@ class ConfiguringALampSpec extends Specification {
             outcome.console().contains('schema_version')
     }
 
-    def 'An empty configuration file is reported as missing its schema, not as a crash'() {
+    def 'Oillamp reports an empty `oillamp.toml` as missing its schema_version, not as an internal error'() {
         reportInfo """
             A file with nothing in it is what someone gets by creating oillamp.toml with `touch`.
-            It has no schema_version, and that is what the user is told, like for any file that
-            lacks it.
+            It has no schema_version, and that is what oillamp tells the user, with
+            `OIL-CONFIG-004`, as for any file that lacks it, rather than reporting a bug in itself
+            (`OIL-INTERNAL-001`).
         """
         given: 'a configuration file with nothing in it'
             var lamp = host.lampPath()
@@ -147,15 +149,18 @@ class ConfiguringALampSpec extends Specification {
             !outcome.reported('OIL-INTERNAL-001')
     }
 
-    def 'A forward may not take a port the sandbox uses for its own way out'() {
+    def 'Oillamp refuses a forward on a port the sandbox uses for its own proxy or model relay'() {
         reportInfo """
             Inside the sandbox, 127.0.0.1:3128 is the policy-controlled egress proxy, and
             127.0.0.1:3129 is where the harnesses reach the model service through oillamp. A
-            forward bound to either port would fail to start or - worse - shadow it, so that
+            forward is a fixed tunnel from a port inside the sandbox to one address on the
+            network. A forward bound to either port would fail to start or - worse - take the
+            port's connections in its place, so that
             traffic the user believes is being checked against their rules silently is not, or
             model requests go somewhere else.
 
-            Better to refuse the configuration and say which port to move.
+            Better to refuse the configuration, with `OIL-CONFIG-004`, and say which port to
+            move.
         """
         given:
             var lamp = host.lampPath()
@@ -181,11 +186,13 @@ class ConfiguringALampSpec extends Specification {
             3129 | 'model service through oillamp'
     }
 
-    def 'Pointing the language model at a forward that does not exist is caught'() {
+    def 'Oillamp refuses an `llm.forward` that names a forward that does not exist'() {
         reportInfo """
-            `llm.forward` names one of the `[[network.forwards]]` entries. A typo there would
+            `llm.forward` names one of the `[[network.forwards]]` entries, the fixed tunnels from a
+            port inside the sandbox to one address. A typo there would
             otherwise surface much later, as an agent tool that cannot reach any model and a user
-            with no idea why. The message lists the forwards that do exist.
+            with no idea why. So oillamp refuses it with `OIL-CONFIG-004`, and the message lists
+            the forwards that do exist.
         """
         given:
             var lamp = host.lampPath()
@@ -293,11 +300,11 @@ class ConfiguringALampSpec extends Specification {
             outcome.console().contains('1 rule')
     }
 
-    def 'A file that is not valid TOML is reported as such, with the line that broke it'() {
+    def 'Oillamp reports an `oillamp.toml` that is not valid TOML with a problem code of its own'() {
         reportInfo """
-            Before any of oillamp's own validation can run, the file has to parse. A syntax error
-            gets its own problem code so the user is not left wondering whether they mistyped a
-            key name or a bracket.
+            Before any of oillamp's own validation can run, the file has to parse. Oillamp reports
+            a syntax error with its own problem code, `OIL-CONFIG-001`, so the user is not left
+            wondering whether they mistyped a key name or a bracket.
         """
         given:
             var lamp = host.lampPath()
@@ -388,19 +395,20 @@ class ConfiguringALampSpec extends Specification {
             '''.stripIndent())
             var checked = host.oillamp.run('config', lamp.toString(), 'check')
 
-        then: 'it is refused, with the two values that work'
+        then: 'oillamp refuses it, with the two values that work'
             checked.status() == LampExitStatus.USAGE
             checked.reported('OIL-CONFIG-004')
             checked.console().contains('"floating" or "tiling"')
     }
 
-    def 'Eden AI is only reached through its EU endpoint, whatever the host says'() {
+    def 'Oillamp keeps the sandbox on Eden AI\'s EU endpoint, whatever the host\'s environment says'() {
         reportInfo """
             The team's model traffic has to stay in the EU. Inside the sandbox, pi and opencode
             are set up to use Eden AI's EU endpoint and nothing else. From the outside, two
             things could undo that: the user's own `EDENAI_BASE_URL`, if it were copied in, and a
             tool that ignores those settings. So the endpoint variables are never copied from the
-            host, and the shipped network policy refuses the global endpoint by name.
+            host, and the network policy oillamp writes into a new lamp's `oillamp.toml` refuses
+            the global endpoint, `api.edenai.run`, by name.
 
             The key is not copied either. oillamp holds it on the host and adds it to each model
             request on the way out, so the sandbox has nothing to take elsewhere.
@@ -506,11 +514,13 @@ class ConfiguringALampSpec extends Specification {
             !Files.exists(marker)
     }
 
-    def 'A host value with a line break is refused rather than written into the settings file'() {
+    def 'Oillamp refuses a host value with a line break rather than write it into the sandbox\'s settings file'() {
         reportInfo """
-            Quoting cannot make a line break safe in a file that is read line by line with
-            `source`, and no real setting contains one. So a value with a line break stops the
-            session from starting, with a problem that names the variable and not its value.
+            The sandbox's settings file, `.oillamp/session/runtime.env`, is read with `source` by
+            the container's first process and by every shell of the agent. Quoting cannot make a
+            line break safe in a file that is read line by line, and no real setting contains
+            one. So for a value from the host's environment with a line break, oillamp refuses
+            to start the session, with a problem that names the variable and not its value.
         """
         given:
             host.machine { it.environmentVariable('EDENAI_MAX_TOKENS', 'first-line\ntouch /tmp/pwned') }
@@ -565,13 +575,17 @@ class ConfiguringALampSpec extends Specification {
             runtimeEnv.contains("OILLAMP_FORWARDS='llm:8000'")
     }
 
-    def 'Host access is off unless asked for, and turning it on without requirements is refused'() {
+    def 'Host access is off unless asked for, and oillamp refuses to turn it on without requirements'() {
         reportInfo """
-            Reaching the host is off unless a lamp says otherwise, so a lamp that never mentions
+            Host access gives the agent tools that reach the user's computer; a checker, a
+            separate model call, judges each request against the requirements, the user's own
+            words, in `host_access.requirements`. Reaching the host is off unless a lamp says
+            otherwise, so a lamp that never mentions
             it behaves exactly as it did before the feature existed. Turning it on without saying
             what the agent may not do would leave the checker with nothing to judge by, and a
             checker with nothing to judge by says yes. So oillamp refuses that, and names the key
-            to fill in, rather than starting a lamp with an open door.
+            to fill in, rather than start a lamp whose checker allows everything. It refuses a
+            relative path in `host_access.roots`, the folders the agent may reach, as well.
 
             The checker's model is not one of those keys. Without one, requests are judged by the
             model the agent answers with, which is known only once a session starts with one.
@@ -605,6 +619,8 @@ class ConfiguringALampSpec extends Specification {
 
     def 'The requirements are one piece of text, written over several lines'() {
         reportInfo """
+            With host access on, a checker, a separate model call, judges each request the agent
+            makes of the user's computer against the requirements in `host_access.requirements`.
             The requirements are the user's own words, not a checklist, so they are a single
             multi-line string. Both TOML spellings work: the literal one, which keeps a backslash
             as a backslash, is the one to use for paths and regular expressions.

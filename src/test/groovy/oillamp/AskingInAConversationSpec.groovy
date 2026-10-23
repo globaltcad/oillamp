@@ -28,7 +28,8 @@ import java.util.concurrent.TimeUnit
  *
  *  <p>The stand-in pi here keeps its conversations the way pi does, in files in the agent's home,
  *  so each scenario reads the result back through {@code Lamp.conversations}, as an application
- *  would.
+ *  would: a program built on oillamp, such as a desktop app, that uses oillamp's Java API in
+ *  {@code dev.lamp}.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class AskingInAConversationSpec extends Specification {
@@ -68,11 +69,14 @@ class AskingInAConversationSpec extends Specification {
         }
     }
 
-    def 'A question with no place starts a new conversation, which the application then finds'() {
+    def 'A question asked without naming a conversation starts a new one, and the run says which'() {
         reportInfo """
-            Asked without saying where, a question starts a conversation of its own. The run says
-            which conversation that was, so an application can show it, and it is known by its
-            first question.
+            Let's consider `oillamp ask` given only a question, with no `--in` to name a
+            conversation. The session starts a conversation of its own for it. The event that ends
+            the run, `RunFinished`, carries that conversation's id, so that an application (a
+            program built on oillamp, such as a desktop app, that uses oillamp's Java API) can
+            find it with `Lamp.conversation` and show it. The conversation takes its first
+            question as its title.
         """
         when:
             var colourAsked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
@@ -86,11 +90,14 @@ class AskingInAConversationSpec extends Specification {
             questionsAndAnswers(conversation.line()) == ['Name a colour', 'Blue.']
     }
 
-    def 'Asking in a conversation continues it where it stands, with the question as it was written'() {
+    def 'Asking in a conversation adds the question after its last answer, exactly as written'() {
         reportInfo """
-            The next question in a chat goes after the last answer. What a person asks goes as
-            they wrote it, never wrapped in anything, because that is what the chat shows as
-            their message. Only a scheduled job's run gets the agent's notes put in front of it.
+            The next question in a chat goes after the last answer. Here it names the conversation
+            with `--in` and only the first 13 characters of its id. What a person asks reaches the
+            agent as they wrote it, never wrapped in anything, because that is what the chat shows
+            as their message. Only a scheduled job's run gets the agent's notes put in front of
+            its prompt; this lamp has its schedule on, so the scenario sees that a question asked
+            in a conversation does not.
         """
         given:
             var colourAsked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
@@ -114,9 +121,10 @@ class AskingInAConversationSpec extends Specification {
 
     def 'Asking instead of an earlier question keeps the old one as a branch of its own'() {
         reportInfo """
-            A person who regrets a question asks something else in its place. Nothing is lost:
-            the old question and everything after it stay as a branch, and the conversation now
-            stands on the new one.
+            A person who regrets a question asks something else in its place, here through the
+            Java API with `LampPrompt.insteadOf`. Nothing is lost: pi keeps a conversation as a
+            tree, so the old question and everything after it stay on a branch of their own, and
+            the conversation's current line now runs through the new question.
         """
         given:
             var colourAsked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
@@ -162,11 +170,16 @@ class AskingInAConversationSpec extends Specification {
             tree.children(blue.id())*.text() == ['Name a fruit', 'Name a tree']
     }
 
-    def 'A place that is not there is refused before anything is saved or asked'() {
+    def 'Oillamp refuses a question aimed at a place in a conversation that does not exist or does not fit'() {
         reportInfo """
-            A conversation that was deleted, an entry that is not in it, or an answer given where a
-            question is needed: each is said at once, in words that say what to give instead, and
-            neither the agent nor the history is touched.
+            `oillamp ask` names where a question goes with `--in` (a conversation's id) and
+            `--after` or `--instead-of` (an entry's id in it). Oillamp refuses five wrong places:
+            a conversation that is not there, an entry that is not in it (both
+            `OIL-CONVERSATION-001`), `--after` a question, where only an answer fits,
+            `--instead-of` an answer, where only a question fits, and an entry without `--in`. For
+            the two that do not fit, the problem says which option to give instead. Oillamp
+            refuses before it saves a snapshot to the lamp's history or wakes the agent, so the
+            scenario sees no new prompt and no new snapshot.
         """
         given:
             var colourAsked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
@@ -202,11 +215,12 @@ class AskingInAConversationSpec extends Specification {
             snapshotsInTheHistory() == snapshots
     }
 
-    def 'A question says what it needs when it is made'() {
+    def 'A `LampPrompt` that could never be asked cannot be made'() {
         reportInfo """
-            An application builds its questions in code. One that could never be asked, such as an
-            entry with no conversation to be in, is refused where it is made, not later by the
-            session.
+            An application, a program built on oillamp's Java API, builds its questions in code as
+            `LampPrompt` values. Its constructor throws `IllegalArgumentException` for one that
+            could never be asked, such as an entry with no conversation to be in, or a blank
+            question, so the mistake shows where it is made, not later in the session.
         """
         when:
             new LampPrompt('x', Optional.empty(), Optional.of('a1'), Optional.empty())

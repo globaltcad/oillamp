@@ -131,7 +131,7 @@ class TravellingBackInTimeSpec extends Specification {
             snapshots*.kind() == [LampSaveKind.STARTUP]
     }
 
-    def 'With autosave.shutdown on, a session that changed the lamp is saved again as it ends'() {
+    def 'With autosave.shutdown on, oillamp saves the lamp again at the end of a session that changed it'() {
         reportInfo """
             The end of a session is the other moment worth keeping: it is the work the agent did.
             The save runs after the container has stopped, so nothing is writing while it reads.
@@ -157,9 +157,10 @@ class TravellingBackInTimeSpec extends Specification {
 
     def 'A save by hand keeps what the person wrote, and saves nothing when nothing changed'() {
         reportInfo """
-            A person saves by hand to mark a moment, such as "before the upgrade", and will look
-            for that moment by what they wrote. A second save with nothing changed would only
-            add a line to the history that is identical to the one before, so there is none.
+            A person saves by hand with `oillamp save` to mark a moment, such as "before the
+            upgrade", and will look for that moment by what they wrote. A second save with
+            nothing changed would only add a line to the history that is identical to the one
+            before, so oillamp makes none.
         """
         given:
             var lamp = aLampThatHasRun()
@@ -221,12 +222,12 @@ class TravellingBackInTimeSpec extends Specification {
             bareSnapshot.message() == '--'
     }
 
-    def 'A restore brings back exactly what was saved, and removes what came after'() {
+    def 'Oillamp\'s `restore` brings back exactly what was saved, and removes what came after'() {
         reportInfo """
             The whole point of a snapshot is that the agent's home comes back as it was: every
             byte, and the things git on its own would lose. A project the agent cloned has its
-            own .git directory, which a plain `git add` would store as a bare pointer, losing the
-            project. A private key must come back as 0600, or ssh refuses to use it. A link must
+            own .git directory, which a plain `git add` would store only as a reference to
+            another repository, without its files, losing the project. A private key must come back as 0600, or ssh refuses to use it. A link must
             come back as a link, an empty directory as a directory, and a directory the agent made
             read-only, as Go does with its module cache, must neither stop the restore nor come
             back writable.
@@ -292,10 +293,10 @@ class TravellingBackInTimeSpec extends Specification {
             !Files.exists(home.resolve('workspace/junk.bin'))
     }
 
-    def 'A restore can itself be undone'() {
+    def 'Oillamp saves the lamp before it restores a snapshot, so the restore can be undone'() {
         reportInfo """
-            Restoring the wrong snapshot must not be a second disaster. So a restore first saves
-            the lamp as it is, and says how to go back to that. The history only ever grows: the
+            Restoring the wrong snapshot must not be a second disaster. So `oillamp restore` first
+            saves the lamp as it is, and prints the command that goes back to that. The history only ever grows: the
             restore adds a snapshot of its own rather than removing the ones after its target.
         """
         given:
@@ -331,7 +332,7 @@ class TravellingBackInTimeSpec extends Specification {
             snapshots*.kind().take(4) == [LampSaveKind.RESTORE, LampSaveKind.RESTORE, LampSaveKind.BEFORE_RESTORE, LampSaveKind.IDLE]
     }
 
-    def 'A restore brings back the configuration too'() {
+    def 'Oillamp\'s `restore` brings back the lamp\'s `oillamp.toml` too'() {
         reportInfo """
             oillamp.toml says what the sandbox may reach and how it looks. A snapshot that brought
             back the agent's home but kept today's network rules would not be the lamp as it was.
@@ -355,10 +356,11 @@ class TravellingBackInTimeSpec extends Specification {
             mode(config) == 'rw-------'
     }
 
-    def 'A restore is refused while the session runs, but a save is not'() {
+    def 'Oillamp refuses to restore while a session runs, but saves while one runs'() {
         reportInfo """
             Replacing the agent's home under running programs would leave them working in files
-            that changed beneath them, so a restore needs the session stopped, and says so.
+            that changed beneath them, so oillamp restores only while no session runs, and
+            otherwise refuses with `OIL-HISTORY-005`.
 
             Saving is different: the moment a person most wants a snapshot is while the session
             runs, just before they let the agent try something risky. That save is marked as a
@@ -389,11 +391,12 @@ class TravellingBackInTimeSpec extends Specification {
             made.session().isPresent()
     }
 
-    def 'A snapshot that does not exist is named in the refusal'() {
+    def 'Oillamp refuses to restore a snapshot id it does not know, and points to `oillamp history`'() {
         reportInfo """
             A restore replaces the agent's home, so it happens only for a snapshot oillamp is
             sure the person meant: a unique beginning of an id, at least four characters long.
-            Anything else is refused with the reason and a pointer to the list.
+            Oillamp refuses anything else with `OIL-HISTORY-001`, the reason, and the command
+            that lists the snapshots, `oillamp history`.
         """
         given:
             var lamp = aLampThatHasRun()
@@ -412,8 +415,9 @@ class TravellingBackInTimeSpec extends Specification {
 
     def 'An application saves, lists and restores through the Lamp API'() {
         reportInfo """
-            An application that holds lamps, such as a desktop app with an agent in each, offers
-            the same three things with its own buttons. It gets values back rather than text to
+            An application, a program built on oillamp's Java API that holds lamps, such as a
+            desktop app with an agent in each, offers saving, listing and restoring with its own
+            buttons, through `LampDirectory.save`, `history` and `restore`. It gets values back rather than text to
             parse, and a failure as an exception that carries the full problem.
         """
         given:
@@ -444,11 +448,10 @@ class TravellingBackInTimeSpec extends Specification {
 
     def 'An application switches the saves on and off, and only those lines of the file change'() {
         reportInfo """
-            An application's settings page shows when the lamp saves itself, and changes it. It
-            reads and writes the four values under [autosave] through the Lamp API, which runs
-            `oillamp autosave`. The file is also the user's, so their comments and the alignment
-            of the values stay. A session reads the file only as it starts, so writing is refused
-            while one runs.
+            An application, a program built on oillamp's Java API, has a settings page that shows
+            when the lamp saves itself, and changes it. It reads and writes the four values under
+            [autosave] with `LampDirectory.autosave`, which runs `oillamp autosave`. The file is
+            also the user's, so their comments and the alignment of the values stay.
         """
         given: 'a lamp with the file a new lamp gets'
             var lamp = aLampThatHasRun()
@@ -487,7 +490,12 @@ class TravellingBackInTimeSpec extends Specification {
             wrong.console().contains('expected startup, shutdown, before-run or after-run')
     }
 
-    def 'Switching the saves is refused while a session runs'() {
+    def 'LampDirectory.autosave refuses to change the saves while a session runs'() {
+        reportInfo """
+            A session reads `oillamp.toml` only as it starts, so a change to `[autosave]` would not
+            reach a running session. So `LampDirectory.autosave` throws `LampFailedException`,
+            with the status `LAMP_BUSY`, while a session runs, and the file stays as it was.
+        """
         given:
             var lamp = aLampThatHasRun()
             var settings = Lamp.at(lamp).launchedBy(host.launcher)
@@ -503,7 +511,7 @@ class TravellingBackInTimeSpec extends Specification {
     }
 
     @IgnoreIf({ !['/usr/bin/git', '/bin/git', '/usr/local/bin/git'].any { Files.isExecutable(Path.of(it)) } })
-    def 'git itself can read the history'() {
+    def 'The program git itself can read a lamp\'s history'() {
         reportInfo """
             oillamp writes the history in git's format itself, rather than by running git, so
             that a nested .git directory is stored like any other. It is still an ordinary

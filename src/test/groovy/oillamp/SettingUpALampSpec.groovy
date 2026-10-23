@@ -30,7 +30,7 @@ class SettingUpALampSpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'A dry run shows the user everything that would happen, and changes nothing'() {
+    def 'Oillamp\'s `at --dry-run` shows the user everything that would happen, and changes nothing'() {
         reportInfo """
             oillamp installs system packages, edits /etc/subuid - the file that grants a user the
             block of spare user-id numbers rootless containers need - writes SSH keys, and creates
@@ -70,7 +70,7 @@ class SettingUpALampSpec extends Specification {
             outcome.console().contains('dry run')
     }
 
-    def 'A dry run answers the question even when oillamp could not carry the plan out'() {
+    def 'Oillamp\'s `at --dry-run` prints the plan even when sudo could not be used to carry it out'() {
         reportInfo """
             Found by running the real binary: on a machine where sudo would need a password and
             there is no terminal to ask in, --dry-run was refusing with "cannot run sudo".
@@ -190,7 +190,7 @@ class SettingUpALampSpec extends Specification {
             Files.readString(agentHome.resolve('AGENTS.md')).contains('# This machine')
     }
 
-    def 'Removing a lamp takes what oillamp made, and needs to be asked twice'() {
+    def 'Oillamp\'s `remove` command deletes only what oillamp made, and only when given `--yes`'() {
         reportInfo """
             A lamp cannot be deleted with `rm -rf`. Part of one belongs to the sandbox's second
             user - the infra sockets and the recordings, which is what stops the agent tampering
@@ -244,7 +244,7 @@ class SettingUpALampSpec extends Specification {
                     .errors().first().whatHappened().contains('not an oillamp lamp')
     }
 
-    def 'A lamp somebody already tried to rm -rf can still be removed'() {
+    def 'Oillamp\'s `remove` command still removes a lamp that someone already half deleted with `rm -rf`'() {
         reportInfo """
             This is the sequence that actually happens. A user reaches for `rm -rf` first, it
             deletes lamp.json and then stops on the sockets it has no permission over, and what is
@@ -343,7 +343,7 @@ class SettingUpALampSpec extends Specification {
             Files.isSymbolicLink(link)
     }
 
-    def 'Several lamps are removed at once, and only if every one of them can be'() {
+    def 'Oillamp\'s `remove` command removes several lamps at once, and only if it can remove every one of them'() {
         reportInfo """
             Lamps made for experiments pile up, and the natural way to clean them up is a shell
             pattern: `oillamp remove ~/lamps/test* --yes`. The shell expands that into several
@@ -393,7 +393,7 @@ class SettingUpALampSpec extends Specification {
             removed.console().contains('All 2 lamps were removed')
     }
 
-    def 'A command that works on one lamp refuses several, rather than quietly using the first'() {
+    def 'Oillamp refuses several lamps for a command that works on one, rather than quietly using the first'() {
         reportInfo """
             `oillamp stop ~/lamps/test*` looks as if it stops every matching lamp. Stopping the
             first and ignoring the rest would leave the user believing the others were stopped.
@@ -408,11 +408,12 @@ class SettingUpALampSpec extends Specification {
             outcome.errors().first().whatHappened().contains('works on one lamp, but was given 2')
     }
 
-    def 'A lamp whose sandbox is still up is not removed out from under it'() {
+    def 'Oillamp\'s `remove` command refuses to remove a lamp whose container still exists'() {
         reportInfo """
-            Deleting the agent's home while a container has it mounted would leave the session
-            working in directories that no longer exist, and the container would outlive everything
-            that describes it, leaving a sandbox with nothing left to stop it with.
+            Let's consider a lamp whose container podman still knows about. Deleting the agent's
+            home while a container has it mounted would leave the session working in directories
+            that no longer exist, and the container would outlive everything that describes it,
+            leaving a sandbox with nothing left to stop it with.
 
             The answer names `oillamp stop`, which is also what clears up a container left behind
             by a supervisor that died. Both cases need the same instruction, so they get the same
@@ -479,15 +480,15 @@ class SettingUpALampSpec extends Specification {
             Files.readString(lamp.resolve('.oillamp/keys/client_ed25519')) == keyBefore
     }
 
-    def 'A directory that already holds something else is refused'() {
+    def 'Oillamp refuses to make a lamp in a directory that already holds other files, unless given `--init`'() {
         reportInfo """
             `oillamp at ~/my-project` is an easy thing to type by mistake. Since a lamp takes
             ownership of its directory, doing that to a directory the user is already using would
             scatter state through it and, worse, expose part of it to the agent.
 
-            So a directory that already has something in it, and is not already a lamp, is
-            refused - but the refusal tells the user what is in the way and how to go ahead
-            deliberately if that is what they meant.
+            So oillamp refuses a directory that already has something in it and is not already a
+            lamp, with `OIL-LAMP-002` - but the refusal tells the user what is in the way and how
+            to go ahead deliberately, with `--init`, if that is what they meant.
         """
         given: 'a directory with the user\'s own files in it'
             var directory = Files.createDirectories(tmp.resolve('home/dev/my-project'))
@@ -521,7 +522,7 @@ class SettingUpALampSpec extends Specification {
             Files.readString(directory.resolve('README.md')) == 'my actual project'
     }
 
-    def 'The home directory itself and system directories are refused outright'() {
+    def 'Oillamp refuses outright to make a lamp of the home directory itself or of a system directory'() {
         reportInfo """
             A lamp attaches part of its own directory to the sandbox as the agent's home. Making
             the user's entire home directory into a lamp would therefore hand the agent every
@@ -542,7 +543,7 @@ class SettingUpALampSpec extends Specification {
         when: 'or at a system directory'
             var system = host.oillamp.run('at', '/etc/oillamp')
 
-        then: 'that is refused too'
+        then: 'oillamp refuses that too'
             system.reported('OIL-LAMP-003')
             system.errors().first().whatHappened().contains('/etc')
     }
@@ -606,15 +607,15 @@ class SettingUpALampSpec extends Specification {
             !podmanRun.contains('.oillamp/sockets:/oillamp/sockets')
     }
 
-    def 'A lamp whose socket directory was replaced by a link is refused, and the link is not followed'() {
+    def 'Oillamp refuses to start a lamp whose socket directory was replaced by a link, and does not follow the link'() {
         reportInfo """
             Before each socket directory was attached on its own, the agent could replace one with
             a symbolic link to any directory of the user's, such as their home or ~/.ssh. The next
             session would then have handed that directory to the infrastructure user, and attached
             it to the container.
 
-            A lamp in that state must not start. oillamp refuses, names the link and where it
-            points, and says how to remove it, without touching either.
+            A lamp in that state must not start. oillamp refuses with `OIL-LAMP-011`, names the
+            link and where it points, and says how to remove it, without touching either.
         """
         given: 'a lamp that has run before'
             var lamp = host.lampPath()
@@ -645,7 +646,7 @@ class SettingUpALampSpec extends Specification {
             Files.deleteIfExists(infra)
     }
 
-    def 'A lamp on a filesystem that cannot hold Unix sockets is refused before anything is created'() {
+    def 'Oillamp refuses a lamp on a filesystem that cannot hold Unix sockets, before it creates anything'() {
         reportInfo """
             Every channel between this machine and the sandbox - the shell, the desktop picture,
             the network proxy - is carried by a Unix domain socket living inside the lamp
@@ -654,7 +655,8 @@ class SettingUpALampSpec extends Specification {
             as NFS cannot, and neither can the FAT filesystems used on most USB sticks.
 
             Discovering that halfway through starting a container would be a baffling failure, so
-            it is checked up front, where the message can name the filesystem and suggest a fix.
+            oillamp checks it up front and reports `OIL-LAMP-005`, where the message can name the
+            filesystem and suggest a fix.
         """
         given: 'a lamp directory on a network share'
             host.machine { it.lampFilesystemType('nfs') }
@@ -668,12 +670,12 @@ class SettingUpALampSpec extends Specification {
             !Files.exists(host.lampPath())
     }
 
-    def 'A lamp written by a newer oillamp is left alone rather than damaged'() {
+    def 'Oillamp leaves a lamp written by a newer oillamp alone rather than damage it'() {
         reportInfo """
-            A lamp holds the agent's accumulated work. If a future version changes the layout,
-            an older oillamp reading it could misinterpret or destroy that. So the identity file
-            carries a schema version, and a version from the future is a hard stop with the only
-            useful advice there is: upgrade.
+            A lamp holds the agent's accumulated work. If a future version changes the layout, an
+            older oillamp reading it could misinterpret or destroy that. So the identity file
+            carries a schema version, and for a version from the future oillamp stops with
+            `OIL-LAMP-004` and the only useful advice there is: upgrade.
         """
         given: 'a lamp created by a later version of oillamp'
             var lamp = Files.createDirectories(host.lampPath())
@@ -709,7 +711,7 @@ class SettingUpALampSpec extends Specification {
         file
     }
 
-    def 'Recordings are listed with what they cost, and only oillamp\'s own are counted'() {
+    def 'Oillamp\'s `recordings` command lists how long each recording ran and its size, and invents no length for other files'() {
         reportInfo """
             A recording is named after the session that made it, and wf-recorder writes to it until
             it is interrupted. So the file already carries both ends of its own life: the name is
@@ -755,7 +757,7 @@ class SettingUpALampSpec extends Specification {
             missing.errors().first().whyItMatters().contains('20260115-100000')
     }
 
-    def 'A recording is played by naming its session, with --open or --open='() {
+    def 'Oillamp\'s `recordings --open <session>` opens that session\'s recording in the desktop\'s video player'() {
         reportInfo """
             `oillamp recordings <dir> --open <session>` hands the recording of that session to the
             desktop's own video player, the way opening the file by double-click would.
@@ -778,11 +780,13 @@ class SettingUpALampSpec extends Specification {
             joined.console().contains('opened ' + recording)
     }
 
-    def 'Pruning now applies the same retention the next session would'() {
+    def 'Oillamp\'s `recordings --prune` deletes now what the next session\'s retention would delete'() {
         reportInfo """
-            Retention already runs at the start of every session, because a lamp used day after day
-            would otherwise fill a laptop quietly. But a user who wants the disk back today should
-            not have to start a sandbox to get it, so --prune brings the same decision forward.
+            Retention, the rules `recording.max_age_days` and `recording.max_total_gb` in
+            `oillamp.toml`, already runs at the start of every session, because a lamp used day
+            after day would otherwise fill the host's disk without a warning. But a user who wants
+            the disk back today should not have to start a sandbox to get it, so --prune brings
+            the same decision forward.
 
             The same decision, not a second one: both call the same function on the same
             configuration. Two implementations of "keep 14 days" would eventually disagree about
@@ -889,12 +893,13 @@ class SettingUpALampSpec extends Specification {
         return file
     }
 
-    def 'A directory whose path contains a colon is refused, because podman could not mount it'() {
+    def 'Oillamp refuses a lamp directory whose path contains a colon, because podman could not mount it'() {
         reportInfo """
             Parts of the lamp are mounted into the sandbox with `podman run --volume
             HOST:CONTAINER`, which separates its parts with colons. A colon in the lamp's path
             would be read as one of those separators, and the sandbox would get the wrong
-            directories or fail to start with a message about something else.
+            directories or fail to start with a message about something else. So oillamp refuses
+            such a path with `OIL-LAMP-001` before it creates anything.
         """
         given:
             var lamp = host.home.resolve('lamps').resolve('feature:x')

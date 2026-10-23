@@ -32,11 +32,13 @@ class EmbeddingASessionSpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'An embedded session opens no windows, and ends when the application lets go of it'() {
+    def 'An embedded session opens no windows, and ends when the application closes oillamp\'s standard input'() {
         reportInfo """
-            A window popping up on the player's desktop would be a surprise, and a terminal that
-            nobody asked for would be closed, so neither opens. The session is up as soon as the
-            sandbox answers.
+            Let's consider an application, such as a game that hosts an agent, that starts
+            `oillamp at <dir> --embedded` as a child process and has its own ways into the
+            sandbox. A window popping up on the player's desktop would be a surprise, and a
+            terminal that nobody asked for would be closed, so oillamp opens neither. The session
+            is up as soon as the sandbox answers.
 
             It ends when oillamp's standard input closes. That happens when the application is
             done, and also when it crashes, because the operating system closes the pipe for it.
@@ -61,7 +63,7 @@ class EmbeddingASessionSpec extends Specification {
             opened.command().toList().contains('-T')
             opened.command().any { it.contains('UNIX-CONNECT:') && it.endsWith('/ssh.sock') }
 
-        and: 'it ended because the application let go, and left nothing behind'
+        and: 'it ended because the application closed its standard input, and removed its session file'
             outcome.events().any { it instanceof LampEvent.Summary
                                    && it.lines().toList().any { line ->
                                           line.contains('asked to stop by the application') } }
@@ -70,9 +72,11 @@ class EmbeddingASessionSpec extends Specification {
 
     def 'An embedded oillamp reports on standard output in JSON, one event per line, and nothing else'() {
         reportInfo """
-            The application reads standard output to show the player what the sandbox is doing.
-            A banner, a coloured line or a progress spinner in between would be a line it cannot
-            read, so in embedded mode every line is an event, and every event is a line.
+            Let's consider an application, such as a game, that starts `oillamp at <dir>
+            --embedded` as a child process and reads its standard output to show the player what
+            the sandbox is doing. A banner, a coloured line or a progress spinner in between would
+            be a line it cannot read, so in embedded mode every line is one event written as JSON,
+            which `LampEvent.fromJson` reads back, and every event is a line.
         """
         when:
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--embedded')
@@ -86,12 +90,14 @@ class EmbeddingASessionSpec extends Specification {
             read.collect { it.get() } == outcome.events().toList()
     }
 
-    def 'An embedded session is not given up for want of a terminal'() {
+    def 'Oillamp does not end an embedded session because no terminal connects to it'() {
         reportInfo """
-            A normal session that no terminal connects to is ended after
-            `timeouts.terminal_connect_seconds`, because nobody is in it. An embedded session never
+            Oillamp ends a normal session that no terminal connects to after
+            `timeouts.terminal_connect_seconds`, with `OIL-TERM-002`, because nobody is in it. An
+            embedded session, started by an application with `oillamp at <dir> --embedded`, never
             has that terminal, so the timeout must not apply, or every embedded session would end
-            after a minute.
+            after a minute. Here the timeout is one second, and the application keeps the session
+            for three.
         """
         given: 'a short terminal timeout, and an application that keeps the session longer'
             host.machine { it.clockRuns().applicationLeavesAfter(Duration.ofSeconds(3)) }
@@ -111,9 +117,10 @@ class EmbeddingASessionSpec extends Specification {
 
     def 'An embedded session needs no graphical session on the host'() {
         reportInfo """
-            An embedded session opens no windows, so it has no use for the host's display. An
-            application may well run where there is none: under tmux, on a server, over a plain
-            SSH login. Refusing to start there would be refusing for a reason that does not apply.
+            An embedded session, started by an application with `oillamp at <dir> --embedded`,
+            opens no windows, so it has no use for the host's display. An application may well run
+            where there is none: under tmux, on a server, over a plain SSH login. Refusing to
+            start there would be refusing for a reason that does not apply.
         """
         given: 'a machine with no desktop session'
             host.machine { it.noGraphicalSession() }

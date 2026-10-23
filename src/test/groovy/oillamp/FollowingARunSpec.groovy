@@ -67,10 +67,13 @@ class FollowingARunSpec extends Specification {
 
     def 'An application follows a run as it happens: the answer as it is written, and each tool as it runs'() {
         reportInfo """
-            The events of a run come to every listener of the lamp, whoever asked: which
-            conversation it is in, each tool the agent runs and what it put out, what the model
-            thinks, the answer piece by piece, and the complete message. Put together, the pieces
-            are exactly the answer the run ends with.
+            Let's consider an application, a program such as a chat app that holds its lamp
+            through oillamp's Java API, `Lamp`. It hands over a question with `Lamp.send`, which
+            returns the run that will answer it at once. The events of that run come to every
+            listener the lamp was given with `onEvent`, whoever asked: which conversation it is
+            in, each tool the agent runs and what it put out, what the model thinks, the answer
+            piece by piece, and the complete message. Put together, the pieces are exactly the
+            answer the run ends with.
         """
         when:
             var run = held.send(LampPrompt.fresh('files, please'))
@@ -98,10 +101,11 @@ class FollowingARunSpec extends Specification {
             finished.snapshot().isPresent()
     }
 
-    def 'The agent\'s status says what it works on, and what waits'() {
+    def 'Lamp.agentStatus names the run the agent works on, and the runs waiting behind it'() {
         reportInfo """
-            An application shows whether the agent is busy, for example to mark a question as
-            waiting. The status names the run in progress and the ones behind it.
+            An application, a program built on oillamp's Java API, shows whether the agent is
+            busy, for example to mark a question as waiting. `Lamp.agentStatus` names the run in
+            progress and the ones queued behind it, and says the agent is idle once they are done.
         """
         when:
             var first = held.send(LampPrompt.fresh('wait for me'))
@@ -122,11 +126,14 @@ class FollowingARunSpec extends Specification {
             !idle.busy()
     }
 
-    def 'A run can be cancelled, and one still waiting then never starts'() {
+    def 'Lamp.cancel stops the run in progress, and a run still waiting never reaches the agent'() {
         reportInfo """
-            The stop button: the run in progress is told to stop, and what it did until then is
-            saved as for any run, marked as cancelled. A run still waiting is taken out of the
-            queue, and the agent never sees it. Cancelling when nothing runs says so.
+            An application, a program built on oillamp's Java API, has a stop button that calls
+            `Lamp.cancel`. The session tells the run in progress to stop, and saves what it did
+            until then in a snapshot, as for any run, with a message that says it was cancelled.
+            Given a run's id, `Lamp.cancel` takes a run still waiting out of the queue, and the
+            agent never sees its question. Called when nothing runs, it throws
+            `LampFailedException`, saying the agent is not working on anything.
         """
         when:
             var working = held.send(LampPrompt.fresh('forever and ever'))
@@ -153,10 +160,12 @@ class FollowingARunSpec extends Specification {
             failed.problem().whatHappened().contains('the agent is not working on anything')
     }
 
-    def 'From a terminal, a question can be handed over without waiting, and cancelled'() {
+    def 'From a terminal, `oillamp ask --no-wait` hands over a question and `oillamp cancel` stops its run'() {
         reportInfo """
-            The same, for a person or a script: oillamp ask --no-wait says which run will answer and
-            returns, oillamp status says what the agent is doing, and oillamp cancel stops it.
+            A person or a script at a terminal can follow and stop a run too: `oillamp ask
+            --no-wait` says which run will answer and returns at once, `oillamp status` says which
+            run the agent is working on, and `oillamp cancel` stops it. Cancelling again, when
+            nothing runs, is reported as `OIL-SESSION-003`.
         """
         when:
             var asked = host.oillamp.run('ask', lamp.toString(), '--no-wait', 'forever, please')

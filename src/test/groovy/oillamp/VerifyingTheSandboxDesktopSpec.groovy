@@ -443,7 +443,8 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
             the screen. wf-recorder does not survive that: it lost the screen with "invalid buffer
             dimensions", stayed alive, and wrote its last picture thousands of times a second at
             four cores' worth of CPU, while the session reported itself healthy. The agent can
-            reach the VNC socket too. So while the desktop is recorded, wayvnc refuses.
+            reach the VNC socket too. So while the desktop is recorded, wayvnc refuses. Genies, a
+            desktop app built on oillamp, asks for its panel's size this way.
         """
         when: 'a viewer asks for 800x500, as Genies does for its panel'
             var answer = askForSize(800, 500)
@@ -504,9 +505,9 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
             satisfied perfectly. The entrypoint wrote ready.json for a dead VNC server, and the
             host believed it.
 
-            Note where this scenario sits: right after the recording scenario, which stops the container. The
-            sockets directory is therefore in exactly the state that broke - full of the previous
-            session's files - and no setup is needed to arrange it.
+            Here the lamp's container has just been stopped with `podman stop`, so its sockets
+            directory is in exactly the state that broke - full of the previous session's files -
+            and no setup is needed to arrange it.
         """
         given: 'the previous session left its socket and its readiness file behind'
             var vncSocket = lamp.resolve('sockets/infra/vnc.sock')
@@ -552,11 +553,13 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
 
     def 'Unrecorded, the desktop takes the size a viewer asks for, and its windows follow'() {
         reportInfo """
-            Genies can show the desktop in a panel next to the chat, at the panel's size. It asks
-            wayvnc, which changes the size of sway's screen. sway sizes a fullscreen window to the
-            screen by itself. A floating window it leaves where it was, which on a smaller screen
-            can be out of reach, so keep-windows-on-screen moves it back, and when the screen grows
-            again, returns it to where it was. `lamp info` tells the agent the size it has now.
+            Genies, a desktop app built on oillamp, can show the desktop in a panel next to the
+            chat, at the panel's size. It asks wayvnc, which changes the size of sway's screen.
+            sway sizes a fullscreen window to the screen by itself. A floating window it leaves
+            where it was, which on a smaller screen can be out of reach, so the helper
+            keep-windows-on-screen, which runs in the sandbox, moves it back, and when the screen
+            grows again, returns it to where it was. `lamp info` tells the agent the size it has
+            now.
 
             The window here is xev, an X11 program, opened near the bottom right of 1280x720, and
             foot, fullscreen.
@@ -602,7 +605,7 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
             inSandbox('pkill -x xev; pkill -x foot; true')
     }
 
-    def 'lamp show reaches the session on the host'() {
+    def 'The `lamp show` command reaches the session on the host'() {
         reportInfo """
             `lamp show` sends one line of JSON to /oillamp/sockets/host/desktop.sock. That
             directory is the host's, mounted read-only into the sandbox, and a socket in it is

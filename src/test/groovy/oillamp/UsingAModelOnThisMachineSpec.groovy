@@ -42,10 +42,11 @@ class UsingAModelOnThisMachineSpec extends Specification {
 
     def 'A lamp pointed at Ollama starts, and its harness is not told to keep only EU models'() {
         reportInfo """
-            Ollama answers OpenAI-style requests under /v1 on this machine's loopback. The lamp
-            is given http://127.0.0.1:11434/v1 and any key. In the sandbox, nothing changes
-            about the address, the relay's, but EDENAI_EU_ONLY is not set: Ollama's model list
-            names no regions, and filtering it would leave nothing.
+            Ollama answers OpenAI-style requests under /v1 on this machine's loopback. The lamp is
+            given http://127.0.0.1:11434/v1 and any key. In the sandbox, the harness's model
+            address stays the same, that of oillamp's model relay, which sends each request on
+            from the host, but EDENAI_EU_ONLY is not set: Ollama's model list names no regions,
+            and filtering it would leave nothing.
         """
         when:
             lamp = Lamp.at(directory).modelService(URI.create(OLLAMA + '/v1')).modelKey('local').start()
@@ -58,11 +59,11 @@ class UsingAModelOnThisMachineSpec extends Specification {
                     '[http://127.0.0.1:3129/v3] [unset]'
     }
 
-    def 'Through the relay, the sandbox sees Ollama\'s models and gets answers'() {
+    def 'Through oillamp\'s model relay, the sandbox sees Ollama\'s models and gets answers'() {
         reportInfo """
-            The sandbox asks the relay under /v3, as it always does, and the relay asks Ollama
-            under /v1. The model list is Ollama's own, and a chat request is answered by the
-            model on this machine.
+            The sandbox asks oillamp's model relay, at 127.0.0.1:3129, under /v3, as it always
+            does, and the relay asks Ollama under /v1. The model list is Ollama's own, and a chat
+            request is answered by the model on this machine.
         """
         when:
             var models = inSandbox(lamp, 'curl', '-s', '--max-time', '30', 'http://127.0.0.1:3129/v3/models')
@@ -76,11 +77,11 @@ class UsingAModelOnThisMachineSpec extends Specification {
             new JsonSlurper().parseText(answer.out).choices[0].message.content instanceof String
     }
 
-    def 'pi uses the model on this machine'() {
+    def 'The harness pi uses the model on this machine'() {
         reportInfo """
             The harness itself, as an agent runs it: pi's Eden AI extension reads the model list
-            through the relay, keeps all of it because EU only is off, and the local model
-            answers.
+            through oillamp's model relay, keeps all of it because EU only is off, and the local
+            model answers.
         """
         when:
             var ran = inSandbox(lamp, 'pi', '--provider', 'edenai', '--model', MODEL, '--no-session',

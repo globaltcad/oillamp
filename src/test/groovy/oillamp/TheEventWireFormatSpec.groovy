@@ -22,7 +22,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- *  How events travel from an embedded oillamp to the application that started it: one line of
+ *  How events get from an embedded oillamp to the application that started it: one line of
  *  JSON each.
  *
  *  <p>An application here is a program built on oillamp, such as a desktop app, that starts the
@@ -30,9 +30,8 @@ import java.time.Instant
  *  {@code dev.lamp.Lamp}. The engine writes each event it reports to that process's standard
  *  output as one line of JSON ({@code LampEvent.toJson}), and the application turns each line back
  *  into an event with {@code LampEvent.fromJson}. The engine writes them in one process and the
- *  application reads them in another. If the
- *  two ever disagreed, the application would show the player nonsense or nothing at all, so
- *  every kind of event is written and read back here.
+ *  application reads them in another. If the two ever disagreed, the application would show its
+ *  user nonsense or nothing at all, so every kind of event is written and read back here.
  */
 class TheEventWireFormatSpec extends Specification {
 
@@ -158,17 +157,20 @@ class TheEventWireFormatSpec extends Specification {
 
     def 'Every event reads back as the same value it was written from'() {
         reportInfo """
-            Text with line breaks, quotes, tabs and backslashes, problems with every kind of
-            evidence, and parts that are absent: all come back exactly as they went out.
+            The engine writes each event as JSON with `LampEvent.toJson`, and an application, a
+            program built on oillamp's Java API, reads it back with `LampEvent.fromJson`. Text
+            with line breaks, quotes, tabs and backslashes, problems with every kind of evidence,
+            and parts that are absent: all come back exactly as they went out.
         """
         expect:
             EXAMPLES.every { event -> LampEvent.fromJson(event.toJson()) == Optional.of(event) }
     }
 
-    def 'Each event is one line, so a reader can split the stream on line breaks'() {
+    def 'Each event is written as one line of JSON, so an application can split the engine\'s output on line breaks'() {
         reportInfo """
-            The application reads the engine's output one line at a time and treats each line as
-            one event. Some events carry text with line breaks in it, such as a container log in
+            An application, a program built on oillamp's Java API, runs the engine with
+            `oillamp at <dir> --embedded`, reads its standard output one line at a time and
+            treats each line as one event. Some events carry text with line breaks in it, such as a container log in
             a problem's evidence. If such a break reached the output as it is, one event would
             arrive as two broken halves, and neither could be read. So a line break inside an
             event is always written as an escape, and only the end of an event ends a line.
@@ -177,9 +179,12 @@ class TheEventWireFormatSpec extends Specification {
             EXAMPLES.every { !it.toJson().contains('\n') }
     }
 
-    def 'The examples above cover every kind of event there is'() {
+    def 'The spec\'s list of example events covers every kind of event there is'() {
         reportInfo """
-            So that a new kind of event cannot be added without being checked here.
+            The scenarios of this spec write and read back the events in one list, `EXAMPLES`.
+            This scenario checks that every kind of event `LampEvent` permits has at least one
+            example in that list, so that a new kind of event cannot be added without being
+            checked.
         """
         expect:
             LampEvent.permittedSubclasses
@@ -187,10 +192,13 @@ class TheEventWireFormatSpec extends Specification {
                      .every { kind -> EXAMPLES.any { kind.isInstance(it) } }
     }
 
-    def 'A line that is not an event this oillamp knows is skipped, not a failure'() {
+    def 'LampEvent.fromJson returns no event for a line it does not know, rather than failing'() {
         reportInfo """
-            An application may read from a newer oillamp than it was built with, or receive a line
-            that was cut short. Either way it should carry on with the next line.
+            An application, a program built on oillamp's Java API, reads the engine's standard
+            output one line of JSON at a time with `LampEvent.fromJson`. It may read from a newer
+            oillamp than it was built with, or receive a line that was cut short. Either way
+            `fromJson` returns an empty `Optional`, so the application carries on with the next
+            line.
         """
         expect:
             LampEvent.fromJson(line).isEmpty()
@@ -202,8 +210,8 @@ class TheEventWireFormatSpec extends Specification {
 
     def 'An answer from an engine that did not yet say which model wrote it reads with no model'() {
         reportInfo """
-            An application may join a session that an older oillamp started, and read its events.
-            Answers then come without the model that wrote them; they read as answers whose
+            An application, a program built on oillamp's Java API, may join a session that an
+            older oillamp started, and read its events with `LampEvent.fromJson`. Answers then come without the model that wrote them; they read as answers whose
             model is not known, rather than not at all.
         """
         expect:

@@ -51,7 +51,7 @@ class ThePointerSpec extends Specification {
         directory.toFile().deleteDir()
     }
 
-    def 'a click is one press and one release of the left button, at exactly that position'() {
+    def 'A `lamp click` is one press and one release of the left button, at exactly that position'() {
         when:
             var result = lamp('click', '300', '200')
 
@@ -61,7 +61,7 @@ class ThePointerSpec extends Specification {
             events.last() == [0, 300, 200]
     }
 
-    def 'a double click needs no button name: lamp click X Y double'() {
+    def 'A double click needs no button name: lamp click X Y double'() {
         reportInfo """
             The button is optional, so `lamp click X Y double` is a left double click. It used to
             be refused with "unknown button 'double'", which is exactly what an agent would type.
@@ -74,7 +74,7 @@ class ThePointerSpec extends Specification {
             presses() == [[LEFT, 300, 200], [LEFT, 300, 200]]
     }
 
-    def 'a right click presses the right button'() {
+    def 'A right click, `lamp click X Y right`, presses the right button'() {
         when:
             lamp('click', '40', '50', 'right')
 
@@ -82,7 +82,7 @@ class ThePointerSpec extends Specification {
             presses() == [[RIGHT, 40, 50]]
     }
 
-    def 'a drag holds the button down all the way from one position to the other'() {
+    def 'A `lamp drag` holds the button down all the way from one position to the other'() {
         when:
             lamp('drag', '100', '100', '500', '300')
 
@@ -93,7 +93,7 @@ class ThePointerSpec extends Specification {
             events.last() == [0, 500, 300]
     }
 
-    def 'scrolling without a position scrolls where the last click was'() {
+    def 'A `lamp scroll` without a position scrolls where the last click was'() {
         given:
             lamp('click', '640', '100')
             events.clear()
@@ -105,7 +105,7 @@ class ThePointerSpec extends Specification {
             presses() == [[WHEEL_DOWN, 640, 100]] * 3
     }
 
-    def 'a position outside the screen is refused, and nothing is clicked'() {
+    def 'The `lamp click` command refuses a position outside the screen, and clicks nothing'() {
         when:
             var result = lamp('click', '1280', '10')
 
@@ -115,7 +115,7 @@ class ThePointerSpec extends Specification {
             presses().isEmpty()
     }
 
-    def 'lamp info gets the size from the desktop, as the VNC server says it when a viewer connects'() {
+    def 'The `lamp info` command reads the desktop\'s size from the greeting the VNC server sends a viewer'() {
         reportInfo """
             The stand-in desktop is 1280x720. The pointer helper connects, reads the size from the
             server's greeting, and sends nothing else.
@@ -129,7 +129,7 @@ class ThePointerSpec extends Specification {
             events.isEmpty()
     }
 
-    def 'when the desktop cannot be reached, lamp says so'() {
+    def 'When the desktop\'s VNC server cannot be reached, `lamp click` says so'() {
         given:
             server.close()
             Files.deleteIfExists(directory.resolve('vnc.sock'))

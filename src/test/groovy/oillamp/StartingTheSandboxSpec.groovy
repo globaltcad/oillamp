@@ -38,16 +38,18 @@ class StartingTheSandboxSpec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'A session is not reported as started until oillamp has opened every socket itself'() {
+    def 'Oillamp reports a session as started only after it has connected to every socket itself'() {
         reportInfo """
-            ready.json is the sandbox's own account of itself, and a report written by the thing
-            being reported on is worth checking. The container writes it after its servers come
-            up; if one of them then dies - or never bound in the first place - the file still
-            says everything is fine.
+            `ready.json`, the readiness file the container writes into `.oillamp/sockets/infra/`,
+            is the sandbox's own account of itself, and a report written by the thing being
+            reported on is worth checking. The container writes it after its servers come up; if
+            one of them then dies - or never bound in the first place - the file still says
+            everything is fine.
 
-            So the last thing `at` does is connect to each socket it is about to hand the user.
-            That is the same act the viewer performs a moment later, which is what makes it proof
-            rather than another assertion.
+            So the last thing `oillamp at` does is connect to each socket it is about to hand the
+            user: `vnc.sock` for the desktop and `ssh.sock` for the shell. That is the same act
+            the viewer performs a moment later, which is what makes it proof rather than another
+            assertion.
         """
         given: 'a lamp'
             var lamp = host.lampPath()
@@ -65,10 +67,11 @@ class StartingTheSandboxSpec extends Specification {
             outcome.stepDetails().any { it.contains('vnc.sock') && it.contains('ssh.sock') }
     }
 
-    def 'A sandbox that reports itself ready but refuses connections is caught, with its log'() {
+    def 'Oillamp fails a start whose sandbox reports itself ready but refuses connections, and shows the sandbox\'s log'() {
         reportInfo """
-            This is the exact failure the user hit, reduced: the socket file is present, the
-            readiness file is written, and nothing is listening.
+            This is a failure a user hit on a real machine, reduced: the desktop's socket file,
+            `vnc.sock`, is present, the readiness file is written, and nothing is listening.
+            Oillamp reports `OIL-SANDBOX-004`, naming the desktop.
 
             The requirement is not only that oillamp fails. It is that the user learns why
             without going looking - the container's own log is the only place the reason exists,
@@ -95,7 +98,7 @@ class StartingTheSandboxSpec extends Specification {
             !outcome.console().contains('vncviewer')
     }
 
-    def 'A sandbox that fails to start is removed, not left running with nobody watching it'() {
+    def 'Oillamp removes a sandbox that fails to start, instead of leaving it running without a session'() {
         reportInfo """
             Once `podman run` has succeeded, a container is running in the background with the
             agent's desktop in it, using memory and processors, and recording if recording is on.
@@ -122,14 +125,17 @@ class StartingTheSandboxSpec extends Specification {
             outcome.console().contains('removed the sandbox that did not start')
     }
 
-    def 'A bug while the sandbox starts is reported, and the container it started is removed'() {
+    def 'Oillamp reports a bug that happens while the sandbox starts, and removes the container it started'() {
         reportInfo """
-            A bug in oillamp is reported as one, with where it happened. But if it happens after
-            `podman run`, while oillamp waits for the sandbox to answer, the container is already
-            running, and nothing else would remove it once oillamp exits. So it is removed first.
+            Oillamp reports a bug in itself as one, `OIL-INTERNAL-001`, with where it happened.
+            But if it happens after `podman run`, while oillamp waits for the sandbox to answer,
+            the container is already running, and nothing else would remove it once oillamp exits.
+            So oillamp removes it first.
 
-            Here the bug is in an application listening to the start, which fails as soon as
-            the container runs: the listener is called on the thread that starts the sandbox.
+            Here the bug is in a listener, code that receives oillamp's events as they happen, the
+            way an application built on oillamp's Java API listens to the start, which fails as
+            soon as the container runs: the listener is called on the thread that starts the
+            sandbox.
         """
         given: 'a listener that fails once the container is running'
             var oillamp = host.oillamp.observedBy { event ->
@@ -149,12 +155,14 @@ class StartingTheSandboxSpec extends Specification {
             outcome.console().contains('removed the sandbox that did not start')
     }
 
-    def 'The readiness file from the previous session is not mistaken for this one'() {
+    def 'Oillamp does not mistake the previous session\'s readiness file for this session\'s'() {
         reportInfo """
-            The sockets directory survives the container, so on every session after the first
-            there is already a ready.json in it. An existence test therefore reports the sandbox
-            ready before the container has done anything at all - and the later that is trusted,
-            the worse it gets, because the host goes on to hand out sockets that do not exist yet.
+            The container writes a readiness file, `ready.json`, into the sockets directory once
+            its servers are up. The sockets directory survives the container, so on every session
+            after the first there is already a ready.json in it. An existence test therefore
+            reports the sandbox ready before the container has done anything at all - and the
+            later that is trusted, the worse it gets, because the host goes on to hand out sockets
+            that do not exist yet.
 
             Two things stop it, and this scenario is about the second one. oillamp clears the
             previous session's files before starting, and it checks that the readiness file it
@@ -195,11 +203,14 @@ class StartingTheSandboxSpec extends Specification {
             outcome.errors().any { it.toString().contains('OIL-SANDBOX-00') }
     }
 
-    def 'Clearing what the previous session left behind is part of starting one'() {
+    def 'Oillamp clears the previous session\'s socket files before it starts the next session'() {
         reportInfo """
-            The other half: on an ordinary second run the old files are removed before the
-            container starts, so wayvnc finds its socket path free and the host never sees the
-            previous answer.
+            The sockets directory, `.oillamp/sockets`, outlives the container, so the previous
+            session's socket files and its readiness file, `ready.json`, are still in it when the
+            next session starts. A leftover `vnc.sock` once made wayvnc, the desktop's server,
+            fail to start. So on an ordinary second run oillamp removes the old files before the
+            container starts: wayvnc finds its socket path free, and the host never reads the
+            previous session's readiness file.
         """
         given: 'a lamp that has been used before'
             var lamp = host.lampPath()
@@ -222,14 +233,15 @@ class StartingTheSandboxSpec extends Specification {
             outcome.steps().any { it.contains('previous session') }
     }
 
-    def 'A second session on the same lamp starts cleanly, which is where this went wrong'() {
+    def 'A second session on the same lamp starts as cleanly as the first'() {
         reportInfo """
-            The whole bug in one scenario. The first session on a lamp always worked; it was the
-            second that came up with a dead desktop, because it was the first one to find a
-            socket file already in place.
+            On a real machine, the first session on a lamp always worked; it was the second that
+            came up with a desktop that did not answer, because it was the first one to find the
+            previous session's socket file, `vnc.sock`, already in place, so the desktop's server
+            could not create it.
 
-            Running `at` twice is therefore not a redundant scenario - it is the only one that
-            covers the state the user was actually in.
+            Running `oillamp at` twice is therefore not a redundant scenario - it is the only one
+            that covers the state the user was actually in.
         """
         given:
             var lamp = host.lampPath()
@@ -246,20 +258,22 @@ class StartingTheSandboxSpec extends Specification {
             second.stepKinds().contains('CheckEndpoints')
     }
 
-    def 'The stale files are removed in the one way that works on a lamp'() {
+    def 'Oillamp\'s plan removes the previous session\'s socket files and readiness file'() {
         reportInfo """
-            These files belong to one of the sandbox's own users. Inside the container that user
-            is number 1001; on this machine the kernel translates it to a number out of the block
-            of spare ids reserved for the person running oillamp - a number that belongs to no real
-            account at all. Plain `rm` is therefore refused with "operation not permitted", even
-            though the files sit in a directory the user owns.
+            The previous session's socket files and its readiness file, `ready.json`, outlive the
+            container in `.oillamp/sockets`. They belong to one of the sandbox's own users. Inside
+            the container that user is number 1001; on this machine the kernel translates it to a
+            number out of the block of spare ids reserved for the person running oillamp - a
+            number that belongs to no real account at all. Plain `rm` is therefore refused with
+            "operation not permitted", even though the files sit in a directory the user owns.
 
             That refusal is not an obstacle to work around. It is the same mechanism that stops the
             agent deleting the recording of its own screen, seen from the one angle where it is
             inconvenient rather than useful.
 
             They have to be removed through `podman unshare`, and a plan that showed an ordinary
-            delete here would be a plan that fails on every machine.
+            delete here would be a plan that fails on every machine. The scenario reads the plan
+            `oillamp at --dry-run` prints, and finds the step that removes these files.
         """
         given:
             var lamp = host.lampPath()

@@ -56,11 +56,12 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
         }
     }
 
-    def 'An allowed connection really carries bytes, all the way to the far side'() {
+    def 'The egress proxy sends an allowed request on to the server, and the server\'s answer back'() {
         reportInfo """
-            The allow path, end to end: the proxy parses the request, decides, resolves, connects,
-            rewrites the request into origin form and streams the answer back. A real server on
-            the other side receives it and replies.
+            The allow path, end to end: the proxy parses the request, resolves the name, decides,
+            connects, rewrites the request into origin form (the path alone, `GET /packages`, as a
+            web server expects it, instead of the full URL a proxy is sent) and copies the answer
+            back. A real server on the other side receives the request and replies.
 
             The lamp here adds one allow rule *above* the default deny rule, which is what a user
             does to reach an internal service. It is also the only way to point this scenario at
@@ -83,16 +84,16 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             requestsSeen.any { it.startsWith('GET /packages ') }
     }
 
-    def 'The host and its own network stay out of reach, decided by address and not by name'() {
+    def 'The egress proxy refuses a name that resolves to loopback, because it judges the address and not the name'() {
         reportInfo """
             The default policy allows the internet but denies private and loopback addresses. This
             is why the policy decides per *resolved address* rather than per host name.
 
             A name is a claim its owner controls. `totally-normal.example.com` can be pointed at
-            127.0.0.1 whenever its DNS operator likes, and a proxy that trusted names would wave
-            it through to whatever the user happens to be running on their own machine. Checking
-            the address catches it whatever the name says. Here, `localhost` resolves to the
-            loopback address and is refused.
+            127.0.0.1 whenever its DNS operator likes, and a proxy that trusted names would let
+            the agent connect to whatever the user happens to be running on the host. Checking the
+            address catches it whatever the name says. Here, `localhost` resolves to the loopback
+            address and is refused.
         """
         given:
             var port = givenAnOriginServer()
@@ -112,7 +113,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             requestsSeen.isEmpty()
     }
 
-    def 'A denial is printed in the terminal the user is already watching'() {
+    def 'Oillamp prints each connection the proxy refuses in the terminal it was started from'() {
         reportInfo """
             With `network.console_denied` on (the default), every denial is printed in the
             terminal oillamp was started from. The agent only sees its build fail; the user needs
@@ -132,14 +133,16 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
                     .text().contains('block private, internal and loopback ranges')
     }
 
-    def 'Every denial reaches the session\'s record, even when many arrive at once'() {
+    def 'The outcome of `oillamp at` holds every refused connection, even when 300 arrive at once'() {
         reportInfo """
-            Everything oillamp says is kept in the outcome of the command as well as printed. During
-            a session it is said from many threads at once: each proxied connection, each shell,
-            the health check and the control socket have their own. An agent retrying a blocked
-            address in parallel produces many denials in the same instant, and a record that
-            could not be added to from several threads at once would lose some of them, or fail
-            inside the thread that was reporting.
+            Everything oillamp says is an event: it is printed, and also kept in the list of
+            events that is the outcome of the command, here `oillamp at`. During a session it is
+            said from many threads at once: each proxied connection, each shell, the health check
+            and the control socket have their own. An agent retrying a blocked address in parallel
+            produces many denials in the same instant, and a list of events that could not be
+            added to from several threads at once would lose some of them, or fail inside the
+            thread that was reporting. The scenario sends 300 refused requests at once, stops the
+            session, and counts 300 denials in the outcome.
         """
         given:
             var port = givenAnOriginServer()
@@ -178,13 +181,15 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
         event instanceof LampEvent.Info && event.text().startsWith('denied ')
     }
 
-    def 'A burst of connections is answered, not turned away at the door'() {
+    def 'The egress proxy answers each of 300 connections that arrive at the same moment'() {
         reportInfo """
             A build opens many connections at once: a package manager fetching dependencies in
             parallel, a browser loading a page. They all arrive at the proxy's socket in the same
             instant. The kernel holds new connections in a queue until the proxy accepts them, and
-            that queue was 50 long, the default. The 51st connection in a burst was refused
-            outright, and the agent saw a network error that no rule explained.
+            that queue was 50 long, the default. The kernel refused the 51st connection in a burst
+            outright, and the agent saw a network error that no rule explained. The scenario sends
+            300 requests at once, none of them trying twice, and expects every one to get the
+            proxy's answer: a 403, since loopback is refused.
         """
         given:
             var port = givenAnOriginServer()
@@ -210,7 +215,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             answers.every { it == 403 }
     }
 
-    def 'Every connection is written to the session network log'() {
+    def 'The egress proxy writes every connection to the session\'s network log'() {
         reportInfo """
             Every connection is written to `.oillamp/logs/network-<session>.jsonl`, one JSON object
             per line: host, port, resolved address, decision, deciding rule and byte counts. Never
@@ -304,11 +309,12 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             !headersSeen.any { it.toLowerCase().startsWith('proxy-') }
     }
 
-    def 'Something that mistakes the proxy for a web server is told what it is'() {
+    def 'The egress proxy tells a client that mistakes it for a web server what it is'() {
         reportInfo """
-            An origin-form request means a client that has the proxy's address but does not know
-            it is a proxy. A bare 400 would send whoever wrote it hunting for a bug in their URL,
-            so the answer says what this is and what to set instead.
+            A request in origin form, with only a path such as `GET /index.html` instead of a full
+            URL, comes from a client that has the proxy's address but does not know it is a proxy.
+            A bare 400 would send whoever wrote it hunting for a bug in their URL, so the answer
+            says what this is and what to set instead.
         """
         given:
             startASession()
@@ -322,7 +328,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             answer.body.contains('HTTP_PROXY')
     }
 
-    def 'A request the proxy cannot serve is answered with what is wrong with it: #why'() {
+    def 'The egress proxy answers a request it cannot act on with what is wrong with it: #why'() {
         reportInfo """
             A client that sends something the proxy cannot act on gets a 400 whose body says
             what was wrong, rather than a closed connection or a bare status. The agent reads that
@@ -413,11 +419,12 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             url << ['http://[::1]/', 'http://[::1]', 'http://[::1]:PORT/x', 'http://[::ffff:127.0.0.1]/']
     }
 
-    def 'A name that does not resolve is reported as that, not as a denial'() {
+    def 'The egress proxy reports a name that does not resolve as unresolved, not as refused'() {
         reportInfo """
-            The proxy resolves names on the host. A name that does not exist gets a 502 saying it
-            could not be resolved. It is logged, but not printed as "denied", because no rule
-            refused it, and a denial would send the user looking for a rule to change.
+            The proxy resolves names on the host. For a name that does not exist it answers 502,
+            saying the name could not be resolved. It is logged, but not printed as "denied",
+            because no rule refused it, and a denial would send the user looking for a rule to
+            change.
         """
         given:
             startASession()
@@ -485,12 +492,14 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             answer.contains('denied by rule "(default)"')
     }
 
-    def 'A forward carries bytes to its one fixed target, and is logged'() {
+    def 'A forward connects the sandbox to its one fixed address, and oillamp logs each connection'() {
         reportInfo """
-            A forward gives the sandbox one internal service, such as a company language model,
-            without opening the rest of the network. It bypasses the policy, because its target is
-            fixed in oillamp.toml, which the agent cannot edit. The host connects on the agent's
-            behalf, so the host's VPN applies, and every connection is logged like any other.
+            A forward is a fixed tunnel from a port inside the sandbox to one address configured
+            in `[[network.forwards]]`. It gives the sandbox one internal service, such as a
+            company language model, without opening the rest of the network. It bypasses the
+            policy, because its target is fixed in oillamp.toml, which the agent cannot edit. The
+            host connects on the agent's behalf, so the host's VPN applies, and every connection
+            is logged like any other.
         """
         given: 'a lamp with a forward to the test server'
             var port = givenAnOriginServer('hello from the company model')
@@ -571,10 +580,12 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             """.stripIndent())
     }
 
-    def 'CONNECT opens a tunnel that oillamp carries without reading'() {
+    def 'Through a CONNECT tunnel, the egress proxy copies bytes both ways without reading them'() {
         reportInfo """
-            Most real traffic uses CONNECT, because it is HTTPS: npm, pip, cargo, git over HTTPS
-            and every API an agent calls. The policy is applied to the host and port in the
+            A client asks a proxy for an encrypted connection with a CONNECT request, naming a
+            host and port; once the proxy answers 200, the same connection is a tunnel to that
+            host. Most real traffic uses CONNECT, because it is HTTPS: npm, pip, cargo, git over
+            HTTPS and every API an agent calls. The policy is applied to the host and port in the
             CONNECT line, which is all a proxy can see of an encrypted connection without
             intercepting it. After the 200, bytes are copied in both directions without being
             read.
@@ -598,11 +609,12 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             requestsSeen.any { it.startsWith('GET /through-the-tunnel ') }
     }
 
-    def 'A denied CONNECT is refused before any tunnel exists'() {
+    def 'The egress proxy refuses a CONNECT its policy denies before it opens any tunnel'() {
         reportInfo """
-            The denial has to come first. A proxy that answered 200 and then closed would leave
-            the agent looking at a TLS handshake that failed for no stated reason; refusing with
-            403 and the rule label means the failure arrives as a sentence it can report.
+            A CONNECT request asks the proxy to open a tunnel to a host and port. The denial has
+            to come first. A proxy that answered 200 and then closed would leave the agent looking
+            at a TLS handshake that failed for no stated reason; refusing with 403 and the rule
+            label means the failure arrives as a sentence it can report.
         """
         given:
             var port = givenAnOriginServer()
@@ -620,7 +632,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             requestsSeen.isEmpty()
     }
 
-    def 'The host and its network stay out of reach however the address is written: #target'() {
+    def 'The egress proxy refuses loopback and private addresses however they are written: #target'() {
         reportInfo """
             An address can be written many ways. 127.0.0.1 is also `::ffff:7f00:1` (the same
             address in IPv6 notation), and `::` means "this machine" to the operating system. A
@@ -781,12 +793,14 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             range << ['PORT-ABOVE', 'BELOW-PORT']
     }
 
-    def 'A lamp configured before the unspecified address was blocked still cannot reach the host through it'() {
+    def 'The egress proxy refuses the unspecified address even when the lamp\'s rules allow everything'() {
         reportInfo """
             Every lamp keeps its own copy of the network rules in oillamp.toml, written when the
             lamp was created. A rule added to the shipped list later never reaches those copies.
             The unspecified address, `::` or `0.0.0.0`, means "this machine" to Linux and is never
-            a real destination, so it is refused even when the lamp's own rules would allow it.
+            a real destination, so the proxy refuses it even when the lamp's own rules would allow
+            it, and says that `no rule can allow it`. The scenario's lamp has a single rule that
+            allows every address.
         """
         given: 'a lamp whose rules allow everything'
             var port = givenAnOriginServer('hello from the internet', '::')

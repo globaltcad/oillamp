@@ -136,11 +136,13 @@ class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
                     .provider.edenai.options.baseURL == 'http://127.0.0.1:3129/v3'
     }
 
-    def 'Going around the relay gets the agent nowhere'() {
+    def 'An agent that calls Eden AI directly, without the model relay, gets no answer'() {
         reportInfo """
-            An agent that ignores the relay and calls Eden AI directly, through the proxy, has
-            only the placeholder to offer, and is refused by Eden AI. The global endpoint is
-            refused before that, by the network policy.
+            Inside the sandbox, `EDENAI_BASE_URL` points at oillamp's model relay, which adds the
+            real key on the host. An agent that ignores the relay and calls Eden AI's EU endpoint
+            directly, through the egress proxy, has only the placeholder key to offer, and Eden AI
+            refuses it with 401 or 403. The egress proxy refuses the global endpoint,
+            `api.edenai.run`, before that, with a 403 by the network policy.
         """
         expect: 'the EU endpoint turns the placeholder away'
             inSandbox('''curl -s -o /dev/null -w '%{http_code}' --max-time 60 \\
@@ -155,10 +157,11 @@ class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
     @Requires({ REAL_KEY })
     def 'Through the relay, the model answers, with the key the sandbox never had'() {
         reportInfo """
-            The same request as above, sent to the relay instead, with the same placeholder. This
-            time oillamp adds the real key on the host, sends it to Eden AI's EU endpoint over
-            HTTPS, and the model answers. The request is tiny (five tokens at most) and needs a
-            real key in this environment; without one, it is skipped.
+            A tiny chat request from the sandbox, sent with `curl` to the model relay at
+            `EDENAI_BASE_URL`, with the placeholder key the sandbox holds. oillamp adds the real
+            key on the host, sends it to Eden AI's EU endpoint over HTTPS, and the model answers.
+            The request is tiny (five tokens at most) and needs a real key in this environment;
+            without one, it is skipped.
         """
         when:
             var answer = inSandbox('''curl -s --max-time 120 \\
@@ -171,12 +174,13 @@ class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
     }
 
     @Requires({ REAL_KEY })
-    def 'pi, holding only the placeholder, gets an answer from the model'() {
+    def 'The harness pi, holding only the placeholder key, gets an answer from the model'() {
         reportInfo """
             The real test of the whole arrangement: the harness itself, as the agent would run it.
-            pi's Eden AI extension reads the relay's address and the placeholder, asks for the
-            model catalog and then for an answer, and both requests leave the sandbox without a
-            key and reach Eden AI with one.
+            This needs a real key in this environment; without one, it is skipped. pi's Eden AI
+            extension reads the relay's address and the placeholder, asks for the model catalog
+            and then for an answer, and both requests leave the sandbox without a key and reach
+            Eden AI with one.
         """
         when:
             var answer = inSandbox("pi --provider edenai --model '${MODEL}' --no-session -p 'Reply with the single word ok.' </dev/null")
@@ -186,10 +190,13 @@ class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
     }
 
     @Requires({ REAL_KEY })
-    def 'opencode, holding only the placeholder, gets an answer from the model'() {
+    def 'The harness opencode, holding only the placeholder key, gets an answer from the model'() {
         reportInfo """
-            The same for opencode, which reads the relay's address from the configuration file the
-            image build wrote, and the placeholder from the environment.
+            opencode, the other harness in the image, is run in the sandbox as the agent would run
+            it, and asked for one word. It reads the model relay's address from the configuration
+            file the image build wrote, and the placeholder key from the environment; oillamp adds
+            the real key on the host. This needs a real key in this environment; without one, it
+            is skipped.
         """
         when:
             var answer = inSandbox("opencode run -m 'edenai/${MODEL}' 'Reply with the single word ok.' </dev/null")

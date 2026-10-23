@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
  *  An application choosing, for a lamp it holds, where model requests go and which key they
  *  carry.
  *
- *  <p>An application such as a chat app has its own settings screen, where its user types in a
+ *  <p>An application is a program built on oillamp that uses its Java API ({@code dev.lamp}) to
+ *  run lamps. An application such as a chat app has its own settings screen, where its user types in a
  *  model service and a key. {@link dev.lamp.LampDirectory#modelService} and {@link dev.lamp.LampDirectory#modelKey}
  *  hand them to the engine, which adds the key to the sandbox's requests on the host, exactly as
  *  it does with a key from its environment. The sandbox never sees either.
@@ -69,11 +70,12 @@ class ChoosingTheModelForALampSpec extends Specification {
 
     def 'The service and key the application gives are the ones the sandbox\'s requests use'() {
         reportInfo """
-            The user typed a service and a key into the application's settings. The application
-            starts the lamp with both, and the sandbox's model requests go to that service with
-            that key, not to the lamp's configured service with the key from the environment.
-            The lamp's own configuration is not touched: the choice is the application's, for
-            this session.
+            Let's consider an application, a program built on oillamp's Java API, whose user typed
+            a model service and a key into its settings. The application starts the lamp with
+            both, through `LampDirectory.modelService` and `modelKey`, and the sandbox's model
+            requests go to that service with that key, not to the lamp's configured service with
+            the key from the environment. The lamp's own configuration is not touched: the choice
+            is the application's, for this session.
         """
         given: 'a key in the environment the application inherited, which should not be used'
             host.machine { it.environmentVariable('EDENAI_API_KEY', 'sk-from-the-environment') }
@@ -174,10 +176,10 @@ class ChoosingTheModelForALampSpec extends Specification {
     def 'An application can point a lamp at a model server on this machine'() {
         reportInfo """
             A user may run their own models, with Ollama, LM Studio or llama.cpp's server, and
-            want their genie to use those. Such a server answers under /v1 on this machine's
-            loopback, needs no key, and lists no regions. The application gives its address
-            with that path, and any key, which the server ignores: the lamp's requests go there,
-            and the harness in the sandbox is not told to keep only EU models, which would
+            want the agent in their lamp to use those. Such a server answers under /v1 on this
+            machine's loopback, needs no key, and lists no regions. The application gives its
+            address with that path, and any key, which the server ignores: the lamp's requests go
+            there, and the harness in the sandbox is not told to keep only EU models, which would
             leave none of the server's.
         """
         when:
@@ -199,12 +201,14 @@ class ChoosingTheModelForALampSpec extends Specification {
             Files.readString(host.lampPath().resolve('.oillamp/session/runtime.env')).contains("OILLAMP_MODEL_EU_ONLY='0'")
     }
 
-    def 'The models an application lists are asked for where the sandbox asks, with the same key'() {
+    def 'Lamp.models asks the service for its models at the same path, with the same key, as the sandbox does'() {
         reportInfo """
-            An application's settings list the models from Lamp.models, asked on the host
-            before any lamp runs. That list is only right if it is the one the agent gets: the
-            relay's answer to the sandbox's GET /v3/models. So both ask the same path of the
-            service, with the same key, for a service with a path of its own and one without.
+            An application, a program built on oillamp's Java API, lists the models a user can
+            choose from with `Lamp.models`, which asks the model service on the host before any
+            lamp runs. That list is only right if it is the one the agent gets when it sends `GET
+            /v3/models` from the sandbox, which the engine's model relay on the host sends on to
+            the service. So the scenario checks that both reach the service at the same path, with
+            the same key, for a service address with a path of its own (`/v1`) and one without.
         """
         given:
             URI given = URI.create("http://127.0.0.1:${service.address.port}${path}")
@@ -227,12 +231,14 @@ class ChoosingTheModelForALampSpec extends Specification {
             path << ['/v1', '']
     }
 
-    def 'A service the key must not be sent to is refused, and the application is told why'() {
+    def 'The engine refuses a model service on another machine over plain http, and tells the application why'() {
         reportInfo """
-            The key travels with every request, so a service reached over plain http, anywhere
-            but on this machine, would show it to the network. The engine refuses it before
-            anything starts, and the lamp reports the refusal as an event the application can
-            show, in the words oillamp uses on a terminal.
+            The key goes with every model request, so with a service reached over plain http,
+            anywhere but on this machine's loopback, anyone on the network in between could read
+            it. The engine refuses such a service before anything starts and exits with the usage
+            status. The lamp reports the refusal as a `Failure` event that the application (a
+            program built on oillamp's Java API) can show, in the words oillamp uses on a
+            terminal: the service `must be https://`.
         """
         when:
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
@@ -246,11 +252,11 @@ class ChoosingTheModelForALampSpec extends Specification {
             events.any { it instanceof LampEvent.Failure && it.problem().whatHappened().contains('must be https://') }
     }
 
-    def 'A blank key is refused at once, before an engine is started'() {
+    def 'LampDirectory.modelKey refuses a blank key at once, before an engine is started'() {
         reportInfo """
             An empty settings field would otherwise start a whole session whose every model
-            request fails. The lamp refuses it where the application passes it, so the
-            application can point at the field.
+            request fails. `modelKey` throws `IllegalArgumentException` where the application
+            passes it, so the application can point at the field.
         """
         when:
             Lamp.at(host.lampPath()).modelKey('  ')

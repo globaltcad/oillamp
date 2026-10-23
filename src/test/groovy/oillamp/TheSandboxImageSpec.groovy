@@ -21,7 +21,7 @@ class TheSandboxImageSpec extends Specification {
 
     static final Path IMAGE = Path.of('src/main/resources/image')
 
-    def 'every shell script in the image parses'() {
+    def 'Every shell script in the image parses'() {
         reportInfo """
             `bash -n` is the cheapest possible check and catches the mistake that actually happens
             when editing a 150-line entrypoint: an unclosed quote or a missing `fi` twenty lines
@@ -44,7 +44,7 @@ class TheSandboxImageSpec extends Specification {
             ]
     }
 
-    def 'everything the Containerfile copies actually exists'() {
+    def 'Everything the Containerfile copies exists'() {
         given: 'the Containerfile'
             var containerfile = Files.readString(IMAGE.resolve('Containerfile'))
 
@@ -63,7 +63,7 @@ class TheSandboxImageSpec extends Specification {
             Files.exists(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-dock'))
     }
 
-    def 'the image carries no trace of the Java desktop helper that was replaced by a shell script'() {
+    def 'The image carries no trace of the Java desktop helper that a shell script replaced'() {
         reportInfo """
             An earlier design had a Java desktop helper (`oillamp-rfb`, `lamp-helper`). It was
             replaced by the `lamp` shell script: the agent can drive the desktop with the ordinary
@@ -92,7 +92,7 @@ class TheSandboxImageSpec extends Specification {
         false
     }
 
-    def 'the compositor config binds no key to running a command'() {
+    def 'The compositor\'s configuration binds no key to running a command'() {
         reportInfo """
             The sharpest edge in the whole image. sway runs as `lamp`, the user that owns the
             recording and the VNC server; the agent can type into the desktop. A single
@@ -119,7 +119,7 @@ class TheSandboxImageSpec extends Specification {
             }
     }
 
-    def 'the dock runs as the agent, so its buttons run nothing the agent could not run itself'() {
+    def 'The dock runs as the agent, so its buttons run nothing the agent could not run itself'() {
         reportInfo """
             Every button on the dock runs a command the agent wrote, whenever the user clicks it.
             Started as the agent, that is no more than the agent can already do. Started as
@@ -135,7 +135,7 @@ class TheSandboxImageSpec extends Specification {
             dockLines.every { !it.contains('drop lamp') }
     }
 
-    def 'a dock that cannot be installed costs only the dock'() {
+    def 'If the dock cannot be installed, the image still builds, and only the dock is missing'() {
         reportInfo """
             The dock is a convenience on top of the desktop, ssh and the recording. If Debian ever
             stops shipping one of its GTK packages, the image must still build, and the dock
@@ -154,7 +154,7 @@ class TheSandboxImageSpec extends Specification {
             entrypoint.contains('[ "$status" = 78 ] && exit 0')
     }
 
-    def 'the agent is allowed on the X11 display, so Swing applications can open windows'() {
+    def 'The agent is allowed on the X11 display, so Swing applications can open windows'() {
         reportInfo """
             X11 applications such as Java Swing draw through Xwayland, which sway starts as the
             infra user `lamp`. Xwayland only accepts its own user, so the agent was refused with
@@ -180,7 +180,7 @@ class TheSandboxImageSpec extends Specification {
             containerfile.contains('x11-xserver-utils')
     }
 
-    def 'sshd is configured so that a shell cannot become a tunnel out'() {
+    def 'The sandbox\'s sshd is configured so that an ssh connection cannot become a tunnel out'() {
         reportInfo """
             Every outbound connection from the sandbox goes through the egress proxy. SSH into the sandbox is a hole
             straight through that if forwarding is left on: `ssh -L` would reach anything the
@@ -204,7 +204,7 @@ class TheSandboxImageSpec extends Specification {
                          'AllowAgentForwarding', 'X11Forwarding', 'PermitTunnel']
     }
 
-    def 'the agent shell is told where the proxy is, in every form a tool might read'() {
+    def 'The agent\'s shell is told where the proxy is, in every form a tool might read'() {
         reportInfo """
             There is no DNS in the sandbox. A tool that does not honour proxy variables
             simply fails, so the ones that do must find them already set - and they disagree about
@@ -250,7 +250,7 @@ class TheSandboxImageSpec extends Specification {
             paths.contains('/usr/lib')
     }
 
-    def 'the agent harnesses are installed into the image, so they are there from the first session'() {
+    def 'The agent harnesses are installed into the image, so they are there from the first session'() {
         reportInfo """
             The harnesses are installed when the image is built, so the agent has them the moment
             it logs in, without waiting for downloads. (They could also be installed later through
@@ -272,7 +272,7 @@ class TheSandboxImageSpec extends Specification {
             Files.readString(IMAGE.resolve('Containerfile')).contains('ARG AGENT_TOOLS="opencode pi"')
     }
 
-    def 'ordinary builds tolerate agent tool failures but explicit updates require success'() {
+    def 'An ordinary image build goes on when a harness fails to install, but an explicit update fails'() {
         reportInfo """
             The user was explicit about this, and they are right: a harness is a convenience, while
             the desktop, the shell, the recording and ssh are the product. Losing all of them
@@ -293,13 +293,12 @@ class TheSandboxImageSpec extends Specification {
             script.contains('WARNING: could not install')
     }
 
-    def 'the pi extension is put where a bind-mounted home cannot hide it'() {
+    def 'The image puts the pi extension where a bind-mounted home cannot hide it'() {
         reportInfo """
             pi reads its extensions from its agent directory, which lives in the agent's home -
             and that home is a bind mount from the lamp, so anything the image writes there at
-            build time is invisible the moment the container starts. This is the same class of
-            mistake as the sockets directory: a path that exists at build time and means something
-            different at run time.
+            build time is invisible the moment the container starts: a path that exists at build
+            time and means something different at run time.
 
             So the extension is built into /usr/local/share and copied into the home once per
             session, and - like everything else about the tooling - it may not stop the sandbox.
@@ -325,11 +324,12 @@ class TheSandboxImageSpec extends Specification {
             entrypoint.contains('seed_pi_agent_dir || true')
     }
 
-    def 'both harnesses reach Eden AI through oillamp\'s relay, holding no key, and are offered only EU models'() {
+    def 'Both harnesses reach Eden AI through oillamp\'s model relay, hold no key, and are offered only EU models'() {
         reportInfo """
-            The harnesses never hold the model key. They send their requests to oillamp's relay
-            inside the sandbox, 127.0.0.1:3129, and oillamp adds the key on the host. The address
-            is the same in every sandbox; where it leads is decided outside.
+            The harnesses, pi and opencode, never hold the model key. They send their requests to
+            oillamp's model relay at an address inside the sandbox, 127.0.0.1:3129, and oillamp
+            adds the key on the host. The address is the same in every sandbox; where it leads is
+            decided outside.
 
             pi's Eden AI extension reads its endpoint from EDENAI_BASE_URL and its key from
             EDENAI_API_KEY, which must not be empty, so the profile sets a placeholder. With
@@ -385,7 +385,7 @@ class TheSandboxImageSpec extends Specification {
             installer.contains('could not configure opencode')
     }
 
-    def 'sdkman is installed where it can be written to, which is not where it is built'() {
+    def 'The image installs SDKMAN where it can be written to, which is not where it is built'() {
         reportInfo """
             SDKMAN is how a JVM project gets the JDK, Groovy or Gradle it actually asks for, and
             it is the only way to get one in here: there is no sudo, no apt and a read-only root

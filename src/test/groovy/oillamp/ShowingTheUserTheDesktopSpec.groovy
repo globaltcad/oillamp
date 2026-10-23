@@ -24,8 +24,8 @@ import java.util.concurrent.TimeUnit
  * <p>When the agent has something to show, a chart, a page, a program it wrote, it opens it on its
  * desktop and runs {@code lamp show "what it shows"}. That sends one line to the session on the
  * host, through a socket the sandbox sees as {@code /oillamp/sockets/host/desktop.sock}, and the
- * session reports {@link LampEvent.LookAtDesktop}: an application that shows the desktop, such as
- * Genies, opens it, and the terminal of {@code oillamp at} says so.
+ * session reports {@link LampEvent.LookAtDesktop}: an application that shows the desktop (a program
+ * built on oillamp's Java API, such as the desktop app Genies) opens it, and the terminal of {@code oillamp at} says so.
  *
  * <p>These scenarios run the real {@code lamp} script against a session on a simulated machine.
  * The socket, the session and the events are real.
@@ -55,12 +55,13 @@ class ShowingTheUserTheDesktopSpec extends Specification {
         }
     }
 
-    def 'The agent asks the user to look, and whoever follows the session hears it'() {
+    def 'When the agent runs `lamp show`, the session reports a `LookAtDesktop` event and the terminal prints it'() {
         reportInfo """
-            The agent opened a chart and runs `lamp show "the chart you asked for"`. The session
-            reports that the agent asks the user to look at its desktop, with its words, and the
-            terminal oillamp runs in prints it. The agent is told the user was asked; whether they
-            look is up to them.
+            Let's consider an agent that opened a chart on its desktop and runs `lamp show "the
+            chart you asked for"` in the sandbox. The `lamp` script sends one line to the session
+            on the host, which reports a `LookAtDesktop` event with the agent's words, so that an
+            application showing the desktop can open it; the terminal `oillamp at` runs in prints
+            it. The agent is told the user was asked; whether they look is up to them.
         """
         given:
             var lamp = aRunningSession()
@@ -79,12 +80,13 @@ class ShowingTheUserTheDesktopSpec extends Specification {
             ended.console().contains('the agent asks you to look at its desktop: the chart you asked for')
     }
 
-    def 'What the agent says reaches the user as plain text, and not too much of it'() {
+    def 'The session takes control characters out of what the agent asks to show, and cuts it at 200 characters'() {
         reportInfo """
-            The agent's words are shown to the user, in an application or a terminal. Escape
-            sequences and other control characters could change how a terminal shows everything
-            after them, so they are taken out; and a few words say what is shown, so more than 200
-            characters are cut. Saying nothing is fine too.
+            The words the agent gives `lamp show` are shown to the user, in an application or a
+            terminal, through the `LookAtDesktop` event. Escape sequences and other control
+            characters could change how a terminal shows everything after them, so the session
+            replaces them with spaces; and a few words say what is shown, so the session cuts the
+            text at 200 characters, ending it with `…`. Saying nothing is fine too.
         """
         given:
             aRunningSession()
@@ -101,10 +103,12 @@ class ShowingTheUserTheDesktopSpec extends Specification {
             looks[1].what() == ''
     }
 
-    def 'The socket does one thing: asking the user to look'() {
+    def 'The session answers any request but `show` on the desktop socket with an error, and reports nothing'() {
         reportInfo """
-            The agent can send anything to this socket. Anything but `show` is refused with the
-            reason, and nothing is reported.
+            `lamp show` reaches the session through the desktop socket, which the sandbox sees as
+            `/oillamp/sockets/host/desktop.sock`. The agent can send anything to this socket. The
+            session answers anything but `show` with the reason it refuses it, and reports no
+            `LookAtDesktop` event.
         """
         given:
             aRunningSession()
@@ -118,11 +122,11 @@ class ShowingTheUserTheDesktopSpec extends Specification {
             !reported.any { it instanceof LampEvent.LookAtDesktop }
     }
 
-    def 'Without a session that answers, lamp show says the user was not told'() {
+    def 'Without a session that answers, `lamp show` fails and says the user was not told'() {
         reportInfo """
-            An agent that believes the user looks at something, while nobody was told, would go
-            on talking to an empty room. So when the session cannot be reached, lamp says so, and
-            fails.
+            An agent that believes the user looks at something, while nobody was told, would wait
+            for a reaction that is not coming. So when `lamp show` cannot reach the session, it
+            says that the user was not told, and exits with an error.
         """
         when:
             var shown = lampShow('anything', tmp.resolve('nobody-listens.sock'))
@@ -133,11 +137,12 @@ class ShowingTheUserTheDesktopSpec extends Specification {
             shown.output.contains('The user was not told.')
     }
 
-    def 'The session tells applications the desktop\'s own size'() {
+    def 'The session tells applications the desktop\'s own size in its `SessionOpened` event'() {
         reportInfo """
-            An application may give the desktop another size for a while, such as the size of the
-            panel it shows it in. It gives it back its own size afterwards, which the session says
-            when it opens: display.width and display.height.
+            An application, a program built on oillamp's Java API that shows the sandbox's
+            desktop, may give the desktop another size for a while, such as the size of the panel
+            it shows it in. It gives it back its own size afterwards, which the session says when
+            it opens: display.width and display.height.
         """
         given:
             aRunningSession('[display]\nwidth = 1600\nheight = 900\n')
