@@ -312,7 +312,7 @@ sealed interface Command {
                 Optional<String> message = values.get("--message");
                 if (action.isPresent() && !HISTORY_ACTIONS.contains(action.get()))
                     yield Result.err(ProblemCatalogUtil.usage("'" + action.get() + "' is not something "
-                            + "`oillamp history <dir>` does; it does save, restore and autosave", usageOf("history")));
+                            + "`oillamp history <dir>` does; it does list, save, restore and autosave", usageOf("history")));
                 if (message.isPresent() && !action.equals(Optional.of("save")))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "--message only goes with `oillamp history <dir> save`", usageOf("history <dir> save")));
@@ -321,6 +321,10 @@ sealed interface Command {
                     yield Result.ok(new History(lamp, new History.Action.ListSnapshots(), options));
                 String usage = usageOf("history <dir> " + action.get());
                 yield switch (action.get()) {
+                    case "list" -> after.isEmpty()
+                            ? Result.ok(new History(lamp, new History.Action.ListSnapshots(), options))
+                            : Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> list` takes nothing "
+                                    + "more, but was given '" + after.first() + "'", usage));
                     case "save" -> after.isEmpty()
                             ? Result.ok(new History(lamp, new History.Action.Save(message.orElse("")), options))
                             : Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> save` takes nothing "
@@ -482,7 +486,7 @@ sealed interface Command {
             "--in", "--after", "--instead-of");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
-    ValueSet<String> HISTORY_ACTIONS = ValueSet.of("save", "restore", "autosave");
+    ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave");
 
     /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
@@ -591,12 +595,13 @@ sealed interface Command {
                     --yes it only says what would go. Every lamp is checked first; if any cannot
                     be removed, none is. Needed because parts of a lamp belong to the sandbox's
                     own users and `rm -rf` cannot remove them.
-              history <dir>
+              history <dir> [list]
                     List the lamp's snapshots, newest first.
               history <dir> save [--message <text>]
                     Take a snapshot of the lamp: the agent's home, oillamp.toml and the
-                    schedule. Works while a session runs. oillamp also saves as each session
-                    starts and ends, when anything changed.
+                    schedule. Works while a session runs. oillamp also saves by itself around
+                    each run, and as each session starts and ends if `history <dir> autosave`
+                    switches that on.
               history <dir> restore <snapshot>
                     Bring the lamp back to a snapshot, named by the start of its id: the
                     home, oillamp.toml and the jobs. The session must be stopped. The lamp is

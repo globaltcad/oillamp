@@ -340,7 +340,7 @@ class UsingTheCommandLineSpec extends Specification {
 
         and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
             !complete(script, 'oillamp', 'history', '').contains('save')
-            complete(script, 'oillamp', 'history', '/x', '') == ['save', 'restore', 'autosave']
+            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave']
             complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
@@ -687,8 +687,9 @@ class UsingTheCommandLineSpec extends Specification {
             them, going back to one and saying when oillamp takes one by itself all act on the
             same history, so they share one command, `oillamp history <dir>`, as the jobs share
             `oillamp schedule <dir>`. The lamp comes first and the action after it:
-            `oillamp history <dir>` alone lists, and `save`, `restore` and `autosave` do the rest.
-            Here the person does each of the four in turn, and each one succeeds.
+            `oillamp history <dir>` alone lists, as `oillamp history <dir> list` does, and `save`,
+            `restore` and `autosave` do the rest. Here the person does each in turn, and each one
+            succeeds.
         """
         given: 'a lamp that has run one session'
             host.machine { it.reallyRuns('ssh-keygen') }
@@ -710,6 +711,14 @@ class UsingTheCommandLineSpec extends Specification {
             listed.succeeded()
             listed.events().find { it instanceof dev.lamp.LampEvent.History }.snapshots().first().id() == snapshot.id()
 
+        when: 'the person lists them again, with the word list'
+            var listedByName = host.oillamp.run('history', lamp, 'list')
+
+        then: 'oillamp lists the same snapshots'
+            listedByName.succeeded()
+            listedByName.events().find { it instanceof dev.lamp.LampEvent.History }.snapshots()*.id() ==
+                    listed.events().find { it instanceof dev.lamp.LampEvent.History }.snapshots()*.id()
+
         when: 'the person goes back to it'
             var restored = host.oillamp.run('history', lamp, 'restore', snapshot.shortId())
 
@@ -730,10 +739,10 @@ class UsingTheCommandLineSpec extends Specification {
 
     def 'Oillamp refuses a word after `history <dir>` that is not one of its actions: oillamp #line'() {
         reportInfo """
-            Let's consider a person who types `oillamp history <dir> list`, expecting the word
-            that `schedule` takes. `oillamp history <dir>` lists on its own, and after the lamp it
-            knows three actions: `save`, `restore` and `autosave`. Any other word is a usage
-            error that names those three and shows how each is written, and oillamp reports it
+            Let's consider a person who types `oillamp history <dir> tidy`, expecting a clean-up
+            that does not exist. After the lamp, `oillamp history <dir>` knows four actions:
+            `list`, `save`, `restore` and `autosave`. Any other word is a usage error that names
+            those four and shows how each is written, and oillamp reports it
             before it looks for the lamp, so a typo is reported as a typo and not as a lamp that
             is missing.
         """
@@ -743,13 +752,12 @@ class UsingTheCommandLineSpec extends Specification {
         then:
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(
-                    "'${word}' is not something `oillamp history <dir>` does; it does save, restore and autosave")
-            ['oillamp history <dir>', 'oillamp history <dir> save [--message <text>]',
+                    "'${word}' is not something `oillamp history <dir>` does; it does list, save, restore and autosave")
+            ['oillamp history <dir> [list]', 'oillamp history <dir> save [--message <text>]',
              'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave ['].every { outcome.console().contains(it) }
 
         where:
             line                        | word
-            'history LAMP list'         | 'list'
             'history LAMP tidy'         | 'tidy'
             'history LAMP undo a1b2c3d4' | 'undo'
     }

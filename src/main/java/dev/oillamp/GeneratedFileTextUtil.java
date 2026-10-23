@@ -219,7 +219,7 @@ final class GeneratedFileTextUtil {
                 fi
                 # `oillamp history <dir> save`: the same.
                 if [ "$before" = history ]; then
-                    COMPREPLY=($(compgen -W 'save restore autosave' -- "$current"))
+                    COMPREPLY=($(compgen -W 'list save restore autosave' -- "$current"))
                     return
                 fi
 
