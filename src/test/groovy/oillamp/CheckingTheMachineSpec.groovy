@@ -151,6 +151,53 @@ class CheckingTheMachineSpec extends Specification {
             outcome.stepKinds().contains('PodmanMigrate')
     }
 
+    def 'Oillamp picks an id range for the user that overlaps no other user\'s: #situation'() {
+        reportInfo """
+            Rootless podman maps the users inside a container to ids on the host. Besides the user's own
+            id, it needs a block of ids that belong to that user alone: the subordinate ids, listed one
+            block per line in /etc/subuid and /etc/subgid as `name:first id:count`. The sandbox's infra
+            user, container uid 1001, is one of those ids on the host.
+
+            When the user has no block, oillamp plans to add one of 65536 ids, through sudo. Let's
+            consider a machine where other users already have blocks. If the new block overlapped one of
+            them, the same host ids would belong to two users. A file that one user's sandbox writes as
+            the infra user would be owned by a host id that the other user's containers also run as, and
+            they could read and change it. podman reports no error for an overlap, so oillamp has to avoid
+            it when it picks the block.
+
+            oillamp starts at id 100000 and goes through the existing blocks in order. When a block is in
+            the way, it moves the start past the end of that block, rounded up to the next multiple of
+            65536. It stops at the first start where 65536 ids fit before the next block.
+
+            The scenario runs `oillamp at --dry-run` with three arrangements of other users' blocks, and
+            reads the block in the plan's `AddSubIds` step:
+
+            - one block at 100000: the new block starts after it, at 196608;
+            - blocks at 100000 and 200000: the ids from 196608 to 199999 are too few, so the new block
+              starts after the second one, at 327680;
+            - one block at 165536: exactly 65536 ids fit below it, so the new block is 100000 to 165535.
+        """
+        given: 'a user without subordinate ids, on a machine where other users have some'
+            host.machine { machine ->
+                taken.inject(machine.withoutSubordinateIds()) { m, block ->
+                    m.subordinateIdsTakenBy(block[0], block[1], 65536)
+                }
+            }
+
+        when: 'the user asks what oillamp would do'
+            var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
+
+        then: 'the plan adds the first block that is free'
+            outcome.stepKinds().contains('AddSubIds')
+            outcome.steps().any { it.contains(expected) }
+
+        where:
+            situation                                       | taken                                           || expected
+            'another user has the first block'              | [['alice', 100000]]                             || '196608-262143'
+            'the gap between two blocks is too small'       | [['alice', 100000], ['bob', 200000]]            || '327680-393215'
+            'a block starts exactly where a free one ends'  | [['alice', 165536]]                             || '100000-165535'
+    }
+
     def 'crun is installed alongside podman, because Ubuntu would otherwise use runc'() {
         reportInfo """
             Found on the first real-hardware run, which no simulation would have caught: Ubuntu

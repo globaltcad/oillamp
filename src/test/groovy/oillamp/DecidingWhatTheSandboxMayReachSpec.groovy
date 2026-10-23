@@ -38,6 +38,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
 
     final List<LampEvent> reported = new CopyOnWriteArrayList<>()
     final List<String> requestsSeen = new CopyOnWriteArrayList<>()
+    final List<String> headersSeen = new CopyOnWriteArrayList<>()
     Thread session
     volatile OilLamp.Outcome finished
     ServerSocket origin
@@ -232,6 +233,75 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
         and: 'recording the address it resolved to, the decision, and the rule that made it'
             log.any { it.contains('"host":"localhost"') && it.contains('"decision":"allow"') &&
                       it.contains('"address":"127.0.0.1"') && it.contains('the test origin server') }
+    }
+
+    def 'With network.log_allowed = false, the proxy writes only refused connections to the network log'() {
+        reportInfo """
+            The proxy writes every connection the sandbox makes to `.oillamp/logs/network-<session>.jsonl`,
+            one JSON line each, with `"decision":"allow"` or `"decision":"deny"`. Over a long session that
+            is many lines, and together they list every site the agent visited. Let's consider a user who
+            only wants the refused connections in that file, because those are the ones they act on. They
+            set `log_allowed = false` under `[network]`.
+
+            That setting leaves out the allowed connections and nothing else. A refused connection is
+            still written, so the user still sees which rule stopped what.
+
+            In the scenario the lamp allows the test server's port on loopback. One request to that port is
+            allowed; then a request to the next port is refused by the deny rule. Once the refusal is in the
+            log, the scenario checks that the log has no line with `"decision":"allow"`. The log is written
+            in the order the connections end, so an allowed line, had it been written, would already be
+            there.
+        """
+        given: 'a lamp that allows the test server, and logs only refusals'
+            var port = givenAnOriginServer()
+            givenALampAllowing(port)
+            var file = host.lampPath().resolve('oillamp.toml')
+            Files.writeString(file, Files.readString(file).replace('schema_version = 1\n',
+                    'schema_version = 1\n\n[network]\nlog_allowed = false\n'))
+            startASession()
+
+        when: 'one request is allowed, and then one is refused'
+            assert askTheProxy("GET http://localhost:${port}/allowed HTTP/1.1\r\n\r\n").status == 200
+            assert askTheProxy("GET http://127.0.0.1:${port + 1}/refused HTTP/1.1\r\n\r\n").status == 403
+
+        then: 'the refusal is in the log'
+            waitUntil { Files.exists(networkLog()) && Files.readString(networkLog()).contains('"decision":"deny"') }
+
+        and: 'the allowed request is not, although it was made first'
+            !Files.readString(networkLog()).contains('"decision":"allow"')
+    }
+
+    def 'The proxy removes the Proxy- headers from a request before it sends the request to the website'() {
+        reportInfo """
+            In the rare case that a client in the sandbox is configured with a user name and password for
+            its proxy, for example with `HTTP_PROXY=http://user:secret@127.0.0.1:3128`, it sends
+            `Proxy-Authorization: Basic <user:secret in base64>` with every request. That header is for
+            the proxy. The website at the other end has no use for it and must not receive the password.
+
+            So when the proxy sends a plain HTTP request on to the website, it removes every header whose
+            name starts with `Proxy-`. All other headers go to the website unchanged.
+
+            In the scenario the request carries `Proxy-Authorization`, `Proxy-Connection` and `Accept`.
+            The test server records the headers it received: `Accept` must be among them, and no header
+            whose name starts with `Proxy-`.
+        """
+        given: 'a lamp that allows the test server'
+            var port = givenAnOriginServer()
+            givenALampAllowing(port)
+            startASession()
+
+        when: 'a request arrives carrying headers for the proxy and one for the website'
+            var answer = askTheProxy("GET http://localhost:${port}/ HTTP/1.1\r\n" +
+                    "Proxy-Authorization: Basic c2VjcmV0OnNlY3JldA==\r\n" +
+                    "Proxy-Connection: keep-alive\r\n" +
+                    "Accept: text/plain\r\n\r\n")
+
+        then: 'the website answered'
+            answer.status == 200
+
+        and: 'it saw its own header, and none of the proxy\'s'
+            headersSeen.contains('Accept: text/plain')
+            !headersSeen.any { it.toLowerCase().startsWith('proxy-') }
     }
 
     def 'Something that mistakes the proxy for a web server is told what it is'() {
@@ -452,7 +522,7 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
      *  is written out again because a lamp's list of rules replaces the default list instead of
      *  being added to it; listing only the allow rule would drop the deny rule.
      */
-    private void givenALampAllowing(int port) {
+    private void givenALampAllowing(int port, String ports = port.toString()) {
         host.givenConfig(host.lampPath(), """
             schema_version = 1
 
@@ -460,7 +530,26 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             label  = "the test origin server"
             action = "allow"
             cidrs  = ["127.0.0.0/8"]
-            ports  = [${port}]
+            ports  = [${ports}]
+
+            [[network.rules]]
+            label  = "block private, internal and loopback ranges"
+            action = "deny"
+            cidrs  = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10",
+                      "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+                      "::1/128", "fc00::/7", "fe80::/10"]
+            """.stripIndent())
+    }
+
+    /** A lamp that allows the host names `pattern` matches, on any port, above the shipped deny rule. */
+    private void givenALampAllowingHosts(String pattern) {
+        host.givenConfig(host.lampPath(), """
+            schema_version = 1
+
+            [[network.rules]]
+            label  = "the hosts the scenario names"
+            action = "allow"
+            hosts  = ["${pattern}"]
 
             [[network.rules]]
             label  = "block private, internal and loopback ranges"
@@ -572,6 +661,126 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
             '0.0.0.0'                  | 'the unspecified address, which means this machine'
     }
 
+    def 'Under the shipped policy, the proxy refuses connections into every private address range: #network'() {
+        reportInfo """
+            oillamp's shipped policy allows the internet and refuses the networks the host itself is part
+            of. Let's consider oillamp running on a machine at home or in an office. Besides the internet,
+            that machine can reach:
+
+            - its local network, usually in 192.168.0.0/16, 10.0.0.0/8 or 172.16.0.0/12, with the router,
+              printers and file servers on it;
+            - a VPN or Tailscale, which use 10.0.0.0/8 or 100.64.0.0/10;
+            - link-local addresses, 169.254.0.0/16 and fe80::/10. On a cloud machine, 169.254.169.254 is
+              the metadata service, which gives the machine's credentials to any process that asks;
+            - private IPv6 networks, fc00::/7.
+
+            The shipped policy refuses all of them with one deny rule, "block private, internal and
+            loopback ranges", which lists each range. If a range were missing from that list, nothing else
+            would refuse it, and the agent could connect into that network. So the scenario asks the proxy
+            for a CONNECT to one address in each range, and expects a 403 that names the deny rule.
+
+            For 172.16.0.0/12 and fc00::/7 the prefix length is not a multiple of 8. A wrong bit mask for
+            such a prefix makes the range smaller, and the addresses in its upper part fall out of it. So
+            for these two the scenario uses 172.31.255.254, the last usable address of the range, and
+            fd12:3456::1, which is in its upper half.
+
+            The addresses are written as numbers, so no name has to be resolved. Nothing listens on them:
+            the proxy decides before it connects, and a refused request never makes a connection.
+        """
+        given: 'a lamp with the shipped policy'
+            startASession()
+
+        when: 'the agent asks for a tunnel to an address in the network'
+            var answer = tunnelThrough(443, '', address)
+
+        then: 'the proxy refuses, naming the rule that keeps private networks out'
+            answer.contains('403')
+            answer.contains(PRIVATE_RANGES)
+            !answer.contains('200 Connection Established')
+
+        where:
+            network                                      | address
+            'a home or office network (10/8)'            | '10.20.30.40'
+            'a corporate network, near its end (172.16/12)' | '172.31.255.254'
+            'a home router (192.168/16)'                 | '192.168.1.1'
+            'carrier-grade NAT and Tailscale (100.64/10)' | '100.100.100.100'
+            'the cloud metadata service (169.254/16)'    | '169.254.169.254'
+            'an IPv6 private network (fc00::/7)'         | '[fd12:3456::1]'
+            'an IPv6 link-local address (fe80::/10)'     | '[fe80::1]'
+    }
+
+    def 'A hosts pattern *.name allows only names that end in .name: #pattern'() {
+        reportInfo """
+            A rule's `hosts` list can hold an exact name such as `docs.example.com`, a pattern such as
+            `*.example.com`, or `*` for every name. The pattern `*.example.com` allows every name that ends
+            in `.example.com`, such as `docs.example.com` and `a.b.example.com`. It does not allow
+            `example.com` itself. And it does not allow `notexample.com`, a different domain that anyone
+            can register, which only happens to end in the same letters.
+
+            The dot makes that difference. oillamp compares the end of the requested name with
+            `.example.com`, dot included. Compared with `example.com` alone, the pattern would also allow
+            `notexample.com`.
+
+            The scenario asks for `localhost`, because it resolves on every machine, once for each
+            pattern. The lamp has the allow rule first, then the shipped deny rule, which refuses loopback
+            addresses. A pattern that allows `localhost` lets the request reach the test server (200); a
+            pattern that does not leaves it to the deny rule (403):
+
+            - `localhost` and `*` allow it;
+            - `*.localhost` does not, because `localhost` is the domain itself, not a name under it;
+            - `*.host` does not, because `localhost` ends in `host`, but not in `.host`.
+        """
+        given: 'a lamp that allows one host pattern, above the shipped deny rule'
+            var port = givenAnOriginServer()
+            givenALampAllowingHosts(pattern)
+            startASession()
+
+        when: 'the agent asks for localhost'
+            var answer = askTheProxy("GET http://localhost:${port}/ HTTP/1.1\r\n\r\n")
+
+        then:
+            answer.status == status
+            (status == 200) == !requestsSeen.isEmpty()
+
+        where:
+            pattern       || status
+            'localhost'   || 200
+            '*'           || 200
+            '*.localhost' || 403
+            '*.host'      || 403
+    }
+
+    def 'A ports range such as "8000-8100" allows both of its end ports: #range'() {
+        reportInfo """
+            A rule's `ports` list can hold single ports, such as `443`, and ranges written as strings, such
+            as `"8000-8100"`. A range includes both ends: `"8000-8100"` allows 8000, 8100 and every port in
+            between.
+
+            Let's consider a user who allows `"8000-8100"` for an internal service that listens on 8100. If
+            the last port of a range were left out, their request to 8100 would be refused by a rule that,
+            as they wrote it, allows it.
+
+            The scenario allows a range of eleven ports with the test server's port first (`PORT-ABOVE`,
+            where ABOVE is the port plus 10), and then a range with the server's port last (`BELOW-PORT`).
+            Both times the request must reach the server and get 200.
+        """
+        given: 'a lamp that allows a range of ports with the test server at one end'
+            var port = givenAnOriginServer()
+            givenALampAllowing(port, '"' + range.replace('PORT', port.toString())
+                                                 .replace('BELOW', (port - 10).toString())
+                                                 .replace('ABOVE', (port + 10).toString()) + '"')
+            startASession()
+
+        when:
+            var answer = askTheProxy("GET http://127.0.0.1:${port}/ HTTP/1.1\r\n\r\n")
+
+        then: 'the server is reached'
+            answer.status == 200
+
+        where:
+            range << ['PORT-ABOVE', 'BELOW-PORT']
+    }
+
     def 'A lamp configured before the unspecified address was blocked still cannot reach the host through it'() {
         reportInfo """
             Every lamp keeps its own copy of the network rules in oillamp.toml, written when the
@@ -605,6 +814,8 @@ class DecidingWhatTheSandboxMayReachSpec extends Specification {
                     var reader = new BufferedReader(new InputStreamReader(client.inputStream))
                     var line = reader.readLine()
                     if (line != null) requestsSeen.add(line)
+                    for (var header = reader.readLine(); header; header = reader.readLine())
+                        headersSeen.add(header)
                     client.outputStream.write(("HTTP/1.1 200 OK\r\n" +
                             "Content-Length: ${body.length()}\r\nConnection: close\r\n\r\n" +
                             body).getBytes(StandardCharsets.UTF_8))

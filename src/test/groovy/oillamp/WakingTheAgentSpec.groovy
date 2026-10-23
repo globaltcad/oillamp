@@ -191,6 +191,109 @@ class WakingTheAgentSpec extends Specification {
             jobs.first().enabled()
     }
 
+    def 'An hourly job switched off on Tuesday and back on on Friday runs at the next full hour, not immediately'() {
+        reportInfo """
+            oillamp computes the next time of a repeating job from the time it last ran, or, if it never
+            ran, from the time it was added. A job that is switched off never runs, but that starting point
+            stays where it was while the job is off.
+
+            Let's consider an `@hourly` job that the user added on Tuesday at 16:15 and switched off at
+            once. On Friday at 16:15 they switch it on again. Counted from Tuesday, its next time would be
+            Tuesday at 17:00, which has passed, so the next session would run the job as soon as it
+            started. The user did not ask for that run.
+
+            So when a repeating job is switched on, oillamp sets its last run to that moment. In the
+            scenario, `oillamp schedule` lists the job after `enable`, and its next time must be Friday at
+            17:00 Berlin time, the first full hour after it was switched on.
+        """
+        given: 'an hourly job, added on Tuesday at 16:15 and switched off at once'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
+            host.oillamp.run('schedule', lamp.toString(), 'disable', 'job-1')
+
+        when: 'it is switched on again three days later, on Friday at 16:15'
+            host.machine { it.clockAt(NOW.plus(Duration.ofDays(3))) }
+            host.oillamp.run('schedule', lamp.toString(), 'enable', 'job-1')
+            var listing = host.oillamp.run('schedule', lamp.toString())
+            var job = listing.events().find { it instanceof LampEvent.Schedule }.jobs().find { it.id() == 'job-1' }
+
+        then: 'it runs next at the top of the coming hour, 17:00 in Berlin'
+            job.enabled()
+            job.next() == Optional.of(Instant.parse('2026-09-25T15:00:00Z'))
+    }
+
+    def 'Oillamp reads a time written as a span from now: #written'() {
+        reportInfo """
+            `--at` and `--expires` accept a time written as a span from now, such as "in 2h", as well as a
+            date such as "2026-10-01 09:00". A span is a number and a unit: m, min or minutes; h or hours;
+            d or days; w or weeks. A week is 7 days. "+2h" means the same as "in 2h".
+
+            The scenario adds one job for each unit at a fixed moment, and checks that the job's next time
+            is that moment plus the span: 90 minutes, 2 hours, 3 days and 7 days.
+        """
+        given: 'Tuesday, 16:15 in Berlin'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+
+        when:
+            var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--at', written, 'Look again')
+
+        then:
+            added.succeeded()
+            added.events().find { it instanceof LampEvent.JobAdded }.job().next() == Optional.of(NOW.plus(span))
+
+        where:
+            written       || span
+            'in 90m'      || Duration.ofMinutes(90)
+            'in 2h'       || Duration.ofHours(2)
+            'in 3 days'   || Duration.ofDays(3)
+            'in 1w'       || Duration.ofDays(7)
+    }
+
+    def 'Oillamp reads a so-called "cron expression" the way the Linux scheduler cron reads it: #meaning'() {
+        reportInfo """
+            Unix systems have run commands at set times with a program called cron since the 1970s. Each line of its configuration file, the crontab, starts with five fields that say
+            when to run: the minute, the hour, the day of the month, the month and the day of the week.
+            `0 9 * * 1-5`, for example, means 9:00 on Monday to Friday. Those five fields are called a
+            "cron expression", and many other tools use the same notation, among them GitHub Actions and
+            Kubernetes.
+
+            oillamp uses it for a repeating job's time, because people already know it and copy it from
+            crontabs and documentation. The basic format is standardised in POSIX. Most Linux systems run
+            Vixie cron, which adds a few rules to it, and expressions found in the wild rely on them. So
+            oillamp reads an expression the way Vixie cron does. Two of those rules are easy to get wrong:
+
+            - In the day-of-week field, Sunday may be written as 0, as 7, or as `sun`. Some crons count
+              Sunday as 0, others as 7, and both spellings are in use. `0 9 * * 7` must run on Sundays at
+              9:00. If oillamp knew only 0, the expression would match no day at all, and
+              `oillamp schedule add` would refuse it as naming no time.
+            - A step after a number, as in `5/20` in the minute field, starts at that number and goes on to
+              the end of the field: minutes 5, 25 and 45. `*/20` starts at 0: minutes 0, 20 and 40. Read as
+              "minute 5 only", `5/20` would run once an hour instead of three times.
+
+            The scenario adds each expression with `oillamp schedule add --cron` on Tuesday 22 September
+            2026 at 16:15 in Berlin, and compares the first runs the job lists with the runs cron makes.
+            Berlin is two hours ahead of UTC in September, so 9:00 there is 07:00Z.
+        """
+        given: 'Tuesday, 16:15 in Berlin'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+
+        when:
+            var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', cron, 'Look again')
+
+        then: 'the first runs are the ones cron would make'
+            added.succeeded()
+            var upcoming = added.events().find { it instanceof LampEvent.JobAdded }.job().upcoming()
+            upcoming.collect().take(expected.size()) == expected.collect { Instant.parse(it) }
+
+        where:
+            meaning                                  | cron            || expected
+            'Sunday written as 7'                    | '0 9 * * 7'     || ['2026-09-27T07:00:00Z']
+            'Sunday written as 0'                    | '0 9 * * 0'     || ['2026-09-27T07:00:00Z']
+            'Sunday written by name'                 | '0 9 * * sun'   || ['2026-09-27T07:00:00Z']
+            'a step that starts at minute 5'         | '5/20 9 * * *'  || ['2026-09-23T07:05:00Z', '2026-09-23T07:25:00Z', '2026-09-23T07:45:00Z']
+            'a step over the whole hour'             | '*/20 9 * * *'  || ['2026-09-23T07:00:00Z', '2026-09-23T07:20:00Z', '2026-09-23T07:40:00Z']
+    }
+
     def 'A job can be written with --cron=, --at= and --expires=, and a prompt that starts with a dash goes after --'() {
         reportInfo """
             `--cron=@daily` means the same as `--cron @daily`, so a job comes out the same
@@ -700,6 +803,122 @@ class WakingTheAgentSpec extends Specification {
 
         and: 'the session reported the new job'
             reported.any { it instanceof LampEvent.JobAdded && it.job().id() == 'job-2' }
+    }
+
+    def 'Oillamp ends the agent\'s jobs within schedule.max_agent_days, whatever end or time the agent asks for'() {
+        reportInfo """
+            The agent can add jobs to the lamp's schedule through the session. Each of its jobs ends after
+            `schedule.max_agent_days` at the latest: 14 days, unless the user set another number. Without
+            that limit an agent could schedule work for itself months ahead, and every run would cost the
+            user model tokens.
+
+            The agent can ask for something past 14 days in two ways, and oillamp handles both:
+
+            - It asks for a repeating job that ends in 30 days. oillamp adds the job, but sets its end to
+              14 days from now.
+            - It asks for a single run in 20 days. oillamp refuses, and the refusal says "at most 14 days
+              ahead", so the agent learns the limit.
+
+            The scenario sends both requests over the session's schedule socket, as the agent's tools do,
+            and reads the end of the added job with `oillamp schedule`.
+        """
+        given: 'a session on a lamp whose schedule is on, with the default limit of fourteen days'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            startASession(lamp)
+
+        when: 'the agent asks for a daily job that ends in thirty days'
+            var daily = agentAsks(op: 'add', cron: '0 9 * * *', prompt: 'Check the build', expires: 'in 30d')
+
+        then: 'the job is added, but it ends after fourteen days'
+            daily.ok
+            var listing = host.oillamp.run('schedule', lamp.toString())
+            var job = listing.events().find { it instanceof LampEvent.Schedule }.jobs().find { it.id() == 'job-1' }
+            job.expires() == Optional.of(NOW.plus(Duration.ofDays(14)))
+
+        when: 'the agent asks for one run in twenty days'
+            var later = agentAsks(op: 'add', at: 'in 20d', prompt: 'Look at the release')
+
+        then: 'it is refused, and told how far ahead it may go'
+            !later.ok
+            later.error.contains('at most 14 days ahead')
+    }
+
+    def 'While the schedule is paused, a due job does not run; after resume, it runs at once'() {
+        reportInfo """
+            `oillamp schedule pause` stops every job from running, without changing or removing any. Let's
+            consider a user who pauses the schedule because they are away. While it is paused, a job whose
+            time comes does not run. When the user resumes it, a job that came due during the pause runs at
+            once. Questions asked with `oillamp ask` are answered as usual, paused or not.
+
+            A running session checks the schedule when it starts and whenever the schedule changes. In the
+            scenario the job's time is five minutes before the session starts, so the job is due at the
+            first check. The schedule is paused, so the job must not run: the user's question, asked next,
+            must be the first and only prompt the agent receives. Then the user runs
+            `oillamp schedule resume`, the session checks again, and the job runs.
+        """
+        given: 'a job that was due five minutes before the session starts, on a paused schedule'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 5m', 'Write the weekly report')
+            host.oillamp.run('schedule', lamp.toString(), 'pause')
+            anAgent { prompt -> 'Done.' }
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+
+        when: 'the person asks something while the schedule is paused'
+            assert host.oillamp.run('ask', lamp.toString(), 'Are you there?').succeeded()
+
+        then: 'only the question reached the agent'
+            prompts == ['Are you there?']
+
+        when: 'the schedule is resumed'
+            host.oillamp.run('schedule', lamp.toString(), 'resume')
+            var ran = waitFor(LampEvent.RunFinished) { it.run().job() == Optional.of('job-1') }
+
+        then: 'the job that waited runs now'
+            ran.outcome() == LampRunOutcome.FINISHED
+            prompts.size() == 2
+            prompts[1].contains('Write the weekly report')
+    }
+
+    def 'With schedule.max_agent_runs_per_day = 0, oillamp skips the agent\'s due job and says why'() {
+        reportInfo """
+            `schedule.max_agent_runs_per_day` limits how many runs of the agent's own jobs may start in 24
+            hours. It does not limit the user's jobs, nor questions asked with `oillamp ask`. When one of
+            the agent's jobs comes due, oillamp counts the runs of the agent's jobs in the last 24 hours,
+            including any that are running or waiting. If that count has reached the limit, the job does
+            not run: oillamp marks it as run, and prints that it was skipped, naming the setting.
+
+            "Reached" means equal or more. With a limit of 3, the third run starts and the fourth is
+            skipped. The scenario uses a limit of 0, where this shows directly: with 0 runs counted and a
+            limit of 0, the agent's job must be skipped.
+
+            In a first session the agent adds a job for five minutes later. The simulated clock does not
+            move during a session, so the scenario ends the session, moves the clock ten minutes ahead, and
+            starts a second session, in which the job is due. It waits for the message that the job was
+            skipped, and checks that the agent received no prompt.
+        """
+        given: 'a lamp whose agent may add jobs, but none of them may run'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 0\n')
+            anAgent { prompt -> 'Done.' }
+
+        and: 'the agent added a job for five minutes later, during a session'
+            startASession(lamp)
+            assert agentAsks(op: 'add', at: 'in 5m', prompt: 'Check the build').ok
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+
+        when: 'the next session starts ten minutes later, with the job due'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            var skipped = waitFor(LampEvent.Info) { it.text().contains('was skipped') }
+
+        then: 'the user is told why it did not run, and which setting decides'
+            skipped.text().contains('job-1 was due')
+            skipped.text().contains('schedule.max_agent_runs_per_day')
+
+        and: 'the agent was not woken'
+            prompts.isEmpty()
+            !reported.any { it instanceof LampEvent.RunStarted }
     }
 
     def 'The agent looks back at an earlier run, as the host\'s history holds it'() {

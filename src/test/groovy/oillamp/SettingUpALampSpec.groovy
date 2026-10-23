@@ -547,6 +547,36 @@ class SettingUpALampSpec extends Specification {
             system.errors().first().whatHappened().contains('/etc')
     }
 
+    def 'Oillamp will not set up a lamp anywhere inside a system directory: #path'() {
+        reportInfo """
+            oillamp will not set up a lamp in a directory that belongs to the operating system: /bin, /boot,
+            /dev, /etc, /lib, /proc, /run, /sbin, /sys, /usr or /var, or any directory below one of them.
+            `oillamp at` reports OIL-LAMP-003 and names the system directory.
+
+            The reason is what oillamp does to a lamp's directory. It creates `.oillamp/` and the agent
+            directory in it, sets their permissions, hands the recordings directory to the infra user, and
+            attaches the agent directory to the sandbox. Inside /usr or /var, that would put files the agent
+            controls among the system's programs and data.
+
+            The check compares the start of the path with each directory in that list. A directory missing
+            from the list would let lamps in under it, and no other check would stop them. The scenario
+            asks `oillamp at` for a lamp a few levels inside /var, /usr and /boot, and expects
+            OIL-LAMP-003 naming the right directory each time.
+        """
+        when:
+            var outcome = host.oillamp.run('at', path)
+
+        then: 'oillamp refuses, and names the system directory'
+            outcome.reported('OIL-LAMP-003')
+            outcome.errors().first().whatHappened().contains("inside the system directory ${directory}")
+
+        where:
+            path                         || directory
+            '/var/lib/lamps/feature-x'   || '/var'
+            '/usr/local/lamps/feature-x' || '/usr'
+            '/boot/lamp'                 || '/boot'
+    }
+
     def 'The agent cannot rearrange the socket directories the desktop and the network depend on'() {
         reportInfo """
             The container reaches the host through Unix sockets in three directories: host/ holds
@@ -784,6 +814,79 @@ class SettingUpALampSpec extends Specification {
             again.status() == LampExitStatus.SUCCESS
             again.console().contains('nothing is beyond')
             Files.exists(recent)
+    }
+
+    def 'When the recordings exceed recording.max_total_gb, oillamp keeps the newest and deletes the oldest'() {
+        reportInfo """
+            With recording on, every session writes a video of the desktop into `.oillamp/recordings/`.
+            Let's consider a lamp that is used every day: after a few weeks its recordings take many
+            gigabytes. Two settings limit them, `recording.max_age_days` and `recording.max_total_gb`. At
+            the start of every session, and on `oillamp recordings --prune`, oillamp deletes every
+            recording outside either limit.
+
+            This scenario is about the size limit. The newest recordings are the ones a person is most
+            likely to watch, so those are kept. oillamp sorts the recordings from newest to oldest, by the
+            time they stopped, and adds up their sizes in that order. A recording that would bring the
+            total above the limit is deleted. With the sort the other way round, the same code would keep
+            the oldest recordings and delete the newest.
+
+            The lamp here has `max_total_gb = 1` and `max_age_days = 0`, which means no age limit, so only
+            the size decides. There are three recordings of 400 MB each, from 13, 14 and 15 January. The
+            two newest add up to 800 MB and are kept. With the oldest, the total would be 1200 MB, more than
+            1 GB (1024 MB), so the oldest is deleted.
+
+            The recordings are sparse files: each reports a size of 400 MB but uses no disk space.
+        """
+        given: 'a lamp that keeps at most one gigabyte of recordings, of any age'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, '''
+                schema_version = 1
+
+                [recording]
+                max_age_days = 0
+                max_total_gb = 1
+                '''.stripIndent())
+            host.oillamp.run('at', lamp.toString())
+
+        and: 'three recordings of 400 MB each, from three days in a row'
+            var oldest = givenRecordingOfSize(lamp, '20260113-100000', 400)
+            var middle = givenRecordingOfSize(lamp, '20260114-100000', 400)
+            var newest = givenRecordingOfSize(lamp, '20260115-100000', 400)
+
+        when:
+            var pruned = host.oillamp.run('recordings', lamp.toString(), '--prune')
+
+        then: 'the two newest fit into the gigabyte together, and are kept'
+            pruned.status() == LampExitStatus.SUCCESS
+            Files.exists(newest)
+            Files.exists(middle)
+
+        and: 'the oldest would make it 1.2 GB, so it is deleted'
+            !Files.exists(oldest)
+    }
+
+    /**
+     *  Plants a recording of the given size without writing its bytes: a sparse file reports its
+     *  full size but takes no space on the disk. It stopped ten minutes after its session began.
+     */
+    private static Path givenRecordingOfSize(Path lamp, String session, int megabytes) {
+        Path file = givenRecording(lamp, session, Duration.ofMinutes(10), 0)
+        new RandomAccessFile(file.toFile(), 'rw').withCloseable { it.setLength(megabytes * 1024L * 1024L) }
+        Files.setLastModifiedTime(
+            file,
+            FileTime.from(
+                Instant.parse(
+                        session[0..3] + '-' +
+                        session[4..5] + '-' +
+                        session[6..7] + 'T' +
+                        session[9..10] + ':' +
+                        session[11..12] + ':' +
+                        session[13..14] + 'Z'
+                )
+                .plus(Duration.ofMinutes(10))
+            )
+        )
+        return file
     }
 
     def 'A directory whose path contains a colon is refused, because podman could not mount it'() {
