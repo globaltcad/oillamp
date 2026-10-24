@@ -52,9 +52,18 @@ sealed interface Command {
     record History(Path lamp, History.Action action, Context.Options options) implements Command {
         /// What `oillamp history <dir>` is asked to do; `ListSnapshots` when nothing is asked.
         sealed interface Action {
-            record ListSnapshots() implements History.Action {}
+            /// `all` is `--all`: the snapshots of every branch, not only the current one's.
+            record ListSnapshots(boolean all) implements History.Action {}
             record Save(String message) implements History.Action {}
             record Restore(String snapshot) implements History.Action {}
+            record ListBranches() implements History.Action {}
+            /// `snapshot` is where the branch starts; without one, at the current branch's newest.
+            record CreateBranch(String name, Optional<String> snapshot) implements History.Action {}
+            /// `confirmed` is `--yes`; without it, the action only says what would be deleted.
+            record DeleteBranch(String name, boolean confirmed) implements History.Action {}
+            record Switch(String branch) implements History.Action {}
+            /// `confirmed` is `--yes`; without it, the action only says what would be lost.
+            record Reset(String snapshot, boolean confirmed) implements History.Action {}
             /// The moments to switch on or off, each on or off; with none, the action only says
             /// what the lamp's file has.
             record Autosave(Optional<Boolean> startup, Optional<Boolean> shutdown,
@@ -102,6 +111,8 @@ sealed interface Command {
         boolean prune = false;
         boolean wait = true;
         boolean system = false;
+        boolean all = false;
+        boolean delete = false;
         // The value of each option in VALUE_OPTIONS that was given, given either as `--open=x` or
         // as the argument after it; pending is the option still waiting for its value.
         Association<String, String> values = Association.between(String.class, String.class);
@@ -151,6 +162,8 @@ sealed interface Command {
                 case "--prune"         -> prune = true;
                 case "--no-wait"       -> wait = false;
                 case "--system"        -> system = true;
+                case "--all"           -> all = true;
+                case "--delete"        -> delete = true;
                 default -> {
                     if (VALUE_OPTIONS.contains(option))
                         pending = Optional.of(option);
@@ -312,30 +325,71 @@ sealed interface Command {
                 Optional<String> message = values.get("--message");
                 if (action.isPresent() && !HISTORY_ACTIONS.contains(action.get()))
                     yield Result.err(ProblemCatalogUtil.usage("'" + action.get() + "' is not something "
-                            + "`oillamp history <dir>` does; it does list, save, restore and autosave", usageOf("history")));
+                            + "`oillamp history <dir>` does; it does list, save, restore, autosave, branches, "
+                            + "branch, switch and reset", usageOf("history")));
                 if (message.isPresent() && !action.equals(Optional.of("save")))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "--message only goes with `oillamp history <dir> save`", usageOf("history <dir> save")));
+                if (all && !(action.isEmpty() || action.equals(Optional.of("list"))))
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "--all only goes with `oillamp history <dir> list`", usageOf("history <dir> [list]")));
+                if (delete && !action.equals(Optional.of("branch")))
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "--delete only goes with `oillamp history <dir> branch`", usageOf("history <dir> branch")));
+                if (confirmed && !(action.equals(Optional.of("reset")) || delete))
+                    yield Result.err(ProblemCatalogUtil.usage("--yes only goes with `oillamp history <dir> reset` "
+                            + "and `oillamp history <dir> branch --delete`", usageOf("history <dir> reset")
+                            + "\n" + usageOf("history <dir> branch")));
                 Path lamp = Path.of(rest.first());
                 if (action.isEmpty())
-                    yield Result.ok(new History(lamp, new History.Action.ListSnapshots(), options));
+                    yield Result.ok(new History(lamp, new History.Action.ListSnapshots(all), options));
                 String usage = usageOf("history <dir> " + action.get());
+                String written = "`oillamp history <dir> " + action.get() + (delete ? " --delete" : "") + "`";
                 yield switch (action.get()) {
-                    case "list" -> after.isEmpty()
-                            ? Result.ok(new History(lamp, new History.Action.ListSnapshots(), options))
-                            : Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> list` takes nothing "
-                                    + "more, but was given '" + after.first() + "'", usage));
-                    case "save" -> after.isEmpty()
-                            ? Result.ok(new History(lamp, new History.Action.Save(message.orElse("")), options))
-                            : Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> save` takes nothing "
-                                    + "more, but was given '" + after.first() + "'", usage));
-                    case "restore" -> after.isEmpty()
-                            ? Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> restore` needs the "
-                                    + "snapshot to go back to, as `oillamp history <dir>` lists them", usage))
-                            : after.size() > 1
-                            ? Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> restore` takes one "
-                                    + "snapshot, but was also given '" + after.get(1) + "'", usage))
-                            : Result.ok(new History(lamp, new History.Action.Restore(after.first()), options));
+                    case "list", "save", "branches" -> {
+                        if (!after.isEmpty())
+                            yield Result.err(ProblemCatalogUtil.usage(written + " takes nothing more, but was given '"
+                                    + after.first() + "'", action.get().equals("list") ? usageOf("history <dir> [list]") : usage));
+                        yield Result.ok(new History(lamp, switch (action.get()) {
+                            case "list" -> new History.Action.ListSnapshots(all);
+                            case "save" -> new History.Action.Save(message.orElse(""));
+                            default     -> new History.Action.ListBranches();
+                        }, options));
+                    }
+                    case "restore", "reset", "switch" -> {
+                        String needed = action.get().equals("switch")
+                                ? "the branch to switch to, as `oillamp history <dir> branches` lists them"
+                                : "the snapshot to go back to, as `oillamp history <dir>` lists them";
+                        if (after.isEmpty())
+                            yield Result.err(ProblemCatalogUtil.usage(written + " needs " + needed, usage));
+                        if (after.size() > 1)
+                            yield Result.err(ProblemCatalogUtil.usage(written + " takes one "
+                                    + (action.get().equals("switch") ? "branch" : "snapshot") + ", but was also given '"
+                                    + after.get(1) + "'", usage));
+                        yield Result.ok(new History(lamp, switch (action.get()) {
+                            case "restore" -> new History.Action.Restore(after.first());
+                            case "reset"   -> new History.Action.Reset(after.first(), confirmed);
+                            default        -> new History.Action.Switch(after.first());
+                        }, options));
+                    }
+                    case "branch" -> {
+                        int most = delete ? 1 : 2;
+                        if (after.isEmpty())
+                            yield Result.err(ProblemCatalogUtil.usage(written + " needs the name of the branch"
+                                    + (delete ? " to delete" : ", and may be given the snapshot it starts at"), usage));
+                        if (after.size() > most)
+                            yield Result.err(ProblemCatalogUtil.usage(written + " takes "
+                                    + (delete ? "one branch" : "a name and a snapshot") + ", but was also given '"
+                                    + after.get(most) + "'", usage));
+                        if (delete)
+                            yield Result.ok(new History(lamp, new History.Action.DeleteBranch(after.first(), confirmed), options));
+                        Optional<String> wrong = dev.oillamp.History.branchNameProblem(after.first());
+                        if (wrong.isPresent())
+                            yield Result.err(ProblemCatalogUtil.usage("the branch name '" + after.first() + "': "
+                                    + wrong.get(), usage));
+                        yield Result.ok(new History(lamp, new History.Action.CreateBranch(after.first(),
+                                after.size() > 1 ? Optional.of(after.get(1)) : Optional.empty()), options));
+                    }
                     default -> autosave(lamp, after, options);
                 };
             }
@@ -460,7 +514,7 @@ sealed interface Command {
                 .put("recordings", ValueSet.of("--open", "--prune", "--dry-run"))
                 .put("doctor",     ValueSet.of("--dry-run", "--no-install"))
                 .put("config",     ValueSet.of("--dry-run", "--no-install"))
-                .put("history",    ValueSet.of("--message", "--embedded"))
+                .put("history",    ValueSet.of("--message", "--all", "--delete", "--yes", "--embedded"))
                 .put("schedule",   ValueSet.of("--cron", "--at", "--expires", "--embedded"))
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
@@ -486,7 +540,8 @@ sealed interface Command {
             "--in", "--after", "--instead-of");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
-    ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave");
+    ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave",
+                                                   "branches", "branch", "switch", "reset");
 
     /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
@@ -595,8 +650,9 @@ sealed interface Command {
                     --yes it only says what would go. Every lamp is checked first; if any cannot
                     be removed, none is. Needed because parts of a lamp belong to the sandbox's
                     own users and `rm -rf` cannot remove them.
-              history <dir> [list]
-                    List the lamp's snapshots, newest first.
+              history <dir> [list] [--all]
+                    List the snapshots on the branch the lamp is on, newest first. --all lists
+                    those of every branch, each marked with the branches it is on.
               history <dir> save [--message <text>]
                     Take a snapshot of the lamp: the agent's home, oillamp.toml and the
                     schedule. Works while a session runs. oillamp also saves by itself around
@@ -604,8 +660,30 @@ sealed interface Command {
                     switches that on.
               history <dir> restore <snapshot>
                     Bring the lamp back to a snapshot, named by the start of its id: the
-                    home, oillamp.toml and the jobs. The session must be stopped. The lamp is
-                    saved first, so this can be undone.
+                    home, oillamp.toml and the jobs. The snapshot must be on the branch the lamp
+                    is on. The session must be stopped. The lamp is saved first, so this can be
+                    undone.
+              history <dir> branches
+                    List the branches: alternative states of the lamp, each a line of snapshots
+                    with its own home, oillamp.toml and jobs. The lamp is on one at a time, and
+                    every save goes to it. The first is main.
+              history <dir> branch <name> [<snapshot>]
+                    Start a branch at a snapshot of any branch, or at the newest snapshot of the
+                    branch the lamp is on. The lamp stays where it is; switch to the branch to
+                    use it. Works while a session runs. A name is lowercase letters, digits,
+                    -, _ and ., begins with a letter or a digit, and is at most 64 long.
+              history <dir> branch --delete <name> [--yes]
+                    Delete a branch other than the one the lamp is on. Without --yes it only
+                    says how many snapshots are on that branch alone.
+              history <dir> switch <name>
+                    Bring the lamp to that branch's newest snapshot, and save to that branch
+                    from now on. What changed since the last snapshot is saved first, on the
+                    branch the lamp leaves. The session must be stopped.
+              history <dir> reset <snapshot> [--yes]
+                    Bring the lamp and its branch back to a snapshot on that branch, as
+                    `git reset --hard` does: the snapshots after it leave the branch, and
+                    changes not yet saved are thrown away. Nothing is saved first. Without
+                    --yes it only says what would be lost. The session must be stopped.
               history <dir> autosave [(startup | shutdown | before-run | after-run) (on | off)]...
                     Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
                     With moments and on or off, write those there, and change nothing else

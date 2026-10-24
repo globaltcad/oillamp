@@ -277,10 +277,12 @@ links are not kept; exact permissions are, in a list of their own. *(added on 20
 
 ### A restore needs the session stopped; a save does not
 
-`oillamp history <dir> restore` refuses while a session runs (`OIL-HISTORY-005`).
+`oillamp history <dir> restore` refuses while a session runs (`OIL-HISTORY-005`), and so do
+`switch` and `reset`, which rewrite the home as well.
 `oillamp history <dir> save` works either way, and a save made while a session runs is marked as a running save. A restore always saves
-first, and records itself as a new snapshot, so the history only grows and every restore can be
-undone.
+first, and records itself as a new snapshot, so a restore removes nothing from the history and can
+always be undone. Starting a branch works while a session runs: it only writes a file in the
+history.
 
 *Why:* rewriting the agent's home under running programs would leave them working in files that
 changed beneath them. Saving while the session runs is the case that matters most, just before
@@ -289,9 +291,9 @@ the mark warns about. *(added on 2026-09-29)*
 
 ### The history commands are actions of `oillamp history <dir>`
 
-Saving, listing, restoring and the autosave settings are one command group:
-`oillamp history <dir>` lists the snapshots, and `save`, `restore` and `autosave` after the lamp do
-the rest. There are no top-level `save`, `restore` or `autosave` commands, and no aliases for them.
+Saving, listing, restoring, the autosave settings and the branches are one command group:
+`oillamp history <dir>` lists the snapshots, and `save`, `restore`, `autosave`, `branches`,
+`branch`, `switch` and `reset` after the lamp do the rest. There are no top-level `save`, `restore` or `autosave` commands, and no aliases for them.
 
 *Why:* the four act on the same history, and oillamp already groups commands by what they act on,
 with the lamp before the action: `oillamp schedule <dir> add`, `oillamp config <dir> check`. One
@@ -300,6 +302,70 @@ because nothing depends on the old names yet: oillamp is not in use outside its 
 and a second spelling would have to be documented, completed and kept working.
 
 *Given up:* `oillamp save <dir>` was shorter to type. *(added on 2026-10-23)*
+
+### A lamp keeps alternative states as branches of its history
+
+A lamp's history can have several branches, as git has: each a line of snapshots, each snapshot
+holding the home, `oillamp.toml` and the jobs, so each branch is a whole state of the lamp. The
+first branch is `main`, and a lamp saved before there were branches is exactly that branch. The
+lamp is on one branch at a time, and every save, by hand or by oillamp, goes to it.
+`oillamp history <dir> branch <name> [<snapshot>]` starts a branch and nothing more; `switch <name>`
+goes there, after a safety save on the branch it leaves if anything changed, and makes no snapshot
+on the branch it goes to. `branches` lists them, `list --all` lists every branch's snapshots, and
+`branch --delete <name>` deletes one other than the current one, only with `--yes`. Branch names
+are lowercase letters, digits, `-`, `_` and `.`, begin with a letter or a digit, and are at most 64
+characters long.
+
+*Why:* a user wants to let the agent try something big, such as a rewrite in another language,
+without losing the original, and to go back and forth between the two. One lamp runs one sandbox
+at a time and has one home, so the states take turns in it; the history already holds whole states,
+and git's branches are the familiar way to keep several lines of them. Starting a branch does not
+switch to it, because the two are different decisions: a branch made while the agent works marks
+a moment to come back to, and a switch rewrites the home, which needs the session stopped. The
+safety save before a switch means nothing unsaved is lost by switching, as with a restore. Names are
+lowercase so that two branches never differ by case alone on a file system that cannot tell them
+apart, and limited to what git accepts, so that git reads every branch oillamp makes.
+
+*Given up:* there is no merging: what the agent did on one branch reaches another only by hand.
+The home is rewritten on every switch, which for a large home takes a moment, though unchanged
+directories are skipped whole. *(added on 2026-10-23)*
+
+### A restore stays on its branch; a reset moves the branch back
+
+`restore <snapshot>` accepts only a snapshot on the current branch. One that only other branches
+hold is refused (`OIL-HISTORY-008`) with how to reach it: start a branch at it, and switch to that.
+`reset <snapshot>` is a hard reset, as `git reset --hard` is: it brings the lamp back to a snapshot
+on the current branch and moves the branch back to it, so the snapshots after it leave the branch,
+and changes not yet saved are thrown away. It saves nothing first. Without `--yes` it says how many
+snapshots would leave the branch and whether there are unsaved changes, changes nothing, and exits
+2, as `remove` does.
+
+*Why:* a restore that put another branch's state on top of this one would mix two states into one
+line, and the history would no longer say which state each snapshot belongs to. Starting a branch
+at that snapshot says exactly that. A restore keeps everything and only grows the history; that is
+what makes it safe, and also what makes a line long when the user wants to abandon what came after.
+A reset is for that: it shortens the line instead. Because it throws work away, it asks first.
+
+*Given up:* a reset cannot be undone with oillamp: the snapshots it takes off the branch stay as
+files in the history, but no command can name them, unless another branch holds them. Starting a
+branch before a reset keeps them. The same holds for a deleted branch. *(added on 2026-10-23)*
+
+### Runs are numbered and limited across all branches, and remembered per branch
+
+A new run's number is one above the highest `Oillamp-Run` on any branch and the highest the
+session gave out. `schedule.max_agent_runs_per_day` counts the agent's runs on every branch. The
+wake prompt's recent runs and the agent's `run_history` tool look only at the current branch.
+
+*Why:* a run's name must name one run of the lamp, whichever branch it was on, so that the history
+read across branches never mixes up two runs. Every run costs model tokens, whichever branch it
+was on, so the daily limit counts them all. But what the agent is told is about the state it is in:
+a run on another branch did not happen in this home, and its changes are not here.
+
+*Given up:* after a reset or a deleted branch takes the newest runs off every branch, their
+numbers are handed out again. That is accepted rather than kept in a counter of its own: everything
+in the lamp that named those runs, their snapshots and the home that held their conversations, went
+with them. For the same reason the daily limit no longer counts those runs, so the agent may run
+more that day. *(added on 2026-10-23)*
 
 ### The session holds the agent, and wakes it on a schedule only while it runs
 
@@ -325,14 +391,16 @@ Every snapshot holds `.oillamp/schedule.json`, and a restore brings it back: the
 and the agent's, each one's enabled flag and last run, whether the schedule is paused, and the
 number the next job gets. A snapshot made before this holds no schedule; restoring it leaves the
 schedule as it is. Runs are no longer numbered by a counter in that file. A new run gets the
-number above the highest `Oillamp-Run` trailer in the history and the highest the session has
-given out.
+number above the highest `Oillamp-Run` trailer in the history, on any branch, and the highest the
+session has given out.
 
 *Why:* a job belongs to the state of the lamp it was written for. Restoring the home but keeping
 today's jobs could wake the agent for work that a restore undid, or that the agent planned for a
-state that no longer exists. It also prepares for several alternative states of one lamp, each
-with its own jobs. A counter in the schedule file would go back with every restore and hand out a
-run's number a second time; the history only grows, so a number taken from it is new. The
+state that no longer exists. It also makes each branch of the history a state with its own jobs.
+A counter in the schedule file would go back with every restore and hand out a run's number a
+second time; a restore only adds to the history, so a number taken from it is new. A reset or a
+deleted branch can take runs off every branch; see "Runs are numbered and limited across all
+branches". The
 session's own count covers the runs that are queued or working but not yet saved.
 
 *Given up:* a job someone added after a snapshot is gone after restoring it, even one that had

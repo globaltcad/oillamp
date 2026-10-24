@@ -151,6 +151,8 @@ oillamp history ~/lamps/first
 ```
 
 ```
+on the branch main
+
 SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE
 5e6f7a8b  2026-09-29 18:40:12  running save                  before the big refactor
 3f2a9c1d  2026-09-29 18:14:03  startup save                  session 20260929-181400
@@ -167,6 +169,24 @@ Everything comes back as it was, including projects the agent cloned (with their
 file permissions and links, and the jobs on the schedule. Whatever the agent made after the
 snapshot is removed, jobs included. Before it changes anything, `restore` saves the lamp once more
 and prints how to undo the restore. The agent cannot see or change these snapshots.
+
+A lamp can also keep several states side by side, as **branches**: let the agent try a Rust
+rewrite on one, keep the original on `main`, and go back and forth. Each branch has its own home,
+`oillamp.toml` and jobs, the lamp is on one at a time, and every save goes to that one:
+
+```sh
+oillamp history ~/lamps/first branch rust-rewrite      # starts it at the newest snapshot; you stay on main
+oillamp history ~/lamps/first switch rust-rewrite      # the session must be stopped
+oillamp history ~/lamps/first branches                 # every branch, * marks the one you are on
+oillamp history ~/lamps/first list --all               # every branch's snapshots
+oillamp history ~/lamps/first switch main
+```
+
+`switch` saves what changed on the branch you leave first, so nothing is lost. `branch <name>
+<snapshot>` starts a branch at any snapshot, also one of another branch: `restore` only goes back
+along the branch you are on. `reset <snapshot>` moves the branch back to an older snapshot of its
+own and throws away what came after, as `git reset --hard` does; `branch --delete <name>` deletes a
+branch. Both say what you would lose and change nothing until you add `--yes`.
 
 ### 7. Let the agent work on a schedule ⏰
 
@@ -268,10 +288,15 @@ oillamp status <dir>             # what a running session is doing
 oillamp stop <dir>               # end a session from anywhere
 oillamp list                     # every oillamp sandbox running on this machine
 oillamp remove <dir>... [--yes]  # delete one or more lamps
-oillamp history <dir>            # list the lamp's snapshots
+oillamp history <dir> [--all]    # list the snapshots of the branch you are on, or of every branch
 oillamp history <dir> save [-m <text>]    # take a snapshot of the lamp, even while it runs
 oillamp history <dir> restore <snapshot>  # go back to a snapshot (stop the session first)
 oillamp history <dir> autosave [<moment> on|off]...  # when oillamp saves by itself
+oillamp history <dir> branches            # the lamp's branches: states of it kept side by side
+oillamp history <dir> branch <name> [<snapshot>]     # start a branch; you stay where you are
+oillamp history <dir> switch <name>       # go to a branch (stop the session first)
+oillamp history <dir> reset <snapshot> [--yes]       # move the branch back, dropping what came after
+oillamp history <dir> branch --delete <name> [--yes] # delete a branch
 oillamp schedule <dir> [add ...] # list or change the jobs that wake the agent
 oillamp ask <dir> "<prompt>"     # wake the agent in a running session, print its answer
 oillamp cancel <dir> [<run>]     # stop the agent's run

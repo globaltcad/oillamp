@@ -219,7 +219,7 @@ final class GeneratedFileTextUtil {
                 fi
                 # `oillamp history <dir> save`: the same.
                 if [ "$before" = history ]; then
-                    COMPREPLY=($(compgen -W 'list save restore autosave' -- "$current"))
+                    COMPREPLY=($(compgen -W 'list save restore autosave branches branch switch reset' -- "$current"))
                     return
                 fi
 
@@ -238,7 +238,7 @@ final class GeneratedFileTextUtil {
                             at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling" ;;
                             view)          options="$options --view-only" ;;
                             remove)        options="$options --yes --dry-run" ;;
-                            history)       options="$options --message" ;;
+                            history)       options="$options --message --all --delete --yes" ;;
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
                             host-access)   options="$options --requirements-env" ;;
@@ -249,6 +249,14 @@ final class GeneratedFileTextUtil {
                         COMPREPLY=($(compgen -W "$options" -- "$current"))
                         return ;;
                 esac
+
+                # `oillamp history <dir> switch main`: the branches the lamp's history has, each a
+                # file in it. A branch git packed into one file is not offered, but can be typed.
+                if [ "$command" = history ] && [ "$COMP_CWORD" -eq $((at + 3)) ] && [ "${COMP_WORDS[at+2]}" = switch ]; then
+                    local heads="${COMP_WORDS[at+1]}/.oillamp/history/refs/heads"
+                    COMPREPLY=($(compgen -W "$(ls "$heads" 2>/dev/null)" -- "$current"))
+                    return
+                fi
 
                 # `oillamp history <dir> autosave startup on`: moments, each followed by on or off.
                 if [ "$command" = history ] && [ "${COMP_WORDS[at+2]}" = autosave ] && [ "$COMP_CWORD" -gt $((at + 2)) ]; then

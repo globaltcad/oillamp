@@ -18,10 +18,12 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,13 +31,16 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+import dev.lamp.LampBranch;
 import dev.lamp.LampSaveKind;
 import dev.lamp.LampProblem;
 import dev.lamp.LampSave;
+import dev.lamp.LampSaveOnBranches;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -46,14 +51,21 @@ import sprouts.Tuple;
 /// Each snapshot is one commit. Its tree mirrors the lamp: the agent directory under its own name,
 /// `oillamp.toml`, `.oillamp/schedule.json`, and `.oillamp-modes`, a list of the exact
 /// permissions git cannot hold (git knows only "executable or not", and ssh refuses a private key
-/// that others may read). The commits form one line, each the parent of the next, on the branch
-/// `main`. A restore never removes a commit: it adds one whose tree is the older snapshot's, with
-/// the schedule the lamp kept when that snapshot is older than snapshots that hold one.
+/// that others may read). Each commit names the one before it as its parent.
+///
+/// A **branch** is a file under `refs/heads/` that names the newest commit of one line of them,
+/// as git keeps it; git may also have moved it into `packed-refs`. The first branch is `main`.
+/// `HEAD` says which branch the lamp is on, as `ref: refs/heads/<name>`, and every save goes to
+/// that one. A restore never removes a commit: it adds one whose tree is the older snapshot's,
+/// with the schedule the lamp kept when that snapshot is older than snapshots that hold one. A
+/// switch brings the lamp to another branch's newest snapshot and points `HEAD` at that branch. A
+/// reset moves the current branch back to one of its older snapshots, and a deleted branch's file
+/// is removed: the commits that then lie on no branch stay where they are.
 ///
 /// Everything here is written in git's own format by this class, not by running `git`; why is
 /// explained in [GitObjectUtil]. Objects are only ever added, each written to a temporary file and
-/// then renamed, and the branch is moved last. A save that is interrupted, even by a power cut,
-/// leaves the history as it was, plus some objects nothing refers to.
+/// then renamed, and a branch is moved last, the same way. A save that is interrupted, even by a
+/// power cut, leaves the history as it was, plus some objects nothing refers to.
 ///
 /// The history is outside the agent directory and never mounted into the container, so the agent
 /// cannot rewrite its own past.
@@ -67,7 +79,12 @@ final class History {
     /// has no `.oillamp` at all.
     static final String STATE_DIR = ".oillamp";
     static final String SCHEDULE_FILE = "schedule.json";
-    private static final String BRANCH = "refs/heads/main";
+    /// The branch a history starts on, and the only one of a lamp saved before there were others.
+    static final String FIRST_BRANCH = "main";
+    /// Where git keeps the branches, each a file named after its branch.
+    private static final String HEADS = "refs/heads/";
+    /// The longest name a branch can be given.
+    static final int LONGEST_BRANCH_NAME = 64;
     /// How long a save waits for another save or restore of the same lamp to finish.
     private static final Duration LOCK_WAIT = Duration.ofMinutes(10);
     /// Files up to this size are read into memory once. Larger ones are read twice, once to name
@@ -100,6 +117,22 @@ final class History {
     record Restoring(LampSave target, Optional<LampSave> safety, Optional<LampSave> result,
                      Tuple<String> skipped) {}
 
+    /// What a switch to another branch did.
+    ///
+    /// @param from   the branch the lamp was on
+    /// @param to     the branch the lamp is on now; the same as `from` when it already was on it,
+    ///               and then nothing changed
+    /// @param safety the save made on `from` just before, so that nothing on it is lost; empty
+    ///               when the lamp had not changed since that branch's newest snapshot
+    record Switching(String from, LampBranch to, Optional<LampSave> safety, Tuple<String> skipped) {}
+
+    /// What a reset did, or would do when it was not confirmed.
+    ///
+    /// @param branch  the branch that goes back, the current one
+    /// @param dropped how many snapshots made after `target` are no longer on the branch
+    /// @param unsaved whether the lamp had changes that no snapshot held
+    record Resetting(String branch, LampSave target, int dropped, boolean unsaved, Tuple<String> skipped) {}
+
     // ─── the three operations ──────────────────────────────────────────────────────────────
 
     /// Saves the lamp as it is now, unless nothing changed since the last snapshot.
@@ -123,7 +156,8 @@ final class History {
         });
     }
 
-    /// Every commit, newest first, with the trailers that say what made each one.
+    /// Every commit on the current branch, newest first, with the trailers that say what made each
+    /// one.
     Result<Tuple<GitObjectUtil.Commit>> commitList() {
         try {
             return Result.ok(commits());
@@ -188,7 +222,8 @@ final class History {
         return false;
     }
 
-    /// Every snapshot, newest first. Empty for a lamp that has never been saved.
+    /// Every snapshot on the current branch, newest first. Empty for a lamp that has never been
+    /// saved.
     Result<Tuple<LampSave>> snapshots() {
         try {
             Tuple<LampSave> found = Tuple.of(LampSave.class);
@@ -199,21 +234,21 @@ final class History {
         }
     }
 
-    /// Brings the lamp back to the snapshot whose id starts with `prefix`.
+    /// Brings the lamp back to the snapshot whose id starts with `prefix`, which must be on the
+    /// current branch: a restore does not put another branch's state on top of this one's.
     ///
     /// Saves the lamp first, so the restore itself can be undone. Only call it while no session
     /// runs: the caller holds the lamp's lock.
     Result<Restoring> restore(String prefix, Instant now) {
         return locked(() -> {
             Tuple<GitObjectUtil.Commit> commits;
+            Result<LampSave> found;
             try {
                 commits = commits();
+                found = onThisBranch(commits, prefix, "restore");
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
             }
-            Tuple<LampSave> snapshots = Tuple.of(LampSave.class);
-            for (GitObjectUtil.Commit commit : commits) snapshots = snapshots.add(commit.snapshot());
-            Result<LampSave> found = GitObjectUtil.find(snapshots, prefix, layout.root());
             if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
             LampSave target = ok.value();
             GitObjectUtil.Commit wanted = commits.stream().filter(c -> c.id().equals(target.id())).findFirst().orElseThrow();
@@ -256,12 +291,265 @@ final class History {
         });
     }
 
+    /// The snapshot on the current branch, whose commits are `line`, that `prefix` names. One that
+    /// only other branches hold is refused, with how to reach it: by starting a branch at it and
+    /// switching to that.
+    ///
+    /// @param action `restore` or `reset`, for the problem
+    private Result<LampSave> onThisBranch(Tuple<GitObjectUtil.Commit> line, String prefix, String action)
+            throws IOException {
+        Result<LampSave> here = GitObjectUtil.find(snapshotsOf(line), prefix, layout.root());
+        if (here.isOk()) return here;
+        Result<LampSave> anywhere = GitObjectUtil.find(snapshotsOf(allCommits()), prefix, layout.root());
+        if (!(anywhere instanceof Result.Ok<LampSave> ok)) return anywhere;
+        Tuple<String> holders = Tuple.of(String.class);
+        for (String name : branchNames())
+            if (line(ref(name)).stream().anyMatch(commit -> commit.id().equals(ok.value().id()))) holders = holders.add(name);
+        return Result.err(ProblemCatalogUtil.notOnThisBranch(ok.value(), headBranch(), holders, layout.root(), action));
+    }
+
+    private static Tuple<LampSave> snapshotsOf(Tuple<GitObjectUtil.Commit> commits) {
+        Tuple<LampSave> snapshots = Tuple.of(LampSave.class);
+        for (GitObjectUtil.Commit commit : commits) snapshots = snapshots.add(commit.snapshot());
+        return snapshots;
+    }
+
+    // ─── branches ──────────────────────────────────────────────────────────────────────────
+
+    /// Why `name` cannot be a new branch's name, or empty when it can. A name is made of lowercase
+    /// letters, digits, `-`, `_` and `.`, begins with a letter or a digit, is at most 64 characters
+    /// long, and neither holds `..` nor ends in `.` or `.lock`, which git refuses. Lowercase only,
+    /// so that no two branches differ by case alone, which some file systems cannot tell apart.
+    static Optional<String> branchNameProblem(String name) {
+        if (name.length() > LONGEST_BRANCH_NAME)
+            return Optional.of("a branch's name is at most " + LONGEST_BRANCH_NAME + " characters long");
+        if (!name.matches("[a-z0-9][a-z0-9._-]*"))
+            return Optional.of("a branch's name is made of lowercase letters, digits, '-', '_' and '.', "
+                             + "and begins with a letter or a digit");
+        if (name.contains("..") || name.endsWith(".") || name.endsWith(".lock"))
+            return Optional.of("a branch's name cannot hold '..', or end in '.' or '.lock', which git refuses");
+        return Optional.empty();
+    }
+
+    /// The branch the lamp is on: the one every save goes to. `main` for a lamp never saved.
+    Result<String> currentBranch() {
+        try {
+            return Result.ok(headBranch());
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+    }
+
+    /// Every branch, in alphabetical order, with its newest snapshot. The current branch is among
+    /// them even before its first snapshot.
+    Result<Tuple<LampBranch>> branches() {
+        try {
+            String current = headBranch();
+            SortedSet<String> names = branchNames();
+            names.add(current);
+            Tuple<LampBranch> found = Tuple.of(LampBranch.class);
+            for (String name : names) {
+                Optional<String> tip = ref(name);
+                found = found.add(new LampBranch(name, name.equals(current),
+                        tip.isEmpty() ? Optional.empty() : Optional.of(commitAt(tip.get()).snapshot())));
+            }
+            return Result.ok(found);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+    }
+
+    /// Every commit on any branch, newest first, each once. Runs are numbered and counted from
+    /// these, because every run on every branch was a run of this lamp's agent.
+    Result<Tuple<GitObjectUtil.Commit>> commitsOfAllBranches() {
+        try {
+            return Result.ok(allCommits());
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+    }
+
+    /// Every snapshot on any branch, newest first, each once, with the branches it is on.
+    Result<Tuple<LampSaveOnBranches>> snapshotsOfAllBranches() {
+        try {
+            Tuple<LampSaveOnBranches> found = Tuple.of(LampSaveOnBranches.class);
+            for (OnBranches listed : everyCommit())
+                found = found.add(new LampSaveOnBranches(listed.commit().snapshot(), Tuple.of(String.class, listed.branches())));
+            return Result.ok(found);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+    }
+
+    /// Starts the branch `name` at the snapshot whose id starts with `prefix`, which may be on any
+    /// branch, or without one at the current branch's newest snapshot. The lamp stays on the branch
+    /// it is on. Only the new branch's file is written, so this works while a session runs.
+    Result<LampBranch> createBranch(String name, Optional<String> prefix) {
+        Optional<String> wrong = branchNameProblem(name);
+        if (wrong.isPresent())
+            return Result.err(ProblemCatalogUtil.usage("the branch name '" + name + "': " + wrong.get(),
+                    Command.usageOf("history <dir> branch")));
+        return locked(() -> {
+            try {
+                if (branchNames().contains(name) || headBranch().equals(name))
+                    return Result.err(ProblemCatalogUtil.branchExists(name, layout.root()));
+                LampSave at;
+                if (prefix.isPresent()) {
+                    Result<LampSave> found = GitObjectUtil.find(snapshotsOf(allCommits()), prefix.get(), layout.root());
+                    if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
+                    at = ok.value();
+                } else {
+                    Optional<GitObjectUtil.Commit> head = headCommit();
+                    if (head.isEmpty())
+                        return Result.err(ProblemCatalogUtil.nothingToBranchFrom(name, headBranch(), layout.root()));
+                    at = head.get().snapshot();
+                }
+                writeRef(name, at.id());
+                return Result.ok(new LampBranch(name, false, Optional.of(at)));
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+        });
+    }
+
+    /// Deletes the branch `name`, or with `confirmed` false only counts what it alone holds. The
+    /// current branch cannot be deleted. Only the branch's file goes; its snapshots stay in the
+    /// history's files, and those on no other branch are then on none.
+    ///
+    /// @return how many snapshots are on `name` and on no other branch
+    Result<Integer> deleteBranch(String name, boolean confirmed) {
+        return locked(() -> {
+            try {
+                SortedSet<String> names = branchNames();
+                if (!names.contains(name))
+                    return Result.err(ProblemCatalogUtil.noSuchBranch(name, layout.root(), Tuple.of(String.class, names)));
+                if (name.equals(headBranch()))
+                    return Result.err(ProblemCatalogUtil.branchIsCurrent(name, layout.root()));
+                Set<String> elsewhere = new HashSet<>();
+                for (String other : names)
+                    if (!other.equals(name))
+                        for (GitObjectUtil.Commit commit : line(ref(other))) elsewhere.add(commit.id());
+                int only = (int) line(ref(name)).stream().filter(commit -> !elsewhere.contains(commit.id())).count();
+                if (confirmed) deleteRef(name);
+                return Result.ok(only);
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+        });
+    }
+
+    /// Switches the lamp to the branch `name`. Saves the lamp on the branch it is on first, if
+    /// anything changed since that branch's newest snapshot, so that nothing is lost. Then brings
+    /// the agent directory, `oillamp.toml` and the schedule to `name`'s newest snapshot, the way a
+    /// restore does, skipping every directory that is the same in both, and points `HEAD` at
+    /// `name`. No snapshot is added to `name`.
+    ///
+    /// Only call it while no session runs: the caller holds the lamp's lock.
+    Result<Switching> switchTo(String name, Instant now) {
+        return locked(() -> {
+            String from;
+            SortedSet<String> names;
+            try {
+                from = headBranch();
+                names = branchNames();
+                if (name.equals(from))
+                    return Result.ok(new Switching(from, new LampBranch(from, true,
+                            headCommit().map(GitObjectUtil.Commit::snapshot)), Optional.empty(), Tuple.of(String.class)));
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+            if (!names.contains(name))
+                return Result.err(ProblemCatalogUtil.noSuchBranch(name, layout.root(), Tuple.of(String.class, names)));
+
+            Saving safety;
+            try {
+                safety = saveUnlocked(LampSaveKind.BEFORE_SWITCH, "before switching to " + name, Optional.empty(), now);
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), "the save before the switch failed, "
+                        + "so the lamp is still on " + from + ": " + ProblemCatalogUtil.reason(e)));
+            }
+            Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
+                    : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
+            // The newest snapshot of `from` now holds exactly what is on disk, apart from any skipped files.
+            GitObjectUtil.Commit current;
+            GitObjectUtil.Commit wanted;
+            String switched;
+            try {
+                current = headCommit().orElseThrow();
+                wanted = commitAt(ref(name).orElseThrow());
+                switched = withScheduleOf(wanted.tree(), current.tree());
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+            try {
+                if (!switched.equals(current.tree())) bringBack(switched, current.tree());
+                writeHead(name);
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.switchFailed(layout.root(), ProblemCatalogUtil.reason(e),
+                        from, current.snapshot().shortId()));
+            }
+            return Result.ok(new Switching(from, new LampBranch(name, true, Optional.of(wanted.snapshot())),
+                    safety.made(), safety.skipped()), warnings);
+        });
+    }
+
+    /// Brings the lamp and its current branch back to the snapshot whose id starts with `prefix`,
+    /// which must be on that branch, as `git reset --hard` does: the snapshots made after it are no
+    /// longer on the branch, and changes that no snapshot holds are thrown away. Nothing is saved
+    /// first. With `confirmed` false nothing changes, and the result says what would be lost.
+    ///
+    /// Only call it while no session runs: the caller holds the lamp's lock.
+    Result<Resetting> reset(String prefix, boolean confirmed) {
+        return locked(() -> {
+            String branch;
+            Tuple<GitObjectUtil.Commit> line;
+            Result<LampSave> found;
+            try {
+                branch = headBranch();
+                line = commits();
+                found = onThisBranch(line, prefix, "reset");
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+            if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
+            LampSave target = ok.value();
+            int dropped = 0;
+            while (!line.get(dropped).id().equals(target.id())) dropped++;
+            GitObjectUtil.Commit newest = line.first();
+            GitObjectUtil.Commit wanted = line.get(dropped);
+
+            // Only to compare it with the newest snapshot; without `confirmed`, nothing is stored.
+            Tally tally = new Tally();
+            tally.write = confirmed;
+            String now;
+            try {
+                now = storeLamp(tally);
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), "the lamp could not be read, "
+                        + "so nothing was reset: " + ProblemCatalogUtil.reason(e)));
+            }
+            Resetting resetting = new Resetting(branch, target, dropped, !now.equals(newest.tree()), tally.skipped);
+            if (!confirmed || (dropped == 0 && !resetting.unsaved())) return Result.ok(resetting);
+            try {
+                bringBack(withScheduleOf(wanted.tree(), now), now);
+                moveBranch(Optional.of(newest.id()), wanted.id());
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.resetFailed(layout.root(), ProblemCatalogUtil.reason(e),
+                        branch, newest.snapshot().shortId()));
+            }
+            return Result.ok(resetting);
+        });
+    }
+
     // ─── saving ────────────────────────────────────────────────────────────────────────────
 
     /// Counts what a save found, as it walks the agent directory.
     private static final class Tally {
         int files;
         Tuple<String> skipped = Tuple.of(String.class);
+        /// Whether objects are stored. Off, they are only named, so that the lamp can be compared
+        /// with a snapshot without adding anything to the history.
+        boolean write = true;
         /// One line per path whose permissions are not what git restores by default, as
         /// `0600 agent-lamp-x/.ssh/id_ed25519` and a NUL byte, since a name may hold a newline.
         final StringBuilder modes = new StringBuilder();
@@ -277,6 +565,19 @@ final class History {
             throws IOException {
         ensureRepository();
         Tally tally = new Tally();
+        String tree = storeLamp(tally);
+
+        Optional<GitObjectUtil.Commit> head = headCommit();
+        if (!always && head.isPresent() && head.get().tree().equals(tree))
+            return new Saving(Optional.empty(), head.map(GitObjectUtil.Commit::snapshot), tally.files, tally.skipped);
+        LampSave made = commit(tree, head.map(GitObjectUtil.Commit::id), now,
+                GitObjectUtil.message(kind, message, session, trailers));
+        return new Saving(Optional.of(made), Optional.of(made), tally.files, tally.skipped);
+    }
+
+    /// Stores the lamp as it is now: the agent directory, `oillamp.toml`, the schedule and the list
+    /// of exact permissions. Returns the name of the top tree, which is a snapshot's tree.
+    private String storeLamp(Tally tally) throws IOException {
         Tuple<GitObjectUtil.Entry> top = Tuple.of(GitObjectUtil.Entry.class);
         Path agent = layout.agentDir();
         String agentName = fileName(agent);
@@ -285,21 +586,14 @@ final class History {
                     storeDirectory(agent, agentName, tally)));
         if (Files.isRegularFile(layout.config(), LinkOption.NOFOLLOW_LINKS))
             top = top.add(new GitObjectUtil.Entry(CONFIG_FILE, GitObjectUtil.EntryMode.FILE,
-                    storeSmall("blob", Files.readAllBytes(layout.config()))));
-        String schedule = storeSmall("blob", new ScheduleBook(layout).stored());
+                    storeSmall("blob", Files.readAllBytes(layout.config()), tally.write)));
+        String schedule = storeSmall("blob", new ScheduleBook(layout).stored(), tally.write);
         top = top.add(new GitObjectUtil.Entry(STATE_DIR, GitObjectUtil.EntryMode.DIRECTORY, storeSmall("tree",
                 GitObjectUtil.tree(Tuple.of(GitObjectUtil.Entry.class,
-                        new GitObjectUtil.Entry(SCHEDULE_FILE, GitObjectUtil.EntryMode.FILE, schedule))))));
+                        new GitObjectUtil.Entry(SCHEDULE_FILE, GitObjectUtil.EntryMode.FILE, schedule))), tally.write)));
         top = top.add(new GitObjectUtil.Entry(MODES_FILE, GitObjectUtil.EntryMode.FILE,
-                storeSmall("blob", tally.modes.toString().getBytes(StandardCharsets.UTF_8))));
-        String tree = storeSmall("tree", GitObjectUtil.tree(top));
-
-        Optional<GitObjectUtil.Commit> head = headCommit();
-        if (!always && head.isPresent() && head.get().tree().equals(tree))
-            return new Saving(Optional.empty(), head.map(GitObjectUtil.Commit::snapshot), tally.files, tally.skipped);
-        LampSave made = commit(tree, head.map(GitObjectUtil.Commit::id), now,
-                GitObjectUtil.message(kind, message, session, trailers));
-        return new Saving(Optional.of(made), Optional.of(made), tally.files, tally.skipped);
+                storeSmall("blob", tally.modes.toString().getBytes(StandardCharsets.UTF_8), tally.write)));
+        return storeSmall("tree", GitObjectUtil.tree(top), tally.write);
     }
 
     /// Stores a directory and everything in it, and returns the name of its tree.
@@ -325,7 +619,8 @@ final class History {
             try {
                 if (attributes.isSymbolicLink()) {
                     byte[] target = Files.readSymbolicLink(child).toString().getBytes(StandardCharsets.UTF_8);
-                    entries = entries.add(new GitObjectUtil.Entry(name, GitObjectUtil.EntryMode.SYMLINK, storeSmall("blob", target)));
+                    entries = entries.add(new GitObjectUtil.Entry(name, GitObjectUtil.EntryMode.SYMLINK,
+                            storeSmall("blob", target, tally.write)));
                 } else if (attributes.isDirectory()) {
                     if (!Files.isReadable(child) || !Files.isExecutable(child)) {
                         tally.skipped = tally.skipped.add(path + "/ (cannot be read)");
@@ -335,7 +630,7 @@ final class History {
                             storeDirectory(child, path, tally)));
                     if (permissions != 0755) tally.modes.append(octal(permissions)).append(' ').append(path).append('\0');
                 } else if (attributes.isRegularFile()) {
-                    Optional<String> blob = storeFile(child, attributes.size());
+                    Optional<String> blob = storeFile(child, attributes.size(), tally.write);
                     if (blob.isEmpty()) {
                         tally.skipped = tally.skipped.add(path + " (kept changing while it was read)");
                         continue;
@@ -353,21 +648,23 @@ final class History {
                 // deleted while the save ran
             }
         }
-        return storeSmall("tree", GitObjectUtil.tree(entries));
+        return storeSmall("tree", GitObjectUtil.tree(entries), tally.write);
     }
 
     /// Stores one file's content, and returns the name of its blob. Empty when the file kept
     /// changing while it was read, three times in a row.
-    private Optional<String> storeFile(Path file, long size) throws IOException {
+    ///
+    /// @param write whether to store it; without, it is only named
+    private Optional<String> storeFile(Path file, long size, boolean write) throws IOException {
         if (size <= SMALL_FILE) {
             byte[] content = Files.readAllBytes(file);
-            return Optional.of(storeSmall("blob", content));
+            return Optional.of(storeSmall("blob", content, write));
         }
         for (int attempt = 0; attempt < 3; attempt++) {
             long expected = Files.size(file);
             Optional<String> id = hashFile(file, expected);
             if (id.isEmpty()) continue;
-            if (Files.exists(objectPath(id.get()))) return id;
+            if (!write || Files.exists(objectPath(id.get()))) return id;
             if (writeLarge(file, expected, id.get())) return id;
         }
         return Optional.empty();
@@ -416,8 +713,13 @@ final class History {
 
     /// Stores an object held in memory, unless it is there already, and returns its name.
     private String storeSmall(String type, byte[] content) throws IOException {
+        return storeSmall(type, content, true);
+    }
+
+    /// The same, or with `write` false only its name.
+    private String storeSmall(String type, byte[] content, boolean write) throws IOException {
         String id = GitObjectUtil.idOf(type, content);
-        if (Files.exists(objectPath(id))) return id;
+        if (!write || Files.exists(objectPath(id))) return id;
         Path temporary = Files.createTempFile(repository.resolve("objects"), "incoming-", ".tmp");
         // A stream given its own Deflater does not release it, so it is released here, rather
         // than whenever the garbage collector gets to thousands of them.
@@ -449,16 +751,47 @@ final class History {
         return GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();
     }
 
-    /// Points the branch at `id`, the last step of every save.
+    /// Points the current branch at `id`, the last step of every save and of a reset.
     ///
     /// The history lock is held, so nothing else moves it at the same time. Checking it still
     /// points at `parent` catches someone committing to this repository by hand meanwhile.
     private void moveBranch(Optional<String> parent, String id) throws IOException {
-        Optional<String> now = branch();
+        String branch = headBranch();
+        Optional<String> now = ref(branch);
         if (!now.equals(parent))
-            throw new IOException("the history changed while this save ran; it now ends at "
+            throw new IOException("the history changed while this ran; " + branch + " now ends at "
                     + now.orElse("nothing") + ", not " + parent.orElse("nothing"));
-        FilesystemUtil.writeFile(repository.resolve(BRANCH), id + "\n", PosixMode.PRIVATE_FILE);
+        writeRef(branch, id);
+    }
+
+    /// Writes a branch's file, which names its newest commit, as git writes it.
+    private void writeRef(String branch, String id) throws IOException {
+        FilesystemUtil.writeFile(repository.resolve(HEADS + branch), id + "\n", PosixMode.PRIVATE_FILE);
+    }
+
+    /// Points `HEAD` at a branch: from now on, saves go to it.
+    private void writeHead(String branch) throws IOException {
+        FilesystemUtil.writeFile(repository.resolve("HEAD"), "ref: " + HEADS + branch + "\n", PosixMode.PRIVATE_FILE);
+    }
+
+    /// Removes a branch: its line in `packed-refs`, if git packed it, and then its own file. Either
+    /// is replaced by renaming a new file over it, so that an interruption leaves the branch as it
+    /// was or gone.
+    private void deleteRef(String branch) throws IOException {
+        Path packed = repository.resolve("packed-refs");
+        if (Files.isRegularFile(packed)) {
+            List<String> lines = Files.readAllLines(packed);
+            List<String> kept = new ArrayList<>();
+            boolean dropping = false;
+            for (String line : lines) {
+                // A `^` line belongs to the ref above it.
+                if (!line.startsWith("^")) dropping = line.endsWith(" " + HEADS + branch);
+                if (!dropping) kept.add(line);
+            }
+            if (kept.size() != lines.size())
+                FilesystemUtil.writeFile(packed, String.join("\n", kept) + "\n", PosixMode.PRIVATE_FILE);
+        }
+        Files.deleteIfExists(repository.resolve(HEADS + branch));
     }
 
     /// Creates an empty repository, the first time a lamp is saved.
@@ -478,44 +811,132 @@ final class History {
                 """, PosixMode.PRIVATE_FILE);
         FilesystemUtil.writeFile(repository.resolve("description"),
                 "The history of the oillamp lamp at " + layout.root() + "\n", PosixMode.PRIVATE_FILE);
-        FilesystemUtil.writeFile(repository.resolve("HEAD"), "ref: " + BRANCH + "\n", PosixMode.PRIVATE_FILE);
+        writeHead(FIRST_BRANCH);
     }
 
     // ─── reading ───────────────────────────────────────────────────────────────────────────
 
-    /// Where the branch points: in its own file, or in `packed-refs` if git packed it.
-    private Optional<String> branch() throws IOException {
-        Path loose = repository.resolve(BRANCH);
-        if (Files.isRegularFile(loose)) return Optional.of(checkedId(Files.readString(loose).strip()));
-        Path packed = repository.resolve("packed-refs");
-        if (Files.isRegularFile(packed))
-            for (String line : Files.readAllLines(packed))
-                if (line.endsWith(" " + BRANCH)) return Optional.of(checkedId(line.substring(0, 40)));
+    /// The branch `HEAD` names, which every save goes to: `main` before the first save.
+    private String headBranch() throws IOException {
+        Path head = repository.resolve("HEAD");
+        if (!Files.isRegularFile(head)) return FIRST_BRANCH;
+        String text = Files.readString(head).strip();
+        String name = text.startsWith("ref: " + HEADS) ? text.substring(("ref: " + HEADS).length()) : "";
+        if (!isRefName(name))
+            throw new IOException("HEAD says '" + text + "', not the branch the lamp is on, such as 'ref: "
+                    + HEADS + FIRST_BRANCH + "'");
+        return name;
+    }
+
+    /// A branch's name as git may have written it: parts joined by `/`, each a plain name. Checked
+    /// for every name read from the history, so that none leads outside `refs/heads`.
+    private static boolean isRefName(String name) {
+        for (String part : name.split("/", -1)) if (!GitObjectUtil.isPlainName(part)) return false;
+        return true;
+    }
+
+    /// Where a branch points: in its own file, or in `packed-refs` if git packed it.
+    private Optional<String> ref(String branch) throws IOException {
+        Path loose = repository.resolve(HEADS + branch);
+        if (Files.isRegularFile(loose, LinkOption.NOFOLLOW_LINKS))
+            return Optional.of(checkedId(Files.readString(loose).strip(), branch));
+        for (String line : packedRefs())
+            if (line.substring(41).equals(HEADS + branch)) return Optional.of(checkedId(line.substring(0, 40), branch));
         return Optional.empty();
     }
 
-    private static String checkedId(String id) throws IOException {
-        if (!GitObjectUtil.isObjectId(id)) throw new IOException("the branch names '" + id + "', not a commit");
+    /// The lines of `packed-refs` that name a ref, each an id, a space and the ref; without the
+    /// comment git starts it with and the `^` lines it adds below a tag.
+    private List<String> packedRefs() throws IOException {
+        Path packed = repository.resolve("packed-refs");
+        if (!Files.isRegularFile(packed)) return List.of();
+        return Files.readAllLines(packed).stream()
+                .filter(line -> line.length() > 41 && line.charAt(40) == ' ' && !line.startsWith("#") && !line.startsWith("^"))
+                .toList();
+    }
+
+    /// The name of every branch, in alphabetical order: those in their own files under
+    /// `refs/heads`, and those git packed into `packed-refs`. A file git leaves while it changes a
+    /// branch, which ends in `.lock`, is not one.
+    private SortedSet<String> branchNames() throws IOException {
+        SortedSet<String> names = new TreeSet<>();
+        Path heads = repository.resolve(HEADS);
+        if (Files.isDirectory(heads, LinkOption.NOFOLLOW_LINKS))
+            try (Stream<Path> files = Files.walk(heads)) {
+                files.filter(file -> Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
+                     .forEach(file -> names.add(heads.relativize(file).toString()));
+            }
+        for (String line : packedRefs())
+            if (line.startsWith(HEADS, 41)) names.add(line.substring(41 + HEADS.length()));
+        names.removeIf(name -> !isRefName(name) || name.endsWith(".lock"));
+        return names;
+    }
+
+    private static String checkedId(String id, String branch) throws IOException {
+        if (!GitObjectUtil.isObjectId(id))
+            throw new IOException("the branch " + branch + " names '" + id + "', not a commit");
         return id;
     }
 
-    private Optional<GitObjectUtil.Commit> headCommit() throws IOException {
-        Optional<String> id = branch();
-        return id.isEmpty() ? Optional.empty() : Optional.of(GitObjectUtil.parseCommit(id.get(), readObject(id.get(), "commit")));
+    private GitObjectUtil.Commit commitAt(String id) throws IOException {
+        return GitObjectUtil.parseCommit(id, readObject(id, "commit"));
     }
 
-    /// Every commit, newest first, following each one's parent.
+    /// The newest commit of the current branch.
+    private Optional<GitObjectUtil.Commit> headCommit() throws IOException {
+        Optional<String> id = ref(headBranch());
+        return id.isEmpty() ? Optional.empty() : Optional.of(commitAt(id.get()));
+    }
+
+    /// Every commit on the current branch, newest first.
     private Tuple<GitObjectUtil.Commit> commits() throws IOException {
         if (!Files.isRegularFile(repository.resolve("HEAD"))) return Tuple.of(GitObjectUtil.Commit.class);
+        return line(ref(headBranch()));
+    }
+
+    /// The commit `tip` names and every one before it, newest first, following each one's parent.
+    private Tuple<GitObjectUtil.Commit> line(Optional<String> tip) throws IOException {
         Tuple<GitObjectUtil.Commit> found = Tuple.of(GitObjectUtil.Commit.class);
-        Optional<String> next = branch();
+        Optional<String> next = tip;
         Set<String> seen = new HashSet<>();
         while (next.isPresent() && seen.add(next.get())) {
-            GitObjectUtil.Commit commit = GitObjectUtil.parseCommit(next.get(), readObject(next.get(), "commit"));
+            GitObjectUtil.Commit commit = commitAt(next.get());
             found = found.add(commit);
             next = commit.parent();
         }
         return found;
+    }
+
+    /// Every commit on any branch, newest first, each once.
+    private Tuple<GitObjectUtil.Commit> allCommits() throws IOException {
+        Tuple<GitObjectUtil.Commit> found = Tuple.of(GitObjectUtil.Commit.class);
+        for (OnBranches listed : everyCommit()) found = found.add(listed.commit());
+        return found;
+    }
+
+    /// A commit, with the branches it is on.
+    ///
+    /// @param depth    how many commits come before it, following each one's parent
+    /// @param branches the names of those branches, in alphabetical order
+    private record OnBranches(GitObjectUtil.Commit commit, int depth, List<String> branches) {}
+
+    /// Every commit on any branch, each once: newest first, and of two saved in the same second,
+    /// the one with more commits before it first, since a commit always comes after its parent.
+    private List<OnBranches> everyCommit() throws IOException {
+        if (!Files.isRegularFile(repository.resolve("HEAD"))) return List.of();
+        Map<String, OnBranches> found = new LinkedHashMap<>();
+        for (String name : branchNames()) {
+            Tuple<GitObjectUtil.Commit> line = line(ref(name));
+            for (int at = 0; at < line.size(); at++) {
+                GitObjectUtil.Commit commit = line.get(at);
+                int depth = line.size() - 1 - at;
+                found.computeIfAbsent(commit.id(), _ -> new OnBranches(commit, depth, new ArrayList<>())).branches().add(name);
+            }
+        }
+        List<OnBranches> newestFirst = new ArrayList<>(found.values());
+        newestFirst.sort(Comparator.comparing((OnBranches listed) -> listed.commit().snapshot().at())
+                                   .thenComparingInt(OnBranches::depth).reversed());
+        return newestFirst;
     }
 
     private Path objectPath(String id) {
@@ -744,8 +1165,8 @@ final class History {
 
     // ─── small helpers ─────────────────────────────────────────────────────────────────────
 
-    /// Runs `work` while holding the history lock, waiting for another save or restore of this
-    /// lamp to finish first.
+    /// Runs `work` while holding the history lock, waiting for another save, restore, switch,
+    /// reset, or start or deletion of a branch of this lamp to finish first.
     private <T> Result<T> locked(Supplier<Result<T>> work) {
         Duration pause = Duration.ofMillis(200);
         try {

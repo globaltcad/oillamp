@@ -29,7 +29,7 @@ import java.util.function.Consumer;
 ///   started with.
 ///
 /// The other methods act on the lamp itself, such as [#save], [#history], [#restore],
-/// [#schedule] and [#remove]. Each one runs a short-lived engine process, waits for it, and
+/// [#branches], [#switchTo], [#schedule] and [#remove]. Each one runs a short-lived engine process, waits for it, and
 /// passes what it reports to the listeners; each says whether it works while a session runs.
 /// The conversation methods read the agent's home directly, and [#ask] needs a running session.
 public final class LampDirectory {
@@ -282,40 +282,145 @@ public final class LampDirectory {
         return Lamp.save(launcher, listeners, directory, message);
     }
 
-    /// Every snapshot of this lamp, newest first.
+    /// Every snapshot on the branch this lamp is on, newest first. Works whether or not a session
+    /// runs.
     ///
     /// @throws LampFailedException when the lamp's history could not be read; the problem says why
     /// @throws IOException when the engine's process could not be started at all
     public List<LampSave> history() throws IOException, InterruptedException, LampFailedException {
-        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString());
-        ran.orThrow();
-        for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.History(sprouts.Tuple<LampSave> snapshots1)) {
-                List<LampSave> snapshots = new ArrayList<>();
-                for (LampSave snapshot : snapshots1) snapshots.add(snapshot);
-                return List.copyOf(snapshots);
-            }
-        return List.of();
+        return List.copyOf(Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString()),
+                LampEvent.History.class).snapshots().toList());
+    }
+
+    /// Every snapshot on every branch of this lamp, newest first, each once, with the branches it
+    /// is on, as `oillamp history <dir> list --all` lists them. Works whether or not a session runs.
+    ///
+    /// @throws LampFailedException when the lamp's history could not be read; the problem says why
+    /// @throws IOException when the engine's process could not be started at all
+    public List<LampSaveOnBranches> historyOfAllBranches() throws IOException, InterruptedException, LampFailedException {
+        return List.copyOf(Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "list", "--all"),
+                LampEvent.HistoryOfAllBranches.class).snapshots().toList());
     }
 
     /// Brings this lamp back to `snapshot`: the agent's home, `oillamp.toml` and the schedule
     /// become what they were when it was saved; a snapshot from before oillamp saved the schedule
-    /// leaves the schedule as it is. The lamp is saved first, so a restore can be undone by
-    /// restoring that save. A lamp whose sandbox is running is refused: close it first.
+    /// leaves the schedule as it is. The snapshot must be on the branch the lamp is on; to go to
+    /// another branch's snapshot, start a branch at it with [#branch(String, String)] and switch to
+    /// that with [#switchTo]. The lamp is saved first, so a restore can be undone by restoring
+    /// that save. A lamp whose sandbox is running is refused: close it first.
     ///
     /// @param snapshot a snapshot's [id][LampSave#id()], or a unique beginning of
     ///                 it of at least four characters
     /// @return the snapshot that records the restore, or the one restored when the lamp
     ///         already was in that state
-    /// @throws LampFailedException when there is no such snapshot, the sandbox is running, or the
-    ///                     restore did not finish; the problem says which
+    /// @throws LampFailedException when there is no such snapshot, it is on another branch
+    ///                     (`OIL-HISTORY-008`), the sandbox is running, or the restore did not
+    ///                     finish; the problem says which
     /// @throws IOException when the engine's process could not be started at all
     public LampSave restore(String snapshot) throws IOException, InterruptedException, LampFailedException {
-        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "restore", snapshot);
-        ran.orThrow();
-        for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.Restored restored) return restored.result();
-        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no restore"));
+        return Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "restore", snapshot),
+                LampEvent.Restored.class).result();
+    }
+
+    /// Every branch of this lamp's history, in alphabetical order: alternative states of the lamp,
+    /// each a line of snapshots with its own agent home, `oillamp.toml` and schedule. One of them
+    /// is [current][LampBranch#current()]. Works whether or not a session runs.
+    ///
+    /// @throws LampFailedException when the lamp's history could not be read; the problem says why
+    /// @throws IOException when the engine's process could not be started at all
+    public List<LampBranch> branches() throws IOException, InterruptedException, LampFailedException {
+        return Lamp.branches(launcher, listeners, directory);
+    }
+
+    /// Starts the branch `name` at the newest snapshot of the branch this lamp is on. The lamp stays
+    /// on its branch; [#switchTo] goes to the new one. Works whether or not a session runs.
+    ///
+    /// @param name lowercase letters, digits, `-`, `_` and `.`, beginning with a letter or a digit,
+    ///             at most 64 characters
+    /// @throws LampFailedException when the name cannot be a branch's, a branch has it already
+    ///                     (`OIL-HISTORY-010`), or the lamp was never saved; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampBranch branch(String name) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.branch(launcher, listeners, directory, name);
+    }
+
+    /// Starts the branch `name` at `snapshot`, which may be on any branch: the way to start a new
+    /// state of the lamp from another state's past. The lamp stays on its branch.
+    ///
+    /// @param snapshot a snapshot's [id][LampSave#id()], or a unique beginning of it of at least
+    ///                 four characters
+    /// @throws LampFailedException when the name cannot be a branch's, a branch has it already, or
+    ///                     there is no such snapshot; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampBranch branch(String name, String snapshot) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.branch(launcher, listeners, directory, name, snapshot);
+    }
+
+    /// Switches this lamp to the branch `name`: what changed since the newest snapshot of the
+    /// branch it is on is saved there first, then the agent's home, `oillamp.toml` and the schedule
+    /// become as `name`'s newest snapshot holds them, and every save goes to `name` from now on.
+    /// Switching to the branch the lamp is on changes nothing. A lamp whose sandbox is running is
+    /// refused: close it first.
+    ///
+    /// @return the branch the lamp is on now
+    /// @throws LampFailedException when there is no such branch (`OIL-HISTORY-009`), the sandbox
+    ///                     is running (`OIL-HISTORY-005`), or the switch did not finish; the
+    ///                     problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampBranch switchTo(String name) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "switch", name),
+                LampEvent.Switched.class).to();
+    }
+
+    /// What [#deleteBranch] would do, without doing it: how many snapshots are on the branch `name`
+    /// and on no other, so that an application can ask its user first.
+    ///
+    /// @throws LampFailedException when there is no such branch, or it is the one the lamp is on
+    ///                     (`OIL-HISTORY-011`); the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampEvent.BranchDeletePlanned wouldDeleteBranch(String name)
+            throws IOException, InterruptedException, LampFailedException {
+        return Lamp.planned(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "branch", "--delete", name),
+                LampEvent.BranchDeletePlanned.class);
+    }
+
+    /// Deletes the branch `name`, which must not be the one the lamp is on, as
+    /// `oillamp history <dir> branch --delete <name> --yes` does. Only the branch goes: its
+    /// snapshots stay in the history's files, and those on no other branch are on none from now on.
+    /// Works whether or not a session runs.
+    ///
+    /// @throws LampFailedException when there is no such branch, or it is the one the lamp is on;
+    ///                     the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampEvent.BranchDeleted deleteBranch(String name) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "branch", "--delete", name, "--yes"),
+                LampEvent.BranchDeleted.class);
+    }
+
+    /// What [#reset] would throw away, without doing it: how many snapshots would leave the branch,
+    /// and whether the lamp has changes no snapshot holds, so that an application can ask its user
+    /// first. A lamp whose sandbox is running is refused.
+    ///
+    /// @throws LampFailedException when there is no such snapshot, it is on another branch, or the
+    ///                     sandbox is running; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampEvent.ResetPlanned wouldReset(String snapshot) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.planned(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "reset", snapshot),
+                LampEvent.ResetPlanned.class);
+    }
+
+    /// Brings this lamp and the branch it is on back to `snapshot`, which must be on that branch, as
+    /// `oillamp history <dir> reset <snapshot> --yes` and `git reset --hard` do: the snapshots
+    /// after it are no longer on the branch, and changes not yet saved are thrown away. Nothing is
+    /// saved first, so this cannot be undone with [#restore]; the snapshots that left the branch
+    /// stay on any other branch they are on. A lamp whose sandbox is running is refused.
+    ///
+    /// @throws LampFailedException when there is no such snapshot, it is on another branch, the
+    ///                     sandbox is running, or the reset did not finish; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public LampEvent.ResetDone reset(String snapshot) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.answer(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "reset", snapshot, "--yes"),
+                LampEvent.ResetDone.class);
     }
 
     /// Reads the values of `enabled` and `requirements` in the `[host_access]` table of this

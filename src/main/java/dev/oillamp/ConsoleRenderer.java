@@ -230,13 +230,45 @@ final class ConsoleRenderer {
             case LampEvent.Saved saved -> printLine(area("history") + colour(GREEN, "✓ ") + "saved "
                     + saved.snapshot().shortId() + " — " + saved.snapshot().kind().label()
                     + (saved.files() > 0 ? ", " + saved.files() + " files" : ""));
-            case LampEvent.History history -> printLine(describe(history.snapshots()));
+            case LampEvent.History history -> printLine(describe(history.branch(), history.snapshots()));
+            case LampEvent.HistoryOfAllBranches all -> printLine(describe(all));
             case LampEvent.Restored restored -> printLine(area("history") + colour(GREEN, "✓ ")
                     + (restored.result().equals(restored.target())
                         ? "the lamp already is as " + restored.target().shortId() + " holds it, so nothing changed"
                         : "restored " + restored.target().shortId() + " (" + restored.target().kind().label()
                           + " of " + when(restored.target().at()) + " UTC), recorded as "
                           + restored.result().shortId()));
+            case LampEvent.Branches branches -> printLine(describeBranches(branches.branches()));
+            case LampEvent.BranchCreated created -> printLine(area("history") + colour(GREEN, "✓ ") + "started the branch "
+                    + created.branch().name() + created.branch().newest().map(newest -> " at " + newest.shortId()
+                        + " (" + newest.kind().label() + " of " + when(newest.at()) + " UTC)").orElse(""));
+            case LampEvent.BranchDeletePlanned planned -> printLine(area("history") + colour(YELLOW, "! ")
+                    + (planned.snapshots() == 0
+                        ? "every snapshot on the branch " + planned.branch() + " is on another branch too, so deleting it "
+                          + "would leave none on no branch"
+                        : "deleting the branch " + planned.branch() + " would leave " + snapshots(planned.snapshots())
+                          + " on no branch"));
+            case LampEvent.BranchDeleted deleted -> printLine(area("history") + colour(GREEN, "✓ ") + "deleted the branch "
+                    + deleted.branch() + (deleted.snapshots() == 0 ? "; every snapshot on it is on another branch too"
+                        : "; " + snapshots(deleted.snapshots()) + " that only it held stay in the history's files, "
+                          + "on no branch"));
+            case LampEvent.Switched switched -> printLine(area("history") + colour(GREEN, "✓ ")
+                    + (switched.from().equals(switched.to().name())
+                        ? "the lamp already is on " + switched.from() + ", so nothing changed"
+                        : "switched from " + switched.from() + " to " + switched.to().name()
+                          + switched.to().newest().map(newest -> ": the lamp is as its newest snapshot, "
+                              + newest.shortId() + ", holds it").orElse("")));
+            case LampEvent.ResetPlanned planned -> printLine(area("history") + colour(YELLOW, "! ")
+                    + (planned.snapshots() == 0 && !planned.unsaved()
+                        ? "the lamp already is as " + planned.target().shortId() + " holds it, so a reset would change nothing"
+                        : "a reset to " + planned.target().shortId() + " would take " + snapshots(planned.snapshots())
+                          + " off the branch" + (planned.unsaved() ? ", and throw away changes no snapshot holds" : "")));
+            case LampEvent.ResetDone done -> printLine(area("history") + colour(GREEN, "✓ ")
+                    + (done.snapshots() == 0 && !done.unsaved()
+                        ? "the lamp already is as " + done.target().shortId() + " holds it, so nothing changed"
+                        : "reset to " + done.target().shortId() + " (" + done.target().kind().label() + " of "
+                          + when(done.target().at()) + " UTC): " + snapshots(done.snapshots()) + " left the branch"
+                          + (done.unsaved() ? ", and the changes no snapshot held are gone" : "")));
             case LampEvent.Schedule schedule -> printLine(describe(schedule));
             case LampEvent.JobAdded added -> printLine(area("schedule") + colour(GREEN, "✓ ") + "added "
                     + added.job().id() + " — " + added.job().when()
@@ -426,20 +458,49 @@ final class ConsoleRenderer {
     }
 
     /// The snapshots `oillamp history` lists, as a table, newest first.
-    private static String describe(Tuple<LampSave> snapshots) {
+    private static String describe(String branch, Tuple<LampSave> snapshots) {
         if (snapshots.isEmpty())
-            return "no snapshots yet — oillamp saves when a session starts and ends, "
+            return "no snapshots on the branch " + branch + " yet — oillamp saves around each run, "
                  + "or run `oillamp history <dir> save`";
-        StringBuilder out = new StringBuilder("SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE");
-        for (LampSave snapshot : snapshots) {
-            String note = !snapshot.message().isBlank() ? snapshot.message().lines().findFirst().orElse("")
-                        : snapshot.session().map(session -> "session " + session).orElse("");
-            out.append('\n').append(snapshot.shortId()).append("  ")
-               .append(when(snapshot.at())).append("  ")
-               .append(String.format("%-30s", snapshot.kind().label()))
-               .append(note);
+        StringBuilder out = new StringBuilder("on the branch " + branch + "\n\n"
+                + "SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE");
+        for (LampSave snapshot : snapshots) out.append('\n').append(row(snapshot));
+        return out.toString().stripTrailing();
+    }
+
+    /// The snapshots `oillamp history <dir> list --all` lists, each with the branches it is on.
+    private static String describe(LampEvent.HistoryOfAllBranches all) {
+        if (all.snapshots().isEmpty())
+            return "no snapshots yet — oillamp saves around each run, or run `oillamp history <dir> save`";
+        StringBuilder out = new StringBuilder("the lamp is on the branch " + all.current() + "\n\n"
+                + "SNAPSHOT  SAVED (UTC)          KIND                          BRANCHES        MESSAGE");
+        for (LampSaveOnBranches listed : all.snapshots()) {
+            String row = row(listed.snapshot());
+            String branches = String.format("%-15s ", listed.branches().join(","));
+            out.append('\n').append(row, 0, 61).append(branches).append(row.substring(61));
         }
         return out.toString().stripTrailing();
+    }
+
+    /// One snapshot in a table, the message last: 61 characters before it.
+    private static String row(LampSave snapshot) {
+        String note = !snapshot.message().isBlank() ? snapshot.message().lines().findFirst().orElse("")
+                    : snapshot.session().map(session -> "session " + session).orElse("");
+        return snapshot.shortId() + "  " + when(snapshot.at()) + "  " + String.format("%-30s", snapshot.kind().label()) + note;
+    }
+
+    /// The branches `oillamp history <dir> branches` lists, the current one marked with `*`.
+    private static String describeBranches(Tuple<LampBranch> branches) {
+        StringBuilder out = new StringBuilder("  BRANCH            NEWEST    SAVED (UTC)          KIND");
+        for (LampBranch branch : branches)
+            out.append('\n').append(branch.current() ? "* " : "  ").append(String.format("%-17s ", branch.name()))
+               .append(branch.newest().map(newest -> newest.shortId() + "  " + when(newest.at()) + "  " + newest.kind().label())
+                                      .orElse("(no snapshot yet)"));
+        return out.append("\n\n* the branch the lamp is on; every save goes to it").toString();
+    }
+
+    private static String snapshots(int count) {
+        return count == 1 ? "1 snapshot" : count + " snapshots";
     }
 
     private static String when(Instant at) {

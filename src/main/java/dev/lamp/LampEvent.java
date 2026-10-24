@@ -95,12 +95,62 @@ public sealed interface LampEvent {
     /// @param files how many files the snapshot holds; 0 where that was not counted
     record Saved(LampSave snapshot, int files)          implements LampEvent {}
 
-    /// A lamp's snapshots, newest first. What `oillamp history <dir>` answers.
-    record History(Tuple<LampSave> snapshots)           implements LampEvent {}
+    /// The snapshots on a lamp's current branch, newest first. What `oillamp history <dir>`
+    /// answers.
+    ///
+    /// @param branch the branch the lamp is on, such as `main`
+    record History(String branch, Tuple<LampSave> snapshots) implements LampEvent {}
+
+    /// The snapshots on every branch of a lamp, newest first, each once, with the branches it is
+    /// on. What `oillamp history <dir> list --all` answers.
+    ///
+    /// @param current the branch the lamp is on
+    record HistoryOfAllBranches(String current, Tuple<LampSaveOnBranches> snapshots) implements LampEvent {}
 
     /// The lamp was brought back to `target`, and `result` is the snapshot that records it.
     /// When the lamp already was as `target` holds it, nothing changed and `result` is `target`.
     record Restored(LampSave target, LampSave result)   implements LampEvent {}
+
+    // ─── branches ──────────────────────────────────────────────────────────────────────────
+
+    /// A lamp's branches, in alphabetical order. What `oillamp history <dir> branches` answers.
+    record Branches(Tuple<LampBranch> branches)         implements LampEvent {}
+
+    /// A branch was started at its newest snapshot. The lamp stays on the branch it was on.
+    record BranchCreated(LampBranch branch)             implements LampEvent {}
+
+    /// What `oillamp history <dir> branch --delete` without `--yes` would do. Nothing changed.
+    ///
+    /// @param snapshots how many snapshots are on that branch and on no other, and would be on
+    ///                  no branch once it is deleted
+    record BranchDeletePlanned(String branch, int snapshots) implements LampEvent {}
+
+    /// A branch was deleted.
+    ///
+    /// @param snapshots how many snapshots were on that branch and on no other. They stay in the
+    ///                  history's files, but no branch leads to them
+    record BranchDeleted(String branch, int snapshots)  implements LampEvent {}
+
+    /// The lamp was switched to the branch `to`: the agent's home, `oillamp.toml` and the schedule
+    /// are as its newest snapshot holds them, and every save goes to it from now on. When `from`
+    /// is `to`'s name, the lamp already was on it, and nothing changed.
+    ///
+    /// @param from the branch the lamp was on
+    record Switched(String from, LampBranch to)         implements LampEvent {}
+
+    /// What `oillamp history <dir> reset` without `--yes` would throw away. Nothing changed.
+    ///
+    /// @param target    the snapshot the current branch would go back to
+    /// @param snapshots how many snapshots made after `target` would no longer be on the branch
+    /// @param unsaved   whether the lamp has changes no snapshot holds, which would be lost
+    record ResetPlanned(LampSave target, int snapshots, boolean unsaved) implements LampEvent {}
+
+    /// The lamp and its current branch went back to `target`. The snapshots after it are no longer
+    /// on the branch, and changes that had not been saved are gone.
+    ///
+    /// @param snapshots how many snapshots made after `target` are no longer on the branch
+    /// @param unsaved   whether changes no snapshot held were thrown away
+    record ResetDone(LampSave target, int snapshots, boolean unsaved) implements LampEvent {}
 
     // ─── the schedule, and the runs that wake the agent ───────────────────────────────────
 

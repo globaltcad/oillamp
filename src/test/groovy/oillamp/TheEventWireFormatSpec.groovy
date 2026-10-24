@@ -4,6 +4,8 @@ import dev.lamp.LampJobAuthor
 import dev.lamp.LampEvent
 import dev.lamp.LampStartupPhase
 import dev.lamp.LampSave
+import dev.lamp.LampBranch
+import dev.lamp.LampSaveOnBranches
 import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
 import dev.lamp.LampProblem
@@ -100,10 +102,22 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.WindowOpened('the desktop viewer', Tuple.of(String, 'vncviewer', '/run/x.sock')),
             new LampEvent.Summary('session 20260928-120000', Tuple.of(String)),
             new LampEvent.Saved(SNAPSHOT, 1234),
-            new LampEvent.History(Tuple.of(LampSave, SNAPSHOT,
+            new LampEvent.History('main', Tuple.of(LampSave, SNAPSHOT,
                     new LampSave('0123456789abcdef0123456789abcdef01234567', Instant.EPOCH,
                                            LampSaveKind.IDLE, '', Optional.empty(), Optional.empty(),
                                            Optional.empty(), Optional.empty(), Optional.empty()))),
+            new LampEvent.History('rust-rewrite', Tuple.of(LampSave)),
+            new LampEvent.HistoryOfAllBranches('main', Tuple.of(LampSaveOnBranches,
+                    new LampSaveOnBranches(SNAPSHOT, Tuple.of(String, 'main', 'rust-rewrite')),
+                    new LampSaveOnBranches(SNAPSHOT, Tuple.of(String)))),
+            new LampEvent.Branches(Tuple.of(LampBranch, new LampBranch('main', true, Optional.of(SNAPSHOT)),
+                    new LampBranch('rust-rewrite', false, Optional.empty()))),
+            new LampEvent.BranchCreated(new LampBranch('rust-rewrite', false, Optional.of(SNAPSHOT))),
+            new LampEvent.BranchDeletePlanned('rust-rewrite', 3),
+            new LampEvent.BranchDeleted('rust-rewrite', 0),
+            new LampEvent.Switched('main', new LampBranch('rust-rewrite', true, Optional.of(SNAPSHOT))),
+            new LampEvent.ResetPlanned(SNAPSHOT, 2, true),
+            new LampEvent.ResetDone(SNAPSHOT, 0, false),
             new LampEvent.Restored(SNAPSHOT, new LampSave('fedcba9876543210fedcba9876543210fedcba98',
                     Instant.parse('2026-09-29T19:00:00Z'), LampSaveKind.RESTORE, 'back to 3f2a9c1d',
                     Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())),

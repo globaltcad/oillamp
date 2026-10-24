@@ -121,6 +121,15 @@ class UsingTheCommandLineSpec extends Specification {
             'history LAMP save --at in-2h'     | "`oillamp history` does not take --at"   | 'oillamp history <dir> save'
             'history LAMP save --expires in-3d' | "`oillamp history` does not take --expires" | 'oillamp history <dir> save'
             'status LAMP --prune'              | "`oillamp status` does not take --prune" | 'oillamp status <dir>'
+            'history LAMP save --all'          | '--all only goes with `oillamp history <dir> list`' | 'oillamp history <dir> [list] [--all]'
+            'history LAMP switch rust --delete' | '--delete only goes with `oillamp history <dir> branch`' | 'oillamp history <dir> branch --delete <name>'
+            'history LAMP restore a1b2c3d4 --yes' | '--yes only goes with `oillamp history <dir> reset`' | 'oillamp history <dir> reset <snapshot> [--yes]'
+            'history LAMP switch rust extra'   | "'extra'"                                | 'oillamp history <dir> switch <name>'
+            'history LAMP reset a1b2c3d4 extra' | "'extra'"                               | 'oillamp history <dir> reset <snapshot> [--yes]'
+            'history LAMP branches extra'      | "'extra'"                                | 'oillamp history <dir> branches'
+            'history LAMP branch rust a1b2c3d4 extra' | "'extra'"                         | 'oillamp history <dir> branch <name> [<snapshot>]'
+            'history LAMP branch --delete rust extra' | "'extra'"                         | 'oillamp history <dir> branch --delete <name> [--yes]'
+            'history LAMP list --cron @daily'  | "`oillamp history` does not take --cron" | 'oillamp history <dir>'
     }
 
     def 'The options a command does take are still accepted: oillamp #line'() {
@@ -142,6 +151,9 @@ class UsingTheCommandLineSpec extends Specification {
                      'recordings LAMP --open 20260101-120000', 'remove LAMP --yes --embedded',
                      'history LAMP save --message note --embedded', 'history LAMP --embedded',
                      'history LAMP restore a1b2c3d4 --embedded', 'history LAMP autosave --embedded', 'stop LAMP --embedded', 'status LAMP --embedded',
+                     'history LAMP list --all --embedded', 'history LAMP --all', 'history LAMP branches --embedded',
+                     'history LAMP branch rust a1b2c3d4 --embedded', 'history LAMP branch --delete rust --yes --embedded',
+                     'history LAMP branch -y --delete rust', 'history LAMP switch rust --embedded', 'history LAMP reset a1b2c3d4 --yes --embedded',
                      'follow LAMP --embedded', 'cancel LAMP --embedded', 'model LAMP azure/gpt-6.1-sol --embedded', 'conversations LAMP --embedded',
                      'schedule LAMP --embedded', 'schedule LAMP add --at in-2h --expires in-3d hello',
                      'ask LAMP --no-wait --embedded hello']
@@ -319,7 +331,9 @@ class UsingTheCommandLineSpec extends Specification {
             be the script and nothing else: no banner, no colour. And the completions must match
             the command line oillamp parses. In `oillamp config <dir> check` and
             `oillamp history <dir> save`, the directory comes first, so the word after `config` or
-            `history` is a path and the one after that is the action.
+            `history` is a path and the one after that is the action. After
+            `oillamp history <dir> switch` comes a branch, one of the lines of snapshots in the
+            lamp's history, and the script offers the names of those the history has.
         """
         when:
             var outcome = host.oillamp.run('completion', 'bash')
@@ -340,11 +354,21 @@ class UsingTheCommandLineSpec extends Specification {
 
         and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
             !complete(script, 'oillamp', 'history', '').contains('save')
-            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave']
+            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset']
             complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
             complete(script, 'oillamp', 'history', '/x', 'save', '--m') == ['--message']
+            complete(script, 'oillamp', 'history', '/x', 'list', '--a') == ['--all']
+            complete(script, 'oillamp', 'history', '/x', 'branch', '--d') == ['--debug', '--delete']
+            complete(script, 'oillamp', 'history', '/x', 'reset', 'a1b2', '--y') == ['--yes']
+
+        and: 'it completes the branches of the lamp\'s history after switch'
+            var heads = Files.createDirectories(tmp.resolve('lamp/.oillamp/history/refs/heads'))
+            Files.writeString(heads.resolve('main'), '0' * 40 + '\n')
+            Files.writeString(heads.resolve('rust-rewrite'), '0' * 40 + '\n')
+            complete(script, 'oillamp', 'history', tmp.resolve('lamp').toString(), 'switch', '') == ['main', 'rust-rewrite']
+            complete(script, 'oillamp', 'history', tmp.resolve('lamp').toString(), 'switch', 'r') == ['rust-rewrite']
             !complete(script, 'oillamp', 'sa').contains('save')
 
         and: 'it offers each command only the options that command takes'
@@ -660,6 +684,10 @@ class UsingTheCommandLineSpec extends Specification {
             'ask LAMP'              | '`oillamp ask` needs something to ask the agent, in quotes'
             'history LAMP restore'  | '`oillamp history <dir> restore` needs the snapshot to go back to'
             'history LAMP autosave startup' | '`oillamp history <dir> autosave` startup needs on or off after it'
+            'history LAMP switch'   | '`oillamp history <dir> switch` needs the branch to switch to'
+            'history LAMP reset'    | '`oillamp history <dir> reset` needs the snapshot to go back to'
+            'history LAMP branch'   | '`oillamp history <dir> branch` needs the name of the branch'
+            'history LAMP branch --delete' | '`oillamp history <dir> branch --delete` needs the name of the branch to delete'
             'schedule LAMP add'     | '`oillamp schedule <dir> add` needs the prompt the agent is woken with, in quotes'
             'schedule LAMP remove'  | '`oillamp schedule <dir> remove` needs the job, such as job-3'
             'schedule LAMP enable'  | '`oillamp schedule <dir> enable` needs the job, such as job-3'
@@ -740,11 +768,11 @@ class UsingTheCommandLineSpec extends Specification {
     def 'Oillamp refuses a word after `history <dir>` that is not one of its actions: oillamp #line'() {
         reportInfo """
             Let's consider a person who types `oillamp history <dir> tidy`, expecting a clean-up
-            that does not exist. After the lamp, `oillamp history <dir>` knows four actions:
-            `list`, `save`, `restore` and `autosave`. Any other word is a usage error that names
-            those four and shows how each is written, and oillamp reports it
-            before it looks for the lamp, so a typo is reported as a typo and not as a lamp that
-            is missing.
+            that does not exist. After the lamp, `oillamp history <dir>` knows eight actions:
+            `list`, `save`, `restore`, `autosave`, `branches`, `branch`, `switch` and `reset`. Any
+            other word is a usage error that names those eight and shows how each is written, and
+            oillamp reports it before it looks for the lamp, so a typo is reported as a typo and
+            not as a lamp that is missing.
         """
         when:
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
@@ -752,9 +780,13 @@ class UsingTheCommandLineSpec extends Specification {
         then:
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(
-                    "'${word}' is not something `oillamp history <dir>` does; it does list, save, restore and autosave")
-            ['oillamp history <dir> [list]', 'oillamp history <dir> save [--message <text>]',
-             'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave ['].every { outcome.console().contains(it) }
+                    "'${word}' is not something `oillamp history <dir>` does; it does list, save, restore, autosave, "
+                    + "branches, branch, switch and reset")
+            ['oillamp history <dir> [list] [--all]', 'oillamp history <dir> save [--message <text>]',
+             'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave [',
+             'oillamp history <dir> branches', 'oillamp history <dir> branch <name> [<snapshot>]',
+             'oillamp history <dir> branch --delete <name> [--yes]', 'oillamp history <dir> switch <name>',
+             'oillamp history <dir> reset <snapshot> [--yes]'].every { outcome.console().contains(it) }
 
         where:
             line                        | word

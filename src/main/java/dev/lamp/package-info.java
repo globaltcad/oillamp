@@ -10,7 +10,7 @@
 /// - [dev.lamp.LampEvent]: everything the engine reports, as values, passed to the listeners
 /// - [dev.lamp.LampProblem], [dev.lamp.LampFailedException] and [dev.lamp.LampExitStatus]: what
 ///   went wrong, and how an engine process ended
-/// - the values these carry, such as [dev.lamp.LampSave], [dev.lamp.LampJob],
+/// - the values these carry, such as [dev.lamp.LampSave], [dev.lamp.LampBranch], [dev.lamp.LampJob],
 ///   [dev.lamp.LampRun], [dev.lamp.LampConversation] and [dev.lamp.LampPrompt]
 ///
 /// Every public type here starts with `Lamp` and every other one with `Internal`, so that a name

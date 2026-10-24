@@ -280,13 +280,14 @@ final class AgentRunner {
                 + config.maxDelayMinutes() + " minutes late, the most `schedule.max_delay_minutes` allows"));
     }
 
-    /// The name of a new run, such as `run-12`: one above the highest number in the history and
-    /// the highest this session gave out, whichever is higher. Not a counter in the schedule
-    /// file, because a restore brings that file back, and the counter with it; the history only
-    /// grows. Not the history alone either, because the runs that wait or work now are not in it
-    /// yet. A history that cannot be read counts as one without runs.
+    /// The name of a new run, such as `run-12`: one above the highest number on any branch of the
+    /// history and the highest this session gave out, whichever is higher. Not a counter in the
+    /// schedule file, because a restore or a switch brings that file back, and the counter with it.
+    /// Every branch, because each branch has its own runs, and a number must name one run of the
+    /// lamp, whichever branch it was on. Not the history alone either, because the runs that wait or
+    /// work now are not in it yet. A history that cannot be read counts as one without runs.
     private synchronized String numberRun() {
-        int saved = new History(layout).commitList().map(GitObjectUtil::highestRun).orElseGet(problems -> 0);
+        int saved = new History(layout).commitsOfAllBranches().map(GitObjectUtil::highestRun).orElseGet(problems -> 0);
         lastNumbered = Math.max(lastNumbered, saved) + 1;
         return "run-" + lastNumbered;
     }
@@ -297,11 +298,12 @@ final class AgentRunner {
     }
 
     /// How many runs of the agent's own jobs began in the last 24 hours: those the history
-    /// records, and those in progress or waiting now.
+    /// records on any branch, since every run costs tokens whichever branch it was on, and those in
+    /// progress or waiting now.
     private int agentRunsInADay(Instant now) {
         int counted = (int) queue.stream().filter(pending -> pending.job().filter(job -> job.author() == LampJobAuthor.AGENT).isPresent()).count()
                 + (current.flatMap(Pending::job).filter(job -> job.author() == LampJobAuthor.AGENT).isPresent() ? 1 : 0);
-        Result<Tuple<GitObjectUtil.Commit>> commits = new History(layout).commitList();
+        Result<Tuple<GitObjectUtil.Commit>> commits = new History(layout).commitsOfAllBranches();
         if (commits instanceof Result.Ok<Tuple<GitObjectUtil.Commit>>(Tuple<GitObjectUtil.Commit> all, var _))
             for (GitObjectUtil.Commit commit : all) {
                 if (commit.snapshot().at().isBefore(now.minus(Duration.ofDays(1)))) break;
@@ -454,7 +456,8 @@ final class AgentRunner {
                                      autosave.afterRun(), now, zone);
     }
 
-    /// The last `count` runs, newest first, with what each changed.
+    /// The last `count` runs on the current branch, newest first, with what each changed. Another
+    /// branch's runs are left out: the agent remembers the state it is in, not the others.
     private static Tuple<WakePromptUtil.Described> recentRuns(History history, int count) {
         Tuple<WakePromptUtil.Described> found = Tuple.of(WakePromptUtil.Described.class);
         Result<Tuple<GitObjectUtil.Commit>> commits = history.commitList();
@@ -542,7 +545,8 @@ final class AgentRunner {
                 + job.expires().map(end -> ", until " + TimeNotationUtil.show(end, zone)).orElse("") + ".";
     }
 
-    /// One run in full, or a list of the recent ones when `run` is empty.
+    /// One run in full, or a list of the recent ones when `run` is empty: those on the current
+    /// branch, as in the wake prompt.
     private String history(String run, ZoneId zone) {
         History history = new History(layout);
         Result<Tuple<GitObjectUtil.Commit>> commits = history.commitList();

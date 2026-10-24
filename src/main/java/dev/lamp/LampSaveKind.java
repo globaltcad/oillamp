@@ -15,6 +15,9 @@ public enum LampSaveKind {
     BEFORE_RESTORE("safety save before a restore"),
     /// A restore: the lamp was brought back to an earlier snapshot.
     RESTORE("restore"),
+    /// oillamp saved just before switching the lamp to another branch, on the branch it left, so
+    /// that nothing changed since that branch's last snapshot is lost.
+    BEFORE_SWITCH("safety save before a switch"),
     /// oillamp saved just before waking the agent, so that what the user changed and what
     /// the agent then did are two separate snapshots.
     BEFORE_RUN("save before a run"),

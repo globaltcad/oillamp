@@ -162,6 +162,40 @@ public final class Lamp implements AutoCloseable {
 
     /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
     /// they travel from the engine to here.
+    /// The event of `kind` that answers a command, once the engine succeeded.
+    ///
+    /// @throws LampFailedException when the engine failed, or reported no such event
+    static <T extends LampEvent> T answer(Ran ran, Class<T> kind) throws LampFailedException {
+        ran.orThrow();
+        for (LampEvent event : ran.events()) if (kind.isInstance(event)) return kind.cast(event);
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no " + kind.getSimpleName()));
+    }
+
+    /// The event of `kind` that says what a command without `--yes` would do. Such a command exits
+    /// with [LampExitStatus#USAGE] whenever it changed nothing because it was not confirmed, so the
+    /// event counts, not the status.
+    ///
+    /// @throws LampFailedException when the engine reported a problem instead
+    static <T extends LampEvent> T planned(Ran ran, Class<T> kind) throws LampFailedException {
+        for (LampEvent event : ran.events()) if (kind.isInstance(event)) return kind.cast(event);
+        ran.orThrow();
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no " + kind.getSimpleName()));
+    }
+
+    static List<LampBranch> branches(LampLauncher launcher, List<Consumer<LampEvent>> listeners, Path directory)
+            throws IOException, InterruptedException, LampFailedException {
+        return List.copyOf(answer(runToEnd(launcher, listeners, "history", directory.toString(), "branches"),
+                LampEvent.Branches.class).branches().toList());
+    }
+
+    /// `oillamp history <dir> branch <name> [<snapshot>]`.
+    static LampBranch branch(LampLauncher launcher, List<Consumer<LampEvent>> listeners, Path directory, String... nameAndSnapshot)
+            throws IOException, InterruptedException, LampFailedException {
+        List<String> command = new ArrayList<>(List.of("history", directory.toString(), "branch"));
+        command.addAll(List.of(nameAndSnapshot));
+        return answer(runToEnd(launcher, listeners, command.toArray(String[]::new)), LampEvent.BranchCreated.class).branch();
+    }
+
     static HostAccess hostAccessOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
@@ -363,6 +397,24 @@ public final class Lamp implements AutoCloseable {
     }
 
     /// This lamp's schedule, as [LampDirectory#schedule] reads it.
+    /// Every branch of this lamp's history, as [LampDirectory#branches] lists them.
+    public List<LampBranch> branches() throws IOException, InterruptedException, LampFailedException {
+        return branches(launcher, listeners, directory);
+    }
+
+    /// Starts a branch at the newest snapshot of the branch this lamp is on, while its sandbox
+    /// runs, as [LampDirectory#branch(String)] does: [#save] first, and the branch holds the lamp
+    /// as it is now. The session goes on, on the branch it was on.
+    public LampBranch branch(String name) throws IOException, InterruptedException, LampFailedException {
+        return branch(launcher, listeners, directory, name);
+    }
+
+    /// Starts a branch at `snapshot`, which may be on any branch, as
+    /// [LampDirectory#branch(String, String)] does. The session goes on, on the branch it was on.
+    public LampBranch branch(String name, String snapshot) throws IOException, InterruptedException, LampFailedException {
+        return branch(launcher, listeners, directory, name, snapshot);
+    }
+
     public LampEvent.Schedule schedule() throws IOException, InterruptedException, LampFailedException {
         return schedule(launcher, listeners, directory);
     }

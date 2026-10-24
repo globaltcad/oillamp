@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.Optional;
 
 import dev.lamp.LampProblem;
+import dev.lamp.LampSave;
 import dev.lamp.LampProblem.Code;
 import dev.lamp.LampProblem.Evidence;
 import dev.lamp.LampProblem.Fix;
@@ -58,6 +59,10 @@ final class ProblemCatalogUtil {
     public static final Code RESTORE_WHILE_RUNNING = new Code("OIL-HISTORY-005");
     public static final Code RESTORE_FAILED        = new Code("OIL-HISTORY-006");
     public static final Code HISTORY_BUSY          = new Code("OIL-HISTORY-007");
+    public static final Code NOT_ON_THIS_BRANCH    = new Code("OIL-HISTORY-008");
+    public static final Code NO_SUCH_BRANCH        = new Code("OIL-HISTORY-009");
+    public static final Code BRANCH_EXISTS         = new Code("OIL-HISTORY-010");
+    public static final Code BRANCH_IS_CURRENT     = new Code("OIL-HISTORY-011");
     public static final Code SCHEDULE_REFUSED      = new Code("OIL-SCHEDULE-001");
     public static final Code SCHEDULE_DAMAGED      = new Code("OIL-SCHEDULE-002");
     public static final Code NO_SUCH_JOB           = new Code("OIL-SCHEDULE-003");
@@ -505,14 +510,92 @@ final class ProblemCatalogUtil {
                           + "a database of a program that was running"));
     }
 
-    /// `oillamp history <dir> restore` on a lamp whose session is running.
-    public static LampProblem restoreWhileRunning(Path lamp) {
-        return error(RESTORE_WHILE_RUNNING, "Stop the session before restoring",
+    /// `oillamp history <dir> restore`, `switch` or `reset` on a lamp whose session is running.
+    ///
+    /// @param action what was refused, as a person would say it: `restore`, `switch` or `reset`
+    public static LampProblem restoreWhileRunning(Path lamp, String action) {
+        return error(RESTORE_WHILE_RUNNING, "Stop the session before you " + action,
                 "a session is running on " + lamp,
-                "a restore rewrites the agent's home, and programs in the sandbox would go on "
+                "a " + action + " rewrites the agent's home, and programs in the sandbox would go on "
               + "working in files that were replaced under them")
             .withFix(Fix.run("shut the session down", "oillamp stop " + lamp))
-            .withFix(Fix.of("then run the restore again"));
+            .withFix(Fix.of("then run the " + action + " again"));
+    }
+
+    /// A switch to another branch stopped part of the way. The lamp is still on `branch`, whose
+    /// newest snapshot, the safety save, holds it as it was.
+    public static LampProblem switchFailed(Path lamp, String reason, String branch, String safetySnapshot) {
+        return error(RESTORE_FAILED, "The switch did not finish",
+                reason,
+                "the agent's home is now partly switched, and the lamp is still on the branch " + branch
+              + "; oillamp saved it there just before, as snapshot " + safetySnapshot)
+            .withEvidence(new Evidence.File(lamp, "the lamp"))
+            .withFix(Fix.run("put it back as it was before the switch",
+                    "oillamp history " + lamp + " restore " + safetySnapshot));
+    }
+
+    /// A reset stopped part of the way. The branch was not moved yet, so it still ends at the
+    /// snapshot it ended at; what had not been saved may be lost.
+    public static LampProblem resetFailed(Path lamp, String reason, String branch, String newestSnapshot) {
+        return error(RESTORE_FAILED, "The reset did not finish",
+                reason,
+                "the agent's home is now partly reset, and the branch " + branch + " still ends at "
+              + newestSnapshot + ", where it ended before")
+            .withEvidence(new Evidence.File(lamp, "the lamp"))
+            .withFix(Fix.run("put the lamp back as that snapshot holds it",
+                    "oillamp history " + lamp + " reset " + newestSnapshot + " --yes"));
+    }
+
+    /// `restore` or `reset` named a snapshot that only other branches hold. Both stay on the
+    /// current branch; the way to another branch's past is a branch of its own.
+    ///
+    /// @param holders the branches the snapshot is on
+    public static LampProblem notOnThisBranch(LampSave snapshot, String current, Tuple<String> holders,
+                                              Path lamp, String action) {
+        return error(NOT_ON_THIS_BRANCH, "The snapshot is on another branch",
+                "the snapshot " + snapshot.shortId() + " is on " + (holders.size() == 1 ? "the branch " : "the branches ")
+              + holders.join(", ")
+              + ", not on " + current + ", the branch the lamp is on",
+                "a " + action + " goes back only along the branch the lamp is on, so that it never "
+              + "puts another branch's state on top of this one's")
+            .withFix(Fix.run("start a branch at that snapshot",
+                    "oillamp history " + lamp + " branch <name> " + snapshot.shortId()))
+            .withFix(Fix.run("and switch the lamp to it", "oillamp history " + lamp + " switch <name>"));
+    }
+
+    /// `switch` or `branch --delete` named a branch the history does not have.
+    public static LampProblem noSuchBranch(String name, Path lamp, Tuple<String> branches) {
+        return error(NO_SUCH_BRANCH, "No such branch",
+                "the history of " + lamp + " has no branch called '" + name + "'"
+              + (branches.isEmpty() ? "" : "; it has " + branches.join(", ")),
+                "oillamp only switches to, or deletes, a branch that is there")
+            .withFix(Fix.run("see this lamp's branches", "oillamp history " + lamp + " branches"));
+    }
+
+    /// `branch <name>` named a branch that is there already.
+    public static LampProblem branchExists(String name, Path lamp) {
+        return error(BRANCH_EXISTS, "That branch is there already",
+                "the history of " + lamp + " already has a branch called '" + name + "'",
+                "starting it again would move it, and its snapshots would no longer be on it")
+            .withFix(Fix.of("give the new branch another name"))
+            .withFix(Fix.run("or switch to the one there is", "oillamp history " + lamp + " switch " + name));
+    }
+
+    /// `branch --delete` named the branch the lamp is on.
+    public static LampProblem branchIsCurrent(String name, Path lamp) {
+        return error(BRANCH_IS_CURRENT, "The lamp is on that branch",
+                "'" + name + "' is the branch the lamp is on, so it cannot be deleted",
+                "every save goes to the branch the lamp is on, so the lamp always needs that one")
+            .withFix(Fix.run("switch the lamp to another branch first", "oillamp history " + lamp + " switch <name>"));
+    }
+
+    /// `branch <name>` without a snapshot, in a lamp that has never been saved.
+    public static LampProblem nothingToBranchFrom(String name, String current, Path lamp) {
+        return error(NO_SUCH_SNAPSHOT, "No snapshot to start the branch at",
+                "the branch " + current + " of " + lamp + " has no snapshot yet, so the branch '" + name
+              + "' has nowhere to start",
+                "a branch starts at a snapshot, and the lamp has never been saved")
+            .withFix(Fix.run("save the lamp first", "oillamp history " + lamp + " save"));
     }
 
     /// A restore stopped part of the way. The safety save before it holds the lamp as it was.

@@ -133,10 +133,11 @@ final class CommandExecutionUtil {
             }
             case Command.Recordings recordings ->
                     recordings(machine, context, recordings.lamp(), recordings.open(), recordings.prune());
-            // The lamp's history. `restore` and writing `autosave` need the lamp stopped; the
-            // others do not.
+            // The lamp's history. `restore`, `switch`, `reset` and writing `autosave` need the lamp
+            // stopped; the others do not.
             case Command.History history -> switch (history.action()) {
-                case Command.History.Action.ListSnapshots _ -> history(machine, context, history.lamp());
+                case Command.History.Action.ListSnapshots list -> history(machine, context, history.lamp(), list.all());
+                case Command.History.Action.ListBranches _ -> branches(machine, context, history.lamp());
                 case Command.History.Action.Save save -> {
                     console.banner(version, history.lamp().toString());
                     yield save(machine, context, history.lamp(), save.message());
@@ -144,6 +145,22 @@ final class CommandExecutionUtil {
                 case Command.History.Action.Restore restore -> {
                     console.banner(version, history.lamp().toString());
                     yield restore(machine, context, history.lamp(), restore.snapshot());
+                }
+                case Command.History.Action.CreateBranch create -> {
+                    console.banner(version, history.lamp().toString());
+                    yield createBranch(machine, context, history.lamp(), create.name(), create.snapshot());
+                }
+                case Command.History.Action.DeleteBranch delete -> {
+                    console.banner(version, history.lamp().toString());
+                    yield deleteBranch(machine, context, history.lamp(), delete.name(), delete.confirmed());
+                }
+                case Command.History.Action.Switch switched -> {
+                    console.banner(version, history.lamp().toString());
+                    yield switchBranch(machine, context, history.lamp(), switched.branch());
+                }
+                case Command.History.Action.Reset reset -> {
+                    console.banner(version, history.lamp().toString());
+                    yield reset(machine, context, history.lamp(), reset.snapshot(), reset.confirmed());
                 }
                 case Command.History.Action.Autosave asked -> autosave(machine, context, history.lamp(), asked);
             };
@@ -836,27 +853,175 @@ final class CommandExecutionUtil {
         }
     }
 
-    /// `oillamp history <dir>`: every snapshot of the lamp, newest first.
-    private static LampExitStatus history(Machine machine, Context context, Path lampPath) {
+    /// `oillamp history <dir> [list] [--all]`: the snapshots on the lamp's current branch, newest
+    /// first, or with `all` those on every branch, each with the branches it is on.
+    private static LampExitStatus history(Machine machine, Context context, Path lampPath, boolean all) {
         Result<LampLayout> found = layoutOf(machine, lampPath);
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
-        Result<Tuple<LampSave>> snapshots = new History(((Result.Ok<LampLayout>) found).value()).snapshots();
-        if (snapshots instanceof Result.Err<Tuple<LampSave>> failure) {
+        History history = new History(((Result.Ok<LampLayout>) found).value());
+        Result<LampEvent> listed = history.currentBranch().flatMap(branch -> all
+                ? history.snapshotsOfAllBranches().<LampEvent>map(snapshots -> new LampEvent.HistoryOfAllBranches(branch, snapshots))
+                : history.snapshots().<LampEvent>map(snapshots -> new LampEvent.History(branch, snapshots)));
+        if (listed instanceof Result.Err<LampEvent> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
-        context.sink().accept(new LampEvent.History(((Result.Ok<Tuple<LampSave>>) snapshots).value()));
+        context.sink().accept(((Result.Ok<LampEvent>) listed).value());
         return LampExitStatus.SUCCESS;
     }
 
-    /// `oillamp history <dir> restore <snapshot>`: bring the lamp back to an earlier snapshot.
+    /// `oillamp history <dir> branches`: every branch of the lamp's history, with its newest
+    /// snapshot, and which one the lamp is on.
+    private static LampExitStatus branches(Machine machine, Context context, Path lampPath) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        Result<Tuple<LampBranch>> branches = new History(((Result.Ok<LampLayout>) found).value()).branches();
+        if (branches instanceof Result.Err<Tuple<LampBranch>> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        context.sink().accept(new LampEvent.Branches(((Result.Ok<Tuple<LampBranch>>) branches).value()));
+        return LampExitStatus.SUCCESS;
+    }
+
+    /// `oillamp history <dir> branch <name> [<snapshot>]`: start a branch, and stay where the lamp is.
+    ///
+    /// Works while a session runs: it writes only the new branch's file in the history, which no
+    /// session reads.
+    private static LampExitStatus createBranch(Machine machine, Context context, Path lampPath, String name,
+                                               Optional<String> snapshot) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        History history = new History(layout);
+        Result<LampBranch> created = history.createBranch(name, snapshot);
+        if (created instanceof Result.Err<LampBranch> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        context.sink().accept(new LampEvent.BranchCreated(((Result.Ok<LampBranch>) created).value()));
+        context.sink().accept(new LampEvent.Info("history", "the lamp stays on "
+                + history.currentBranch().orElseGet(_ -> History.FIRST_BRANCH)
+                + "; to work on " + name + ", run: oillamp history " + layout.root() + " switch " + name));
+        return LampExitStatus.SUCCESS;
+    }
+
+    /// `oillamp history <dir> branch --delete <name> [--yes]`: delete a branch other than the
+    /// current one. Without `--yes`, say how many snapshots only that branch holds, change
+    /// nothing, and exit 2, as `remove` does.
+    private static LampExitStatus deleteBranch(Machine machine, Context context, Path lampPath, String name,
+                                               boolean confirmed) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<Integer> counted = new History(layout).deleteBranch(name, confirmed);
+        if (counted instanceof Result.Err<Integer> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        int only = ((Result.Ok<Integer>) counted).value();
+        if (confirmed) {
+            context.sink().accept(new LampEvent.BranchDeleted(name, only));
+            return LampExitStatus.SUCCESS;
+        }
+        context.sink().accept(new LampEvent.BranchDeletePlanned(name, only));
+        context.sink().accept(new LampEvent.Answer("Nothing has been deleted. To go ahead:\n\n  oillamp history "
+                + layout.root() + " branch --delete " + name + " --yes"));
+        return LampExitStatus.USAGE;
+    }
+
+    /// `oillamp history <dir> switch <name>`: bring the lamp to another branch, and save to it from
+    /// now on.
+    ///
+    /// Refused while a session runs, as a restore is. What changed since the last snapshot is
+    /// saved first, on the branch the lamp leaves.
+    private static LampExitStatus switchBranch(Machine machine, Context context, Path lampPath, String name) {
+        return whileStopped(machine, context, lampPath, "switch", layout -> {
+            Result<History.Switching> switched = new History(layout).switchTo(name, machine.now());
+            context.sinkAcceptProblems(switched.warnings());
+            if (switched instanceof Result.Err<History.Switching> failure) {
+                context.sinkAcceptProblems(failure.problems());
+                return exitStatusFor(failure.problems());
+            }
+            History.Switching done = ((Result.Ok<History.Switching>) switched).value();
+            done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Saved(safety, 0)));
+            context.sink().accept(new LampEvent.Switched(done.from(), done.to()));
+            if (!done.from().equals(done.to().name()))
+                context.sink().accept(new LampEvent.Info("history", "to go back, run: oillamp history "
+                        + layout.root() + " switch " + done.from()));
+            return LampExitStatus.SUCCESS;
+        });
+    }
+
+    /// `oillamp history <dir> reset <snapshot> [--yes]`: bring the lamp and its current branch back
+    /// to a snapshot on that branch, throwing away what came after.
+    ///
+    /// Refused while a session runs. Without `--yes`, say what would be lost, change nothing, and
+    /// exit 2, as `remove` does; when nothing would be lost there is nothing to confirm, and it
+    /// exits 0.
+    private static LampExitStatus reset(Machine machine, Context context, Path lampPath, String snapshot,
+                                        boolean confirmed) {
+        return whileStopped(machine, context, lampPath, "reset", layout -> {
+            Result<History.Resetting> reset = new History(layout).reset(snapshot, confirmed);
+            if (reset instanceof Result.Err<History.Resetting> failure) {
+                context.sinkAcceptProblems(failure.problems());
+                return exitStatusFor(failure.problems());
+            }
+            History.Resetting done = ((Result.Ok<History.Resetting>) reset).value();
+            if (confirmed) {
+                context.sink().accept(new LampEvent.ResetDone(done.target(), done.dropped(), done.unsaved()));
+                return LampExitStatus.SUCCESS;
+            }
+            context.sink().accept(new LampEvent.ResetPlanned(done.target(), done.dropped(), done.unsaved()));
+            if (done.dropped() == 0 && !done.unsaved()) return LampExitStatus.SUCCESS;
+            context.sink().accept(new LampEvent.Answer("Nothing has been changed. To go ahead:\n\n  oillamp history "
+                    + layout.root() + " reset " + done.target().shortId() + " --yes"));
+            return LampExitStatus.USAGE;
+        });
+    }
+
+    /// `oillamp history <dir> restore <snapshot>`: bring the lamp back to an earlier snapshot on
+    /// its current branch.
     ///
     /// Refused while a session runs. The lamp is saved first, so every restore can be undone by
     /// restoring that save.
     private static LampExitStatus restore(Machine machine, Context context, Path lampPath, String snapshot) {
+        return whileStopped(machine, context, lampPath, "restore", layout -> {
+            Result<History.Restoring> restored = new History(layout).restore(snapshot, machine.now());
+            context.sinkAcceptProblems(restored.warnings());
+            if (restored instanceof Result.Err<History.Restoring> failure) {
+                context.sinkAcceptProblems(failure.problems());
+                return exitStatusFor(failure.problems());
+            }
+            History.Restoring done = ((Result.Ok<History.Restoring>) restored).value();
+            done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Saved(safety, 0)));
+            context.sink().accept(new LampEvent.Restored(done.target(), done.result().orElse(done.target())));
+            if (done.result().isEmpty()) return LampExitStatus.SUCCESS;
+            done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Info("history",
+                    "to undo this, run: oillamp history "
+                    + layout.root() + " restore " + safety.shortId())));
+            return LampExitStatus.SUCCESS;
+        });
+    }
+
+    /// Does `work` on a lamp while holding the lamp's lock, so that no session starts meanwhile.
+    /// Refused with `OIL-HISTORY-005` while a session runs.
+    ///
+    /// @param action what is refused, as the problem says it: `restore`, `switch` or `reset`
+    private static LampExitStatus whileStopped(Machine machine, Context context, Path lampPath, String action,
+                                               Function<LampLayout, LampExitStatus> work) {
         Result<LampLayout> found = layoutOf(machine, lampPath);
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
@@ -872,25 +1037,13 @@ final class CommandExecutionUtil {
             return LampExitStatus.ERROR;
         }
         if (lock.isEmpty()) {
-            Tuple<LampProblem> refused = Tuple.of(LampProblem.class, ProblemCatalogUtil.restoreWhileRunning(layout.root()));
+            Tuple<LampProblem> refused = Tuple.of(LampProblem.class,
+                    ProblemCatalogUtil.restoreWhileRunning(layout.root(), action));
             context.sinkAcceptProblems(refused);
             return exitStatusFor(refused);
         }
         try {
-            Result<History.Restoring> restored = new History(layout).restore(snapshot, machine.now());
-            context.sinkAcceptProblems(restored.warnings());
-            if (restored instanceof Result.Err<History.Restoring> failure) {
-                context.sinkAcceptProblems(failure.problems());
-                return exitStatusFor(failure.problems());
-            }
-            History.Restoring done = ((Result.Ok<History.Restoring>) restored).value();
-            done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Saved(safety, 0)));
-            context.sink().accept(new LampEvent.Restored(done.target(), done.result().orElse(done.target())));
-            if (done.result().isEmpty()) return LampExitStatus.SUCCESS;
-            done.safety().ifPresent(safety -> context.sink().accept(new LampEvent.Info("history",
-                    "to undo this, run: oillamp history "
-                    + layout.root() + " restore " + safety.shortId())));
-            return LampExitStatus.SUCCESS;
+            return work.apply(layout);
         } finally {
             release(lock.get());
         }
@@ -1596,12 +1749,14 @@ final class CommandExecutionUtil {
                        .orElse("an earlier time"));
     }
 
-    /// The exit code for a list of problems: 4 for a busy lamp, 2 for configuration errors, otherwise 1.
+    /// The exit code for a list of problems: 4 for a busy lamp, 2 for configuration errors and for a
+    /// snapshot or branch that cannot be the one meant, otherwise 1.
     private static LampExitStatus exitStatusFor(Tuple<LampProblem> problems) {
         for (LampProblem problem : problems) {
             String code = problem.code().value();
             if (code.equals("OIL-LOCK-001") || code.equals("OIL-HISTORY-005")) return LampExitStatus.LAMP_BUSY;
-            if (code.equals("OIL-HISTORY-001")) return LampExitStatus.USAGE;
+            if (code.equals("OIL-HISTORY-001") || code.equals("OIL-HISTORY-008") || code.equals("OIL-HISTORY-009")
+                    || code.equals("OIL-HISTORY-010") || code.equals("OIL-HISTORY-011")) return LampExitStatus.USAGE;
             if (code.startsWith("OIL-CONFIG-")) return LampExitStatus.USAGE;
         }
         for (LampProblem problem : problems)

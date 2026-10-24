@@ -50,9 +50,14 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp update <dir> [--system]` | Works in the simulated scenarios. Not yet run against real npm, Eden AI and Debian mirrors. |
 | `oillamp remove <dir> [--yes]` | Works. Without `--yes`, lists what would be deleted and exits 2. |
 | `oillamp recordings <dir> [--open <session>] [--prune]` | Works. |
-| `oillamp history <dir>` | Works. |
+| `oillamp history <dir> [list] [--all]` | Works. Lists the current branch's snapshots; `--all` those of every branch, each with the branches it is on, which works in the scenarios only. |
 | `oillamp history <dir> save [--message <text>]` | Works in the scenarios and on a lamp made by hand (see below). |
 | `oillamp history <dir> restore <snapshot>` | Works in the scenarios and on a lamp made by hand. Refused while a session runs. Brings back the schedule too; that, and keeping the schedule when restoring a snapshot an older oillamp made without it, works in the scenarios only. |
+| `oillamp history <dir> branches` | Works in the scenarios. Also `LampDirectory.branches`. |
+| `oillamp history <dir> branch <name> [<snapshot>]` | Works in the scenarios, also while a session runs. Also `LampDirectory.branch` and `Lamp.branch`. |
+| `oillamp history <dir> branch --delete <name> [--yes]` | Works in the scenarios, also on branches git packed into `packed-refs`. Without `--yes`, says how many snapshots only that branch holds and exits 2. Also `LampDirectory.deleteBranch` and `wouldDeleteBranch`. |
+| `oillamp history <dir> switch <name>` | Works in the scenarios. Refused while a session runs. Saves the branch it leaves first, if anything changed. Also `LampDirectory.switchTo`. Not yet tried on a lamp with a large home. |
+| `oillamp history <dir> reset <snapshot> [--yes]` | Works in the scenarios. Refused while a session runs. Without `--yes`, says what would be lost and exits 2. Also `LampDirectory.reset` and `wouldReset`. |
 | `oillamp history <dir> autosave [<moment> on\|off]...` | Works in the scenarios: reads and writes `startup`, `shutdown`, `before_run` and `after_run` under `[autosave]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.autosave`. |
 | `oillamp schedule <dir> [add \| remove \| enable \| disable \| pause \| resume]` | Works in the scenarios and in a real session (see "Runs and the schedule"). A run later than `schedule.max_delay_minutes` is missed and reported as `RunMissed`; that works in the scenarios, and has not been seen in a real session yet. |
 | `oillamp ask <dir> "<prompt>"` | Works in the scenarios and in a real session with pi. `--in`, `--after`, `--instead-of` and `--no-wait` work in the scenarios, against a stand-in pi that writes session files as pi does; not yet tried with the real pi. |
@@ -366,10 +371,14 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   reading the age of the cached apt layers (`podman history`), or remembering the last
   `--system` build per lamp. Undecided.
 
-- Run numbers are counted from the `Oillamp-Run` trailers in the history and from the session's
-  own count. With both `autosave.before_run` and `autosave.after_run` off, the history names no
-  run, so the next session starts again at `run-1`, and pi's conversations can get the same name
-  (`run-1 (job-2)`) in two sessions.
+- Run numbers are counted from the `Oillamp-Run` trailers on every branch of the history and from
+  the session's own count. With both `autosave.before_run` and `autosave.after_run` off, the
+  history names no run, so the next session starts again at `run-1`, and pi's conversations can
+  get the same name (`run-1 (job-2)`) in two sessions. After a reset or a deleted branch took the
+  newest runs off every branch, their numbers are handed out again, and so are the names of pi's
+  conversations for them, which stay in the homes of other branches only if those hold them.
+- `schedule.max_agent_runs_per_day` counts the agent's runs on every branch, but not those a reset
+  or a deleted branch left on no branch: after either, the agent may run more that day.
 
 ### Host access, still missing
 
@@ -403,6 +412,8 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 - The history keeps every version of every file ever saved, and nothing removes old snapshots.
   There is no way yet to leave parts of the agent's home out of a snapshot, such as `~/.cache`.
+  The snapshots a reset or a deleted branch leaves on no branch stay as files too, and no command
+  can name them any more, not even to start a branch at one.
 
 - oillamp removes only the image an `oillamp update` replaces, and no other. Cleaning up the rest
   is out of scope; instead every build that makes a new image warns (`OIL-IMAGE-003`) and lists
@@ -437,8 +448,8 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   seconds, a save with nothing changed 0.6 seconds, a restore 1.2 seconds. The JDK came back
   byte-identical and the cloned repository with a clean `git status`.
 - Saving or restoring a home with hundreds of thousands of files, such as several `node_modules`.
-- The Genies app has no buttons for the history yet; `dev.lamp.Lamp` offers `save`, `history` and
-  `restore`.
+- The Genies app has no buttons for the history yet; `dev.lamp.Lamp` offers `save`, `history`,
+  `restore` and the branches.
 - Genies still starts its own pi, and does not use the session's. A lamp that Genies holds and
   that has jobs on its schedule runs two pis in one home. The Lamp API now has what Genies needs
   (`conversations`, `send` with a `LampPrompt`, `RunProgress`, `cancel`, `agentStatus`); Genies does

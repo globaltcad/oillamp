@@ -61,7 +61,8 @@ These words have one meaning each, in the code and in the documents.
 | **problem** | oillamp's structured error: a code, what happened, why it matters, evidence, and fixes. |
 | **spike** | A test that runs real podman to confirm an assumption about a third-party tool. |
 | **snapshot** | The agent directory, `oillamp.toml` and the schedule as they were at one moment, kept in the lamp's history. One git commit. |
-| **history** | `<lamp>/.oillamp/history/`: a git repository holding a lamp's snapshots, oldest to newest on one branch. |
+| **history** | `<lamp>/.oillamp/history/`: a git repository holding a lamp's snapshots, on one or more branches. |
+| **branch** | One alternative state of a lamp: a line of snapshots in its history, each naming the one before it, kept as a git branch. The first is `main`. The lamp is on one branch at a time, the **current branch**, named by the history's `HEAD`; every save goes to it. A branch's **newest snapshot** is the last one saved on it, the one a switch brings the lamp to. A snapshot is *on* a branch when it is that branch's newest snapshot or comes before it in its line, so the snapshots from before a branch was started are on both branches. |
 | **harness** | The agent program a session holds and prompts: pi, in RPC mode, started over ssh by the supervisor. One per session. |
 | **run** | One time the harness is woken with a prompt, by a job or by `oillamp ask`. Named `run-<n>`, counted per lamp. |
 | **job** | An entry on a lamp's schedule: a prompt, and a cron expression or a single time. Named `job-<n>`. Added by the user or by the agent. |
@@ -167,10 +168,10 @@ known lifetime:
 | `<lamp>/.oillamp/sockets/*/` | the proxy (host); wayvnc and the ssh listener (container) | relays, viewer, socat | files outlive their servers; deleted before the next session |
 | `<lamp>/.oillamp/recordings/` | wf-recorder | you, the agent (read only) | until retention deletes them |
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
-| `<lamp>/.oillamp/history/` | `History`: at the start and end of every session, `oillamp history <dir> save`, `oillamp history <dir> restore` | `oillamp history <dir>`, `oillamp history <dir> restore`, git by hand | until `oillamp remove`; only ever grows |
-| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir> restore` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
+| `<lamp>/.oillamp/history/` | `History`: around runs, at the start and end of a session when `[autosave]` says so, and for `oillamp history <dir>` `save`, `restore`, `branch`, `switch` and `reset` | `oillamp history <dir>` and its actions, the session (run numbers and the agent's past runs), git by hand | until `oillamp remove`; objects are only added; a reset or a deleted branch leaves some on no branch, which stay as files |
+| `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir>` `restore`, `switch` and `reset` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
-| `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save or restore runs | every other save and restore, which wait for it | the lock ends with the process |
+| `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save, restore, switch, reset, or start or deletion of a branch runs | every other one of them, which waits for it | the lock ends with the process |
 | `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`, and with host access on,
 `.pi/agent/extensions/oillamp-host-access.js`; once the sandbox is up, `Harness` writes the session's instructions to `.pi/agent/APPEND_SYSTEM.md` and its model into `.pi/agent/settings.json` | the agent, you | until `oillamp remove` |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/sockets` (a symlink) | `LampPlanUtil.planSkeleton`, every start | every host-side socket path | in memory: gone at reboot, made again next start |
@@ -216,7 +217,10 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   ├── recordings/              infra user; <session>.mkv; attached at /oillamp/recordings
 │   ├── logs/                    network-<session>.jsonl, host-access-<session>.jsonl
 │   ├── history/                 the lamp's snapshots, a bare git repository; never attached
-│   ├── history.lock             locked while a save or a restore runs
+│   │   ├── HEAD                 the current branch, as `ref: refs/heads/<name>`
+│   │   ├── refs/heads/<name>    each branch's newest snapshot
+│   │   └── objects/             every snapshot's files, trees and commits, one file each
+│   ├── history.lock             locked while the history is written
 │   ├── schedule.json            the jobs that wake the agent; never attached; in every snapshot
 │   └── schedule.lock            locked while the schedule is changed
 └── agent-lamp-<agent id>/       attached read-write at /home/agent
@@ -299,7 +303,8 @@ the work it is for. The object format is simple, and `GitObjectUtil` holds all o
   directory) and the name of a blob or tree;
 - a **commit** names the top tree and the commit before it, and holds a message.
 
-git itself still reads the result: `git --git-dir=<lamp>/.oillamp/history log` lists the snapshots.
+git itself still reads the result: `git --git-dir=<lamp>/.oillamp/history log` lists the snapshots,
+`git branch` the branches.
 git only knows "executable or not", so the other permissions, such as 0600 on a private key or 0555
 on a read-only directory, go in `.oillamp-modes`: one `<octal> <path>` per path that differs from
 git's defaults (0644, 0755 for executables and directories), each ended by a NUL byte, because a
@@ -307,14 +312,15 @@ name may contain a line break.
 
 **Saving** walks the agent directory without following links, stores each file that is not stored
 yet, adds `oillamp.toml` and the schedule, builds the trees, and compares the top tree with the
-newest commit's. If they are equal, nothing changed and no commit is made; a change to the schedule
-alone, such as a new job, is a change. Otherwise it writes a commit and moves `refs/heads/main` to
-it, last. Every object goes to a temporary file first and is renamed into place, so a save that
+newest commit of the current branch. If they are equal, nothing changed and no commit is made; a
+change to the schedule alone, such as a new job, is a change. Otherwise it writes a commit and moves
+the current branch to it, last. Every object goes to a temporary file first and is renamed into place, so a save that
 is cut short leaves the history as it was, plus some objects nothing refers to. Unreadable files
 are left out and reported (`OIL-HISTORY-004`). So are files that keep changing while they are read.
 Sockets, pipes and devices are skipped without a word.
 
-**Restoring** takes the lamp's lock (so no session can run), saves first (a "safety save"), then
+**Restoring** takes the lamp's lock (so no session can run), finds the snapshot on the current
+branch, saves first (a "safety save"), then
 compares the target snapshot's trees with the safety save's, directory by directory. A directory
 whose tree is the same in both is skipped whole, which is why restoring a large home takes about a
 second. Everything else is deleted and rewritten, then the permissions from `.oillamp-modes` are
@@ -323,8 +329,58 @@ lock: every job, the user's and the agent's, each one's enabled flag and last ru
 schedule is paused, and the number the next job gets. A job added after the target snapshot is
 gone. A snapshot from before snapshots held the schedule says nothing about the jobs, so restoring
 it leaves the schedule as it is. Finally a commit records the restore, with the target's tree, or,
-for such an older target, the target's tree with the schedule the lamp kept. Nothing is ever
-removed from the history.
+for such an older target, the target's tree with the schedule the lamp kept. A restore removes
+nothing from the history. A snapshot that only other branches hold is refused (`OIL-HISTORY-008`),
+with how to reach it: start a branch at it, and switch to that. A restore never puts another
+branch's state on top of this one's.
+
+**Branches.** A lamp keeps several alternative states as branches: the agent may try a Rust rewrite
+on one while the original stays on another. Each branch has its own home, `oillamp.toml` and jobs,
+because every snapshot holds all three. A branch is what git makes of it: a file
+`refs/heads/<name>` naming the branch's newest commit, written to a temporary file and renamed,
+like everything else. `HEAD` names the current branch, `ref: refs/heads/<name>`; a lamp saved
+before branches existed has exactly `HEAD` and `refs/heads/main`, which is the branch `main`, so it
+needs no change. `History` also reads a branch from `packed-refs`, where `git pack-refs` or `git gc`
+moves them, and deletes a branch from there too. A name is lowercase letters, digits, `-`, `_` and
+`.`, begins with a letter or a digit, is at most 64 characters, and neither holds `..` nor ends in
+`.` or `.lock` (`History.branchNameProblem`); lowercase only, so that no two branches differ by case
+alone on a file system that cannot tell them apart. Names that break the rule are refused as a
+usage error, before the lamp is looked at.
+
+- **`branch <name> [<snapshot>]`** writes the new branch's file, naming the snapshot, which may be
+  on any branch, or the current branch's newest. That is all, so it works while a session runs, and
+  the lamp stays on its branch. A name the history has already is refused (`OIL-HISTORY-010`).
+- **`switch <name>`** takes the lamp's lock, as a restore does, and saves first on the current
+  branch, as a `before-switch` save, if anything changed since that branch's newest snapshot. It
+  then brings the agent directory, `oillamp.toml` and the schedule to the target branch's newest
+  snapshot with the restore's machinery, which skips every directory that is the same in both, and
+  last points `HEAD` at the target. It makes no commit on the target. A target from before
+  snapshots held the schedule keeps the schedule the lamp has, as a restore does. Switching to the
+  current branch changes nothing. If the files cannot all be written, `HEAD` is not moved, and the
+  safety save is the way back (`OIL-HISTORY-006`).
+- **`reset <snapshot> [--yes]`** is `git reset --hard`: it takes the lamp's lock, finds the
+  snapshot on the current branch (another branch's is refused, `OIL-HISTORY-008`), stores the lamp
+  as it is to compare it with the newest snapshot, brings the files back to the target, and moves the
+  branch back to it, with the same check as a save that nobody moved it meanwhile. Nothing is saved
+  first. The snapshots after the target are no longer on the branch, and changes not yet saved are
+  gone. Without `--yes` it only names the files' objects, writing nothing, and reports how many
+  snapshots would leave the branch and whether there are unsaved changes (`ResetPlanned`), and
+  exits with `USAGE`, as `remove` does; when nothing would be lost it exits with `SUCCESS`.
+- **`branch --delete <name> [--yes]`** removes the branch's line from `packed-refs`, then its
+  file. The current branch is refused (`OIL-HISTORY-011`). Without `--yes` it reports how many
+  snapshots are on that branch and on no other (`BranchDeletePlanned`) and exits with `USAGE`.
+
+**What is reachable.** `oillamp history <dir>`, a restore, the wake prompt and `run_history` follow
+the current branch from its newest commit, parent by parent. `list --all` and `branches` follow every
+branch. `list --all` lists each commit once, with the branches it is on, newest first; of two saved
+in the same second, the one with more commits before it comes first, since a commit always comes
+after its parent. `branch <name> <snapshot>` accepts any snapshot on any branch. Run numbers and
+`schedule.max_agent_runs_per_day` count every branch's commits.
+
+**Nothing is deleted.** Objects are only ever added. A reset and a deleted branch leave commits that
+no branch leads to; they and their files stay in `objects/` until oillamp removes what no branch
+reaches, which it does not yet do. Until then they take disk space, and no command names them: a
+snapshot is found only among the snapshots on some branch.
 
 **What made each snapshot** is in its commit message:
 
@@ -343,6 +399,7 @@ Oillamp-Session: 20260929-181200
 | `idle` | `oillamp history <dir> save` while no session runs |
 | `before-restore` | `oillamp history <dir> restore`, just before it changes anything |
 | `restore` | `oillamp history <dir> restore`, recording which snapshot it went back to |
+| `before-switch` | `oillamp history <dir> switch`, on the branch it leaves, just before it changes anything, if anything changed |
 | `before-run` | `AgentRunner`, just before the agent is woken, if anything changed since the last snapshot. For a job's run that is always so, because the job was just marked as run in the schedule |
 | `run` | `AgentRunner`, as a run ends, always, even when nothing changed: its message holds the agent's last message |
 
@@ -889,7 +946,7 @@ the supervisor is dead and `oillamp stop` cleans up; in the second it is alive b
 | `<lamp>/.oillamp/schedule.json` | the jobs, whether the schedule is paused, and the number the next job gets; saved with every snapshot, and brought back by a restore |
 | `AgentRunner.queue`, `AgentRunner.current` (memory) | runs waiting, and the one in progress; lost when the session ends, which is fine: a job that did not run is still due next session |
 | the pi process (`Harness`) | one per session, started with the first run, kept for the next |
-| `<lamp>/.oillamp/history/` | every run's `before-run` and `run` snapshots: the only lasting record of runs, and where run numbers are counted from |
+| `<lamp>/.oillamp/history/` | every run's `before-run` and `run` snapshots, on the branch the lamp was on: the only lasting record of runs, and where run numbers are counted from |
 | `AgentRunner.lastNumbered` (memory) | the highest run number this session gave out |
 | `~/workspace/NOTES.md` (the agent's) | what the agent wants to remember from one run to the next |
 
@@ -964,9 +1021,12 @@ names: `LampDirectory.instructions` puts them in `OILLAMP_INSTRUCTIONS`, as it p
 set, empty, or longer than 64 KiB (`OIL-USAGE-001`).
 
 **Run numbers.** A run is named as it is queued, by `oillamp ask` or by the schedule: one above
-the highest number the history's `Oillamp-Run` trailers name and the highest this session has given
-out, whichever is higher. The history, because it only grows: a restore adds a snapshot and removes
-none, so a number taken from it is never handed out twice. A counter in `schedule.json`, as older
+the highest number the `Oillamp-Run` trailers on any branch name and the highest this session has
+given out, whichever is higher. The history, because a restore adds a snapshot and removes none, so
+a number taken from it is not handed out twice. Every branch, because each branch has runs of its
+own, and a number names one run of the lamp. A reset or a deleted branch can leave the highest
+numbers on no branch, and then they are handed out again; everything in the lamp that named those
+runs went with them. A counter in `schedule.json`, as older
 versions kept (`next_run`, now read past and no longer written), would go back with a restore, and
 the next run would get a number an earlier run already has. The session's own count as well,
 because a run's snapshots come later than its number: the `before-run` snapshot only if something
@@ -982,7 +1042,7 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
    `Oillamp-Base` is the newest snapshot there is.
 3. The prompt. For a job's run, `WakePromptUtil` writes it: why the agent was woken (and,
    for its own job, that it wrote the task itself), the task, `NOTES.md` (cut at
-   `schedule.notes_max_kb`), the last three runs with the files each changed (diffing the `run`
+   `schedule.notes_max_kb`), the last three runs on the current branch with the files each changed (diffing the `run`
    snapshot's tree against its `Oillamp-Base`), the last run's final message, and a reminder to
    rewrite the notes. With `autosave.after_run` off and no run in the history, it says that no
    record of runs is kept, rather than that this is the first. A question someone asked is sent as they wrote it, because it is what a
@@ -1026,7 +1086,8 @@ started after a few days: it runs at its next full hour, not at once. A job swit
 `oillamp schedule resume` does the same for every repeating job, so a pause never makes one miss a
 run. A job that runs once keeps its time through a pause, because it has no later time to wait
 for: found more than `schedule.max_delay_minutes` after it, it is missed. A job of the agent's is skipped when the agent's jobs
-already ran `schedule.max_agent_runs_per_day` times in the last 24 hours, counted from the history.
+already ran `schedule.max_agent_runs_per_day` times in the last 24 hours, counted from the history
+on every branch, since every run costs tokens.
 Nothing runs while the schedule is paused. Cron expressions (`CronExpression`) have the usual five
 fields, names for months and days, steps and ranges, and `@hourly`, `@daily`, `@weekly`; they and
 `--at` times are read in the host's time zone (`Machine.zone`).
@@ -1040,7 +1101,8 @@ off, which they get whether they asked for one or not. The agent may remove only
 **The agent's side.** With the schedule on, the session serves `sockets/host/schedule.sock`,
 which the sandbox sees as `/oillamp/sockets/host/schedule.sock`, with `Control.Server` and
 `AgentRunner.answerAgent`: one JSON line in, one out. Requests are `list`, `add` (`cron`, `at`, `prompt`,
-`expires`), `remove` (`id`) and `history` (`run`, or nothing for the recent runs). Replies have a
+`expires`), `remove` (`id`) and `history` (`run`, or nothing for the recent runs, both on the
+current branch only: the agent remembers the state it is in). Replies have a
 `text` or an `error`, written for the agent to read. The extension
 `src/main/resources/agent/oillamp-schedule.js`, which `LampPlanUtil` writes into pi's extension
 directory each session, turns these into the tools `schedule_add`, `schedule_list`,
@@ -1732,9 +1794,9 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 |---|---|---|
 | 0 | `SUCCESS` | Success, or a session that ended normally. |
 | 1 | `ERROR` | Any error not covered below. |
-| 2 | `USAGE` | Bad command line or bad configuration. Also `remove` without `--yes`. |
+| 2 | `USAGE` | Bad command line or bad configuration. Also `remove`, `history <dir> reset` and `history <dir> branch --delete` without `--yes`, and a snapshot or branch that cannot be the one meant. |
 | 3 | `PREREQUISITES_MISSING` | Host packages, subordinate ids or podman are not ready. |
-| 4 | `LAMP_BUSY` | Another session holds this lamp, `remove` found it still in use, or `restore` found a session running. |
+| 4 | `LAMP_BUSY` | Another session holds this lamp, `remove` found it still in use, or `restore`, `switch` or `reset` found a session running. |
 | 5 | `SESSION_FAILED` | The container or the session failed. |
 | 130 | `INTERRUPTED` | Interrupted before the session was running. |
 
@@ -1767,13 +1829,17 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-LAMP-011` | A socket directory of the lamp was replaced by a link. |
 | `OIL-LAMP-012` | Warning: a file in the agent's home was not written, because it or a directory on the way is a link. |
 | `OIL-LAMP-013` | Warning: a file in the agent's home was not written, such as pi's settings that are not a JSON object. |
-| `OIL-HISTORY-001` | `restore` named no snapshot, or more than one. |
+| `OIL-HISTORY-001` | `restore`, `reset` or `branch` named no snapshot, or more than one; or a branch was to start at the newest snapshot of a branch that has none. |
 | `OIL-HISTORY-002` | The history cannot be read. |
 | `OIL-HISTORY-003` | The lamp could not be saved. |
 | `OIL-HISTORY-004` | Warning: some files were left out of a snapshot. |
-| `OIL-HISTORY-005` | `restore` refused: a session is running. |
-| `OIL-HISTORY-006` | A restore stopped part of the way; the safety save holds the lamp as it was. |
+| `OIL-HISTORY-005` | `restore`, `switch` or `reset` refused: a session is running. |
+| `OIL-HISTORY-006` | A restore, switch or reset stopped part of the way; the safety save, or the branch's newest snapshot for a reset, holds the lamp as it was. |
 | `OIL-HISTORY-007` | Another save or restore has held the history for over ten minutes. |
+| `OIL-HISTORY-008` | `restore` or `reset` named a snapshot that only other branches hold. |
+| `OIL-HISTORY-009` | `switch` or `branch --delete` named a branch the history does not have. |
+| `OIL-HISTORY-010` | `branch` named a branch the history has already. |
+| `OIL-HISTORY-011` | `branch --delete` named the current branch. |
 | `OIL-SCHEDULE-001` | A job was refused: its time could not be read, has passed, or breaks one of the agent's limits. |
 | `OIL-SCHEDULE-002` | The schedule file could not be read or written. |
 | `OIL-SCHEDULE-003` | No job has that name. |
