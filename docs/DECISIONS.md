@@ -340,6 +340,11 @@ and changes not yet saved are thrown away. It saves nothing first. Without `--ye
 snapshots would leave the branch and whether there are unsaved changes, changes nothing, and exits
 2, as `remove` does.
 
+Both the preview and confirmed reset refuse if the current home cannot be read completely,
+naming the skipped paths. The user can restore access and retry. A skipped directory does not
+mean an empty directory: extra files inside it would otherwise survive the reset while oillamp
+reported that unsaved changes were gone.
+
 *Why:* a restore that put another branch's state on top of this one would mix two states into one
 line, and the history would no longer say which state each snapshot belongs to. Starting a branch
 at that snapshot says exactly that. A restore keeps everything and only grows the history; that is

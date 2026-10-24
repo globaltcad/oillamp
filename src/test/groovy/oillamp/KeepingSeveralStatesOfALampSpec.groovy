@@ -18,6 +18,7 @@ import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -554,6 +555,63 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             [second, third].every { Files.exists(objectFile(lamp, it.id())) }
     }
 
+    def 'Oillamp refuses a hard reset it cannot read completely, so it never claims to discard work it kept'() {
+        reportInfo """
+            A hard reset throws away unsaved changes and brings the home back to a snapshot.
+            Before doing that, oillamp reads the current home to find what must be replaced or
+            removed. If a directory cannot be read, that picture is incomplete: extra files inside
+            it would be invisible, and restoring the saved files alone would leave them behind.
+
+            Let's consider a saved directory to which the user added an unsaved draft, then took
+            away all permissions. Both the reset preview and the confirmed reset must refuse with
+            `OIL-HISTORY-003`, name the unreadable directory, and leave the branch and home alone.
+            Once the user makes the directory readable, resetting works and removes the draft.
+            Oillamp must never report that unsaved work is gone while silently keeping it.
+        """
+        given: 'a saved directory with an unsaved draft, which the user made unreadable'
+            var lamp = aLampThatHasRun()
+            var directory = home(lamp).resolve('workspace/private')
+            write(home(lamp), 'workspace/private/saved.txt', 'saved\n')
+            var snapshot = saved(host.oillamp.run('history', lamp.toString(), 'save'))
+            write(home(lamp), 'workspace/private/draft.txt', 'not saved\n')
+            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString('---------'))
+            var before = Files.readString(lamp.resolve('.oillamp/history/refs/heads/main'))
+
+        when: 'the user previews the reset and then tries to confirm it'
+            var preview = host.oillamp.run('history', lamp.toString(), 'reset', snapshot.id())
+            var confirmed = host.oillamp.run('history', lamp.toString(), 'reset', snapshot.id(), '--yes')
+
+        then: 'both refuse, explain which directory could not be read, and report no completed reset'
+            [preview, confirmed].every {
+                it.status() == LampExitStatus.ERROR && it.reported('OIL-HISTORY-003') &&
+                        it.console().contains('workspace/private') &&
+                        !it.events().any { event -> event instanceof LampEvent.ResetDone || event instanceof LampEvent.ResetPlanned }
+            }
+
+        and: 'the branch and the directory permissions are unchanged'
+            Files.readString(lamp.resolve('.oillamp/history/refs/heads/main')) == before
+            Files.getPosixFilePermissions(directory) == PosixFilePermissions.fromString('---------')
+
+        when: 'the user restores access to the directory'
+            Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString('rwxr-xr-x'))
+
+        then: 'the refused resets left both files intact'
+            Files.readString(directory.resolve('saved.txt')) == 'saved\n'
+            Files.readString(directory.resolve('draft.txt')) == 'not saved\n'
+
+        when: 'the user confirms the reset again'
+            var retried = host.oillamp.run('history', lamp.toString(), 'reset', snapshot.id(), '--yes')
+
+        then: 'it succeeds and discards the unsaved draft'
+            retried.succeeded()
+            !Files.exists(directory.resolve('draft.txt'))
+            Files.readString(directory.resolve('saved.txt')) == 'saved\n'
+
+        cleanup:
+            if (directory != null && Files.exists(directory))
+                Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString('rwxr-xr-x'))
+    }
+
     def 'Oillamp keeps the snapshots a reset takes off one branch on every other branch that has them'() {
         reportInfo """
             A branch is a line of snapshots of a lamp's history; the lamp is on one at a time. A
@@ -974,6 +1032,47 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
         then: 'neither oillamp nor git lists it any more'
             branchesOf(lamp)*.name() == ['main']
             git(repository, 'branch', '--list').readLines()*.trim() == ['* main']
+    }
+
+    def 'Oillamp ignores an interrupted branch write whose temporary file is #state'() {
+        reportInfo """
+            Saving or starting a branch writes its new commit id to a temporary file beside the
+            branch, then renames it over the branch's file. A history reader can see that temporary
+            file while a write is in progress, and an interrupted process can leave it behind.
+            It may be empty, partially written, or already hold a complete commit id.
+
+            Those files are not branches. Oillamp must still list the real branches and their
+            snapshots, and let the user start and switch to another branch. The scenario leaves
+            exactly such a file in `refs/heads` without needing to kill a process at just the right
+            instant. Even a fully written temporary file must not appear as an alternative state.
+        """
+        given: 'a saved lamp and the temporary file left by an interrupted branch write'
+            var lamp = aLampThatHasRun()
+            var snapshot = saved(host.oillamp.run('history', lamp.toString(), 'save'))
+            var temporary = lamp.resolve('.oillamp/history/refs/heads/.oillamp-interrupted.tmp')
+            Files.writeString(temporary, content(snapshot.id()))
+
+        expect: 'only the real branch and its snapshot are listed'
+            branchesOf(lamp)*.name() == ['main']
+            var all = host.oillamp.run('history', lamp.toString(), 'list', '--all')
+            all.succeeded()
+            all.events().find { it instanceof LampEvent.HistoryOfAllBranches }.snapshots()
+                    .collect { [it.snapshot().id(), it.branches().toList()] } == [[snapshot.id(), ['main']]]
+
+        when: 'the user starts a branch and switches to it'
+            var created = host.oillamp.run('history', lamp.toString(), 'branch', 'other')
+            var switched = host.oillamp.run('history', lamp.toString(), 'switch', 'other')
+
+        then: 'both work and the temporary file never becomes a branch'
+            created.succeeded()
+            switched.succeeded()
+            branchesOf(lamp).collect { [it.name(), it.current()] } == [['main', false], ['other', true]]
+
+        where:
+            state              | content
+            'empty'            | { id -> '' }
+            'partly written'   | { id -> id.substring(0, 12) }
+            'fully written'    | { id -> id + '\n' }
     }
 
     // ─── through the Java API ──────────────────────────────────────────────────────────────

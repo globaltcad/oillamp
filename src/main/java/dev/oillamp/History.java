@@ -528,6 +528,12 @@ final class History {
                 return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), "the lamp could not be read, "
                         + "so nothing was reset: " + ProblemCatalogUtil.reason(e)));
             }
+            // A skipped directory is absent from `now`, not empty on disk. Using that incomplete
+            // tree to restore would leave extra files inside it and falsely report them discarded.
+            if (!tally.skipped.isEmpty())
+                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(),
+                        "the lamp could not be read completely, so nothing was reset: " + tally.skipped.join(", "))
+                    );
             Resetting resetting = new Resetting(branch, target, dropped, !now.equals(newest.tree()), tally.skipped);
             if (!confirmed || (dropped == 0 && !resetting.unsaved())) return Result.ok(resetting);
             try {
@@ -829,9 +835,11 @@ final class History {
     }
 
     /// A branch's name as git may have written it: parts joined by `/`, each a plain name. Checked
-    /// for every name read from the history, so that none leads outside `refs/heads`.
+    /// for every name read from the history, so that none leads outside `refs/heads`. Git forbids
+    /// dot-prefixed components; in particular, oillamp's `.oillamp-*.tmp` writes are not branches.
     private static boolean isRefName(String name) {
-        for (String part : name.split("/", -1)) if (!GitObjectUtil.isPlainName(part)) return false;
+        for (String part : name.split("/", -1))
+            if (!GitObjectUtil.isPlainName(part) || part.startsWith(".")) return false;
         return true;
     }
 
@@ -857,7 +865,7 @@ final class History {
 
     /// The name of every branch, in alphabetical order: those in their own files under
     /// `refs/heads`, and those git packed into `packed-refs`. A file git leaves while it changes a
-    /// branch, which ends in `.lock`, is not one.
+    /// branch, which ends in `.lock`, and oillamp's dot-prefixed temporary files are not branches.
     private SortedSet<String> branchNames() throws IOException {
         SortedSet<String> names = new TreeSet<>();
         Path heads = repository.resolve(HEADS);
