@@ -84,7 +84,7 @@ final class ConfigLoadingUtil {
         LampConfig defaults = ConfigDefaultsUtil.lampConfig();
         root.allowOnly("schema_version", "display", "viewer", "terminal", "recording",
                        "limits", "network", "llm", "model", "git", "agent_tools", "image", "host", "timeouts",
-                       "schedule", "host_access", "autosave");
+                        "schedule", "host_access", "autosave", "history");
 
         LampConfig.Display display   = readDisplay(root.table("display"), defaults.display());
         LampConfig.Viewer viewer     = readViewer(root.table("viewer"), defaults.viewer());
@@ -107,10 +107,17 @@ final class ConfigLoadingUtil {
         LampConfig.Schedule schedule = readSchedule(root.table("schedule"), defaults.schedule());
         LampConfig.HostAccess hostAccess = readHostAccess(root.table("host_access"), defaults.hostAccess());
         LampConfig.Autosave autosave = readAutosave(root.table("autosave"), defaults.autosave());
+        ConfigSection historySection = root.table("history");
+        historySection.allowOnly("max_total_gb");
+        double historyGb = historySection.number("max_total_gb", defaults.history().maxTotalGb());
+        if (!Double.isFinite(historyGb) || historyGb < 0 || historyGb > 10_000) {
+            historySection.invalid("max_total_gb", Double.toString(historyGb), "a size in GB from 0 to 10000, 0 for unlimited");
+            historyGb = defaults.history().maxTotalGb();
+        }
 
         return new LampConfig(display, viewer, terminal, recording, limits,
                               network, forwards, llm, model, git, tools, image, host, timeouts, schedule,
-                              hostAccess, autosave);
+                               hostAccess, autosave, new LampConfig.History(historyGb));
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {

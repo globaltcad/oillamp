@@ -354,7 +354,7 @@ class UsingTheCommandLineSpec extends Specification {
 
         and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
             !complete(script, 'oillamp', 'history', '').contains('save')
-            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset']
+            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset', 'prune']
             complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
@@ -781,7 +781,7 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(
                     "'${word}' is not something `oillamp history <dir>` does; it does list, save, restore, autosave, "
-                    + "branches, branch, switch and reset")
+                     + "branches, branch, switch, reset and prune")
             ['oillamp history <dir> [list] [--all]', 'oillamp history <dir> save [--message <text>]',
              'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave [',
              'oillamp history <dir> branches', 'oillamp history <dir> branch <name> [<snapshot>]',

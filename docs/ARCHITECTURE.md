@@ -168,7 +168,7 @@ known lifetime:
 | `<lamp>/.oillamp/sockets/*/` | the proxy (host); wayvnc and the ssh listener (container) | relays, viewer, socat | files outlive their servers; deleted before the next session |
 | `<lamp>/.oillamp/recordings/` | wf-recorder | you, the agent (read only) | until retention deletes them |
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
-| `<lamp>/.oillamp/history/` | `History`: around runs, at the start and end of a session when `[autosave]` says so, and for `oillamp history <dir>` `save`, `restore`, `branch`, `switch` and `reset` | `oillamp history <dir>` and its actions, the session (run numbers and the agent's past runs), git by hand | until `oillamp remove`; objects are only added; a reset or a deleted branch leaves some on no branch, which stay as files |
+| `<lamp>/.oillamp/history/` | `History`: saves, branch operations and retention | history commands, the session and git by hand | bounded by the fixed initial size plus `[history].max_total_gb`; branch tips and active bases survive |
 | `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir>` `restore`, `switch` and `reset` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save, restore, switch, reset, or start or deletion of a branch runs | every other one of them, which waits for it | the lock ends with the process |
@@ -270,6 +270,39 @@ The paths come from `LampLayout`. Why it is laid out like this:
 
 ### The history
 
+**Retention.** Every new commit applies `[history].max_total_gb` (default 2, zero disables it).
+This is extra space beyond the compressed objects of the first snapshot, measured once in
+`history/initial-bytes`; adopting an existing history measures its oldest root snapshot. The
+allowance is fixed even if that snapshot is later removed. Sizes count unique compressed object
+file lengths, not the home, filesystem allocation blocks, or metadata files. All branches share
+one target. Every branch tip survives, even if their combined objects exceed the target.
+
+Oldest ancestry is removed first, ordered by graph depth then time, so clocks going backwards
+cannot make a cut skip a retained descendant. Git's `history/shallow` lists retained commits at
+which traversal stops. Commit ids and trees stay unchanged; when the fork goes, branches become
+disconnected but their homes still restore normally. Shared objects are counted once. Reachability
+incoming-edge counts in the object graph determine what can go, without storing each snapshot's
+full descendant set. Unreferenced loose objects and abandoned `incoming-*.tmp` writes are swept.
+Additional git refs, reflogs and packed objects refuse pruning rather than risk their contents.
+
+Readers hold the history lock too. A running agent pins its starting snapshot in `active-base`;
+its path from the branch tip remains protected until the run finishes. Startup clears a pin left
+by a dead session; stopped saves and explicit pruning ignore stale pins too. Restore and switch
+protect snapshots used within their locked operation. Invalid current configuration does not
+prevent recovery: restore and switch warn and skip retention when policy validation fails.
+Pruning records discarded run numbers and the last day's agent runs in `pruned-runs`, outside
+restored snapshots, before publishing boundaries. Objects, refs, accounting and boundaries are
+forced to disk before deletion, including existing metadata when adopting an older history.
+Boundary publication is atomic. Interruption leaves valid history and possibly excess garbage.
+Failure of this maintenance reports a warning without undoing a successful save.
+Partial sweep failures still report the cut and actual reclaimed bytes. Cleanup events are
+delivered after releasing the history lock so listeners can refresh history synchronously.
+
+`HistoryPruned` carries removed snapshots with their previous branch membership, retained boundary
+ids, bytes reclaimed, bytes remaining and the target. Over-budget protected states are reported
+with that event too. `history prune` previews without writing; `--yes` applies it while stopped.
+Run change summaries whose starting snapshot is gone explicitly report that changes are unavailable.
+
 A lamp keeps snapshots of itself in `.oillamp/history/`, a git repository. A snapshot is one
 commit, and its tree mirrors the lamp:
 
@@ -329,8 +362,8 @@ lock: every job, the user's and the agent's, each one's enabled flag and last ru
 schedule is paused, and the number the next job gets. A job added after the target snapshot is
 gone. A snapshot from before snapshots held the schedule says nothing about the jobs, so restoring
 it leaves the schedule as it is. Finally a commit records the restore, with the target's tree, or,
-for such an older target, the target's tree with the schedule the lamp kept. A restore removes
-nothing from the history. A snapshot that only other branches hold is refused (`OIL-HISTORY-008`),
+for such an older target, the target's tree with the schedule the lamp kept. Its saves also apply
+retention, protecting the target and safety snapshot during the operation. A snapshot that only other branches hold is refused (`OIL-HISTORY-008`),
 with how to reach it: start a branch at it, and switch to that. A restore never puts another
 branch's state on top of this one's.
 
@@ -377,10 +410,9 @@ in the same second, the one with more commits before it comes first, since a com
 after its parent. `branch <name> <snapshot>` accepts any snapshot on any branch. Run numbers and
 `schedule.max_agent_runs_per_day` count every branch's commits.
 
-**Nothing is deleted.** Objects are only ever added. A reset and a deleted branch leave commits that
-no branch leads to; they and their files stay in `objects/` until oillamp removes what no branch
-reaches, which it does not yet do. Until then they take disk space, and no command names them: a
-snapshot is found only among the snapshots on some branch.
+**Unreachable objects.** Reset and branch deletion leave commits no branch reaches. Enabled
+retention reclaims them on the next save or explicit cleanup. A snapshot can be named through
+Oillamp only while some branch reaches it within the retained shallow boundaries.
 
 **What made each snapshot** is in its commit message:
 

@@ -55,6 +55,7 @@ final class AgentRunner {
     private final LampLayout layout;
     private final LampConfig.Schedule config;
     private final LampConfig.Autosave autosave;
+    private final LampConfig.History historyPolicy;
     private final SessionId session;
     private final ScheduleBook book;
     private final Harness harness;
@@ -90,9 +91,10 @@ final class AgentRunner {
     /// @param post         puts a run's activity on the session's queue, so that the one event loop
     ///                     keeps it in the state; the host-access gate reads it from there
     AgentRunner(Machine machine, Context context, LampLayout layout, LampConfig.Schedule config,
-                LampConfig.Autosave autosave, SessionId session,
+                 LampConfig.Autosave autosave, LampConfig.History historyPolicy, SessionId session,
                 Optional<String> instructions, java.util.function.Consumer<SessionEvent> post) {
         this.machine = machine;
+        this.historyPolicy = historyPolicy;
         this.context = context;
         this.layout = layout;
         this.config = config;
@@ -287,7 +289,7 @@ final class AgentRunner {
     /// lamp, whichever branch it was on. Not the history alone either, because the runs that wait or
     /// work now are not in it yet. A history that cannot be read counts as one without runs.
     private synchronized String numberRun() {
-        int saved = new History(layout).commitsOfAllBranches().map(GitObjectUtil::highestRun).orElseGet(problems -> 0);
+        int saved = new History(layout).highestRun().orElseGet(problems -> 0);
         lastNumbered = Math.max(lastNumbered, saved) + 1;
         return "run-" + lastNumbered;
     }
@@ -303,14 +305,7 @@ final class AgentRunner {
     private int agentRunsInADay(Instant now) {
         int counted = (int) queue.stream().filter(pending -> pending.job().filter(job -> job.author() == LampJobAuthor.AGENT).isPresent()).count()
                 + (current.flatMap(Pending::job).filter(job -> job.author() == LampJobAuthor.AGENT).isPresent() ? 1 : 0);
-        Result<Tuple<GitObjectUtil.Commit>> commits = new History(layout).commitsOfAllBranches();
-        if (commits instanceof Result.Ok<Tuple<GitObjectUtil.Commit>>(Tuple<GitObjectUtil.Commit> all, var _))
-            for (GitObjectUtil.Commit commit : all) {
-                if (commit.snapshot().at().isBefore(now.minus(Duration.ofDays(1)))) break;
-                Optional<WakePromptUtil.Past> past = WakePromptUtil.Past.of(commit);
-                if (past.isPresent() && past.get().author() == LampJobAuthor.AGENT) counted++;
-            }
-        return counted;
+        return counted + new History(layout).agentRunsInADay(now).orElseGet(_ -> 0);
     }
 
     private void enqueue(Pending pending) {
@@ -369,7 +364,8 @@ final class AgentRunner {
         context.sink().accept(new LampEvent.RunStarted(run));
         post.accept(new SessionEvent.RunBegan(run.id(), run.prompt()));
 
-        History history = new History(layout);
+        History history = new History(layout, historyPolicy, context.sink());
+        try {
         Association<String, String> trailers = Association.between(String.class, String.class)
                 .put(GitObjectUtil.RUN_TRAILER, run.id());
         Optional<String> base = Optional.empty();
@@ -382,11 +378,10 @@ final class AgentRunner {
             } else {
                 context.sinkAcceptProblems(before.problems().map(ProblemCatalogUtil::asWarning));
             }
-        } else if (history.snapshots() instanceof Result.Ok<Tuple<LampSave>>(Tuple<LampSave> all, var _)
-                   && !all.isEmpty()) {
+        } else {
             // Without a save just before, the newest snapshot is the nearest to where the run
             // began, and what the run changed then also holds what changed since that snapshot.
-            base = Optional.of(all.first().id());
+            base = history.pinLatest().orElseGet(_ -> Optional.empty());
         }
 
         // A job wakes an agent that knows nothing of why, so its prompt carries the agent's notes
@@ -429,6 +424,9 @@ final class AgentRunner {
         }
         return new LampEvent.RunFinished(run, answer.outcome(), answer.text().strip(),
                 snapshot, Duration.between(started, ended), conversation);
+        } finally {
+            history.releaseBase();
+        }
     }
 
     private void remember(LampAgentProgress progress, String run) {
@@ -466,18 +464,16 @@ final class AgentRunner {
             if (found.size() >= count) break;
             Optional<WakePromptUtil.Past> past = WakePromptUtil.Past.of(commit);
             if (past.isEmpty()) continue;
-            found = found.add(describe(history, all, past.get(), WakePromptUtil.CHANGES_SHOWN));
+            found = found.add(describe(history, past.get(), WakePromptUtil.CHANGES_SHOWN));
         }
         return found;
     }
 
-    private static WakePromptUtil.Described describe(History history, Tuple<GitObjectUtil.Commit> all, WakePromptUtil.Past past, int most) {
-        Optional<String> baseTree = past.base().flatMap(id ->
-                all.stream().filter(commit -> commit.id().equals(id)).findFirst().map(GitObjectUtil.Commit::tree));
-        Result<History.Changes> changes = history.changes(baseTree, past.tree(), most);
-        return changes instanceof Result.Ok<History.Changes>(History.Changes found, var _)
-                ? new WakePromptUtil.Described(past, found.shown(), found.more())
-                : new WakePromptUtil.Described(past, Tuple.of(History.Change.class), false);
+    private static WakePromptUtil.Described describe(History history, WakePromptUtil.Past past, int most) {
+        Optional<History.Changes> changes = history.runChanges(past.base(), past.tree(), most)
+                .orElseGet(_ -> Optional.empty());
+        return changes.map(found -> new WakePromptUtil.Described(past, found.shown(), found.more(), true))
+                .orElseGet(() -> new WakePromptUtil.Described(past, Tuple.of(History.Change.class), false, false));
     }
 
     // ─── the agent's requests ──────────────────────────────────────────────────────────────
@@ -565,11 +561,12 @@ final class AgentRunner {
         Optional<WakePromptUtil.Past> found = runs.stream().filter(past -> past.run().equals(run)).findFirst();
         if (found.isEmpty()) return "There is no run called '" + run + "'. Leave the run out to list the recent ones.";
         WakePromptUtil.Past past = found.get();
-        WakePromptUtil.Described described = describe(history, all, past, 100);
+        WakePromptUtil.Described described = describe(history, past, 100);
         StringBuilder out = new StringBuilder();
         out.append(past.run()).append(", ").append(TimeNotationUtil.show(past.at(), zone)).append(", ")
            .append(past.job().map(job -> "for " + job).orElse("asked by the user")).append(": ").append(past.outcome()).append(".\n");
-        out.append(described.changes().isEmpty() ? "\nIt changed no files.\n" : "\nIt changed:\n");
+        out.append(!described.available() ? "\nChanges unavailable: the starting snapshot is no longer retained.\n"
+                : described.changes().isEmpty() ? "\nIt changed no files.\n" : "\nIt changed:\n");
         for (History.Change change : described.changes())
             out.append("- ").append(change.path()).append(" (").append(change.kind()).append(")\n");
         if (described.more()) out.append("- and more\n");

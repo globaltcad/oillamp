@@ -62,7 +62,7 @@ final class WakePromptUtil {
     }
 
     /// A past run, with what it changed.
-    record Described(Past past, Tuple<History.Change> changes, boolean more) {}
+    record Described(Past past, Tuple<History.Change> changes, boolean more, boolean available) {}
 
     /// The prompt for a run.
     ///
@@ -117,7 +117,9 @@ final class WakePromptUtil {
                 out.append("\n- ").append(past.run()).append(", ").append(TimeNotationUtil.show(past.at(), zone)).append(", ")
                    .append(past.job().map(job -> "for " + job).orElse("asked by the user")).append(": ")
                    .append(past.outcome()).append(". ");
-                if (described.changes().isEmpty()) {
+                if (!described.available()) {
+                    out.append("Changes unavailable: the starting snapshot is no longer retained.\n");
+                } else if (described.changes().isEmpty()) {
                     out.append("It changed no files.\n");
                 } else {
                     out.append("It changed:\n");

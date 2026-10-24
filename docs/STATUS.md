@@ -410,10 +410,20 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Disk space
 
-- The history keeps every version of every file ever saved, and nothing removes old snapshots.
-  There is no way yet to leave parts of the agent's home out of a snapshot, such as `~/.cache`.
-  The snapshots a reset or a deleted branch leaves on no branch stay as files too, and no command
-  can name them any more, not even to start a branch at one.
+- Follow-up retention review scenarios cover recovery from invalid configuration, abandoned
+  temporary objects and dead-run pins, synchronous refresh callbacks, partial deletion failures,
+  disabled maintenance and undoing a restore under budget pressure. A synthetic 10,000-file,
+  1,000-snapshot shared-tree history prunes with a 256 MB heap after replacing per-snapshot
+  descendant sets with incoming-edge counts. Power-loss durability barriers are implemented;
+  physical power loss has not been tested.
+
+- History now prunes after every new snapshot, using the fixed initial snapshot size plus
+  `[history].max_total_gb` (default 2). Branch tips and active run bases survive; retained ids stay
+  stable, even with disconnected branches. Scenarios cover real loose-object reclamation, Git
+  integrity, previews, restore safety, saves during runs, run numbering and daily-limit accounting.
+  `HistoryPruned` reports cleanup through the event API. Packed objects, additional refs and
+  reflogs refuse pruning. Large-home performance and interruption during sweeping have not been
+  tested on real hardware. There is still no way to exclude home paths such as `~/.cache`.
 
 - oillamp removes only the image an `oillamp update` replaces, and no other. Cleaning up the rest
   is out of scope; instead every build that makes a new image warns (`OIL-IMAGE-003`) and lists

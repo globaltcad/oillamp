@@ -144,7 +144,7 @@ final class Supervisor {
         // What each run does is kept only for the host-access gate, so a lamp without it keeps
         // nothing, and its event loop is not handed every piece of the agent's thinking.
         this.runs = new AgentRunner(machine, this.context, prepared.layout(), prepared.config().schedule(),
-                                    prepared.config().autosave(), prepared.session(),
+                                    prepared.config().autosave(), prepared.config().history(), prepared.session(),
                                     instructions,
                                     prepared.config().hostAccess().enabled() ? this::post : event -> { });
     }
@@ -596,7 +596,7 @@ final class Supervisor {
         //    Ctrl-C this sequence is the last thing that runs before the JVM exits.
         if (prepared.config().autosave().shutdown())
             problems = problems.addAll(CommandExecutionUtil.saveLamp(context, prepared.layout(),
-                    LampSaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now()));
+                    LampSaveKind.SHUTDOWN, "", Optional.of(prepared.session()), machine.now(), prepared.config().history()));
         return problems;
     }
 

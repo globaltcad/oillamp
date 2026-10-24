@@ -232,6 +232,14 @@ final class ConsoleRenderer {
                     + (saved.files() > 0 ? ", " + saved.files() + " files" : ""));
             case LampEvent.History history -> printLine(describe(history.branch(), history.snapshots()));
             case LampEvent.HistoryOfAllBranches all -> printLine(describe(all));
+            case LampEvent.HistoryPruned pruned -> printLine(area("history") + "pruned "
+                    + snapshots(pruned.removed().size()) + "; reclaimed " + pruned.bytesFreed()
+                    + " bytes; " + pruned.remainingBytes() + " bytes remain (target " + pruned.limitBytes() + ")"
+                    + (pruned.remainingBytes() > pruned.limitBytes() ? "; protected branch states exceed the target" : "")
+                    + (pruned.boundaries().isEmpty() ? "" : "; earlier history ends at " + pruned.boundaries().join(", ")));
+            case LampEvent.HistoryPrunePlanned planned -> printLine(area("history") + "would prune "
+                    + snapshots(planned.removed().size()) + " and reclaim " + planned.bytesFreed()
+                    + " bytes; " + planned.remainingBytes() + " bytes would remain (target " + planned.limitBytes() + ")");
             case LampEvent.Restored restored -> printLine(area("history") + colour(GREEN, "✓ ")
                     + (restored.result().equals(restored.target())
                         ? "the lamp already is as " + restored.target().shortId() + " holds it, so nothing changed"

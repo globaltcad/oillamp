@@ -107,6 +107,18 @@ public sealed interface LampEvent {
     /// @param current the branch the lamp is on
     record HistoryOfAllBranches(String current, Tuple<LampSaveOnBranches> snapshots) implements LampEvent {}
 
+    /// Old snapshots were pruned after a save, or by `history prune --yes`. Every branch's newest
+    /// state and every retained snapshot id are preserved. Boundaries are the retained snapshots
+    /// at which earlier history is no longer available. Bytes count compressed object files once,
+    /// including garbage reclaimed from resets and deleted branches. The limit includes the fixed
+    /// allowance for the first snapshot; protected states can exceed it.
+    record HistoryPruned(Tuple<LampSaveOnBranches> removed, Tuple<String> boundaries,
+                         long bytesFreed, long remainingBytes, long limitBytes) implements LampEvent {}
+
+    /// What `history prune` would remove; no history was changed. See [HistoryPruned].
+    record HistoryPrunePlanned(Tuple<LampSaveOnBranches> removed, Tuple<String> boundaries,
+                              long bytesFreed, long remainingBytes, long limitBytes) implements LampEvent {}
+
     /// The lamp was brought back to `target`, and `result` is the snapshot that records it.
     /// When the lamp already was as `target` holds it, nothing changed and `result` is `target`.
     record Restored(LampSave target, LampSave result)   implements LampEvent {}

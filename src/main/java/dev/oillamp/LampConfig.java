@@ -33,32 +33,43 @@ record LampConfig(
     Timeouts timeouts,
     Schedule schedule,
     HostAccess hostAccess,
-    Autosave autosave
+    Autosave autosave,
+    History history
 ) {
     /// The same configuration with other `[model]` settings, such as those an application gave
     /// on the command line for one session.
     public LampConfig withModel(Model changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              changed, git, agentTools, image, host, timeouts, schedule, hostAccess, autosave);
+                              changed, git, agentTools, image, host, timeouts, schedule, hostAccess, autosave, history);
     }
 
     /// The same configuration with other `[schedule]` settings.
     public LampConfig withSchedule(Schedule changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, changed, hostAccess, autosave);
+                              model, git, agentTools, image, host, timeouts, changed, hostAccess, autosave, history);
     }
 
     /// The same configuration with other `[host_access]` settings, such as the requirements an
     /// application gave for one session.
     public LampConfig withHostAccess(HostAccess changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, schedule, changed, autosave);
+                              model, git, agentTools, image, host, timeouts, schedule, changed, autosave, history);
     }
 
     /// The same configuration with other `[autosave]` settings.
     public LampConfig withAutosave(Autosave changed) {
         return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
-                              model, git, agentTools, image, host, timeouts, schedule, hostAccess, changed);
+                              model, git, agentTools, image, host, timeouts, schedule, hostAccess, changed, history);
+    }
+
+    /// The disk allowance beyond the first snapshot, shared by all history branches. Zero disables
+    /// automatic pruning. Like recording retention, a GB here is 1024 cubed bytes.
+    public record History(double maxTotalGb) {
+        public History {
+            if (!Double.isFinite(maxTotalGb) || maxTotalGb < 0 || maxTotalGb > 10_000)
+                throw new IllegalArgumentException("history.max_total_gb must be between 0 and 10000");
+        }
+        long allowanceBytes() { return (long) (maxTotalGb * 1024L * 1024L * 1024L); }
     }
 
     /// The version of the config schema this build writes and understands.

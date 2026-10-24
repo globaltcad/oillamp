@@ -2,6 +2,8 @@ package dev.oillamp;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +43,7 @@ import dev.lamp.LampSaveKind;
 import dev.lamp.LampProblem;
 import dev.lamp.LampSave;
 import dev.lamp.LampSaveOnBranches;
+import dev.lamp.LampEvent;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -93,10 +96,27 @@ final class History {
 
     private final LampLayout layout;
     private final Path repository;
+    private final LampConfig.History policy;
+    private final java.util.function.Consumer<LampEvent> sink;
+    private final boolean stopped;
+    /// Snapshots being used by a restore or switch in this locked operation.
+    private final Set<String> inUse = new HashSet<>();
+    private final List<LampEvent> pendingEvents = new ArrayList<>();
 
     History(LampLayout layout) {
+        this(layout, ConfigDefaultsUtil.lampConfig().history(), _ -> { });
+    }
+
+    History(LampLayout layout, LampConfig.History policy, java.util.function.Consumer<LampEvent> sink) {
+        this(layout, policy, sink, false);
+    }
+
+    History(LampLayout layout, LampConfig.History policy, java.util.function.Consumer<LampEvent> sink, boolean stopped) {
         this.layout = layout;
         this.repository = layout.historyDir();
+        this.policy = policy;
+        this.sink = sink;
+        this.stopped = stopped;
     }
 
     /// What a save did.
@@ -159,11 +179,7 @@ final class History {
     /// Every commit on the current branch, newest first, with the trailers that say what made each
     /// one.
     Result<Tuple<GitObjectUtil.Commit>> commitList() {
-        try {
-            return Result.ok(commits());
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        return reading(() -> Result.ok(commits()));
     }
 
     /// One path that differs between two snapshots.
@@ -180,13 +196,11 @@ final class History {
 
     /// Lists what differs from the tree `before` (or from nothing) to the tree `after`.
     Result<Changes> changes(Optional<String> before, String after, int limit) {
-        try {
+        return reading(() -> {
             List<Change> found = new ArrayList<>();
             boolean more = compare(before, Optional.of(after), "", found, limit, true);
             return Result.ok(new Changes(Tuple.of(Change.class, found), more));
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        });
     }
 
     /// Adds what differs between two trees to `found`. True once there were more than `limit`.
@@ -225,13 +239,11 @@ final class History {
     /// Every snapshot on the current branch, newest first. Empty for a lamp that has never been
     /// saved.
     Result<Tuple<LampSave>> snapshots() {
-        try {
+        return reading(() -> {
             Tuple<LampSave> found = Tuple.of(LampSave.class);
             for (GitObjectUtil.Commit commit : commits()) found = found.add(commit.snapshot());
             return Result.ok(found);
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        });
     }
 
     /// Brings the lamp back to the snapshot whose id starts with `prefix`, which must be on the
@@ -251,6 +263,7 @@ final class History {
             }
             if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
             LampSave target = ok.value();
+            inUse.add(target.id());
             GitObjectUtil.Commit wanted = commits.stream().filter(c -> c.id().equals(target.id())).findFirst().orElseThrow();
 
             Saving safety;
@@ -265,6 +278,7 @@ final class History {
             GitObjectUtil.Commit current;
             try {
                 current = commits().first();
+                inUse.add(current.id());
             } catch (IOException | RuntimeException e) {
                 return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
             }
@@ -333,17 +347,13 @@ final class History {
 
     /// The branch the lamp is on: the one every save goes to. `main` for a lamp never saved.
     Result<String> currentBranch() {
-        try {
-            return Result.ok(headBranch());
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        return reading(() -> Result.ok(headBranch()));
     }
 
     /// Every branch, in alphabetical order, with its newest snapshot. The current branch is among
     /// them even before its first snapshot.
     Result<Tuple<LampBranch>> branches() {
-        try {
+        return reading(() -> {
             String current = headBranch();
             SortedSet<String> names = branchNames();
             names.add(current);
@@ -354,31 +364,23 @@ final class History {
                         tip.isEmpty() ? Optional.empty() : Optional.of(commitAt(tip.get()).snapshot())));
             }
             return Result.ok(found);
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        });
     }
 
     /// Every commit on any branch, newest first, each once. Runs are numbered and counted from
     /// these, because every run on every branch was a run of this lamp's agent.
     Result<Tuple<GitObjectUtil.Commit>> commitsOfAllBranches() {
-        try {
-            return Result.ok(allCommits());
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        return reading(() -> Result.ok(allCommits()));
     }
 
     /// Every snapshot on any branch, newest first, each once, with the branches it is on.
     Result<Tuple<LampSaveOnBranches>> snapshotsOfAllBranches() {
-        try {
+        return reading(() -> {
             Tuple<LampSaveOnBranches> found = Tuple.of(LampSaveOnBranches.class);
             for (OnBranches listed : everyCommit())
                 found = found.add(new LampSaveOnBranches(listed.commit().snapshot(), Tuple.of(String.class, listed.branches())));
             return Result.ok(found);
-        } catch (IOException | RuntimeException e) {
-            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-        }
+        });
     }
 
     /// Starts the branch `name` at the snapshot whose id starts with `prefix`, which may be on any
@@ -460,6 +462,12 @@ final class History {
             }
             if (!names.contains(name))
                 return Result.err(ProblemCatalogUtil.noSuchBranch(name, layout.root(), Tuple.of(String.class, names)));
+
+            try {
+                inUse.add(ref(name).orElseThrow());
+            } catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
 
             Saving safety;
             try {
@@ -574,8 +582,10 @@ final class History {
         String tree = storeLamp(tally);
 
         Optional<GitObjectUtil.Commit> head = headCommit();
-        if (!always && head.isPresent() && head.get().tree().equals(tree))
+        if (!always && head.isPresent() && head.get().tree().equals(tree)) {
+            if (kind == LampSaveKind.BEFORE_RUN) pinBaseUnlocked(head.get().id());
             return new Saving(Optional.empty(), head.map(GitObjectUtil.Commit::snapshot), tally.files, tally.skipped);
+        }
         LampSave made = commit(tree, head.map(GitObjectUtil.Commit::id), now,
                 GitObjectUtil.message(kind, message, session, trailers));
         return new Saving(Optional.of(made), Optional.of(made), tally.files, tally.skipped);
@@ -748,13 +758,25 @@ final class History {
         Path target = objectPath(id);
         Files.createDirectories(target.getParent());
         FilesystemUtil.setMode(temporary, PosixMode.of(0444));
+        force(temporary);
         Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        force(java.util.Objects.requireNonNull(target.getParent()));
+        force(repository.resolve("objects"));
     }
 
     private LampSave commit(String tree, Optional<String> parent, Instant now, String message) throws IOException {
         String id = storeSmall("commit", GitObjectUtil.commit(tree, parent, now, message));
         moveBranch(parent, id);
-        return GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();
+        LampSave snapshot = GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();
+        if (snapshot.kind() == LampSaveKind.BEFORE_RUN) pinBaseUnlocked(id);
+        // The save is already durable. Maintenance failure must not turn it into a failed save.
+        try {
+            pruneUnlocked(true, now).ifPresent(pendingEvents::add);
+        } catch (IOException | RuntimeException e) {
+            pendingEvents.add(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
+                    "the snapshot was saved, but history pruning failed: " + ProblemCatalogUtil.reason(e))));
+        }
+        return snapshot;
     }
 
     /// Points the current branch at `id`, the last step of every save and of a reset.
@@ -772,12 +794,12 @@ final class History {
 
     /// Writes a branch's file, which names its newest commit, as git writes it.
     private void writeRef(String branch, String id) throws IOException {
-        FilesystemUtil.writeFile(repository.resolve(HEADS + branch), id + "\n", PosixMode.PRIVATE_FILE);
+        durableWrite(repository.resolve(HEADS + branch), id + "\n");
     }
 
     /// Points `HEAD` at a branch: from now on, saves go to it.
     private void writeHead(String branch) throws IOException {
-        FilesystemUtil.writeFile(repository.resolve("HEAD"), "ref: " + HEADS + branch + "\n", PosixMode.PRIVATE_FILE);
+        durableWrite(repository.resolve("HEAD"), "ref: " + HEADS + branch + "\n");
     }
 
     /// Removes a branch: its line in `packed-refs`, if git packed it, and then its own file. Either
@@ -795,9 +817,11 @@ final class History {
                 if (!dropping) kept.add(line);
             }
             if (kept.size() != lines.size())
-                FilesystemUtil.writeFile(packed, String.join("\n", kept) + "\n", PosixMode.PRIVATE_FILE);
+                durableWrite(packed, String.join("\n", kept) + "\n");
         }
         Files.deleteIfExists(repository.resolve(HEADS + branch));
+        Path parent = java.util.Objects.requireNonNull(repository.resolve(HEADS + branch).getParent());
+        if (Files.isDirectory(parent)) force(parent);
     }
 
     /// Creates an empty repository, the first time a lamp is saved.
@@ -907,10 +931,11 @@ final class History {
         Tuple<GitObjectUtil.Commit> found = Tuple.of(GitObjectUtil.Commit.class);
         Optional<String> next = tip;
         Set<String> seen = new HashSet<>();
+        Set<String> boundaries = shallow();
         while (next.isPresent() && seen.add(next.get())) {
             GitObjectUtil.Commit commit = commitAt(next.get());
             found = found.add(commit);
-            next = commit.parent();
+            next = boundaries.contains(commit.id()) ? Optional.empty() : commit.parent();
         }
         return found;
     }
@@ -1173,6 +1198,337 @@ final class History {
 
     // ─── small helpers ─────────────────────────────────────────────────────────────────────
 
+    // ─── bounded history ────────────────────────────────────────────────────────────────────
+
+    private Set<String> shallow() throws IOException {
+        Path file = repository.resolve("shallow");
+        Set<String> ids = new HashSet<>();
+        if (Files.exists(file))
+            for (String id : Files.readAllLines(file)) {
+                if (!GitObjectUtil.isObjectId(id)) throw new IOException("invalid shallow boundary: " + id);
+                ids.add(id);
+            }
+        return ids;
+    }
+
+    Result<Optional<LampEvent.HistoryPruned>> prune(boolean confirmed, Instant now) {
+        return reading(() -> Result.ok(pruneUnlocked(confirmed, now)));
+    }
+
+    /// One fixed allowance, measured from the oldest initial snapshot when adopting an existing
+    /// repository. It is a byte count, not a protected snapshot; its objects may eventually go.
+    private long initialBytes(List<OnBranches> commits, Map<String, Long> sizes, boolean write) throws IOException {
+        Path file = repository.resolve("initial-bytes");
+        if (Files.exists(file)) {
+            long bytes = Long.parseLong(Files.readString(file).strip());
+            if (bytes < 0) throw new IOException("negative initial history size");
+            return bytes;
+        }
+        long bytes = 0;
+        if (!commits.isEmpty()) {
+            GitObjectUtil.Commit first = commits.stream().min(Comparator.comparingInt(OnBranches::depth)
+                    .thenComparing(c -> c.commit().snapshot().at())).orElseThrow().commit();
+            for (String id : snapshotObjects(first)) bytes += sizes.getOrDefault(id, 0L);
+        }
+        if (write) durableWrite(file, bytes + "\n");
+        return bytes;
+    }
+
+    private Set<String> snapshotObjects(GitObjectUtil.Commit commit) throws IOException {
+        Set<String> objects = new HashSet<>();
+        objects.add(commit.id());
+        collectTree(commit.tree(), objects);
+        return objects;
+    }
+
+    /// Count incoming edges in the object DAG, not a full descendant set per snapshot. Identical
+    /// trees are traversed once, so thousands of snapshots of one large home need linear memory.
+    private void retainTree(String tree, Map<String, Integer> counts, Map<String, Tuple<String>> children) throws IOException {
+        counts.merge(tree, 1, Integer::sum);
+        if (children.containsKey(tree)) return;
+        Tuple<String> edges = Tuple.of(String.class);
+        for (GitObjectUtil.Entry entry : GitObjectUtil.parseTree(readObject(tree, "tree"))) {
+            edges = edges.add(entry.id());
+            if (entry.isDirectory()) retainTree(entry.id(), counts, children);
+            else {
+                if (!Files.isRegularFile(objectPath(entry.id()), LinkOption.NOFOLLOW_LINKS))
+                    throw new IOException("missing snapshot object " + entry.id());
+                counts.merge(entry.id(), 1, Integer::sum);
+            }
+        }
+        children.put(tree, edges);
+    }
+
+    private long releaseObject(String id, Map<String, Integer> counts, Map<String, Tuple<String>> children,
+                               Map<String, Long> sizes) {
+        int count = java.util.Objects.requireNonNull(counts.get(id)) - 1;
+        if (count > 0) { counts.put(id, count); return 0; }
+        counts.remove(id);
+        long freed = sizes.getOrDefault(id, 0L);
+        for (String child : children.getOrDefault(id, Tuple.of(String.class)))
+            freed += releaseObject(child, counts, children, sizes);
+        return freed;
+    }
+
+    Result<Tuple<String>> boundaries() {
+        return reading(() -> Result.ok(Tuple.of(String.class, new TreeSet<>(shallow()))));
+    }
+
+    private void collectTree(String tree, Set<String> objects) throws IOException {
+        if (!objects.add(tree)) return;
+        for (GitObjectUtil.Entry entry : GitObjectUtil.parseTree(readObject(tree, "tree"))) {
+            if (entry.isDirectory()) collectTree(entry.id(), objects);
+            else {
+                if (!Files.isRegularFile(objectPath(entry.id()), LinkOption.NOFOLLOW_LINKS))
+                    throw new IOException("missing snapshot object " + entry.id());
+                objects.add(entry.id());
+            }
+        }
+    }
+
+    /// Publish boundaries before sweeping. After interruption, traversal is already valid and a
+    /// later sweep can reclaim what remains. No commit or branch ref is rewritten.
+    private Optional<LampEvent.HistoryPruned> pruneUnlocked(boolean confirmed, Instant now) throws IOException {
+        if (!Files.isRegularFile(repository.resolve("HEAD"))) return Optional.empty();
+        if (policy.maxTotalGb() == 0) {
+            if (confirmed && !Files.exists(repository.resolve("initial-bytes"))) {
+                List<OnBranches> all = everyCommit();
+                Map<String, Long> sizes = new HashMap<>();
+                if (!all.isEmpty()) {
+                    GitObjectUtil.Commit first = all.stream().min(Comparator.comparingInt(OnBranches::depth)
+                            .thenComparing(c -> c.commit().snapshot().at())).orElseThrow().commit();
+                    for (String id : snapshotObjects(first)) sizes.put(id, Files.size(objectPath(id)));
+                }
+                initialBytes(all, sizes, true);
+            }
+            return Optional.empty();
+        }
+        Map<String, Long> sizes = new HashMap<>();
+        Map<Path, Long> abandoned = new HashMap<>();
+        try (Stream<Path> files = Files.walk(repository.resolve("objects"))) {
+            for (Path file : files.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                String relative = repository.resolve("objects").relativize(file).toString();
+                String id = relative.replace("/", "");
+                if (relative.matches("[0-9a-f]{2}/[0-9a-f]{38}")) sizes.put(id, Files.size(file));
+                else if (relative.matches("incoming-[^/]+\\.tmp")) abandoned.put(file, Files.size(file));
+                else if (!relative.startsWith("info/"))
+                    throw new IOException("history pruning does not support object file " + relative);
+            }
+        }
+        List<OnBranches> all = everyCommit();
+        long initial = initialBytes(all, sizes, confirmed);
+        long limit = policy.maxTotalGb() == 0 ? Long.MAX_VALUE : initial + policy.allowanceBytes();
+        if (policy.maxTotalGb() == 0) return Optional.empty();
+        // Tags, reflogs and replacement refs can retain history outside our branch graph. Refuse
+        // that layout instead of silently deleting objects a person protected with git.
+        try (Stream<Path> refs = Files.walk(repository.resolve("refs"))) {
+            if (refs.anyMatch(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)
+                    && !p.startsWith(repository.resolve("refs/heads"))))
+                throw new IOException("remove additional git refs before pruning this lamp's history");
+        }
+        if (packedRefs().stream().anyMatch(ref -> !ref.startsWith(HEADS, 41))
+                || Files.isDirectory(repository.resolve("logs")))
+            throw new IOException("additional git refs or reflogs are not supported by history pruning");
+        Set<String> protectedIds = new HashSet<>(inUse);
+        Path pin = repository.resolve("active-base");
+        if (stopped && confirmed) Files.deleteIfExists(pin);
+        if (!stopped && Files.exists(pin)) {
+            String id = Files.readString(pin).strip();
+            if (!GitObjectUtil.isObjectId(id)) throw new IOException("invalid active run base");
+            protectedIds.add(id);
+        }
+        // A pin must remain reachable as well as stored. Preserve the path from its branch tip
+        // until the run or restore releases it; otherwise a later sweep could forget the pin.
+        Set<String> pins = new HashSet<>(protectedIds);
+        for (String name : branchNames()) {
+            Tuple<GitObjectUtil.Commit> line = line(ref(name));
+            int through = -1;
+            for (int at = 0; at < line.size(); at++)
+                if (pins.contains(line.get(at).id())) through = at;
+            for (int at = 0; at <= through; at++) protectedIds.add(line.get(at).id());
+        }
+        for (String name : branchNames()) ref(name).ifPresent(protectedIds::add);
+        Map<String, Integer> counts = new HashMap<>();
+        Map<String, Tuple<String>> children = new HashMap<>();
+        for (OnBranches listed : all) {
+            counts.put(listed.commit().id(), 1);
+            retainTree(listed.commit().tree(), counts, children);
+        }
+        long kept = 0;
+        for (String id : counts.keySet()) kept += sizes.getOrDefault(id, 0L);
+        Set<String> retained = new HashSet<>();
+        for (OnBranches listed : all) retained.add(listed.commit().id());
+        Tuple<LampSaveOnBranches> removed = Tuple.of(LampSaveOnBranches.class);
+        List<OnBranches> oldest = new ArrayList<>(all);
+        oldest.sort(Comparator.comparingInt(OnBranches::depth).thenComparing(c -> c.commit().snapshot().at()));
+        for (OnBranches candidate : oldest) {
+            if (kept <= limit) break;
+            if (protectedIds.contains(candidate.commit().id())) continue;
+            retained.remove(candidate.commit().id());
+            removed = removed.add(new LampSaveOnBranches(candidate.commit().snapshot(), Tuple.of(String.class, candidate.branches())));
+            kept -= releaseObject(candidate.commit().id(), counts, children, sizes);
+            kept -= releaseObject(candidate.commit().tree(), counts, children, sizes);
+        }
+        SortedSet<String> boundaries = new TreeSet<>();
+        for (OnBranches listed : all)
+            if (retained.contains(listed.commit().id()) && listed.commit().parent().filter(p -> !retained.contains(p)).isPresent())
+                boundaries.add(listed.commit().id());
+        long total = sizes.values().stream().mapToLong(Long::longValue).sum()
+                + abandoned.values().stream().mapToLong(Long::longValue).sum();
+        long freed = total - kept;
+        if (confirmed) {
+            // Histories created by older builds did not force objects to disk. Establish their
+            // durability once before the first destructive sweep; new writes already do so.
+            if (!Files.exists(repository.resolve("durable-objects"))) {
+                for (String id : counts.keySet()) force(objectPath(id));
+                try (Stream<Path> dirs = Files.walk(repository.resolve("objects"))) {
+                    for (Path dir : dirs.filter(Files::isDirectory).toList()) force(dir);
+                }
+                try (Stream<Path> refs = Files.walk(repository.resolve("refs"))) {
+                    for (Path ref : refs.toList()) force(ref);
+                }
+                for (String name : List.of("HEAD", "packed-refs", "shallow"))
+                    if (Files.exists(repository.resolve(name))) force(repository.resolve(name));
+                force(repository);
+                durableWrite(repository.resolve("durable-objects"), "1\n");
+            }
+            rememberPrunedRuns(removed, now);
+            if (!boundaries.equals(shallow()))
+                durableWrite(repository.resolve("shallow"), boundaries.isEmpty() ? "" : String.join("\n", boundaries) + "\n");
+            long actualFreed = 0;
+            List<String> failures = new ArrayList<>();
+            Map<Path, Long> doomed = new HashMap<>(abandoned);
+            for (String id : sizes.keySet()) if (!counts.containsKey(id)) doomed.put(objectPath(id), sizes.getOrDefault(id, 0L));
+            for (var object : doomed.entrySet()) {
+                try {
+                    if (Files.deleteIfExists(object.getKey())) actualFreed += object.getValue();
+                } catch (IOException e) { failures.add(ProblemCatalogUtil.reason(e)); }
+            }
+            freed = actualFreed;
+            kept = total - actualFreed;
+            if (!failures.isEmpty()) pendingEvents.add(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
+                    "history boundaries were updated, but some unused objects could not be deleted: " + failures.getFirst())));
+        }
+        return Optional.of(new LampEvent.HistoryPruned(removed, Tuple.of(String.class, boundaries), freed, kept, limit))
+                .filter(event -> !event.removed().isEmpty() || event.bytesFreed() > 0 || event.remainingBytes() > event.limitBytes());
+    }
+
+    /// Accounting for runs whose commit was removed automatically. Manual reset keeps its existing
+    /// semantics; automatic maintenance must not reuse numbers or bypass the daily token limit.
+    private void rememberPrunedRuns(Tuple<LampSaveOnBranches> removed, Instant now) throws IOException {
+        Path file = repository.resolve("pruned-runs");
+        int high = prunedHigh();
+        Map<String, Instant> recent = prunedAgentRuns(now);
+        for (LampSaveOnBranches listed : removed) {
+            LampSave snapshot = listed.snapshot();
+            if (snapshot.run().isPresent() && snapshot.run().get().matches("run-[0-9]{1,9}"))
+                high = Math.max(high, Integer.parseInt(snapshot.run().get().substring(4)));
+            if (snapshot.kind() == LampSaveKind.RUN && snapshot.run().isPresent()) {
+                GitObjectUtil.Commit commit = commitAt(snapshot.id());
+                if (commit.trailers().get(GitObjectUtil.AUTHOR_TRAILER).filter("agent"::equals).isPresent()
+                        && !snapshot.at().isBefore(now.minus(Duration.ofDays(1)))) recent.put(snapshot.run().get(), snapshot.at());
+            }
+        }
+        StringBuilder text = new StringBuilder(high + "\n");
+        for (var run : recent.entrySet()) text.append(run.getKey()).append(' ').append(run.getValue().getEpochSecond()).append('\n');
+        durableWrite(file, text.toString());
+    }
+
+    private int prunedHigh() throws IOException {
+        Path file = repository.resolve("pruned-runs");
+        return Files.exists(file) ? Integer.parseInt(Files.readAllLines(file).getFirst()) : 0;
+    }
+
+    private Map<String, Instant> prunedAgentRuns(Instant now) throws IOException {
+        Map<String, Instant> runs = new HashMap<>();
+        Path file = repository.resolve("pruned-runs");
+        if (Files.exists(file)) {
+            List<String> lines = Files.readAllLines(file);
+            for (String line : lines.subList(1, lines.size())) {
+                String[] parts = line.split(" ", -1);
+                Instant at = Instant.ofEpochSecond(Long.parseLong(parts[1]));
+                if (!at.isBefore(now.minus(Duration.ofDays(1)))) runs.put(parts[0], at);
+            }
+        }
+        return runs;
+    }
+
+    Result<Integer> highestRun() {
+        return reading(() -> Result.ok(Math.max(prunedHigh(), GitObjectUtil.highestRun(allCommits()))));
+    }
+
+    Result<Integer> agentRunsInADay(Instant now) {
+        return reading(() -> {
+            Set<String> runs = new HashSet<>(prunedAgentRuns(now).keySet());
+            for (GitObjectUtil.Commit commit : allCommits())
+                if (!commit.snapshot().at().isBefore(now.minus(Duration.ofDays(1)))
+                        && commit.trailers().get(GitObjectUtil.AUTHOR_TRAILER).filter("agent"::equals).isPresent()
+                        && commit.snapshot().kind() == LampSaveKind.RUN) commit.snapshot().run().ifPresent(runs::add);
+            return Result.ok(runs.size());
+        });
+    }
+
+    private void pinBaseUnlocked(String id) throws IOException {
+        FilesystemUtil.writeFile(repository.resolve("active-base"), id + "\n", PosixMode.PRIVATE_FILE);
+    }
+
+    Result<Optional<String>> pinLatest() {
+        return reading(() -> {
+            Optional<String> id = headCommit().map(GitObjectUtil.Commit::id);
+            if (id.isPresent()) pinBaseUnlocked(id.get());
+            return Result.ok(id);
+        });
+    }
+
+    Result<Boolean> releaseBase() {
+        return reading(() -> Result.ok(Files.deleteIfExists(repository.resolve("active-base"))));
+    }
+
+    Result<Optional<Changes>> runChanges(Optional<String> base, String tree, int limit) {
+        return reading(() -> {
+            Optional<String> before = Optional.empty();
+            if (base.isPresent()) {
+                before = allCommits().stream().filter(c -> c.id().equals(base.get())).findFirst().map(GitObjectUtil.Commit::tree);
+                if (before.isEmpty()) return Result.ok(Optional.empty());
+            }
+            List<Change> found = new ArrayList<>();
+            boolean more = compare(before, Optional.of(tree), "", found, limit, true);
+            return Result.ok(Optional.of(new Changes(Tuple.of(Change.class, found), more)));
+        });
+    }
+
+    @FunctionalInterface
+    private interface Reading<T> { Result<T> get() throws IOException; }
+
+    /// Force contents before publishing, then force the directory entry before deleting history.
+    private static void durableWrite(Path file, String text) throws IOException {
+        Path parent = java.util.Objects.requireNonNull(file.getParent());
+        Files.createDirectories(parent);
+        Path temporary = Files.createTempFile(parent, ".oillamp-", ".tmp");
+        try {
+            Files.writeString(temporary, text);
+            FilesystemUtil.setMode(temporary, PosixMode.PRIVATE_FILE);
+            force(temporary);
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            force(parent);
+        } finally { Files.deleteIfExists(temporary); }
+    }
+
+    private static void force(Path path) throws IOException {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) { channel.force(true); }
+    }
+
+    /// Readers use the same short-lived lock as writers: a sweep must not remove an object while
+    /// a reader traverses it. Each read finishes with a consistent view of the retained history.
+    private <T> Result<T> reading(Reading<T> work) {
+        return locked(() -> {
+            try { return work.get(); }
+            catch (IOException | RuntimeException e) {
+                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+            }
+        });
+    }
+
     /// Runs `work` while holding the history lock, waiting for another save, restore, switch,
     /// reset, or start or deletion of a branch of this lamp to finish first.
     private <T> Result<T> locked(Supplier<Result<T>> work) {
@@ -1184,7 +1540,11 @@ final class History {
                     try {
                         return work.get();
                     } finally {
+                        inUse.clear();
                         lock.get().close();
+                        List<LampEvent> events = List.copyOf(pendingEvents);
+                        pendingEvents.clear();
+                        for (LampEvent event : events) sink.accept(event);
                     }
                 }
                 if (pause.multipliedBy(waited).compareTo(LOCK_WAIT) > 0)

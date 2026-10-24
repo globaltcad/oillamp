@@ -138,6 +138,20 @@ final class CommandExecutionUtil {
             case Command.History history -> switch (history.action()) {
                 case Command.History.Action.ListSnapshots list -> history(machine, context, history.lamp(), list.all());
                 case Command.History.Action.ListBranches _ -> branches(machine, context, history.lamp());
+                case Command.History.Action.Prune prune -> whileStopped(machine, context, history.lamp(), "prune", layout -> {
+                    Result<Optional<LampEvent.HistoryPruned>> result = historyWriter(machine, context, layout)
+                            .flatMap(writer -> writer.prune(prune.confirmed(), machine.now()));
+                    if (result instanceof Result.Err<Optional<LampEvent.HistoryPruned>> failure) {
+                        context.sinkAcceptProblems(failure.problems());
+                        return exitStatusFor(failure.problems());
+                    }
+                    Optional<LampEvent.HistoryPruned> event = ((Result.Ok<Optional<LampEvent.HistoryPruned>>) result).value();
+                    event.ifPresent(e -> context.sink().accept(prune.confirmed() ? e
+                            : new LampEvent.HistoryPrunePlanned(e.removed(), e.boundaries(), e.bytesFreed(), e.remainingBytes(), e.limitBytes())));
+                    if (event.isEmpty()) context.sink().accept(new LampEvent.Info("history", "nothing to prune"));
+                    return !prune.confirmed() && event.filter(e -> !e.removed().isEmpty() || e.bytesFreed() > 0).isPresent()
+                            ? LampExitStatus.USAGE : LampExitStatus.SUCCESS;
+                });
                 case Command.History.Action.Save save -> {
                     console.banner(version, history.lamp().toString());
                     yield save(machine, context, history.lamp(), save.message());
@@ -287,12 +301,15 @@ final class CommandExecutionUtil {
         }
 
         LampLock held = lock.get();
+        // A process killed during a run leaves its base pin behind. No session is alive while we
+        // hold this lock, so that pin is no longer in use and must not defeat future retention.
+        new History(prepared.layout()).releaseBase();
         // Before the sandbox runs, so the snapshot holds the lamp exactly as the last session
         // left it, and this session can always be undone; when `autosave.startup` is on. A save
         // that fails is a warning: the session is still worth having.
         if (prepared.config().autosave().startup())
             for (LampProblem problem : saveLamp(context, prepared.layout(), LampSaveKind.STARTUP, "",
-                                            Optional.of(prepared.session()), machine.now()))
+                                            Optional.of(prepared.session()), machine.now(), prepared.config().history()))
                 context.sink().accept(new LampEvent.Warning(problem));
         // Until the supervisor takes over, nothing else would remove a container this run started:
         // not a failed start, and not a Ctrl-C while the image builds or the desktop comes up.
@@ -828,6 +845,11 @@ final class CommandExecutionUtil {
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
         // Holding the lamp's lock while saving also keeps a session from starting halfway through.
+        Result<LampConfig> config = loadConfig(machine, layout.root());
+        if (config instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
         Optional<LampLock> idle;
         try {
             idle = LampLock.tryAcquire(layout.lockFile());
@@ -837,6 +859,7 @@ final class CommandExecutionUtil {
             return LampExitStatus.ERROR;
         }
         try {
+            if (idle.isPresent()) new History(layout).releaseBase();
             Optional<SessionId> session = idle.isPresent() ? Optional.empty()
                     : FilesystemUtil.readString(layout.sessionMeta()).flatMap(JsonUtil::parse)
                                 .flatMap(json -> SessionId.parse(JsonUtil.text(json, "session")));
@@ -845,7 +868,8 @@ final class CommandExecutionUtil {
                         "a session is running, so programs in the sandbox may be "
                         + "writing while this saves; the snapshot is marked as a running save"));
             Tuple<LampProblem> problems = saveLamp(context, layout,
-                    idle.isPresent() ? LampSaveKind.IDLE : LampSaveKind.RUNNING, message, session, machine.now());
+                    idle.isPresent() ? LampSaveKind.IDLE : LampSaveKind.RUNNING, message, session, machine.now(),
+                    ((Result.Ok<LampConfig>) config).value().history());
             context.sinkAcceptProblems(problems);
             return exitStatusFor(problems);
         } finally {
@@ -870,6 +894,11 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         context.sink().accept(((Result.Ok<LampEvent>) listed).value());
+        history.boundaries().map(ids -> {
+            if (!ids.isEmpty()) context.sink().accept(new LampEvent.Info("history",
+                    "earlier history was pruned; retained boundaries: " + ids.join(", ")));
+            return ids;
+        });
         return LampExitStatus.SUCCESS;
     }
 
@@ -949,7 +978,7 @@ final class CommandExecutionUtil {
     /// saved first, on the branch the lamp leaves.
     private static LampExitStatus switchBranch(Machine machine, Context context, Path lampPath, String name) {
         return whileStopped(machine, context, lampPath, "switch", layout -> {
-            Result<History.Switching> switched = new History(layout).switchTo(name, machine.now());
+            Result<History.Switching> switched = recoveryWriter(machine, context, layout).switchTo(name, machine.now());
             context.sinkAcceptProblems(switched.warnings());
             if (switched instanceof Result.Err<History.Switching> failure) {
                 context.sinkAcceptProblems(failure.problems());
@@ -999,7 +1028,7 @@ final class CommandExecutionUtil {
     /// restoring that save.
     private static LampExitStatus restore(Machine machine, Context context, Path lampPath, String snapshot) {
         return whileStopped(machine, context, lampPath, "restore", layout -> {
-            Result<History.Restoring> restored = new History(layout).restore(snapshot, machine.now());
+            Result<History.Restoring> restored = recoveryWriter(machine, context, layout).restore(snapshot, machine.now());
             context.sinkAcceptProblems(restored.warnings());
             if (restored instanceof Result.Err<History.Restoring> failure) {
                 context.sinkAcceptProblems(failure.problems());
@@ -1052,13 +1081,13 @@ final class CommandExecutionUtil {
     /// Saves a lamp, reports the snapshot or that nothing changed, and returns the problems to
     /// report. Also used by `at` as a session starts and by the supervisor as it ends.
     static Tuple<LampProblem> saveLamp(Context context, LampLayout layout, LampSaveKind kind, String message,
-                                   Optional<SessionId> session, Instant now) {
+                                   Optional<SessionId> session, Instant now, LampConfig.History policy) {
         String activity = "saving lamp state now — this may take a while";
         context.sink().accept(new LampEvent.StepStarted(new LampStep(
                 "SaveLamp", activity + " (" + kind.label() + ")",
                 "save " + layout.root() + " (" + kind.label() + ")")));
         // Saved, Info (nothing changed), or the caller's Warning/Failure ends the activity line.
-        Result<History.Saving> saved = new History(layout).save(kind, message, session, now);
+        Result<History.Saving> saved = new History(layout, policy, context.sink()).save(kind, message, session, now);
         if (saved instanceof Result.Err<History.Saving> failure) return failure.problems();
         History.Saving saving = ((Result.Ok<History.Saving>) saved).value();
         if (saving.made().isPresent())
@@ -1070,6 +1099,20 @@ final class CommandExecutionUtil {
                     .orElse("nothing to save yet")));
         return saving.skipped().isEmpty() ? Tuple.of(LampProblem.class)
                 : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped()));
+    }
+
+    private static Result<History> historyWriter(Machine machine, Context context, LampLayout layout) {
+        return loadConfig(machine, layout.root()).map(config -> new History(layout, config.history(), context.sink(), true));
+    }
+
+    /// A broken current config must not prevent restoring a saved, valid config.
+    private static History recoveryWriter(Machine machine, Context context, LampLayout layout) {
+        Result<LampConfig> loaded = loadConfig(machine, layout.root());
+        if (loaded instanceof Result.Ok<LampConfig> ok)
+            return new History(layout, ok.value().history(), context.sink(), true);
+        context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
+                "history pruning is disabled for this recovery because the current configuration is invalid")));
+        return new History(layout, new LampConfig.History(0), context.sink(), true);
     }
 
     // ─── the schedule, and asking the agent ────────────────────────────────────────────────

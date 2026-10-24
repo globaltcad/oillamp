@@ -170,6 +170,21 @@ file permissions and links, and the jobs on the schedule. Whatever the agent mad
 snapshot is removed, jobs included. Before it changes anything, `restore` saves the lamp once more
 and prints how to undo the restore. The agent cannot see or change these snapshots.
 
+Every new snapshot automatically prunes old history using a shared allowance for all branches:
+
+```toml
+[history]
+max_total_gb = 2 # default: extra GB beyond the first snapshot; 0 disables pruning
+```
+
+The first snapshot's compressed object size is measured once and added to this allowance. GB
+means 1024³ bytes. Each branch's newest state is protected even if those states exceed the target.
+Old snapshots and branch forks may disappear, but retained ids and contents stay unchanged.
+`oillamp history <dir> prune` previews cleanup; `prune --yes` applies it with the session stopped.
+Applications receive `LampEvent.HistoryPruned` with removed snapshots and branches, retained
+boundaries, reclaimed bytes, remaining bytes and the target. `LampDirectory.wouldPruneHistory`
+and `pruneHistory` expose manual cleanup.
+
 A lamp can also keep several states side by side, as **branches**: let the agent try a Rust
 rewrite on one, keep the original on `main`, and go back and forth. Each branch has its own home,
 `oillamp.toml` and jobs, the lamp is on one at a time, and every save goes to that one:

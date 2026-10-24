@@ -64,6 +64,7 @@ sealed interface Command {
             record Switch(String branch) implements History.Action {}
             /// `confirmed` is `--yes`; without it, the action only says what would be lost.
             record Reset(String snapshot, boolean confirmed) implements History.Action {}
+            record Prune(boolean confirmed) implements History.Action {}
             /// The moments to switch on or off, each on or off; with none, the action only says
             /// what the lamp's file has.
             record Autosave(Optional<Boolean> startup, Optional<Boolean> shutdown,
@@ -326,7 +327,7 @@ sealed interface Command {
                 if (action.isPresent() && !HISTORY_ACTIONS.contains(action.get()))
                     yield Result.err(ProblemCatalogUtil.usage("'" + action.get() + "' is not something "
                             + "`oillamp history <dir>` does; it does list, save, restore, autosave, branches, "
-                            + "branch, switch and reset", usageOf("history")));
+                            + "branch, switch, reset and prune", usageOf("history")));
                 if (message.isPresent() && !action.equals(Optional.of("save")))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "--message only goes with `oillamp history <dir> save`", usageOf("history <dir> save")));
@@ -336,8 +337,8 @@ sealed interface Command {
                 if (delete && !action.equals(Optional.of("branch")))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "--delete only goes with `oillamp history <dir> branch`", usageOf("history <dir> branch")));
-                if (confirmed && !(action.equals(Optional.of("reset")) || delete))
-                    yield Result.err(ProblemCatalogUtil.usage("--yes only goes with `oillamp history <dir> reset` "
+                if (confirmed && !(action.equals(Optional.of("reset")) || action.equals(Optional.of("prune")) || delete))
+                    yield Result.err(ProblemCatalogUtil.usage("--yes only goes with `oillamp history <dir> reset`, `oillamp history <dir> prune` "
                             + "and `oillamp history <dir> branch --delete`", usageOf("history <dir> reset")
                             + "\n" + usageOf("history <dir> branch")));
                 Path lamp = Path.of(rest.first());
@@ -346,13 +347,14 @@ sealed interface Command {
                 String usage = usageOf("history <dir> " + action.get());
                 String written = "`oillamp history <dir> " + action.get() + (delete ? " --delete" : "") + "`";
                 yield switch (action.get()) {
-                    case "list", "save", "branches" -> {
+                    case "list", "save", "branches", "prune" -> {
                         if (!after.isEmpty())
                             yield Result.err(ProblemCatalogUtil.usage(written + " takes nothing more, but was given '"
                                     + after.first() + "'", action.get().equals("list") ? usageOf("history <dir> [list]") : usage));
                         yield Result.ok(new History(lamp, switch (action.get()) {
                             case "list" -> new History.Action.ListSnapshots(all);
                             case "save" -> new History.Action.Save(message.orElse(""));
+                            case "prune" -> new History.Action.Prune(confirmed);
                             default     -> new History.Action.ListBranches();
                         }, options));
                     }
@@ -541,7 +543,7 @@ sealed interface Command {
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
     ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave",
-                                                   "branches", "branch", "switch", "reset");
+                                                   "branches", "branch", "switch", "reset", "prune");
 
     /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
@@ -688,6 +690,10 @@ sealed interface Command {
                     Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
                     With moments and on or off, write those there, and change nothing else
                     in the file. Writing needs the session to be stopped.
+              history <dir> prune [--yes]
+                    Preview history retention, or apply it with --yes. Every new snapshot also
+                    prunes automatically. [history].max_total_gb is the shared allowance beyond
+                    the first snapshot; every branch's newest state is protected.
               schedule <dir> [add | remove <job> | enable <job> | disable <job> | pause | resume]
                     List the jobs that wake the agent while a session runs, or change them.
                     Jobs run only in a session started with --enable-scheduling, or with

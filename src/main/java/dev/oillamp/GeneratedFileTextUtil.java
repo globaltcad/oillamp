@@ -53,6 +53,9 @@ final class GeneratedFileTextUtil {
             max_age_days   = 14       # retention: delete recordings older than this
             max_total_gb   = 20       # retention: delete oldest until the total fits
 
+            [history]
+            max_total_gb   = 2        # GB on top of the first snapshot; shared by all branches, 0 = unlimited
+
             [limits]
             memory = "16g"
             cpus   = 0                # 0 = host CPUs minus one
@@ -219,7 +222,7 @@ final class GeneratedFileTextUtil {
                 fi
                 # `oillamp history <dir> save`: the same.
                 if [ "$before" = history ]; then
-                    COMPREPLY=($(compgen -W 'list save restore autosave branches branch switch reset' -- "$current"))
+                    COMPREPLY=($(compgen -W 'list save restore autosave branches branch switch reset prune' -- "$current"))
                     return
                 fi
 

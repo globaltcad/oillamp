@@ -494,6 +494,13 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("try again once the cause is fixed", "oillamp history " + lamp + " save"));
     }
 
+    /// Maintenance can fail after a successful save or after publishing a history boundary.
+    public static LampProblem historyPruningFailed(Path lamp, String reason) {
+        return asWarning(error(SAVE_FAILED, "History cleanup did not finish", reason,
+                "saved states remain available within the published history boundaries; unused objects may still occupy disk space")
+                .withFix(Fix.run("retry cleanup once the cause is fixed", "oillamp history " + lamp + " prune --yes")));
+    }
+
     /// A save made its snapshot, but had to leave some files out.
     public static LampProblem filesNotSaved(Path lamp, Tuple<String> skipped) {
         int shown = Math.min(skipped.size(), 10);

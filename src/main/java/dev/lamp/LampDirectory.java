@@ -302,6 +302,28 @@ public final class LampDirectory {
                 LampEvent.HistoryOfAllBranches.class).snapshots().toList());
     }
 
+    /// Previews retention using `[history].max_total_gb`, the allowance beyond the first snapshot.
+    /// Empty when nothing would be pruned. The sandbox must be stopped.
+    public Optional<LampEvent.HistoryPrunePlanned> wouldPruneHistory()
+            throws IOException, InterruptedException, LampFailedException {
+        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "prune");
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.HistoryPrunePlanned planned) return Optional.of(planned);
+        ran.orThrow();
+        return Optional.empty();
+    }
+
+    /// Applies history retention now. Each new snapshot also applies it automatically. Empty
+    /// when nothing was pruned. The sandbox must be stopped; each branch's newest state survives.
+    public Optional<LampEvent.HistoryPruned> pruneHistory()
+            throws IOException, InterruptedException, LampFailedException {
+        Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "prune", "--yes");
+        ran.orThrow();
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.HistoryPruned pruned) return Optional.of(pruned);
+        return Optional.empty();
+    }
+
     /// Brings this lamp back to `snapshot`: the agent's home, `oillamp.toml` and the schedule
     /// become what they were when it was saved; a snapshot from before oillamp saved the schedule
     /// leaves the schedule as it is. The snapshot must be on the branch the lamp is on; to go to

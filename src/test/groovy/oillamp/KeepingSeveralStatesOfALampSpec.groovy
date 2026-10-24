@@ -824,7 +824,7 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
                     .findAll { it.kind() == LampSaveKind.RUN }*.run()*.get().sort() == ['run-1', 'run-2', 'run-3']
     }
 
-    def 'Oillamp counts the agent\'s runs on every branch against schedule.max_agent_runs_per_day'() {
+    def 'Oillamp counts the agent\'s runs on every branch against schedule.max_agent_runs_per_day with history budget #budget'() {
         reportInfo """
             A branch is a line of snapshots of a lamp's history; the lamp is on one at a time, and
             each branch has its own schedule. `schedule.max_agent_runs_per_day` limits how many runs
@@ -839,7 +839,7 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             when it comes due the same day, it must be skipped: the run on `main` counts.
         """
         given: 'a lamp whose agent may run one job of its own a day, with the branch other'
-            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 1\n')
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 1\n[history]\nmax_total_gb = ' + budget + '\n')
             assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             assert host.oillamp.run('history', lamp.toString(), 'branch', 'other').succeeded()
             anAgent { prompt -> 'Done.' }
@@ -852,6 +852,18 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             startASession(lamp)
             waitFor(LampEvent.RunFinished)
             stopTheSession(lamp)
+
+        and: 'with a small budget, a later save prunes that run but remembers its daily usage'
+            if (budget != '0') {
+                var data = new byte[65536]
+                new Random(42).nextBytes(data)
+                Files.createDirectories(home(lamp).resolve('workspace'))
+                Files.write(home(lamp).resolve('workspace/big.bin'), data)
+                var saved = host.oillamp.run('history', lamp.toString(), 'save')
+                assert saved.succeeded()
+                assert saved.events().any { it instanceof LampEvent.HistoryPruned &&
+                        it.removed().any { entry -> entry.snapshot().kind() == LampSaveKind.RUN } }
+            }
 
         and: 'on other, the agent added a job of its own'
             assert host.oillamp.run('history', lamp.toString(), 'switch', 'other').succeeded()
@@ -870,6 +882,9 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             skipped.text().contains('schedule.max_agent_runs_per_day')
             prompts.isEmpty()
             !reported.any { it instanceof LampEvent.RunStarted }
+
+        where:
+            budget << ['0', '0.000001']
     }
 
     def 'Oillamp tells the agent only about the runs of the branch the lamp is on'() {

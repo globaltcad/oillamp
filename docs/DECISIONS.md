@@ -303,6 +303,26 @@ and a second spelling would have to be documented, completed and kept working.
 
 *Given up:* `oillamp save <dir>` was shorter to type. *(added on 2026-10-23)*
 
+### History retention cuts ancestry without changing retained snapshot ids
+
+Every new snapshot prunes automatically. `[history].max_total_gb`, default 2 and zero for
+unlimited, is the extra allowance beyond the first snapshot's compressed object size. That size
+is measured once and stays fixed. All branches share it; their newest snapshots are protected
+even when those alone exceed it. Old roots are removed first. Git shallow boundaries cut ancestry
+without rewriting commits, so retained ids stay stable and branches may lose their common fork.
+Oillamp sweeps unreachable loose objects itself; `git gc` would pack them into an unreadable form.
+
+*Why:* a large initial home should not immediately exhaust the allowance. A snapshot already
+contains a whole state, so keeping old changes does not require keeping their old commits. Stable
+ids matter to applications and run references. Retaining a branch state matters more than keeping
+its ancient common ancestor. Readers and active run bases must be coordinated with deletion.
+Accounting for automatically discarded runs is outside restored snapshots, so pruning cannot
+reuse their numbers or bypass the daily agent limit. Events describe the cleanup to applications.
+
+*Given up:* this is a retention target, not a hard disk quota; protected states and active runs can
+exceed it, and saves need temporary space before cleanup. Metadata and filesystem block overhead
+are not counted. Pruning is irreversible. *(added on 2026-10-24)*
+
 ### A lamp keeps alternative states as branches of its history
 
 A lamp's history can have several branches, as git has: each a line of snapshots, each snapshot
@@ -366,7 +386,10 @@ read across branches never mixes up two runs. Every run costs model tokens, whic
 was on, so the daily limit counts them all. But what the agent is told is about the state it is in:
 a run on another branch did not happen in this home, and its changes are not here.
 
-*Given up:* after a reset or a deleted branch takes the newest runs off every branch, their
+Automatically pruned run numbers and recent agent usage remain in a small accounting file outside
+restored snapshots. Automatic retention therefore does not reuse those numbers or forget the daily limit.
+
+*Given up:* after a reset or a deleted branch takes runs not yet recorded by retention off every branch, their
 numbers are handed out again. That is accepted rather than kept in a counter of its own: everything
 in the lamp that named those runs, their snapshots and the home that held their conversations, went
 with them. For the same reason the daily limit no longer counts those runs, so the agent may run
