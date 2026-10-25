@@ -1,7 +1,5 @@
 package oillamp
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
 import dev.lamp.Lamp
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
@@ -13,10 +11,6 @@ import spock.lang.TempDir
 import spock.lang.Timeout
 import spock.lang.Title
 
-import java.nio.ByteBuffer
-import java.nio.channels.Channels
-import java.nio.channels.SocketChannel
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
@@ -38,13 +32,15 @@ judges first and then carries out, or refuses.
 ```
  sandbox: /home/agent              engine (host)                           the host
  ────────────────────              ─────────────                           ────────
- pi calls host_read_file
+ pi calls mcp__oillamp__host_read_file
    { path: "~/Documents/q3.md" }
-        │ one JSON line
+        │ MCP: a tools/call, one JSON-RPC line,
+        │ through socat
         ▼
  the session's socket  ─────────▶  sockets/host/host-access.sock
                                    │
-                                   ├ 1. read: a request, or nothing at all
+                                   ├ 1. read: a call of a tool there is,
+                                   │    with arguments that fit it
                                    ├ 2. the tier: closed is closed
                                    ├ 3. the paths: ~ is the user's home,
                                    │    no "..", never inside the lamp,
@@ -56,13 +52,13 @@ judges first and then carries out, or refuses.
                                    │    request; never the agent's          conversation)
                                    │    messages                     ◀──── a verdict
                                    │
-                                   ├ 6. the person, for a program or a
-                                   │    path past the roots
+                                   ├ 6. the person, for a command when the
+                                   │    lamp says so, or a path past the roots
                                    │
                                    ├ 7. the paths once more, then ────────▶ ~/Documents/q3.md
                                    │    the effect
                                    └ logs/host-access-<session>.jsonl
-        ◀──────────────────────────  the result, or the refusal and why
+        ◀──────────────────────────  the tool's result, or isError and why
 ```
 
 Steps 1 to 4 need no model and cost nothing, so a refusal there never reaches the checker. The
@@ -80,9 +76,9 @@ whose file already turned it on.
 
 The engine runs in this JVM against the simulated machine, connected to the lamp by real pipes.
 A stand-in model service on loopback plays the checker: it records what it was shown, and
-answers with the verdict the scenario sets. The scenarios speak to the session's host-access
-socket exactly as the extension in the sandbox does, and give the person's decisions with
-`Lamp.decidePermission`, as an application would. So what is checked is the real gate, from the
+answers with the verdict the scenario sets. The scenarios speak MCP to the session's
+host-access socket exactly as pi does through `socat` in the sandbox, and give the person's
+decisions with `Lamp.decidePermission`, as an application would. So what is checked is the real gate, from the
 request's first byte to the file on the host.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
@@ -91,59 +87,43 @@ class ReachingTheHostSpec extends Specification {
     /** The model the agent answers with, and so the one that judges, unless the file names another. */
     static final String MODEL = 'azure/gpt-6.1-sol'
     static final String REQUIREMENTS = 'You may read ~/Documents. Never read ~/.ssh.'
-    static final String ALLOW = '{"decision":"allow","risk":"passive","reason":"The user asked about it."}'
 
     @TempDir Path tmp
     @Subject ScenarioHost host
-    HttpServer service
-    /** The body of each request the checker model received. */
-    final List<String> checked = new CopyOnWriteArrayList<>()
+    /** The model service that plays the checker. */
+    StandInChecker checker
     final List<LampEvent> events = new CopyOnWriteArrayList<>()
     Lamp lamp
-    /** What the stand-in checker answers. */
-    volatile String verdict = ALLOW
 
     def setup() {
         host = new ScenarioHost(tmp)
         host.machine { it.reallyRuns('ssh-keygen') }
-        service = HttpServer.create(new InetSocketAddress('127.0.0.1', 0), 0)
-        service.createContext('/') { HttpExchange exchange ->
-            String body = new String(exchange.requestBody.readAllBytes(), StandardCharsets.UTF_8)
-            checked << body
-            String answer = '{"choices":[{"message":{"role":"assistant","content":' \
-                    + groovy.json.JsonOutput.toJson((String) verdict) + '}}]}'
-            byte[] bytes = answer.getBytes(StandardCharsets.UTF_8)
-            exchange.responseHeaders.set('Content-Type', 'application/json')
-            exchange.sendResponseHeaders(200, bytes.length)
-            OutputStream out = exchange.responseBody
-            out.write(bytes)
-            out.close()
-        }
-        // One request per connection is answered on a thread of its own; a single-threaded
-        // server would hold the connection the client is still writing on.
-        service.executor = java.util.concurrent.Executors.newCachedThreadPool()
-        service.start()
+        checker = new StandInChecker()
         Files.createDirectories(host.home.resolve('Documents'))
     }
 
     def cleanup() {
         lamp?.close()
-        service?.stop(0)
-        service?.executor?.shutdownNow()
-        service = null
-        checked.clear()
+        checker?.close()
         events.clear()
     }
 
     def 'A lamp with host access on gives the agent the tools, and the checker judges every request first'() {
         reportInfo """
-            Host access is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`,
-            and then the session serves a socket for it and the agent sees the tools, such as
-            `host_read_file` — only those this lamp offers. The checker is a separate model call
-            that judges each request against the user's requirements before oillamp carries it
-            out. A file read is the simplest request there is: the agent names a path the way a
-            person would, from the home directory, oillamp resolves it on the host, asks the
-            checker, and only then hands back what the file holds.
+            Host access is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`.
+            Then the session serves a socket for it, and writes a small pi extension into the
+            agent's home, `~/.pi/agent/extensions/oillamp-host-access.js`. The extension registers
+            one MCP server with pi, named `oillamp`: a `socat` that connects pi to that socket.
+            MCP, the Model Context Protocol, is how pi finds tools it does not have built in. pi
+            asks the server with `tools/list` which tools there are, and the session answers with
+            the tools this lamp offers and no others, such as `host_read_file`, which the model
+            sees as `mcp__oillamp__host_read_file`.
+
+            The checker is a separate model call that judges each request against the user's
+            requirements before oillamp carries it out. A file read is the simplest request there
+            is: the agent names a path the way a person would, from the home directory, oillamp
+            resolves it on the host, asks the checker, and only then hands back what the file
+            holds.
 
             The checker is asked in a conversation of its own. What it is shown has exactly three
             parts: the user's requirements, the run, and the request. There is no place in it for
@@ -157,36 +137,41 @@ class ReachingTheHostSpec extends Specification {
         when: 'the application starts the lamp, with a model service it can reach'
             start()
 
-        then: 'the session says the way out is open, and the agent has the reading tools and no others'
+        then: 'the session says the way out is open, with the reading and writing tools, and no command tool'
             var enabled = events.find { it instanceof LampEvent.HostAccessEnabled } as LampEvent.HostAccessEnabled
             enabled.tools().contains('host_read_file')
-            !enabled.tools().contains('host_run')
+            !enabled.tools().contains('host_bash')
             enabled.checker() == Optional.of(MODEL)
+
+        and: 'the extension in the agent\'s home registers the MCP server, reached through socat'
             var extension = Files.readString(Lamp.agentHome(host.lampPath()).orElseThrow()
                     .resolve('.pi/agent/extensions/oillamp-host-access.js'))
-            var offered = extension.lines().filter { it.startsWith('const OFFERED') }.findFirst().orElseThrow()
-            offered.contains('"host_list_dir", "host_stat", "host_read_file"')
-            !offered.contains('host_run')
-            !offered.contains('host_clipboard')
-            extension.contains('net.createConnection(SOCKET)')
+            extension.contains('pi.registerMcpServer("oillamp"')
+            extension.contains('command: "socat"')
+            extension.contains('const SOCKET = "/oillamp/sockets/host/host-access.sock"')
+
+        and: 'asked with tools/list, the server lists the tools this lamp offers, in the order the agent sees them'
+            var listed = McpClient.initialized(hostAccessSocket()).withCloseable { it.request('tools/list', [:]) }
+            (listed.result.tools as List<Map>)*.name == ['host_list_dir', 'host_stat', 'host_read_file', 'host_show',
+                    'host_open_url', 'host_write_file', 'host_edit_file', 'host_notify', 'host_copy_out']
 
         and: 'the agent\'s guide says it can reach the host, with which tools and under which folder'
             var guide = Files.readString(Lamp.agentHome(host.lampPath()).orElseThrow().resolve('AGENTS.md'))
             guide.contains("## Reaching the user's computer")
-            guide.contains('| `host_read_file` |')
-            !guide.contains('`host_run`')
+            guide.contains('| `mcp__oillamp__host_read_file` |')
+            !guide.contains('host_bash')
             guide.contains("`${host.home.resolve('Documents')}`")
 
         when: 'the agent reads a document under the root, naming it from the home directory'
             var reply = ask('host_read_file', [path: '~/Documents/q3.md'])
 
         then: 'the request was allowed, and the agent was given the file'
-            reply['ok']
-            reply['result'].contains('Revenue is up.')
+            !reply.isError
+            McpClient.text(reply).contains('Revenue is up.')
 
         and: 'the checker was asked once, with the requirements and the resolved request, and nothing else'
-            checked.size() == 1
-            var seen = judged(checked.first())
+            checker.checked.size() == 1
+            var seen = StandInChecker.judged(checker.checked.first())
             seen.keySet() == ['requirements', 'run', 'request'] as Set
             seen.requirements.text.contains(REQUIREMENTS)
             seen.request.tool == 'host_read_file'
@@ -209,8 +194,8 @@ class ReachingTheHostSpec extends Specification {
             it is shown the instruction of the run the request comes from. Which run that is, the
             session knows: it is the one the agent is working on. The request itself does not get
             a say, because a request that could name another run could borrow that run's
-            instruction. Here the request names `run-999`, and the checker is still shown the run
-            the agent is in.
+            instruction. Here the call names `run-999` in MCP's `_meta`, a field any client may
+            fill with anything, and the checker is still shown the run the agent is in.
         """
         given: 'an agent that reads a document while it works on a question'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
@@ -227,8 +212,8 @@ class ReachingTheHostSpec extends Specification {
             waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
 
         then: 'the checker saw this run, and what the user asked in it'
-            answered['ok']
-            var seen = judged(checked.first())
+            answered.content && !answered.isError
+            var seen = StandInChecker.judged(checker.checked.first())
             seen.run.id == run.id()
             seen.run.instruction == 'Summarise my Q3 notes'
     }
@@ -244,17 +229,17 @@ class ReachingTheHostSpec extends Specification {
         given: 'a lamp whose checker refuses'
             Files.writeString(host.home.resolve('Documents/passwords.md'), 'hunter2')
             givenHostAccess(roots: [host.home.resolve('Documents')])
-            verdict = '{"decision":"deny","risk":"passive","reason":"The file looks like it holds passwords."}'
+            checker.verdict = '{"decision":"deny","risk":"passive","reason":"The file looks like it holds passwords."}'
 
         when:
             start()
             var reply = ask('host_read_file', [path: '~/Documents/passwords.md'])
 
         then: 'the agent is told no, with the reason, and is given nothing of the file'
-            !reply['ok']
-            reply['error'].contains('The file looks like it holds passwords.')
-            !reply.containsKey('result')
-            checked.size() == 1
+            reply.isError
+            McpClient.text(reply).contains('The file looks like it holds passwords.')
+            !McpClient.text(reply).contains('hunter2')
+            checker.checked.size() == 1
     }
 
     def 'Oillamp treats an answer from the checker that is not a verdict, or claims more than the tool can do, as a refusal'() {
@@ -271,12 +256,12 @@ class ReachingTheHostSpec extends Specification {
             start()
 
         when:
-            verdict = answer
+            checker.verdict = answer
             var reply = ask('host_read_file', [path: '~/Documents/q3.md'])
 
         then:
-            !reply['ok']
-            reply['error'].contains(why)
+            reply.isError
+            McpClient.text(reply).contains(why)
 
         where:
             answer                                                                    | why
@@ -303,9 +288,9 @@ class ReachingTheHostSpec extends Specification {
             var reply = ask('host_read_file', [path: asked])
 
         then: 'oillamp refuses it, and the checker was never asked'
-            !reply['ok']
-            reply['error'].contains(why)
-            checked.isEmpty()
+            reply.isError
+            McpClient.text(reply).contains(why)
+            checker.checked.isEmpty()
 
         and: 'the refusal is an event, so the user sees the attempt'
             events.any { it instanceof LampEvent.HostAccessRefused }
@@ -327,7 +312,7 @@ class ReachingTheHostSpec extends Specification {
         """
         given:
             givenHostAccess(roots: [host.home.resolve('Documents')])
-            verdict = '{"decision":"allow","risk":"additive","reason":"The user asked for notes in Documents."}'
+            checker.verdict = '{"decision":"allow","risk":"additive","reason":"The user asked for notes in Documents."}'
             var old = Files.writeString(host.home.resolve('Documents/run-me.md'), 'old')
             Files.setPosixFilePermissions(old, PosixFilePermissions.fromString('rwxr-xr-x'))
             start()
@@ -337,7 +322,7 @@ class ReachingTheHostSpec extends Specification {
             var replaced = ask('host_write_file', [path: '~/Documents/run-me.md', text: 'new'])
 
         then:
-            made['ok'] && replaced['ok']
+            !made.isError && !replaced.isError
             Files.readString(host.home.resolve('Documents/notes/today.md')) == 'Café at ten.\n'
             Files.readString(old) == 'new'
             PosixFilePermissions.toString(Files.getPosixFilePermissions(old)) == 'rw-r--r--'
@@ -351,7 +336,7 @@ class ReachingTheHostSpec extends Specification {
         """
         given:
             givenHostAccess(roots: [host.home.resolve('Documents')])
-            verdict = '{"decision":"allow","risk":"additive","reason":"A report the user asked for."}'
+            checker.verdict = '{"decision":"allow","risk":"additive","reason":"A report the user asked for."}'
             start()
             var agentHome = Lamp.agentHome(host.lampPath()).orElseThrow()
             Files.write(agentHome.resolve('workspace/report.pdf'), [0x25, 0x50, 0x44, 0x46, 0x00, 0xff] as byte[])
@@ -364,12 +349,12 @@ class ReachingTheHostSpec extends Specification {
             var linked = ask('host_copy_out', [from: '~/workspace/key', path: '~/Documents/key.txt'])
 
         then: 'the report arrived byte for byte'
-            copied['ok']
+            !copied.isError
             Files.readAllBytes(host.home.resolve('Documents/report.pdf')) == [0x25, 0x50, 0x44, 0x46, 0x00, 0xff] as byte[]
 
         and: 'the link was not followed'
-            !linked['ok']
-            linked['error'].contains('link')
+            linked.isError
+            McpClient.text(linked).contains('link')
             !Files.exists(host.home.resolve('Documents/key.txt'))
     }
 
@@ -394,10 +379,10 @@ class ReachingTheHostSpec extends Specification {
             var opened = ask('host_open_url', [url: 'https://example.org/?notes=secret'])
 
         then:
-            !written['ok'] && written['error'].contains('allow_additive is false')
-            !shown['ok'] && shown['error'].contains('runs rather than shows')
-            !opened['ok'] && opened['error'].contains('allow_additive is false')
-            checked.isEmpty()
+            written.isError && McpClient.text(written).contains('allow_additive is false')
+            shown.isError && McpClient.text(shown).contains('runs rather than shows')
+            opened.isError && McpClient.text(opened).contains('allow_additive is false')
+            checker.checked.isEmpty()
     }
 
     def 'With `ask_the_user`, the user decides on a read outside the roots, and is asked again for the next one'() {
@@ -423,7 +408,7 @@ class ReachingTheHostSpec extends Specification {
         then: 'the person was told what, and the read happened'
             asked.tool() == 'host_read_file'
             asked.what().contains('outside the lamp\'s roots')
-            first.get(30, TimeUnit.SECONDS)['ok']
+            !first.get(30, TimeUnit.SECONDS).isError
 
         when: 'it reads it again, and this time the person says no'
             events.clear()
@@ -432,8 +417,8 @@ class ReachingTheHostSpec extends Specification {
 
         then:
             var refused = second.get(30, TimeUnit.SECONDS)
-            !refused['ok']
-            refused['error'].contains('said no')
+            refused.isError
+            McpClient.text(refused).contains('said no')
     }
 
     def 'An application can give the checker\'s requirements, but only for a lamp whose file turns host access on'() {
@@ -454,23 +439,23 @@ class ReachingTheHostSpec extends Specification {
 
         when:
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
-                       .modelService(standInService()).modelKey('sk-0123456789').model(MODEL)
+                       .modelService(checker.address()).modelKey('sk-0123456789').model(MODEL)
                        .security('Only ~/Documents, and nothing private.')
                        .launchedBy(host.launcher).start()
             lamp.awaitRunning(Duration.ofSeconds(30))
             var reply = ask('host_read_file', [path: '~/Documents/today.md'])
 
         then: 'the application\'s rules are the ones the checker saw, on the agent\'s model'
-            reply['ok']
-            judged(checked.first()).requirements.text == 'Only ~/Documents, and nothing private.'
-            modelOf(checked.first()) == MODEL
+            !reply.isError
+            StandInChecker.judged(checker.checked.first()).requirements.text == 'Only ~/Documents, and nothing private.'
+            StandInChecker.modelOf(checker.checked.first()) == MODEL
 
         when: 'an application asks for host access on a lamp whose file has it off'
             var closed = host.lampPath('closed')
             host.givenConfig(closed, 'schema_version = 1\n')
             List<LampEvent> heard = new CopyOnWriteArrayList<>()
             var second = Lamp.at(closed).onEvent { heard << it }
-                            .modelService(standInService()).modelKey('sk-0123456789').model(MODEL)
+                            .modelService(checker.address()).modelKey('sk-0123456789').model(MODEL)
                             .security('Read anything.')
                             .launchedBy(host.launcher).start()
             second.awaitRunning(Duration.ofSeconds(30))
@@ -541,8 +526,8 @@ class ReachingTheHostSpec extends Specification {
             var reply = ask('host_read_file', [path: '~/Documents/today.md'])
 
         then: 'the checker judged it against what the application wrote'
-            reply['ok']
-            judged(checked.first()).requirements.text == rules
+            !reply.isError
+            StandInChecker.judged(checker.checked.first()).requirements.text == rules
 
         when: 'the session ends, and the application turns host access on with no requirements'
             lamp.close()
@@ -572,14 +557,14 @@ class ReachingTheHostSpec extends Specification {
             ask('host_read_file', [path: '~/Documents/today.md'])
 
         then: 'the checker was asked on the agent\'s model'
-            modelOf(checked.last()) == MODEL
+            StandInChecker.modelOf(checker.checked.last()) == MODEL
 
         when: 'the application gives the agent another model, and the agent reads again'
             lamp.useModel('mistral/mistral-large-3')
             ask('host_read_file', [path: '~/Documents/today.md'])
 
         then: 'the checker moved with it, and the log says which model judged each request'
-            modelOf(checked.last()) == 'mistral/mistral-large-3'
+            StandInChecker.modelOf(checker.checked.last()) == 'mistral/mistral-large-3'
             var logs = Files.list(host.lampPath().resolve('.oillamp/logs')).withCloseable { it.toList() }
                     .findAll { it.fileName.toString().startsWith('host-access-') }
             Files.readAllLines(logs.first()).collect { (new groovy.json.JsonSlurper().parseText(it) as Map).checker } ==
@@ -588,7 +573,7 @@ class ReachingTheHostSpec extends Specification {
         when: 'the lamp\'s file names a checker of its own'
             lamp.close()
             lamp = null
-            checked.clear()
+            checker.checked.clear()
             givenHostAccess(roots: [host.home.resolve('Documents')], checker: 'azure/gpt-6.1-guard')
             start()
             ask('host_read_file', [path: '~/Documents/today.md'])
@@ -596,7 +581,7 @@ class ReachingTheHostSpec extends Specification {
             ask('host_read_file', [path: '~/Documents/today.md'])
 
         then: 'that one judges, whatever the agent answers with'
-            checked.collect { modelOf(it) } == ['azure/gpt-6.1-guard', 'azure/gpt-6.1-guard']
+            checker.checked.collect { StandInChecker.modelOf(it) } == ['azure/gpt-6.1-guard', 'azure/gpt-6.1-guard']
     }
 
     def 'Oillamp refuses to start a lamp with host access on but no model for the checker'() {
@@ -612,13 +597,13 @@ class ReachingTheHostSpec extends Specification {
 
         when:
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
-                       .modelService(standInService()).modelKey('sk-0123456789')
+                       .modelService(checker.address()).modelKey('sk-0123456789')
                        .launchedBy(host.launcher).start()
 
         then:
             !lamp.awaitRunning(Duration.ofSeconds(30))
             events.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-HOSTACCESS-015' }
-            checked.isEmpty()
+            checker.checked.isEmpty()
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
@@ -642,56 +627,31 @@ class ReachingTheHostSpec extends Specification {
 
     private void start(Path lampDir = host.lampPath()) {
         lamp = Lamp.at(lampDir).onEvent { events << it }
-                   .modelService(standInService())
+                   .modelService(checker.address())
                    .model(MODEL)
                    .modelKey('sk-0123456789')
                    .launchedBy(host.launcher).start()
         assert lamp.awaitRunning(Duration.ofSeconds(30))
     }
 
-    private URI standInService() { URI.create("http://127.0.0.1:${service.address.port}/v1") }
-
-    /** The model a checker request asked for. */
-    private static String modelOf(String body) {
-        (new groovy.json.JsonSlurper().parseText(body) as Map).model
+    /**
+     * One tool call on the session's host-access socket, as pi makes it: MCP, on a connection
+     * that introduced itself first. {@code meta} is MCP's {@code _meta}, which a client may fill
+     * with anything.
+     */
+    private Map ask(String tool, Map args, Map meta = [:]) {
+        McpClient.initialized(hostAccessSocket()).withCloseable { it.call(tool, args, meta) }
     }
 
-    /** What the checker was shown about the request: the JSON after the message's first line. */
-    private static Map judged(String body) {
-        var request = new groovy.json.JsonSlurper().parseText(body) as Map
-        String content = request.messages.find { it.role == 'user' }.content
-        new groovy.json.JsonSlurper().parseText(content.substring(content.indexOf('{'))) as Map
-    }
-
-    /** One request on the session's host-access socket, as the sandbox's extension makes it. */
-    private Map ask(String tool, Map args, Map extra = [:]) {
-        Path socket = sockets('sockets/host/host-access.sock').first()
-        String request = groovy.json.JsonOutput.toJson([op: 'host'] + extra
-                + [request: groovy.json.JsonOutput.toJson([tool: tool, args: args])])
-        exchange(socket, request)
+    /** The host-access socket of the running lamp, under the short runtime directory. */
+    private Path hostAccessSocket() {
+        Files.list(host.runtime.resolve('oillamp')).withCloseable { lamps ->
+            lamps.map { it.resolve('sockets/host/host-access.sock') }.filter { Files.exists(it) }.findFirst().orElseThrow() }
     }
 
     /** The person's decision, as an application gives it. */
     private void answer(String request, boolean allowed) {
         lamp.decidePermission(request, allowed)
-    }
-
-    /** The sockets of that name the running lamps have, under the short runtime directory. */
-    private List<Path> sockets(String name) {
-        Files.list(host.runtime.resolve('oillamp')).withCloseable { lamps ->
-            lamps.map { it.resolve(name) }.filter { Files.exists(it) }.toList() }
-    }
-
-    private static Map exchange(Path socket, String line) {
-        var channel = SocketChannel.open(StandardProtocolFamily.UNIX)
-        try {
-            channel.connect(UnixDomainSocketAddress.of(socket))
-            channel.write(ByteBuffer.wrap((line + '\n').getBytes(StandardCharsets.UTF_8)))
-            String answer = new String(Channels.newInputStream(channel).readAllBytes(), StandardCharsets.UTF_8)
-            new groovy.json.JsonSlurper().parseText(answer.split('\n')[0]) as Map
-        } finally {
-            channel.close()
-        }
     }
 
     private <T extends LampEvent> T waitFor(Class<T> type, Closure<Boolean> which) {

@@ -1357,7 +1357,7 @@ final class CommandExecutionUtil {
         }
         LampConfig.HostAccess wanted = new LampConfig.HostAccess(enabled.orElse(now.enabled()),
                 requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
-                now.executables(), now.allowAdditive(), now.askTheUser());
+                now.commands(), now.allowAdditive(), now.askTheUser());
         return changeConfig(machine, context, layout, "[host_access]",
                 file -> ConfigFileEditUtil.withHostAccess(file, enabled, requirements),
                 ((Result.Ok<LampConfig>) before).value().withHostAccess(wanted),
@@ -1804,7 +1804,11 @@ final class CommandExecutionUtil {
              + ", roots " + roots
              + ", " + (access.allowAdditive() ? "writing and opening pages allowed" : "read only")
              + (access.askTheUser() ? ", asks you past the roots" : "")
-             + ", " + (access.executables().isEmpty() ? "no programs" : "programs: " + String.join(", ", access.executables()))
+             + ", " + (switch (access.commands()) {
+                   case OFF -> "no commands";
+                   case ASK -> "commands, each one asked of you first";
+                   case CHECKER -> "commands, judged by the checker alone";
+               })
              + "\n"
              + "               requirements, as the checker sees them:\n"
              + access.requirements().lines().map(line -> "                 | " + line).reduce("", (a, b) -> a + (a.isEmpty() ? "" : "\n") + b);

@@ -339,10 +339,19 @@ design prepared was needed.
 ## Supervised host access
 
 The agent can reach the host only through the tools in [HOST-ACCESS.md](HOST-ACCESS.md), only in a
-lamp whose `oillamp.toml` turns it on, and only for a request a separate model call allows. It is
-built and covered by `ReachingTheHostSpec`, against the simulated machine and a stand-in checker;
-it has not been tried yet in a real sandbox with a real model. See "Planned but not built" below
-for what is still missing from it.
+lamp whose `oillamp.toml` turns it on, and only for a request a separate model call allows. The
+tools are an MCP server in the engine, which the sandbox's pi reaches through `socat`.
+
+| What | Checked how |
+|---|---|
+| the gate: tiers, roots, the lamp's own files, the checker, the person, the log | `ReachingTheHostSpec`, against the simulated machine and a stand-in checker |
+| `host_edit_file` and `host_bash`: exit status and output, refusal, `commands = "off"`/`"ask"`/`"checker"`, the whole command shown to the checker, timeouts that stop what a command started, a call cancelled before it runs, the model key kept out of a command's environment | `WorkingOnTheHostSpec`, with `env` and `bash` really running on the test machine |
+| MCP: `initialize` and version negotiation, `tools/list` with schemas, JSON-RPC errors, two calls on one connection, a closed connection withdrawing its calls, the socket gone when the session ends | `ServingTheHostToolsOverMcpSpec` |
+| a real pi 1.4.0 (`pi mcp list --json`, with the same `socat` registration the extension makes) connecting to a session's socket and listing the tools | tried by hand on 2026-10-26, against a session in a scenario, outside a sandbox |
+| the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`) through `socat`: initialize, list, a `host_bash` call with a non-zero exit (`isError` false), a refusal (`isError` true), an unknown tool (`-32602`) | tried by hand on 2026-10-26, the same way |
+
+Not tried yet: pi calling the tools inside a real sandbox with a real model, and the checker judging
+real requirements on Eden AI.
 
 ## Known gaps
 
@@ -385,11 +394,13 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 - The clipboard tools are refused with a "not built yet" answer: nothing on the host reads or
   writes the user's selection, because that needs a tool oillamp does not carry.
-- Asking the user works through the session: the question is an event, and the answer goes back
-  on the control socket as `host-access-answer`. There is no command yet to answer it from a
-  terminal, and the `Lamp` API has no method for it, so outside a test a request that needs the
-  person waits its minute and is refused.
-- `host_run` and the `ask_the_user` path are covered against the simulated machine only.
+- Asking the user is covered against the simulated machine only: the question is an event, and
+  the answer comes back with `oillamp answer` or `Lamp.decidePermission`.
+- An image built before host access became an MCP server has a pi that may not register MCP
+  servers from extensions (pi 1.4.0 does). Such a lamp shows no host tools until `oillamp update`
+  builds a new image.
+- There are no long-running processes on the host: a command runs for at most 600 seconds, and
+  its input is empty. No progress is reported while it runs.
 - An application's `.security(...)` replaces the file's rules, but the file still has to carry
   requirements of its own while `enabled = true`, or it does not load.
 - The checker has not been tried against Eden AI with real requirements, only against a stand-in

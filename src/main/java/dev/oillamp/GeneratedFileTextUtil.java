@@ -170,9 +170,9 @@ final class GeneratedFileTextUtil {
             before_run = true    # just before a run wakes the agent
             after_run  = true    # as a run ends, with the agent's last message
 
-            # Let the agent reach this machine - read a document, put a file where you will find
-            # it, open a page - always through oillamp, which asks a model about every request
-            # first. That model sees your requirements below, the request, and what the agent was
+            # Let the agent reach this machine - read a document, edit a file, open a page, run a
+            # command if you let it - always through oillamp, which asks a model about every
+            # request first. That model sees your requirements below, the request, and what the agent was
             # asked to do and did just before; it does not see the agent's own conversation.
             # Turning this on means your model service sees your requirements, the agent's
             # instruction, and the names and contents of the files it touches. Off unless you
@@ -185,9 +185,11 @@ final class GeneratedFileTextUtil {
             requirements = '''
             '''
             checker_model     = ""       # the model that judges; empty: the one the agent answers with
-            roots             = []       # absolute paths; empty means your home directory
+            roots             = []       # absolute paths the file tools, and a command's directory,
+                                         # may name; empty means your home directory
             max_read_bytes    = 65536    # how much of one file the agent may be handed
-            executables       = []       # programs it may ask to run here; empty: none
+            commands          = "off"    # shell commands here: "off", "ask" (the checker, then you,
+                                         # for every one) or "checker" (the checker alone)
             allow_additive    = true     # writing and copying files out, opening pages, notifications
             ask_the_user      = false    # ask you, rather than refuse, a request outside roots
             """;

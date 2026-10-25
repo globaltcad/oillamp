@@ -650,6 +650,55 @@ class ConfiguringALampSpec extends Specification {
             outcome.console().contains("checker the agent's model")
     }
 
+    def 'Oillamp lets the agent run commands on the host only when host_access.commands says "ask" or "checker"'() {
+        reportInfo """
+            With host access on, the agent may reach the user's computer through tools that a
+            checker, a separate model call, judges first. One of them, `host_bash`, runs a command
+            there, which can do anything the user can. Whether it exists in a lamp, and who allows
+            each command, is the setting `host_access.commands`, one of three words:
+
+            - `"off"`, the default: there is no `host_bash`.
+            - `"ask"`: the checker judges each command, and then the user is asked before it runs.
+            - `"checker"`: the checker's allow is enough.
+
+            Any other word is refused with `OIL-CONFIG-004`, naming the key and the three words:
+            a typo must not open the way to running commands. The setting replaced
+            `host_access.executables`, a list of programs, which is now an unknown key
+            (`OIL-CONFIG-002`) rather than a setting that is quietly ignored.
+
+            The scenario checks a lamp's file with `oillamp config <dir> check`, and reads what a
+            valid one means with `oillamp config <dir> show-effective`.
+        """
+        given: 'a lamp whose file sets host_access.commands'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, """
+                schema_version = 1
+
+                [host_access]
+                enabled = true
+                requirements = "Build ~/project, and nothing else."
+                ${setting}
+            """.stripIndent())
+
+        when: 'the user checks the file, and asks what it means'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'a valid setting passes, and says who allows a command'
+            (checked.status() == LampExitStatus.SUCCESS) == (code == null)
+            code == null ? shown.console().contains(means) : checked.reported(code)
+            code == null || checked.console().contains(means)
+
+        where:
+            setting                         | code             | means
+            ''                              | null             | 'no commands'
+            'commands = "off"'              | null             | 'no commands'
+            'commands = "ask"'              | null             | 'commands, each one asked of you first'
+            'commands = "checker"'          | null             | 'commands, judged by the checker alone'
+            'commands = "always"'           | 'OIL-CONFIG-004' | 'host_access.commands'
+            'executables = ["inkscape"]'    | 'OIL-CONFIG-002' | 'executables'
+    }
+
     def 'Oillamp #verdict schedule.max_delay_minutes = #value'() {
         reportInfo """
             `schedule.max_delay_minutes` says how late a job's run may start. A running session

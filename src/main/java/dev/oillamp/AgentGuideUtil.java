@@ -338,19 +338,20 @@ final class AgentGuideUtil {
             ## Reaching the user's computer
 
             The user let you reach their own computer, outside this sandbox, through these tools,
-            which pi has here:
+            which pi has here from oillamp's MCP server:
 
             | Tool | What it does |
             |---|---|
             """);
-        for (String tool : HostTool.offeredBy(access))
-            out.append("| `").append(tool).append("` | ").append(whatItDoes(tool)).append(" |\n");
+        for (HostToolKind kind : HostTool.offeredBy(access))
+            out.append("| `").append(PI_TOOL_PREFIX).append(kind.toolName).append("` | ").append(kind.summary).append(" |\n");
         out.append("""
 
-            Nothing else of the host is mounted or reachable here: not with `bash`, `curl` or a
-            socket of your own. Only these tools reach it.
+            They act on the user's computer. pi's own `read`, `write`, `edit` and `bash` act here,
+            in the sandbox. Nothing else of the host is mounted or reachable here: not with `bash`,
+            `curl` or a socket of your own. Only these tools reach it.
 
-            oillamp, on the user's computer, judges every request before it happens: it checks the
+            oillamp, on the user's computer, judges every call before it happens: it checks the
             path, then asks a model whether the user's rules allow it. You cannot see those rules.
             A refusal comes back as the tool's error, with the reason; tell the user what was
             refused and why, rather than trying another way. Paths are absolute or start with
@@ -362,6 +363,14 @@ final class AgentGuideUtil {
             for (String root : access.roots()) out.append(" `").append(root).append('`');
             out.append(".\n");
         }
+        if (HostTool.offeredBy(access).contains(HostToolKind.BASH))
+            out.append("""
+
+                A command run with `%shost_bash` runs as the user, on their computer, in the
+                directory you name; the model that judges it is shown the whole command. %s
+                """.formatted(PI_TOOL_PREFIX, access.commands() == LampConfig.HostAccess.Commands.ASK
+                        ? "The user is asked before each one runs, so tell them what you are about to do and why."
+                        : "Say what a command is for, in your own words, before you call it."));
         out.append("""
             What you change there is outside the lamp's history: it cannot be undone from here.
 
@@ -369,32 +378,22 @@ final class AgentGuideUtil {
         return out.toString();
     }
 
-    private static String whatItDoes(String tool) {
-        return switch (tool) {
-            case "host_list_dir" -> "list a directory";
-            case "host_stat" -> "say whether a path exists, its size, times and permissions";
-            case "host_read_file" -> "read a text file; large files are cut, ask again with `offset`";
-            case "host_open_url" -> "open an http or https page in the user's browser";
-            case "host_show" -> "open a file, such as a PDF or a picture, with the user's own application";
-            case "host_write_file" -> "write a text file, creating or replacing it";
-            case "host_notify" -> "show the user a desktop notification";
-            case "host_copy_out" -> "copy a file from your home here to the user's computer";
-            case "host_run" -> "run one of the programs the user allowed; the user is asked first";
-            default -> "see its description in pi";
-        };
-    }
+    /// What pi puts before the name of a tool of oillamp's MCP server, which the extension
+    /// registers as `oillamp`.
+    static final String PI_TOOL_PREFIX = "mcp__oillamp__";
 
     /// The pi extension that gives the agent its scheduling tools. They send requests to the
     /// session over a socket; see `src/main/resources/agent/oillamp-schedule.js`.
     static String scheduleTools() { return resource("oillamp-schedule.js"); }
 
-    /// The pi extension with the host tools; see `src/main/resources/agent/oillamp-host-access.js`.
-    /// It registers only the tools `access` offers, so its list is filled in here.
-    static String hostAccessTools(LampConfig.HostAccess access) {
-        StringBuilder offered = new StringBuilder("[");
-        for (String tool : HostTool.offeredBy(access))
-            offered.append(offered.length() > 1 ? ", " : "").append('"').append(tool).append('"');
-        return resource("oillamp-host-access.js").replace("/* offered */[]", offered.append(']').toString());
+    /// The pi extension that registers oillamp's MCP server for the host tools; see
+    /// `src/main/resources/agent/oillamp-host-access.js`. Which tools it has, the server says;
+    /// how long pi waits for one call is filled in here: the checker, then a person, then the
+    /// longest command, and a minute to spare.
+    static String hostAccessTools() {
+        long seconds = HostAccessChecker.PATIENCE.plus(HostAccess.USER_PATIENCE).plus(HostTool.LONGEST_COMMAND)
+                .plusMinutes(1).toSeconds();
+        return resource("oillamp-host-access.js").replace("/* timeout */0", String.valueOf(seconds));
     }
 
     /// The pi extension through which the session moves within a conversation, to ask a question

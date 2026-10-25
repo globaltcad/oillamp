@@ -80,6 +80,10 @@ final class RealMachine implements Machine {
         for (Pair<String, String> variable : command.environment())
             builder.environment().put(variable.first(), variable.second());
         command.workingDirectory().ifPresent(directory -> builder.directory(directory.toFile()));
+        // Nothing is ever written to a command's input, so it reads an empty one, rather than a
+        // pipe that never ends, on which a command that reads its input would wait for its
+        // timeout.
+        builder.redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
 
         Instant started = Instant.now();
         Process process;

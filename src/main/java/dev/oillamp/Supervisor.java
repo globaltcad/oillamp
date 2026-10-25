@@ -96,7 +96,7 @@ final class Supervisor {
     private volatile Optional<Control.Server> desktopDesk = Optional.empty();
     /// The socket of supervised access to the host. Present only while `host_access.enabled`
     /// is on.
-    private volatile Optional<Control.Server> hostAccessDesk = Optional.empty();
+    private volatile Optional<HostMcp.Server> hostAccessDesk = Optional.empty();
     /// Every time the agent is woken, by a job or by `oillamp ask`.
     private final AgentRunner runs;
     /// Everyone following the session with `oillamp follow`. Every event passes through it.
@@ -479,10 +479,11 @@ final class Supervisor {
             HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
                     HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
                     context.sink(), this::awaitAnswered, runs::currentRun,
-                    run -> HostAccess.logOf(state.runs(), run));
-            Result<Control.Server> door = Control.Server.open(layout.hostAccessSocket(), granted::answer);
-            if (door instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
-            hostAccessDesk = Optional.of(((Result.Ok<Control.Server>) door).value());
+                    run -> HostAccess.logOf(state.runs(), run),
+                    HostAccess.secretVariables(prepared.config(), service, context.options()));
+            Result<HostMcp.Server> door = HostMcp.Server.open(layout.hostAccessSocket(), granted, prepared.config().hostAccess());
+            if (door instanceof Result.Err<HostMcp.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
+            hostAccessDesk = Optional.of(((Result.Ok<HostMcp.Server>) door).value());
             granted.announce();
         }
 
@@ -540,7 +541,7 @@ final class Supervisor {
                 "stopping the agent's run and saving what it did"));
         scheduleDesk.ifPresent(Control.Server::close);
         desktopDesk.ifPresent(Control.Server::close);
-        hostAccessDesk.ifPresent(Control.Server::close);
+        hostAccessDesk.ifPresent(HostMcp.Server::close);
         questions.values().forEach(answer -> answer.completeExceptionally(
                 new IllegalStateException("the session is ending")));
         runs.stop();

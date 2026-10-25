@@ -1663,36 +1663,66 @@ instead, explaining that it may take a while.
 
 ## Supervised host access
 
-Planned and built as described in [HOST-ACCESS.md](HOST-ACCESS.md); this is where it sits in the
-running session.
+Built as described in [HOST-ACCESS.md](HOST-ACCESS.md); this is where it sits in the running
+session.
 
-The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on. The
-agent's pi extension opens it directly, at `/oillamp/sockets/host/host-access.sock`, as the
-scheduling tools open theirs: the socket is `0600` and the agent's, so no bridge run by the
-sandbox's `lamp` user could reach it.
-One JSON line per connection is read by [Control.Server][Control.Server], as on the schedule and
-desktop sockets, and handed to `HostAccess.answer` on that connection's thread.
+The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on. It is an
+MCP server (the Model Context Protocol, which agent harnesses use to find and call tools they do
+not have built in). The pi extension `oillamp-host-access.js` only registers it with pi
+(`pi.registerMcpServer("oillamp", …)`): pi starts `socat STDIO UNIX-CONNECT:/oillamp/sockets/host/host-access.sock`
+and speaks MCP over its standard input and output, one JSON-RPC message per line. The socket is
+`0600` and the agent's, so no bridge run by the sandbox's `lamp` user could reach it, and the
+`socat` pi starts runs as the agent.
 
-`HostAccess.answer` is the order in which a request becomes an effect:
+```
+ pi ── stdin/stdout ── socat ── host-access.sock ──▶ HostMcp ──▶ HostAccess ──▶ HostAccessTools
+                                                     (adapts)    (decides)      (does)
+```
 
-1. `HostTool.read` turns the line into a tool call, or refuses it before anything else. A line
-   that is not a request is not logged.
-2. `HostTool.closedBecause` refuses a request in a tier the lamp closed: no program, no writing,
+`HostMcp.Server` keeps one thread per connection, which reads lines, and one per `tools/call`,
+which waits on the gate, so a call waiting for a person does not stop the connection from reading
+the next call or a cancellation. What to do with one message is `HostMcp.decide`, a pure function
+of the connection's stage (`Fresh` until `initialize`, then `Initialized`) and the message, read
+into `HostMcp.Incoming`. It answers `initialize`, `ping`, `tools/list` and `tools/call`; anything
+else is a JSON-RPC error. Which tools are listed, their descriptions and their argument schemas
+come from `HostToolKind`, the one catalogue; `HostTool.read` holds every call to the same
+parameters.
+
+`HostAccess.answer(HostTool, withdrawn)` is the order in which a request becomes an effect, and it
+returns an `Answer`: `Done`, `Refused` or `Failed`. `HostMcp` writes each as a tool result, with
+`isError` for the last two.
+
+1. `HostTool.read` turns the call's JSON arguments into a tool request, or the call is refused
+   before anything else, as a JSON-RPC error. A call that is not a request is not logged.
+2. `HostTool.closedBecause` refuses a request in a tier the lamp closed: no commands, no writing,
    no pages opened.
 3. `HostPaths.locate` resolves every path it names on the host (`~` is the probed user's home;
    `.` and `..` are refused), then anything inside the lamp or its state is refused, compared
    with links followed on both sides. `HostPaths.within` checks the roots: a path outside them is
-   refused, or with `ask_the_user` marked for the person.
+   refused, or with `ask_the_user` marked for the person. For `host_bash` that path is the
+   directory it runs in, and only that.
 4. What the tool rules out by itself: `host_show` of a file the desktop would run
-   (`HostAccessTools.whyNotShown`), and `host_copy_out` from outside the sandbox's home.
+   (`HostAccessTools.whyNotShown`), `host_copy_out` from outside the sandbox's home, and a command
+   longer than the checker is shown whole (`HostTool.LONGEST_COMMAND_TEXT`).
 5. `HostAccessChecker.check` asks the model, in a conversation of its own, and `HostTool.verdict`
    reads the answer; anything unreadable, untimed, or unreachable is a refusal.
-6. An executing request, or (with `ask_the_user`) an allowed request outside the roots, goes to
-   the person: `SessionEvent.HostAccessAsked` on the event queue. The state machine asks one
-   question at a time, and only while the session runs; any other is declined at once. The
-   supervisor keeps one future per question, answered by `host-access-answer` on the control
-   socket, and timed out after `HostAccess.USER_PATIENCE`.
-7. `HostAccessTools.perform` does the work, after the paths are resolved once more.
+6. A command in a lamp whose `host_access.commands` is `ask`, or (with `ask_the_user`) an allowed
+   request outside the roots, goes to the person: `SessionEvent.HostAccessAsked` on the event
+   queue. The state machine asks one question at a time, and only while the session runs; any
+   other is declined at once. The supervisor keeps one future per question, answered by
+   `host-access-answer` on the control socket, and timed out after `HostAccess.USER_PATIENCE`.
+7. `HostAccessTools.perform` does the work, after the paths are resolved once more. A command runs
+   as `env -u <secret> … bash -c <command>` in its directory, with oillamp's environment minus
+   the variables `HostAccess.secretVariables` names (the model key, and the variables an
+   application named for its requirements and instructions).
+
+A call is withdrawn when pi sends `notifications/cancelled` for it, or its connection closes:
+`HostMcp` completes the call's `withdrawn` future. The gate looks at it after the checker, after
+the person, and just before the effect, and a withdrawn call is refused there. A command already
+running is stopped: it runs on a thread of its own, which the withdrawal interrupts, and
+`Machine.run` stops a command with everything it started when its thread is interrupted. The
+request's own thread is never interrupted, because an interrupt also closes the next channel that
+thread writes to, such as the session's events.
 
 The run a request is judged by is the one `AgentRunner` is working on; the request does not name
 it. What each run was asked and did is a value in the session state (`SessionState.runs()`),
@@ -1701,8 +1731,10 @@ the runner posts only while host access is on; the gate reads it, so the activit
 like everything else in the session. Every request is written to
 `.oillamp/logs/host-access-<session>.jsonl`.
 
-The extension in the sandbox is written with the list of tools the lamp offers
-(`AgentGuideUtil.hostAccessTools`), and registers only those.
+The extension in the sandbox is written with how long pi should wait for one call
+(`AgentGuideUtil.hostAccessTools`): the checker's patience, the person's, and the longest command,
+with a minute to spare. pi's own default of 60 seconds would give up on calls the host is still
+carrying out.
 
 The checker reaches the model service as `Egress` does, with the same key read on the host, so the
 sandbox holds neither. Its model is the lamp's `checker_model` when the file names one, and
@@ -1811,9 +1843,9 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `host_access.enabled` | false | let the agent reach the host through oillamp, every request judged first; off unless set ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
 | `host_access.requirements` | `""` | the user's own words, the only thing the checker judges by; required when it is enabled | yes |
 | `host_access.checker_model` | `""` | the model that judges, as the service names it; empty means the model the agent answers with | yes |
-| `host_access.roots` | `[]` | absolute host paths the tools may name; empty means the user's home directory | yes |
+| `host_access.roots` | `[]` | absolute host paths the file tools, and a command's working directory, may name; empty means the user's home directory | yes |
 | `host_access.max_read_bytes` | 65536 | how much of one host file the agent may be handed (1–16777216) | yes |
-| `host_access.executables` | `[]` | programs the agent may ask to run on the host; empty closes the executing tier | yes |
+| `host_access.commands` | `"off"` | `host_bash`, shell commands on the host: `"off"`, `"ask"` (the checker, then the user, for every command) or `"checker"` (the checker alone) | yes |
 | `host_access.allow_additive` | true | offer writing, copying out, opening pages and notifications at all | yes |
 | `host_access.ask_the_user` | false | ask the user, rather than refuse, about an allowed request outside `roots` | yes |
 | `autosave.startup` | false | save the lamp as a session starts, before the sandbox runs | yes |

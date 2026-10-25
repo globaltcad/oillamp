@@ -1,8 +1,8 @@
 package dev.oillamp;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -13,20 +13,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import sprouts.Association;
 import sprouts.Tuple;
 
-/// The tools the agent can call to reach the host, and what each one is allowed to be.
+/// The requests the agent can make of the host, one record for each tool, with its arguments
+/// read.
 ///
-/// A tool is a record with a fixed shape of arguments. There is no shell string anywhere: the
-/// agent names a program and its arguments separately, or a path, and the host decides what to do
-/// with them.
+/// Every request has a fixed shape, read from the call's JSON arguments by [#read] before
+/// anything else looks at it. The one tool that takes a command string, `host_bash`, is the
+/// executing tier, which the lamp keeps closed unless its `host_access.commands` opens it.
 ///
 /// Everything here decides and nothing does. [HostAccess] carries the decisions out, after the
-/// checks in [HostPaths] and the checker's [Verdict][dev.lamp.LampHostVerdict].
+/// checks in [HostPaths] and the checker's [Verdict][dev.lamp.LampHostVerdict]. What each tool is
+/// called and described as is [HostToolKind].
 ///
 /// Adding a tool means adding a case to every `switch` over it, which the compiler insists on.
 sealed interface HostTool {
-
-    /// What the agent asked for, in the tool's own arguments.
-    record Call(HostTool tool, Association<String, String> arguments) {}
 
     // ─── the tools ────────────────────────────────────────────────────────────────────────
 
@@ -37,6 +36,10 @@ sealed interface HostTool {
     record OpenUrl(URI url) implements HostTool {}
     record Show(String path) implements HostTool {}
     record WriteFile(String path, String text) implements HostTool {}
+    /// One exact piece of a text file replaced by another.
+    ///
+    /// @param oldText what is replaced; it must occur in the file exactly once
+    record EditFile(String path, String oldText, String newText) implements HostTool {}
     record ClipboardWrite(String text) implements HostTool {}
     record Notify(String title, String text) implements HostTool {}
     /// A file copied out of the sandbox's home onto the host.
@@ -44,40 +47,51 @@ sealed interface HostTool {
     /// @param from where the file is in the sandbox: under `/home/agent`, or a path starting `~/`
     /// @param path where it goes on the host
     record CopyOut(String from, String path) implements HostTool {}
-    record Run(String executable, Tuple<String> argv) implements HostTool {}
+    /// A bash command, run on the host.
+    ///
+    /// @param command what bash runs, as one argument to `bash -c`, never pasted into another
+    ///                command line
+    /// @param cwd     the host directory it runs in, as the agent wrote it
+    /// @param timeout how long it may take before it is stopped
+    record Bash(String command, String cwd, Duration timeout) implements HostTool {}
 
-    /// The tier a tool belongs to. It is the ceiling: the checker may put a request lower, never
-    /// higher, and [HostAccess] refuses a request in a tier that is closed.
-    static LampHostRisk tierOf(HostTool tool) {
+    /// How long a command may take when the agent does not say.
+    Duration USUAL_COMMAND = Duration.ofMinutes(2);
+    /// The longest a command may be given. A tool call that runs for longer than this belongs in
+    /// a program the agent starts some other way.
+    Duration LONGEST_COMMAND = Duration.ofMinutes(10);
+    /// The longest command `host_bash` takes, in bytes. The checker is shown the whole command,
+    /// so a longer one is refused instead of cut: a command whose end the checker never saw is not
+    /// a command it judged.
+    int LONGEST_COMMAND_TEXT = 16 * 1024;
+
+    /// The tool a request is a call of.
+    static HostToolKind kindOf(HostTool tool) {
         return switch (tool) {
-            case ListDir _, Stat _, ReadFile _, ClipboardRead _, Show _ -> LampHostRisk.PASSIVE;
-            // Opening a page sends whatever the address holds to whoever serves it, so it is a way
-            // out for anything the agent has read, not a read.
-            case OpenUrl _, WriteFile _, ClipboardWrite _, Notify _, CopyOut _ -> LampHostRisk.ADDITIVE;
-            case Run _ -> LampHostRisk.EXECUTING;
+            case ListDir _ -> HostToolKind.LIST_DIR;
+            case Stat _ -> HostToolKind.STAT;
+            case ReadFile _ -> HostToolKind.READ_FILE;
+            case ClipboardRead _ -> HostToolKind.CLIPBOARD_READ;
+            case OpenUrl _ -> HostToolKind.OPEN_URL;
+            case Show _ -> HostToolKind.SHOW;
+            case WriteFile _ -> HostToolKind.WRITE_FILE;
+            case EditFile _ -> HostToolKind.EDIT_FILE;
+            case ClipboardWrite _ -> HostToolKind.CLIPBOARD_WRITE;
+            case Notify _ -> HostToolKind.NOTIFY;
+            case CopyOut _ -> HostToolKind.COPY_OUT;
+            case Bash _ -> HostToolKind.BASH;
         };
     }
 
-    /// The tool's name in the sandbox, which is also what `pi` shows the model.
-    static String nameOf(HostTool tool) {
-        return switch (tool) {
-            case ListDir _ -> "host_list_dir";
-            case Stat _ -> "host_stat";
-            case ReadFile _ -> "host_read_file";
-            case ClipboardRead _ -> "host_clipboard_read";
-            case OpenUrl _ -> "host_open_url";
-            case Show _ -> "host_show";
-            case WriteFile _ -> "host_write_file";
-            case ClipboardWrite _ -> "host_clipboard_write";
-            case Notify _ -> "host_notify";
-            case CopyOut _ -> "host_copy_out";
-            case Run _ -> "host_run";
-        };
-    }
+    /// The tier a request belongs to, which is its tool's.
+    static LampHostRisk tierOf(HostTool tool) { return kindOf(tool).tier; }
 
-    /// One line for the user and the log. It never includes a file's contents, a clipboard text,
-    /// or a program's standard input: those can be large, and they are not what the user is
-    /// being asked to judge.
+    /// The tool's name, such as `host_read_file`.
+    static String nameOf(HostTool tool) { return kindOf(tool).toolName; }
+
+    /// One line for the user and the log. It never includes a file's contents or a clipboard
+    /// text: those can be large, and they are not what the user is being asked to judge. A
+    /// command is included whole, because it is exactly what the person is asked to judge.
     static String describe(HostTool tool) {
         return switch (tool) {
             case ListDir dir -> "list " + dir.path();
@@ -86,154 +100,174 @@ sealed interface HostTool {
                     + (read.offset() > 0 ? " from byte " + read.offset() : "")
                     + (read.maxBytes() > 0 ? ", at most " + read.maxBytes() + " bytes" : "");
             case ClipboardRead _ -> "read the clipboard";
-            case OpenUrl url -> "open " + url;
+            case OpenUrl url -> "open " + url.url();
             case Show show -> "show " + show.path();
-            case WriteFile write -> "write " + write.text().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+            case WriteFile write -> "write " + write.text().getBytes(StandardCharsets.UTF_8).length
                     + " bytes to " + write.path();
+            case EditFile edit -> "edit " + edit.path() + ": replace " + edit.oldText().length()
+                    + " characters with " + edit.newText().length();
             case ClipboardWrite write -> "put " + write.text().length() + " characters on the clipboard";
             case Notify notify -> "notify: " + notify.title();
             case CopyOut copy -> "copy " + copy.from() + " from the sandbox to " + copy.path() + ", without running it";
-            case Run run -> "run " + run.executable()
-                    + (run.argv().isEmpty() ? "" : " " + String.join(" ", run.argv()));
+            case Bash bash -> "run in " + bash.cwd() + ": " + bash.command();
+        };
+    }
+
+    /// The request's arguments as text, by name, as the checker and the log are shown them.
+    static Association<String, String> argumentsOf(HostTool tool) {
+        Association<String, String> none = Association.between(String.class, String.class);
+        return switch (tool) {
+            case ListDir dir -> none.put("path", dir.path());
+            case Stat stat -> none.put("path", stat.path());
+            case ReadFile read -> none.put("path", read.path()).put("offset", String.valueOf(read.offset()))
+                                      .put("max_bytes", String.valueOf(read.maxBytes()));
+            case ClipboardRead _ -> none;
+            case OpenUrl url -> none.put("url", url.url().toString());
+            case Show show -> none.put("path", show.path());
+            case WriteFile write -> none.put("path", write.path()).put("text", write.text());
+            case EditFile edit -> none.put("path", edit.path()).put("old_text", edit.oldText())
+                                      .put("new_text", edit.newText());
+            case ClipboardWrite write -> none.put("text", write.text());
+            case Notify notify -> none.put("title", notify.title()).put("text", notify.text());
+            case CopyOut copy -> none.put("from", copy.from()).put("path", copy.path());
+            case Bash bash -> none.put("command", bash.command()).put("cwd", bash.cwd())
+                                  .put("timeout_seconds", String.valueOf(bash.timeout().toSeconds()));
         };
     }
 
     /// Why a tool cannot be offered by this lamp, or empty when it can.
     ///
-    /// Kept apart from the checker on purpose: whether a whole tier is open, and whether a program
-    /// is named at all, are the user's settings, and must not depend on a model's opinion.
-    static Optional<String> closedBecause(HostTool tool, LampConfig.HostAccess access) {
-        return switch (tool) {
-            case OpenUrl _, WriteFile _, ClipboardWrite _, Notify _, CopyOut _ ->
+    /// Kept apart from the checker on purpose: whether a whole tier is open is the user's
+    /// setting, and must not depend on a model's opinion.
+    static Optional<String> closedBecause(HostToolKind kind, LampConfig.HostAccess access) {
+        return switch (kind) {
+            // Not built yet: offering them would only teach the agent a tool that always refuses.
+            case CLIPBOARD_READ, CLIPBOARD_WRITE -> Optional.of(kind.toolName + " is not built yet");
+            case OPEN_URL, WRITE_FILE, EDIT_FILE, NOTIFY, COPY_OUT ->
                     access.allowAdditive() ? Optional.empty()
                     : Optional.of("this lamp's host_access.allow_additive is false, so nothing on the host may be changed");
-            case Run run ->
-                    access.executables().contains(run.executable()) ? Optional.empty()
-                    : Optional.of("this lamp does not let the agent run programs on the host"
-                          + (access.executables().isEmpty() ? " (host_access.executables is empty)" : " by that name"));
-            case ListDir _, Stat _, ReadFile _, ClipboardRead _, Show _ -> Optional.empty();
+            case BASH -> switch (access.commands()) {
+                case OFF -> Optional.of("this lamp does not let the agent run commands on the host "
+                                      + "(host_access.commands is \"off\")");
+                case ASK, CHECKER -> Optional.empty();
+            };
+            case LIST_DIR, STAT, READ_FILE, SHOW -> Optional.empty();
         };
     }
 
-    /// The tools this lamp offers the agent, in the order the extension lists them. A closed tier
-    /// is absent, so the agent does not try and does not read a refusal it could have avoided.
-    static Tuple<String> offeredBy(LampConfig.HostAccess access) {
-        Tuple<String> names = Tuple.of(String.class);
-        for (String name : ALL)
-            if (offered(name, access)) names = names.add(name);
-        return names;
+    /// The tools this lamp offers the agent, in the order they are listed. A closed tier is
+    /// absent, so the agent does not try and does not read a refusal it could have avoided.
+    static Tuple<HostToolKind> offeredBy(LampConfig.HostAccess access) {
+        Tuple<HostToolKind> offered = Tuple.of(HostToolKind.class);
+        for (HostToolKind kind : HostToolKind.values())
+            if (closedBecause(kind, access).isEmpty()) offered = offered.add(kind);
+        return offered;
     }
 
-    /// The names of every tool there is, whether or not this lamp offers it.
-    Tuple<String> ALL = Tuple.of(String.class,
-            "host_list_dir", "host_stat", "host_read_file", "host_clipboard_read", "host_open_url", "host_show",
-            "host_write_file", "host_clipboard_write", "host_notify", "host_copy_out", "host_run");
-
-    private static boolean offered(String name, LampConfig.HostAccess access) {
-        return switch (name) {
-            // Not built yet: offering them would only teach the agent a tool that always refuses.
-            case "host_clipboard_read", "host_clipboard_write" -> false;
-            case "host_open_url", "host_write_file", "host_notify", "host_copy_out" -> access.allowAdditive();
-            case "host_run" -> !access.executables().isEmpty();
-            default -> true;
-        };
+    /// Whether the person must allow a request too, after the checker did. A command does in a
+    /// lamp whose `host_access.commands` is `ask`; a path past the roots does separately, in
+    /// [HostAccess].
+    static boolean needsThePerson(HostTool tool, LampConfig.HostAccess access) {
+        return tool instanceof Bash && access.commands() == LampConfig.HostAccess.Commands.ASK;
     }
 
     // ─── reading a request ────────────────────────────────────────────────────────────────
 
-    /// Reads one request from the sandbox. The line's shape is fixed, and anything that is not
-    /// exactly it is refused here, before a path is touched or a model is asked.
-    static Result<Call> read(String line) {
-        Optional<JsonNode> parsed = JsonUtil.parse(line);
-        if (parsed.isEmpty()) return Result.err(HostAccessProblems.notARequest());
-        JsonNode node = parsed.get();
-        if (!node.isObject()) return Result.err(HostAccessProblems.notARequest());
-        String tool = node.path("tool").asText("");
-        JsonNode args = node.path("args");
-        if (tool.isEmpty() || !args.isObject()) return Result.err(HostAccessProblems.notARequest());
-        Association<String, String> arguments = Association.between(String.class, String.class);
-        for (var field : args.properties()) {
-            JsonNode value = field.getValue();
-            if (!value.isTextual()) return Result.err(HostAccessProblems.notARequest());
-            arguments = arguments.put(field.getKey(), value.asText());
-        }
-        return of(tool, arguments);
+    /// Reads one call of `kind` from its JSON arguments, an object such as
+    /// `{"path": "~/Documents/q3.md", "offset": 10}`. Anything that is not exactly the tool's
+    /// shape is refused here, before a path is touched or a model is asked: an argument it does
+    /// not take, one of the wrong type, a required one missing, or a value the tool cannot use.
+    static Result<HostTool> read(HostToolKind kind, JsonNode arguments) {
+        Optional<String> misfit = misfitOf(kind, arguments);
+        if (misfit.isPresent()) return Result.err(HostAccessProblems.badArguments(kind.toolName, misfit.get()));
+        String name = kind.toolName;
+        return switch (kind) {
+            case LIST_DIR -> Result.ok(new ListDir(text(arguments, "path")));
+            case STAT -> Result.ok(new Stat(text(arguments, "path")));
+            case READ_FILE -> {
+                long offset = number(arguments, "offset").orElse(0L);
+                long most = number(arguments, "max_bytes").orElse(0L);
+                yield offset < 0 || most < 0 || most > Integer.MAX_VALUE
+                        ? Result.err(HostAccessProblems.badArguments(name, "offset and max_bytes: numbers of bytes, 0 or more"))
+                        : Result.ok(new ReadFile(text(arguments, "path"), offset, (int) most));
+            }
+            case CLIPBOARD_READ -> Result.ok(new ClipboardRead());
+            case OPEN_URL -> optionalUri(text(arguments, "url")).filter(HostTool::openable)
+                    .<Result<HostTool>>map(uri -> Result.ok(new OpenUrl(uri)))
+                    .orElse(Result.err(HostAccessProblems.badArguments(name, "url: an http:// or https:// address")));
+            case SHOW -> Result.ok(new Show(text(arguments, "path")));
+            case WRITE_FILE -> Result.ok(new WriteFile(text(arguments, "path"), text(arguments, "text")));
+            case EDIT_FILE -> Result.ok(new EditFile(text(arguments, "path"), text(arguments, "old_text"),
+                                                     text(arguments, "new_text")));
+            case CLIPBOARD_WRITE -> Result.ok(new ClipboardWrite(text(arguments, "text")));
+            case NOTIFY -> Result.ok(new Notify(text(arguments, "title"), text(arguments, "text")));
+            case COPY_OUT -> Result.ok(new CopyOut(text(arguments, "from"), text(arguments, "path")));
+            case BASH -> {
+                long seconds = number(arguments, "timeout_seconds").orElse(USUAL_COMMAND.toSeconds());
+                yield seconds < 1 || seconds > LONGEST_COMMAND.toSeconds()
+                        ? Result.err(HostAccessProblems.badArguments(name,
+                                "timeout_seconds: from 1 to " + LONGEST_COMMAND.toSeconds()))
+                        : Result.ok(new Bash(text(arguments, "command"), text(arguments, "cwd"), Duration.ofSeconds(seconds)));
+            }
+        };
     }
 
-    /// Builds one tool from its name and arguments. Every argument that is missing, unknown or
-    /// of the wrong shape is a refusal with the tool's name in it, not a guess.
-    static Result<Call> of(String name, Association<String, String> args) {
-        Result<Call> call = switch (name) {
-            case "host_list_dir" -> {
-                String path = args.get("path").orElse("");
-                yield path.isEmpty() ? Result.err(HostAccessProblems.badArguments(name, "path"))
-                                     : Result.ok(new Call(new ListDir(path), args));
-            }
-            case "host_stat" -> {
-                String path = args.get("path").orElse("");
-                yield path.isEmpty() ? Result.err(HostAccessProblems.badArguments(name, "path"))
-                                     : Result.ok(new Call(new Stat(path), args));
-            }
-            case "host_read_file" -> {
-                String path = args.get("path").orElse("");
-                if (path.isEmpty()) yield Result.err(HostAccessProblems.badArguments(name, "path"));
-                long offset = args.get("offset").flatMap(HostTool::number).orElse(0L);
-                int max = args.get("max_bytes").flatMap(HostTool::number).map(Long::intValue).orElse(0);
-                yield Result.ok(new Call(new ReadFile(path, Math.max(0, offset), max), args));
-            }
-            case "host_clipboard_read" -> Result.ok(new Call(new ClipboardRead(), args));
-            case "host_open_url" -> {
-                String url = args.get("url").orElse("");
-                Optional<URI> parsed = url.isEmpty() ? Optional.empty() : optionalUri(url);
-                yield parsed.filter(HostTool::openable).map(uri -> Result.ok(new Call(new OpenUrl(uri), args)))
-                        .orElse(Result.err(HostAccessProblems.badArguments(name, "url")));
-            }
-            case "host_show" -> {
-                String path = args.get("path").orElse("");
-                yield path.isEmpty() ? Result.err(HostAccessProblems.badArguments(name, "path"))
-                                     : Result.ok(new Call(new Show(path), args));
-            }
-            case "host_write_file" -> {
-                Optional<String> path = args.get("path").filter(text -> !text.isEmpty());
-                Optional<String> text = args.get("text");
-                yield path.isEmpty() || text.isEmpty()
-                        ? Result.err(HostAccessProblems.badArguments(name, "path and text"))
-                        : Result.ok(new Call(new WriteFile(path.get(), text.get()), args));
-            }
-            case "host_clipboard_write" -> {
-                Optional<String> text = args.get("text");
-                yield text.isEmpty() ? Result.err(HostAccessProblems.badArguments(name, "text"))
-                                     : Result.ok(new Call(new ClipboardWrite(text.get()), args));
-            }
-            case "host_notify" -> {
-                Optional<String> title = args.get("title").filter(text -> !text.isBlank());
-                Optional<String> text = args.get("text");
-                yield title.isEmpty() || text.isEmpty()
-                        ? Result.err(HostAccessProblems.badArguments(name, "title and text"))
-                        : Result.ok(new Call(new Notify(title.get(), text.get()), args));
-            }
-            case "host_copy_out" -> {
-                String from = args.get("from").orElse("");
-                String path = args.get("path").orElse("");
-                yield from.isEmpty() || path.isEmpty() ? Result.err(HostAccessProblems.badArguments(name, "from and path"))
-                                                       : Result.ok(new Call(new CopyOut(from, path), args));
-            }
-            case "host_run" -> {
-                Optional<String> executable = args.get("executable").filter(text -> !text.isEmpty());
-                if (executable.isEmpty()) yield Result.err(HostAccessProblems.badArguments(name, "executable"));
-                Optional<Tuple<String>> argv = args.get("args").map(HostTool::split);
-                if (argv.isEmpty()) yield Result.err(HostAccessProblems.badArguments(name, "args"));
-                yield Result.ok(new Call(new Run(executable.get(), argv.get()), args));
-            }
-            default -> Result.err(HostAccessProblems.noSuchTool(name));
+    /// What is wrong with a call's arguments, judged by its tool's parameters alone, or empty
+    /// when every argument is one the tool takes, of the type it takes.
+    private static Optional<String> misfitOf(HostToolKind kind, JsonNode arguments) {
+        if (!arguments.isObject()) return Optional.of("its arguments as one JSON object");
+        for (var field : arguments.properties()) {
+            Optional<HostToolKind.Parameter> parameter = parameterNamed(kind, field.getKey());
+            if (parameter.isEmpty())
+                return Optional.of(kind.parameters.isEmpty() ? "no arguments, not " + field.getKey()
+                        : "only " + String.join(", ", kind.parameters.mapTo(String.class, HostToolKind.Parameter::name))
+                          + ", not " + field.getKey());
+            if (!fits(parameter.get().type(), field.getValue()))
+                return Optional.of(field.getKey() + ": " + wanted(parameter.get().type()));
+        }
+        for (HostToolKind.Parameter parameter : kind.parameters)
+            if (parameter.required() && !arguments.has(parameter.name()))
+                return Optional.of(parameter.name() + ": " + wanted(parameter.type()));
+        return Optional.empty();
+    }
+
+    private static Optional<HostToolKind.Parameter> parameterNamed(HostToolKind kind, String name) {
+        for (HostToolKind.Parameter parameter : kind.parameters)
+            if (parameter.name().equals(name)) return Optional.of(parameter);
+        return Optional.empty();
+    }
+
+    private static boolean fits(HostToolKind.Type type, JsonNode value) {
+        return switch (type) {
+            case TEXT -> value.isTextual() && !value.asText().isBlank();
+            case TEXT_OR_EMPTY -> value.isTextual();
+            case WHOLE_NUMBER -> value.isIntegralNumber() && value.canConvertToLong();
         };
-        return call;
+    }
+
+    private static String wanted(HostToolKind.Type type) {
+        return switch (type) {
+            case TEXT -> "a string that is not empty";
+            case TEXT_OR_EMPTY -> "a string";
+            case WHOLE_NUMBER -> "a whole number";
+        };
+    }
+
+    /// A string argument [#misfitOf] has already checked, or empty text for one left out.
+    private static String text(JsonNode arguments, String name) {
+        return arguments.path(name).asText("");
+    }
+
+    /// A number argument [#misfitOf] has already checked.
+    private static Optional<Long> number(JsonNode arguments, String name) {
+        return arguments.has(name) ? Optional.of(arguments.get(name).asLong()) : Optional.empty();
     }
 
     /// The host paths a tool will touch, as the agent wrote them, before they are resolved. The
     /// clipboard, a URL and a notification touch none; `host_copy_out` names its destination
     /// here, and its source is a path in the sandbox, which [HostAccessTools] reads in the
-    /// agent's home.
+    /// agent's home. `host_bash` names the directory it starts in, and only that: what the
+    /// command touches from there, the roots do not bound.
     static Tuple<String> pathsOf(HostTool tool) {
         return switch (tool) {
             case ListDir dir -> Tuple.of(String.class, dir.path());
@@ -241,8 +275,10 @@ sealed interface HostTool {
             case ReadFile read -> Tuple.of(String.class, read.path());
             case Show show -> Tuple.of(String.class, show.path());
             case WriteFile write -> Tuple.of(String.class, write.path());
+            case EditFile edit -> Tuple.of(String.class, edit.path());
             case CopyOut copy -> Tuple.of(String.class, copy.path());
-            case ClipboardRead _, OpenUrl _, ClipboardWrite _, Notify _, Run _ -> Tuple.of(String.class);
+            case Bash bash -> Tuple.of(String.class, bash.cwd());
+            case ClipboardRead _, OpenUrl _, ClipboardWrite _, Notify _ -> Tuple.of(String.class);
         };
     }
 
@@ -294,38 +330,5 @@ sealed interface HostTool {
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
-    }
-
-    private static Optional<Long> number(String text) {
-        try {
-            return Optional.of(Long.parseLong(text.strip()));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
-    }
-
-    /// A program's arguments arrive as one string from pi's tool call. They are split the way a
-    /// shell would split them, except that nothing is ever expanded or run: the result is a list
-    /// handed to [ProcessBuilder], never to a shell.
-    private static Tuple<String> split(String text) {
-        Tuple<String> parts = Tuple.of(String.class);
-        StringBuilder current = new StringBuilder();
-        boolean quoted = false;
-        char quote = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (quoted) {
-                if (c == quote) quoted = false; else current.append(c);
-            } else if (c == '\'' || c == '"') {
-                quoted = true;
-                quote = c;
-            } else if (Character.isWhitespace(c)) {
-                if (!current.isEmpty()) { parts = parts.add(current.toString()); current.setLength(0); }
-            } else {
-                current.append(c);
-            }
-        }
-        if (!current.isEmpty()) parts = parts.add(current.toString());
-        return parts;
     }
 }

@@ -159,7 +159,7 @@ final class LampPhase {
                   + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024 + " KiB, far more than any useful rules",
                     Command.usageOf("at")));
         return Result.ok(new LampConfig.HostAccess(true, text.get(), configured.checkerModel(),
-                configured.roots(), configured.maxReadBytes(), configured.executables(),
+                configured.roots(), configured.maxReadBytes(), configured.commands(),
                 configured.allowAdditive(), configured.askTheUser()));
     }
 
@@ -189,7 +189,7 @@ final class LampPhase {
                 ((Result.Ok<String>) environment).value(), AgentGuideUtil.render(config),
                 AgentGitConfigUtil.render(gitAuthor(config.git(), layout)),
                 config.schedule().enabled() ? Optional.of(AgentGuideUtil.scheduleTools()) : Optional.empty(),
-                config.hostAccess().enabled() ? Optional.of(AgentGuideUtil.hostAccessTools(config.hostAccess()))
+                config.hostAccess().enabled() ? Optional.of(AgentGuideUtil.hostAccessTools())
                                               : Optional.empty());
     }
 

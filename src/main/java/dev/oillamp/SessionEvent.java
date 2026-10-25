@@ -56,8 +56,8 @@ sealed interface SessionEvent {
     /// `UserAnswered`, which comes back from the person.
     ///
     /// @param run      the run the request came from, or empty when the agent asked outside one
-    /// @param tool     the tool it named, such as `host_run`
-    /// @param question what it is, in the agent's terms, such as "run `inkscape a.svg`, in ~/Documents"
+    /// @param tool     the tool it named, such as `host_bash`
+    /// @param question what it is, in the agent's terms, such as "run in ~/Documents: inkscape a.svg"
     record HostAccessAsked(String run, String tool, String question) implements SessionEvent {}
 
     /// The person answered a host-access question, or the answer timed out.

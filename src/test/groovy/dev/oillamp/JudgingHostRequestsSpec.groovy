@@ -178,13 +178,13 @@ class JudgingHostRequestsSpec extends Specification {
                                                             Tuple.of(HostAccess.RunLog))
 
         when: 'one question arrives'
-            var first = rules.step(running, new SessionEvent.HostAccessAsked('run-1', 'host_run', 'run inkscape'), now)
+            var first = rules.step(running, new SessionEvent.HostAccessAsked('run-1', 'host_bash', 'run inkscape'), now)
 
         then: 'it is asked'
-            first.actions().toList() == [new SessionAction.AskTheUser('run-1', 'host_run', 'run inkscape')]
+            first.actions().toList() == [new SessionAction.AskTheUser('run-1', 'host_bash', 'run inkscape')]
 
         when: 'a second arrives before the first is answered'
-            var second = rules.step(first.next(), new SessionEvent.HostAccessAsked('run-1', 'host_run', 'run gimp'), now)
+            var second = rules.step(first.next(), new SessionEvent.HostAccessAsked('run-1', 'host_bash', 'run gimp'), now)
 
         then: 'it is declined, and the first still waits'
             second.actions().first() instanceof SessionAction.DeclineQuestion
@@ -192,14 +192,14 @@ class JudgingHostRequestsSpec extends Specification {
 
         when: 'the first is answered, and another comes'
             var answered = rules.step(second.next(), new SessionEvent.UserAnswered('run inkscape', true), now)
-            var third = rules.step(answered.next(), new SessionEvent.HostAccessAsked('run-1', 'host_run', 'run gimp'), now)
+            var third = rules.step(answered.next(), new SessionEvent.HostAccessAsked('run-1', 'host_bash', 'run gimp'), now)
 
         then: 'that one is asked'
-            third.actions().toList() == [new SessionAction.AskTheUser('run-1', 'host_run', 'run gimp')]
+            third.actions().toList() == [new SessionAction.AskTheUser('run-1', 'host_bash', 'run gimp')]
 
         when: 'a question arrives while the session is still starting'
             var early = rules.step(new SessionState.Starting(now, Tuple.of(HostAccess.RunLog)),
-                                   new SessionEvent.HostAccessAsked('run-1', 'host_run', 'run inkscape'), now)
+                                   new SessionEvent.HostAccessAsked('run-1', 'host_bash', 'run inkscape'), now)
 
         then: 'there is nobody to ask, so it is declined'
             early.actions().first() instanceof SessionAction.DeclineQuestion

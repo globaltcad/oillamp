@@ -454,11 +454,11 @@ final class ConfigLoadingUtil {
 
     private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {
         s.allowOnly("enabled", "requirements", "checker_model", "roots", "max_read_bytes",
-                    "executables", "allow_additive", "ask_the_user");
+                    "commands", "allow_additive", "ask_the_user");
         boolean enabled = s.bool("enabled", fallback.enabled());
         String requirements = s.string("requirements", fallback.requirements());
         Tuple<String> roots = s.strings("roots", fallback.roots());
-        Tuple<String> executables = s.strings("executables", fallback.executables());
+        LampConfig.HostAccess.Commands commands = readCommands(s, fallback.commands());
         int maxReadBytes = bounded(s, "max_read_bytes", fallback.maxReadBytes(), 1, 16 * 1024 * 1024,
                 "a number of bytes from 1 to 16777216");
         boolean allowAdditive = s.bool("allow_additive", fallback.allowAdditive());
@@ -488,7 +488,22 @@ final class ConfigLoadingUtil {
         }
         enabled = enabled && complete;
         return new LampConfig.HostAccess(enabled, requirements, checkerModel, absoluteRoots,
-                                         maxReadBytes, executables, allowAdditive, askTheUser);
+                                         maxReadBytes, commands, allowAdditive, askTheUser);
+    }
+
+    /// `host_access.commands`, one of three words. Anything else is reported, and the lamp keeps
+    /// the fallback, which for a new lamp is `off`: a typo must not open the executing tier.
+    private static LampConfig.HostAccess.Commands readCommands(ConfigSection s, LampConfig.HostAccess.Commands fallback) {
+        String text = s.string("commands", fallback.name().toLowerCase(java.util.Locale.ROOT));
+        return switch (text) {
+            case "off" -> LampConfig.HostAccess.Commands.OFF;
+            case "ask" -> LampConfig.HostAccess.Commands.ASK;
+            case "checker" -> LampConfig.HostAccess.Commands.CHECKER;
+            default -> {
+                s.invalid("commands", "\"" + text + "\"", "\"off\", \"ask\" (the checker, then you, for every command) or \"checker\" (the checker alone)");
+                yield fallback;
+            }
+        };
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────

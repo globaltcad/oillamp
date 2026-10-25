@@ -108,6 +108,10 @@ test {
     useJUnitPlatform {
         excludeTags 'spike'
     }
+    // The model key an application gives a lamp reaches the engine in this variable. With it set
+    // in the scenarios' own JVM too, a command run on the host in WorkingOnTheHostSpec would
+    // print the key if oillamp did not take it out of the command's environment.
+    environment 'OILLAMP_MODEL_KEY', 'sk-0123456789'
     testLogging {
         events "failed"
         exceptionFormat "full"

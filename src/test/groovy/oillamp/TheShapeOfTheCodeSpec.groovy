@@ -211,13 +211,15 @@ class TheShapeOfTheCodeSpec extends Specification {
                            // LampLauncher is how it starts that process, and the commands
                            // it runs in the sandbox, and can be replaced.
                            'Lamp', 'LampLauncher',
-                           // Supervised host access. It binds the socket the sandbox asks on and
-                           // touches the host once a request is allowed, as Control and Egress
-                           // do, and decides nothing: what a request means is HostTool, what the
-                           // model is asked and how its answer is read is HostAccessChecker,
-                           // where a path really goes is HostPaths (which reads nothing but the
-                           // resolution of a path), and the effects are HostAccessTools.
-                           'HostAccess', 'HostAccessTools', 'HostPaths', 'HostAccessChecker'] as Set
+                           // Supervised host access. HostMcp binds the socket the sandbox asks
+                           // on and keeps its connections, as Control does; what to do with one
+                           // message is its pure HostMcp.decide. HostAccess touches the host once a
+                           // request is allowed, and decides nothing itself: what a request means is
+                           // HostTool, what the model is asked and how its answer is read is
+                           // HostAccessChecker, where a path really goes is HostPaths (which reads
+                           // nothing but the resolution of a path), and the effects are
+                           // HostAccessTools.
+                           'HostMcp', 'HostAccess', 'HostAccessTools', 'HostPaths', 'HostAccessChecker'] as Set
 
         and: 'the things only they may use'
             var effects = ['java.nio.file.Files', 'java.lang.ProcessBuilder', 'java.lang.Process',

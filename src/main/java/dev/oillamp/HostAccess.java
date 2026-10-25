@@ -25,28 +25,31 @@ import dev.lamp.LampHostVerdict;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import sprouts.Association;
 import sprouts.Tuple;
 
-/// Supervised access to the host: the socket the sandbox asks on, the activity each request is
-/// judged by, and the order in which a request becomes an effect or a refusal.
+/// Supervised access to the host: the activity each request is judged by, and the order in which
+/// a request becomes an effect or a refusal.
 ///
 /// One request, in order:
 ///
-/// 1. [Control.Server] reads one JSON line and calls [#answer] on that connection's thread.
-/// 2. The line is read into a [HostTool.Call][HostTool.Call]. Anything else is refused there,
-///    and not logged: it is not a request.
-/// 3. The tier is checked against the lamp's settings, without a model: a closed tier is a
+/// 1. [HostMcp] reads one `tools/call` from the sandbox into a [HostTool], and calls [#answer]
+///    on that call's own thread. A call it cannot read is refused there, and not logged: it is
+///    not a request.
+/// 2. The tier is checked against the lamp's settings, without a model: a closed tier is a
 ///    refusal even if the checker would allow it.
-/// 4. Every path the tool names is resolved on the host. One inside the lamp is refused; one
+/// 3. Every path the tool names is resolved on the host. One inside the lamp is refused; one
 ///    outside the lamp's roots is refused too, unless `ask_the_user` lets the person decide.
-/// 5. The checker is asked, with the requirements, the run's instruction, its recent tool calls,
+/// 4. The checker is asked, with the requirements, the run's instruction, its recent tool calls,
 ///    its last reasoning, and the request. It has its own conversation and never sees the
 ///    agent's messages. Which run that is, the session knows: the sandbox does not get to say.
-/// 6. A refusal is the answer. An allow is carried out here, with the paths resolved again at the
-///    moment of the effect, because a link can be swapped in while a model is thinking.
+/// 5. A refusal is the answer. An allow goes to the person when it must, and is then carried out
+///    here, with the paths resolved again at the moment of the effect, because a link can be
+///    swapped in while a model is thinking. A call the sandbox cancelled while it waited is not
+///    carried out at all.
 ///
-/// The effect happens on the host. The pi extension in the sandbox only asks: it has nothing to
-/// fake, because it has no capability of its own.
+/// The effect happens on the host. The pi extension in the sandbox only registers the MCP
+/// server: it has nothing to fake, because it has no capability of its own.
 ///
 /// All of it is written to `logs/host-access-<session>.jsonl`, as one object per request. The
 /// requirements and the reasoning are not in the log: they belong to the user and to the agent,
@@ -64,10 +67,22 @@ final class HostAccess implements AutoCloseable {
     /// this, so this only bounds the shape of an answer, not the tool.
     static final int ANSWER_SENT = 128 * 1024;
 
+    /// What became of one request, as the agent is told it. The protocol that carried the request
+    /// decides how each is written back; the gate only decides which it is.
+    sealed interface Answer {
+        /// The request was carried out. A command that exited with a status other than 0 was
+        /// carried out too: its status is in the text.
+        record Done(String text) implements Answer {}
+        /// The request was not carried out, because a check, the checker or the person said no.
+        record Refused(String why) implements Answer {}
+        /// The request was allowed, and the host could not do it.
+        record Failed(String why) implements Answer {}
+    }
+
     /// A request the checker allowed that the person must allow too, as the person is shown it.
     ///
     /// @param run  the run the request came from, or empty when the agent asked outside one
-    /// @param tool the tool, such as `host_run`
+    /// @param tool the tool, such as `host_bash`
     /// @param what what is about to happen, in words
     record RequestForPermission(String run, String tool, String what) {}
 
@@ -95,10 +110,13 @@ final class HostAccess implements AutoCloseable {
 
     private final Object logLock = new Object();
 
+    /// @param withheld the names of the variables in oillamp's environment that hold its secrets,
+    ///                 such as the model key; a command run on the host does not get them
     HostAccess(Machine machine, LampLayout layout, LampConfig config, SessionId session, Path home,
                HostAccessChecker checker, Consumer<LampEvent> sink,
                Function<RequestForPermission, CompletableFuture<Boolean>> decisions,
-               Supplier<Optional<LampRun>> currentRun, Function<String, RunLog> activityNow) {
+               Supplier<Optional<LampRun>> currentRun, Function<String, RunLog> activityNow,
+               Tuple<String> withheld) {
         this.machine = machine;
         this.layout = layout;
         this.config = config;
@@ -109,12 +127,27 @@ final class HostAccess implements AutoCloseable {
         this.decisions = decisions;
         this.currentRun = currentRun;
         this.activityNow = activityNow;
-        this.tools = new HostAccessTools(machine, config.hostAccess(), layout.agentDir());
+        this.tools = new HostAccessTools(machine, config.hostAccess(), layout.agentDir(), withheld);
+    }
+
+    /// The variables of oillamp's own environment that hold its secrets: the model key, the
+    /// application's requirements and instructions. A command the agent runs on the host gets
+    /// oillamp's environment without them. The requirements are the checker's and the
+    /// instructions the application's; neither is the agent's to read.
+    static Tuple<String> secretVariables(LampConfig config, LampConfig.Model service, Context.Options options) {
+        Tuple<String> all = Tuple.of(String.class, service.keyEnv())
+                .addAll(config.llm().map(LampConfig.Llm::apiKeyEnv).stream().toList())
+                .addAll(options.hostAccess().map(Context.Options.HostAccessGrant::requirementsEnv).stream().toList())
+                .addAll(options.instructionsEnv().stream().toList());
+        Tuple<String> names = Tuple.of(String.class);
+        for (String name : all) if (!name.isBlank() && !names.contains(name)) names = names.add(name);
+        return names;
     }
 
     /// Tells the user, once, that the way out exists and what it is bounded by.
     void announce() {
-        sink.accept(new LampEvent.HostAccessEnabled(HostTool.offeredBy(config.hostAccess()),
+        sink.accept(new LampEvent.HostAccessEnabled(
+                HostTool.offeredBy(config.hostAccess()).mapTo(String.class, kind -> kind.toolName),
                 Optional.of(checkerModelName())));
     }
 
@@ -183,31 +216,29 @@ final class HostAccess implements AutoCloseable {
 
     // ─── one request ───────────────────────────────────────────────────────────────────────
 
-    /// Answers one request from the sandbox. Called on a connection's own thread, never on the
-    /// event loop, because it waits for a model and may run a program.
-    Control.Reply answer(Control.Request request) {
+    /// Answers one request from the sandbox. Called on the request's own thread, never on the
+    /// event loop, because it waits for a model and a person, and may run a command.
+    ///
+    /// @param withdrawn completes when the sandbox stops waiting for the answer: pi cancelled the
+    ///                  call, or its connection closed. A request withdrawn before its effect has
+    ///                  no effect; a command withdrawn while it runs is stopped. It is a value the
+    ///                  thread looks at, not an interrupt of the thread: an interrupt would also
+    ///                  close any channel the thread writes to next, such as the session's events.
+    Answer answer(HostTool tool, CompletableFuture<Void> withdrawn) {
         Instant started = machine.now();
-        String line = request.arguments().get("request").orElse("");
         Optional<LampRun> working = currentRun.get();
         String run = working.map(LampRun::id).orElse("");
-        Result<HostTool.Call> read = HostTool.read(line);
-        if (read instanceof Result.Err<HostTool.Call> bad) {
-            String why = bad.problems().first().whatHappened();
-            sink.accept(new LampEvent.HostAccessRefused(run, "?", why));
-            return Control.Reply.failed(why);
-        }
-        HostTool.Call call = ((Result.Ok<HostTool.Call>) read).value();
-        Attempt attempt = new Attempt(started, run, HostTool.nameOf(call.tool()),
-                HostTool.tierOf(call.tool()).name().toLowerCase(Locale.ROOT), tuplesOf(call));
+        Attempt attempt = new Attempt(started, run, HostTool.nameOf(tool),
+                HostTool.tierOf(tool).name().toLowerCase(Locale.ROOT), HostTool.argumentsOf(tool));
 
         // 1. The tier is the user's setting. Closed is closed, whatever a model would say.
-        Optional<String> closed = HostTool.closedBecause(call.tool(), config.hostAccess());
+        Optional<String> closed = HostTool.closedBecause(HostTool.kindOf(tool), config.hostAccess());
         if (closed.isPresent()) return refuse(attempt, Tuple.of(HostPaths.ResolvedPath.class), closed.get());
 
         // 2. The paths, before anything else looks at them.
         Tuple<HostPaths.ResolvedPath> resolved = Tuple.of(HostPaths.ResolvedPath.class);
         boolean outside = false;
-        for (String asked : HostTool.pathsOf(call.tool())) {
+        for (String asked : HostTool.pathsOf(tool)) {
             Result<HostPaths.ResolvedPath> path = HostPaths.locate(asked, home);
             if (path instanceof Result.Err<HostPaths.ResolvedPath> bad)
                 return refuse(attempt, resolved, bad.problems().first().whatHappened());
@@ -226,14 +257,14 @@ final class HostAccess implements AutoCloseable {
             }
         }
         // 3. What the tool itself rules out, whatever the checker would say.
-        Optional<String> unfit = unfit(call.tool(), resolved);
+        Optional<String> unfit = unfit(tool, resolved);
         if (unfit.isPresent()) return refuse(attempt, resolved, unfit.get());
-        sink.accept(new LampEvent.HostAccessRequested(run, attempt.tool(), HostTool.describe(call.tool())));
+        sink.accept(new LampEvent.HostAccessRequested(run, attempt.tool(), HostTool.describe(tool)));
 
         // 4. The checker.
         Result<LampHostVerdict> verdict;
         try {
-            verdict = checker.check(call, activityOf(working), resolved);
+            verdict = checker.check(tool, activityOf(working), resolved);
         } catch (RuntimeException bug) {
             verdict = Result.err(HostAccessProblems.checkerUnreachable(ProblemCatalogUtil.reason(bug)));
         }
@@ -246,28 +277,31 @@ final class HostAccess implements AutoCloseable {
                 Duration.between(started, machine.now())));
         if (!decided.allowed()) {
             log(attempt, resolved, "refused", risk, decided.reason(), 0);
-            return Control.Reply.failed("refused: " + decided.reason());
+            return new Answer.Refused("refused: " + decided.reason());
         }
         // The checker may put a request lower than its tool's tier; it may not put it higher.
-        if (decided.risk().compareTo(HostTool.tierOf(call.tool())) > 0)
+        if (decided.risk().compareTo(HostTool.tierOf(tool)) > 0)
             return refuse(attempt, resolved, "the checker called this " + risk + ", which is more than "
                     + attempt.tool() + " can do; nothing was done");
+        if (withdrawn.isDone()) return refuse(attempt, resolved, CANCELLED);
 
-        // 5. The person's permission first, for a program, and for a path past the roots.
-        if (call.tool() instanceof HostTool.Run || outside) {
-            Optional<String> no = askTheUser(new RequestForPermission(run, attempt.tool(), HostTool.describe(call.tool())
-                    + (outside ? " (outside the lamp's roots)" : "")));
+        // 5. The person's permission first, for a command when the lamp says so, and for a path
+        // past the roots.
+        if (HostTool.needsThePerson(tool, config.hostAccess()) || outside) {
+            Optional<String> no = askTheUser(new RequestForPermission(run, attempt.tool(), HostTool.describe(tool)
+                    + (outside ? " (outside the lamp's roots)" : "")), withdrawn);
             if (no.isPresent()) return refuse(attempt, resolved, no.get());
         }
 
         // 6. The work. Paths are resolved once more here, so a link swapped in while the model
         // thought cannot move the effect to another file.
-        Optional<LampProblem> moved = recheckPaths(call, resolved);
+        Optional<LampProblem> moved = recheckPaths(tool, resolved);
         if (moved.isPresent()) return refuse(attempt, resolved, moved.get().whatHappened());
+        if (withdrawn.isDone()) return refuse(attempt, resolved, CANCELLED);
 
         Result<String> done;
         try {
-            done = tools.perform(call, resolved);
+            done = tools.perform(tool, resolved, withdrawn);
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt();
             done = Result.err(HostAccessProblems.failed(attempt.tool(), "it was stopped"));
@@ -278,12 +312,24 @@ final class HostAccess implements AutoCloseable {
             LampProblem problem = failed.problems().first();
             sink.accept(new LampEvent.HostAccessRefused(run, attempt.tool(), problem.whatHappened()));
             log(attempt, resolved, "failed", risk, problem.whatHappened(), 0);
-            return Control.Reply.failed(problem.whatHappened());
+            return new Answer.Failed(problem.whatHappened());
         }
         String answer = ((Result.Ok<String>) done).value();
         log(attempt, resolved, "done", risk, decided.reason(), answer.length());
-        return Control.Reply.ok().with("result", answer.length() <= ANSWER_SENT
+        return new Answer.Done(answer.length() <= ANSWER_SENT
                 ? answer : answer.substring(0, ANSWER_SENT) + "\n[…] (the rest was cut)");
+    }
+
+    /// Why a request the sandbox withdrew was not carried out. pi does not read it, since it
+    /// stopped waiting; the log and the event say it all the same.
+    private static final String CANCELLED = "the sandbox withdrew the request before it was carried out "
+            + "(pi cancelled the call, or its connection closed); nothing was done";
+
+    /// Reports a call that could not be read as a request at all, such as one of a tool there is
+    /// not or with arguments that do not fit. It is an event for the user, and not in the log:
+    /// the log records requests, and this was none.
+    void refusedUnread(String tool, String why) {
+        sink.accept(new LampEvent.HostAccessRefused(currentRun.get().map(LampRun::id).orElse(""), tool, why));
     }
 
     /// What the checker is told about the run in progress. The state may not have heard of a run
@@ -297,18 +343,24 @@ final class HostAccess implements AutoCloseable {
     }
 
     /// One request on its way through [#answer], for the log and the events.
-    private record Attempt(Instant started, String run, String tool, String tier, Tuple<String> arguments) {}
+    private record Attempt(Instant started, String run, String tool, String tier,
+                           Association<String, String> arguments) {}
 
     /// What a tool rules out by itself, before any model: a `host_show` of something the desktop
-    /// would run, and a `host_copy_out` from outside the sandbox's home.
+    /// would run, a `host_copy_out` from outside the sandbox's home, and a command too long to
+    /// show the checker whole.
     private static Optional<String> unfit(HostTool tool, Tuple<HostPaths.ResolvedPath> resolved) {
         return switch (tool) {
             case HostTool.Show _ -> HostAccessTools.whyNotShown(resolved.first().hostPath());
             case HostTool.CopyOut copy -> HostAccessTools.sourceInAgentHome(copy.from()) instanceof Result.Err<java.nio.file.Path> bad
                     ? Optional.of(bad.problems().first().whatHappened()) : Optional.empty();
+            case HostTool.Bash bash -> bash.command().getBytes(StandardCharsets.UTF_8).length > HostTool.LONGEST_COMMAND_TEXT
+                    ? Optional.of("the command is longer than " + HostTool.LONGEST_COMMAND_TEXT / 1024 + " KiB, more than "
+                                + "the checker is shown whole; write it to a script in small steps, or split it up")
+                    : Optional.empty();
             case HostTool.ListDir _, HostTool.Stat _, HostTool.ReadFile _, HostTool.ClipboardRead _,
-                 HostTool.OpenUrl _, HostTool.WriteFile _, HostTool.ClipboardWrite _, HostTool.Notify _,
-                 HostTool.Run _ -> Optional.empty();
+                 HostTool.OpenUrl _, HostTool.WriteFile _, HostTool.EditFile _, HostTool.ClipboardWrite _,
+                 HostTool.Notify _ -> Optional.empty();
         };
     }
 
@@ -323,8 +375,8 @@ final class HostAccess implements AutoCloseable {
 
     /// Checks the same paths again, immediately before the effect. A path that resolved one way
     /// when the checker was asked and another way now is a refusal, not a retry.
-    private Optional<LampProblem> recheckPaths(HostTool.Call call, Tuple<HostPaths.ResolvedPath> before) {
-        Tuple<String> asked = HostTool.pathsOf(call.tool());
+    private Optional<LampProblem> recheckPaths(HostTool tool, Tuple<HostPaths.ResolvedPath> before) {
+        Tuple<String> asked = HostTool.pathsOf(tool);
         for (int i = 0; i < asked.size(); i++) {
             Result<HostPaths.ResolvedPath> path = HostPaths.locate(asked.get(i), home);
             if (path instanceof Result.Err<HostPaths.ResolvedPath> bad)
@@ -337,10 +389,10 @@ final class HostAccess implements AutoCloseable {
         return Optional.empty();
     }
 
-    private Control.Reply refuse(Attempt attempt, Tuple<HostPaths.ResolvedPath> resolved, String why) {
+    private Answer refuse(Attempt attempt, Tuple<HostPaths.ResolvedPath> resolved, String why) {
         sink.accept(new LampEvent.HostAccessRefused(attempt.run(), attempt.tool(), why));
         log(attempt, resolved, "refused", "", why, 0);
-        return Control.Reply.failed(why);
+        return new Answer.Refused(why);
     }
 
     // ─── the user's turn ──────────────────────────────────────────────────────────────────
@@ -348,14 +400,19 @@ final class HostAccess implements AutoCloseable {
     /// Asks the person through the session, and waits for an answer.
     ///
     /// A person is the slowest and most careful checker there is, so this is reserved for the
-    /// requests worth an interruption: running a program, and (with `ask_the_user`) a path past
-    /// the roots. The session refuses at once when it has nobody to ask, and the request
+    /// requests worth an interruption: a command, in a lamp whose `host_access.commands` is
+    /// `ask`, and (with `ask_the_user`) a path past the roots. The session refuses at once when it has nobody to ask, and the request
     /// times out on its own, so this never waits longer than [#USER_PATIENCE].
+    /// A request the sandbox withdraws while the person is asked is withdrawn from the person
+    /// too: the question is closed, and the next one can be asked.
+    ///
     /// @return why the request may not go on, or empty when the person said yes
-    private Optional<String> askTheUser(RequestForPermission request) {
+    private Optional<String> askTheUser(RequestForPermission request, CompletableFuture<Void> withdrawn) {
+        CompletableFuture<Boolean> decision = decisions.apply(request);
+        var unused = withdrawn.thenRun(() -> decision.completeExceptionally(new IllegalStateException(CANCELLED)));
         try {
-            boolean yes = Boolean.TRUE.equals(decisions.apply(request)
-                    .get(USER_PATIENCE.toMillis() + 1000, TimeUnit.MILLISECONDS));
+            boolean yes = Boolean.TRUE.equals(decision.get(USER_PATIENCE.toMillis() + 1000, TimeUnit.MILLISECONDS));
+            if (withdrawn.isDone()) return Optional.of(CANCELLED);
             return yes ? Optional.empty() : Optional.of(HostAccessProblems.userSaidNo(request.tool()).whatHappened());
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt();
@@ -363,6 +420,7 @@ final class HostAccess implements AutoCloseable {
         } catch (TimeoutException slow) {
             return Optional.of(HostAccessProblems.userDidNotAnswer(USER_PATIENCE).whatHappened());
         } catch (ExecutionException ended) {
+            if (withdrawn.isDone()) return Optional.of(CANCELLED);
             return Optional.of(ended.getCause() instanceof TimeoutException
                     ? HostAccessProblems.userDidNotAnswer(USER_PATIENCE).whatHappened()
                     : HostAccessProblems.userNotAsked(request.tool(), Optional.ofNullable(ended.getCause())
@@ -382,10 +440,11 @@ final class HostAccess implements AutoCloseable {
             entry.put("tool", attempt.tool());
             entry.put("tier", attempt.tier());
             ObjectNode args = entry.putObject("arguments");
-            for (String argument : attempt.arguments()) {
-                int equals = argument.indexOf('=');
-                if (equals > 0) args.put(argument.substring(0, equals), argument.substring(equals + 1));
-            }
+            // A command is logged whole: it is what ran on the host, and HostAccess refuses one
+            // longer than HostTool.LONGEST_COMMAND_TEXT. A file's text is not the log's business.
+            for (var argument : attempt.arguments())
+                args.put(argument.first(), attempt.tool().equals("host_bash") && argument.first().equals("command")
+                        ? argument.second() : shorten(argument.second()));
             ArrayNode paths = entry.putArray("resolved");
             for (HostPaths.ResolvedPath path : resolved) paths.add(path.hostPath().toString());
             entry.put("outcome", outcome);
@@ -411,18 +470,13 @@ final class HostAccess implements AutoCloseable {
         return layout.logsDir().resolve("host-access-" + session.value() + ".jsonl");
     }
 
-    private static Tuple<String> tuplesOf(HostTool.Call call) {
-        Tuple<String> out = Tuple.of(String.class);
-        for (var argument : call.arguments()) out = out.add(argument.first() + "=" + shorten(argument.second()));
-        return out;
-    }
-
     private static String shorten(String text) {
         String single = ConsoleRenderer.NOT_PRINTABLE.matcher(text).replaceAll(" ");
         return single.length() <= 200 ? single : single.substring(0, 200) + "…";
     }
 
     @Override public void close() {
-        // Nothing of its own to close: the socket belongs to the session's Control.Server.
+        // Nothing of its own to close: the socket and its connections belong to the session's
+        // HostMcp.Server.
     }
 }

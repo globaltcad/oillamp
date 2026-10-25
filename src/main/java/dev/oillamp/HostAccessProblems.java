@@ -24,9 +24,12 @@ final class HostAccessProblems {
     }
 
     /// The arguments to a tool did not fit its shape.
+    ///
+    /// @param expected what did not fit, and what was expected instead, such as
+    ///                 `path: a string that is not empty`
     static LampProblem badArguments(String tool, String expected) {
         return refusal("OIL-HOSTACCESS-002", "Host tool arguments do not fit",
-                tool + " was called without what it needs",
+                tool + " was called with arguments that do not fit it; expected " + expected,
                 "a tool runs only when every argument it reads is there and is the kind it expects")
             .withEvidence(new LampProblem.Evidence.Value("expected", expected));
     }
@@ -138,7 +141,7 @@ final class HostAccessProblems {
     /// The line the sandbox sent is not a request at all.
     static LampProblem notARequest() {
         return refusal("OIL-HOSTACCESS-011", "Not a host request",
-                "the host tools socket received something that is not one JSON request",
+                "the host tools socket received a line that is not one JSON-RPC message",
                 "oillamp reads only its own protocol there; anything else is ignored before a model "
               + "is asked or a path is touched");
     }

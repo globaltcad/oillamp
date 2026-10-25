@@ -264,14 +264,14 @@ record LampConfig(
     /// @param roots           absolute host paths the tools may mention at all; empty means the
     ///                        user's home directory
     /// @param maxReadBytes    how much of one file the agent may be handed
-    /// @param executables     programs the agent may ask to run on the host; empty closes the
-    ///                        executing tier
+    /// @param commands        whether the agent may run shell commands on the host, and who
+    ///                        must allow each one
     /// @param allowAdditive   whether writing, copying out, opening pages and notifications are
     ///                        offered at all
     /// @param askTheUser      whether a request outside `roots` goes to a person once the checker
     ///                        allows it, rather than being refused
     public record HostAccess(boolean enabled, String requirements, String checkerModel,
-                             Tuple<String> roots, int maxReadBytes, Tuple<String> executables,
+                             Tuple<String> roots, int maxReadBytes, Commands commands,
                              boolean allowAdditive, boolean askTheUser) {
         public HostAccess {
             if (maxReadBytes < 1) throw new IllegalArgumentException("host_access.max_read_bytes");
@@ -280,8 +280,20 @@ record LampConfig(
                     throw new IllegalArgumentException("host_access.roots entries must be absolute paths: " + root);
         }
         public HostAccess switchedOn() {
-            return new HostAccess(true, requirements, checkerModel, roots, maxReadBytes, executables,
+            return new HostAccess(true, requirements, checkerModel, roots, maxReadBytes, commands,
                                   allowAdditive, askTheUser);
+        }
+
+        /// `host_access.commands`: whether `host_bash` exists in this lamp, and who allows each
+        /// command. Running a command is the executing tier, the one that can do anything the
+        /// user can, so it is off unless the user names one of the other two.
+        public enum Commands {
+            /// No `host_bash`: the tool is not offered, and a call is refused.
+            OFF,
+            /// The checker judges each command, and then the person is asked before it runs.
+            ASK,
+            /// The checker alone judges each command.
+            CHECKER
         }
     }
 }

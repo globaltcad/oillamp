@@ -10,7 +10,7 @@ public enum LampHostRisk {
     /// Changes something on the host, in a way the user can see and undo, or sends something
     /// out, as opening a page does. Closed unless the lamp's `host_access.allow_additive` is on.
     ADDITIVE,
-    /// Runs a program on the host. Closed unless the lamp's `host_access.executables` names the
-    /// program, and the user is asked every time.
+    /// Runs a command on the host, which can do anything the user can. Closed unless the lamp's
+    /// `host_access.commands` is `ask`, in which the user is asked every time, or `checker`.
     EXECUTING
 }

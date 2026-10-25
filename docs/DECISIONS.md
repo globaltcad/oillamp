@@ -625,19 +625,77 @@ every run is saved before and after.
 *Given up:* the reader depends on pi's session file format (version 3). A change to it in a new pi
 needs a change in `InternalPiSessionFileUtil`. *(added on 2026-09-30)*
 
-### Host access, when it exists, is judged on the host by a model with its own prompt
+### Host access is judged on the host by a model with its own prompt
 
-Planned, not built; see [HOST-ACCESS.md](HOST-ACCESS.md). The agent gets typed tools whose
-implementation is on the host. Each request is judged by a separate model call that sees the
-user's requirements, the request and the run's activity, but never the agent's conversation. The
-tools are in tiers, deterministic checks enforce the outermost one, and the feature is off by
-default with no command-line switch.
+See [HOST-ACCESS.md](HOST-ACCESS.md). The agent gets typed tools whose implementation is on the
+host. Each request is judged by a separate model call that sees the user's requirements, the
+request and the run's activity, but never the agent's conversation. The tools are in tiers,
+deterministic checks enforce the outermost one, and the feature is off by default with no
+command-line switch.
 
 *Why:* permission dialogues are for people who enjoy permission dialogues. A judgement call made
 per request, bounded by checks that do not depend on the model, and off unless asked for, is the
 smallest thing that can work. The threat is a prompt injection, so the judge must not share the
 poisoned context, and the judge may only ever tighten what the checks allow. *(added on
 2026-10-18)*
+
+### The host tools are an MCP server in the engine, and the sandbox only registers it
+
+The session serves the host tools as an MCP server on `sockets/host/host-access.sock`. The pi
+extension registers it with `pi.registerMcpServer`, as a `socat` that copies pi's standard input
+and output to the socket. The engine is the one catalogue of the tools: their names,
+descriptions, argument schemas and tiers are in `HostToolKind`, and every call is held to the same
+schema it was listed with. The earlier protocol, one JSON line per connection with every argument
+a string, is gone rather than kept beside it. The MCP server is written by hand and speaks only
+`initialize`, `ping`, `tools/list`, `tools/call` and the two notifications it needs; there is no
+MCP SDK.
+
+*Why:* MCP is how harnesses find tools they do not have built in, so the host tools work in pi as
+any MCP server does, with no tool description in JavaScript to keep in step with the Java, and
+another harness that speaks MCP could be pointed at the same socket. One protocol means one set
+of checks to get right. The part of MCP host access needs is small, and a library would bring
+more of the protocol, such as resources, than oillamp wants to serve: a resource read would be a
+second way to the host's files, past the checker.
+
+*Given up:* the host tools need a pi that registers MCP servers from extensions (1.4.0 does; an
+image built with an older pi needs `oillamp update`). pi names them `mcp__oillamp__host_…`, which
+is longer than before. *(added on 2026-10-26)*
+
+### Commands on the host are one tool, `host_bash`, and the user says who allows each
+
+`host_bash` runs a command with `bash -c` in a directory the agent names. It replaced `host_run`
+and its allowlist, `host_access.executables`. `host_access.commands` decides whether it exists:
+`"off"` (the default), `"ask"` (the checker, then the person, for every command) or `"checker"`
+(the checker alone).
+
+*Why:* the agent should be able to work on the user's machine as it would if pi ran there, and
+the work of a coding agent is commands: builds, tests, git. An allowlist of program names did not
+bound that: a build tool runs whatever the build says, and a list long enough to be useful is a
+list of interpreters. So the bound is stated as what it is, a judgement of the whole command at
+the moment it is asked for, and the user chooses whether a person confirms each one. Without that
+choice, asking the person stays the safer of the two that run commands; with `"checker"`, a
+command needs no person, which is what makes long work on the host possible at all.
+
+*Given up:* a command is authorised as a whole. Once it runs, what it touches is not checked again
+file by file: the roots bound its working directory, not its effects, and a script it runs is
+judged by its name and the run's recent tool calls, not its content. The checker is shown the
+whole command, and a command longer than 16 KiB is refused rather than shown in part.
+*(added on 2026-10-26)*
+
+### A command on the host gets oillamp's environment, without oillamp's secrets
+
+A command runs with the environment oillamp was started with, as one typed into the user's
+terminal would, minus the variables that hold the model key and the text an application handed
+over for the checker's requirements and the agent's instructions. `env -u` removes them before
+bash starts.
+
+*Why:* a command without `PATH`, `HOME` and the user's toolchain settings could not build
+anything. The key is the checker's, and the requirements are what the checker judges by; the
+agent is not the checker and must not read either.
+
+*Given up:* anything else the user keeps in their environment, a command gets, as it would in
+their terminal. The requirements are where to say which of those it must not print or send.
+*(added on 2026-10-26)*
 
 ---
 

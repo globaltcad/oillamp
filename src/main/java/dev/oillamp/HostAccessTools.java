@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -25,16 +26,13 @@ import sprouts.Tuple;
 /// this class, and nowhere else.
 ///
 /// Only [HostAccess] calls it, and only after the tier, the roots and the checker allowed it.
-/// Everything here is bounded: a file read is cut at the lamp's `max_read_bytes`, a program is
-/// given a timeout and no shell, and a copy out never runs what it copies.
+/// Everything here is bounded: a file read is cut at the lamp's `max_read_bytes`, a command is
+/// given a timeout and stopped with everything it started, and a copy out never runs what it
+/// copies.
 ///
 /// The desktop tools go through the user's own desktop programs, found on `PATH`; a missing one
 /// is a refusal with its name in it, not a silent nothing.
 final class HostAccessTools {
-
-    /// How long a program the agent runs on the host may take. A tool call that hangs forever
-    /// would hold the agent's run until its own timeout, with no sign why.
-    static final java.time.Duration PROGRAM_PATIENCE = java.time.Duration.ofMinutes(5);
 
     /// The largest file `host_copy_out` copies. The whole file is held in memory on its way out.
     static final int LARGEST_COPY = 64 * 1024 * 1024;
@@ -52,20 +50,25 @@ final class HostAccessTools {
     private final Machine machine;
     private final LampConfig.HostAccess access;
     private final Path agentHome;
+    private final Tuple<String> withheld;
 
     /// @param agentHome the agent's home as it is on the host, the lamp's agent directory
-    HostAccessTools(Machine machine, LampConfig.HostAccess access, Path agentHome) {
+    /// @param withheld  the variables of oillamp's environment a command does not get
+    HostAccessTools(Machine machine, LampConfig.HostAccess access, Path agentHome, Tuple<String> withheld) {
         this.machine = machine;
         this.access = access;
         this.agentHome = agentHome;
+        this.withheld = withheld;
     }
 
     /// Does the work, and returns what the agent is told.
     ///
-    /// @param resolved the paths, in the order the tool named them
-    Result<String> perform(HostTool.Call call, Tuple<HostPaths.ResolvedPath> resolved)
+    /// @param resolved  the paths, in the order the tool named them
+    /// @param withdrawn completes when the sandbox stops waiting; a command still running then
+    ///                  is stopped
+    Result<String> perform(HostTool tool, Tuple<HostPaths.ResolvedPath> resolved, CompletableFuture<Void> withdrawn)
             throws IOException, InterruptedException {
-        return switch (call.tool()) {
+        return switch (tool) {
             case HostTool.ListDir _ -> Result.ok(list(resolved.first()));
             case HostTool.Stat _ -> Result.ok(stat(resolved.first()));
             case HostTool.ReadFile read -> Result.ok(read(resolved.first(), read.offset(), effectiveLimit(read.maxBytes())));
@@ -79,10 +82,11 @@ final class HostAccessTools {
             }
             case HostTool.WriteFile write -> write("host_write_file", resolved.first(),
                     write.text().getBytes(StandardCharsets.UTF_8));
+            case HostTool.EditFile edit -> edit(resolved.first(), edit.oldText(), edit.newText());
             case HostTool.ClipboardWrite _ -> clipboardWrite();
             case HostTool.Notify notify -> notifyUser(notify.title(), notify.text());
             case HostTool.CopyOut copy -> copyOut(copy.from(), resolved.first());
-            case HostTool.Run run -> run(run.executable(), run.argv());
+            case HostTool.Bash bash -> bash(bash, resolved.first(), withdrawn);
         };
     }
 
@@ -253,6 +257,38 @@ final class HostAccessTools {
         return Result.ok("wrote " + content.length + " bytes to " + file);
     }
 
+    /// The largest file `host_edit_file` edits. The whole file is held in memory while it is.
+    static final int LARGEST_EDIT = 8 * 1024 * 1024;
+
+    /// Replaces the one place `oldText` occurs in a text file with `newText`, and writes the file
+    /// as [#write] does. No match, or more than one, changes nothing: a replacement in the wrong
+    /// one of two places is worse than none, and the agent can give more of the text around it.
+    private static Result<String> edit(HostPaths.ResolvedPath path, String oldText, String newText) throws IOException {
+        Path file = path.hostPath();
+        if (!Files.isRegularFile(file))
+            return Result.err(HostAccessProblems.failed("host_edit_file", path.asked() + " is not a file"));
+        if (Files.size(file) > LARGEST_EDIT)
+            return Result.err(HostAccessProblems.failed("host_edit_file", path.asked() + " is larger than "
+                    + LARGEST_EDIT / (1024 * 1024) + " MiB"));
+        byte[] bytes = Files.readAllBytes(file);
+        if (isBinary(java.util.Arrays.copyOf(bytes, Math.min(bytes.length, SNIFFED))))
+            return Result.err(HostAccessProblems.failed("host_edit_file", path.asked() + " is not text"));
+        String text = new String(bytes, StandardCharsets.UTF_8);
+        int first = text.indexOf(oldText);
+        if (first < 0)
+            return Result.err(HostAccessProblems.failed("host_edit_file",
+                    "old_text does not occur in " + path.asked() + "; read the file again and copy it exactly"));
+        if (text.indexOf(oldText, first + oldText.length()) >= 0)
+            return Result.err(HostAccessProblems.failed("host_edit_file",
+                    "old_text occurs more than once in " + path.asked() + "; include more of the lines around it"));
+        String edited = text.substring(0, first) + newText + text.substring(first + oldText.length());
+        Result<String> written = write("host_edit_file", path, edited.getBytes(StandardCharsets.UTF_8));
+        return written instanceof Result.Ok<String>
+                ? Result.ok("replaced " + oldText.length() + " characters with " + newText.length()
+                            + " in " + file + ", at character " + first)
+                : written;
+    }
+
     /// Copies a file out of the agent's home, read without following a link the agent may have
     /// put there, and writes it as data: never executable.
     private Result<String> copyOut(String from, HostPaths.ResolvedPath to) throws IOException {
@@ -309,25 +345,73 @@ final class HostAccessTools {
         return Result.ok("opened " + what + " on the user's desktop");
     }
 
-    // ─── running a program ───────────────────────────────────────────────────────────────
+    // ─── running a command ───────────────────────────────────────────────────────────────
 
-    /// Runs one of the programs the lamp names, with an argument list and never a shell. The
-    /// executable is found on `PATH`, and its real path is checked, so a `PATH` the agent could
-    /// not change still cannot be fooled by a directory it could.
-    private Result<String> run(String executable, Tuple<String> argv) throws IOException, InterruptedException {
-        if (!access.executables().contains(executable))
-            return Result.err(HostAccessProblems.failed("host_run", executable + " is not in host_access.executables"));
-        Optional<Path> found = machine.locateExecutable(executable);
-        if (found.isEmpty()) return Result.err(HostAccessProblems.failed("host_run", executable + " is not on PATH"));
-        Path real = found.get().toRealPath();
-        Machine.Outcome outcome = machine.run(new Machine.Command(
-                Tuple.of(String.class).add(real.toString()).addAll(argv),
-                Association.between(String.class, String.class), Optional.empty(),
-                PROGRAM_PATIENCE, executable, false));
-        StringBuilder out = new StringBuilder();
-        out.append("exit status ").append(outcome.exitCode()).append('\n');
-        if (!outcome.output().isBlank()) out.append("stdout:\n").append(outcome.output()).append('\n');
-        if (!outcome.errorOutput().isBlank()) out.append("stderr:\n").append(outcome.errorOutput());
-        return Result.ok(out.toString());
+    /// The most of each of a command's outputs the agent is handed. The end is kept: that is
+    /// where a build or a test run says how it went.
+    static final int OUTPUT_KEPT = 32 * 1024;
+
+    /// Runs a command with bash, in the directory the agent named, for at most the time it gave.
+    ///
+    /// The command is one argument to `bash -c`, never pasted into another command line, so
+    /// nothing in it is read by anything but bash. It inherits oillamp's environment, as a
+    /// command typed in the user's terminal would, except for the variables that hold oillamp's
+    /// secrets, which `env -u` removes before bash starts. Its standard input is empty. When its
+    /// time is up, or the request is withdrawn, it is stopped with everything it started.
+    ///
+    /// The command runs on a thread of its own, which does nothing but wait for it, so that a
+    /// withdrawal can interrupt that thread: [Machine#run] stops the command when its thread is
+    /// interrupted. The request's own thread is never interrupted; it goes on to write the log
+    /// and the session's events.
+    ///
+    /// A command that exits with a status other than 0 has run: that is an answer, not a failure.
+    private Result<String> bash(HostTool.Bash bash, HostPaths.ResolvedPath cwd, CompletableFuture<Void> withdrawn)
+            throws InterruptedException {
+        if (!Files.isDirectory(cwd.hostPath()))
+            return Result.err(HostAccessProblems.failed("host_bash", cwd.asked() + " is not a directory"));
+        if (machine.locateExecutable("bash").isEmpty())
+            return Result.err(HostAccessProblems.failed("host_bash", "bash is not on PATH"));
+        Tuple<String> argv = Tuple.of(String.class, "env");
+        for (String variable : withheld) argv = argv.add("-u").add(variable);
+        argv = argv.addAll(Tuple.of(String.class, "bash", "-c", bash.command()));
+        Machine.Command command = new Machine.Command(argv, Association.between(String.class, String.class),
+                Optional.of(cwd.hostPath()), bash.timeout(), "host_bash", false);
+        CompletableFuture<Machine.Outcome> ran = new CompletableFuture<>();
+        Thread running = Thread.ofVirtual().name("oillamp-host-bash").start(() -> {
+            try {
+                ran.complete(machine.run(command));
+            } catch (RuntimeException failed) {
+                ran.completeExceptionally(failed);
+            }
+        });
+        var unused = withdrawn.thenRun(running::interrupt);
+        running.join();
+        return answerOf(ran.join(), bash.timeout(), withdrawn.isDone());
+    }
+
+    /// What the agent is told about a command, by how it ended. A command stopped before its end
+    /// while the request was withdrawn was stopped for that, not for its time. One that finished
+    /// is reported as finished, also when the withdrawal came a moment after.
+    static Result<String> answerOf(Machine.Outcome outcome, java.time.Duration timeout, boolean withdrawn) {
+        return switch (outcome) {
+            case Machine.Outcome.Finished finished -> Result.ok("exit status " + finished.exitCode() + "\n"
+                    + section("stdout", finished.standardOutput()) + section("stderr", finished.standardError()));
+            case Machine.Outcome.TimedOut _ when withdrawn -> Result.err(HostAccessProblems.failed("host_bash",
+                    "the sandbox withdrew the request while the command ran, and it was stopped with everything it started"));
+            case Machine.Outcome.TimedOut timedOut -> Result.ok("timed out: it was given " + timeout.toSeconds()
+                    + " s, and was stopped with everything it started\n"
+                    + section("stdout so far", timedOut.standardOutputSoFar()));
+            case Machine.Outcome.NotFound notFound -> Result.err(HostAccessProblems.failed("host_bash",
+                    notFound.executable() + " is not on PATH"));
+        };
+    }
+
+    /// One of a command's outputs, under its name, or nothing when it printed nothing there.
+    private static String section(String name, String output) {
+        if (output.isBlank()) return "";
+        String kept = output.length() <= OUTPUT_KEPT ? output
+                : "[… " + (output.length() - OUTPUT_KEPT) + " characters before this were cut]\n"
+                  + output.substring(output.length() - OUTPUT_KEPT);
+        return name + ":\n" + kept + (kept.endsWith("\n") ? "" : "\n");
     }
 }
