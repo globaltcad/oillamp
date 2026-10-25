@@ -113,7 +113,10 @@ with at most 8 billion parameters working on each word; otherwise `qwen3:1.7b`.
 | each genie's jobs | `.oillamp/schedule.json` in its lamp | oillamp; Genies changes it through `LampDirectory` |
 | each job's past runs: which job, how it ended, what the genie said last, its conversation | the lamp's history, as `run` snapshots | oillamp |
 | the moments a genie's home was saved at, which it can go back to | the lamp's history, as snapshots | oillamp; Genies saves and goes back through `LampDirectory` |
+| the branches of a genie's history, each with a home of its own, and the one it lives on | the lamp's history | oillamp; the history page starts, moves to and deletes them through `LampDirectory` |
+| which branch's line the history page shows, and which moment is picked | `History.line` and `History.picked`, in the window's state, while Genies runs | Genies |
 | when oillamp saves a genie's home by itself: as it wakes, after it sleeps, before and after each run | `[autosave]` in its lamp's `oillamp.toml` | oillamp; the history page changes it through `LampDirectory.autosave`, only while the genie sleeps |
+| how far a genie's history may grow beyond its first moment | `[history].max_growth_gb` in its lamp's `oillamp.toml` | oillamp; the history page changes it through `LampDirectory.historyMaxGrowthGb`, only while the genie sleeps |
 
 `~/.local/share` is `$XDG_DATA_HOME` when that is set. The window itself keeps nothing: what it
 shows is one value, `GeniesState`, rebuilt from the files above when Genies starts. All genies
@@ -171,7 +174,9 @@ changes only the tree.
 **Stop** cancels the run that answers the chat, with `Lamp.cancel`.
 
 **Sleeping** closes the lamp. The engine stops the container and exits. The
-genie's home stays, with the conversation in it. A lamp Genies joined (see below) is ended with
+genie's home stays, with the conversation in it. Each lamp's events are heard only until it is put out: its last ones,
+such as its session stopping, can arrive after the genie woke again in a new lamp, and must not
+break it. A lamp Genies joined (see below) is ended with
 `Lamp.stop`, which is `oillamp stop`.
 
 **Closing Genies** with genies awake or waking asks: *Put to sleep*, *Keep running* or *Cancel*.
@@ -399,26 +404,95 @@ changed makes nothing. Each save is a moment the genie can go back to. Its sched
 one: it is kept in the lamp, outside the home, and stays as it is.
 
 **The page** lists the moments newest first, day by day, under "now", on a rail like the
-schedule's week (`History`, pure): what each was, such as "Answered: Plot the sales figures",
-"before the big refactor" or "Woke up", and, after a run, what the genie said last. A run is titled
-by its conversation, or a job's run by its job. The newest 40 show; a button shows the rest.
+schedule's week: what each was, such as "Answered: Plot the sales figures", "before the big
+refactor" or "Woke up", and, after a run, what the genie said last. A run is titled by its
+conversation, or a job's run by its job. The newest 40 show; a button shows the rest.
+The lines scroll in an area of their own, at most three fifths of the page's height (never less
+than 260 units nor more than 900), so the header, its banners and the settings are always near,
+also in a narrow window, where the settings stand below the lines. At either end of that area,
+the mouse wheel moves the page instead, so it never stops dead. Resizing the window changes only
+that height; the rows stay as they are.
 
-**Reading it.** When the page comes on show, `HistoryKeeper` asks the lamp for its history
-(`LampDirectory.history()`), awake or asleep, and `ScheduleKeeper` for the schedule, for the jobs'
-titles. While the genie is awake, `Saved` and `RunFinished` read it again, and so does the lamp
-going out.
+**Reading it.** When the page comes on show, `HistoryKeeper` asks the lamp for its branches
+(`LampDirectory.branches()`) and every moment on them, each with the branches it is on
+(`historyOfAllBranches()`), awake or asleep, then for its settings, `autosave()` and
+`historyMaxGrowthGb()`; and `ScheduleKeeper` for the schedule, for the jobs' titles. While the
+genie is awake, `Saved`, `RunFinished` and `HistoryPruned` read it again, and so does the lamp
+going out. Each reading is numbered as it starts, and `History.readAs` takes only one newer than
+what the page shows: readings are engine processes, and one that finishes late cannot put older
+moments back. A reading equal to what is shown leaves the state equal, so nothing is drawn anew.
+Each change the keeper makes, a save, a branch started or deleted, old moments deleted, reads
+the history right after it on the keeper's thread, so a reading that waited before the change is
+never the last word. The titles, tooltips and banners are worded from the history, the
+conversations, the jobs and the day alone, not anew with each piece of an answer the genie
+writes.
+
+**Branches.** A branch is a line of moments with a home of its own, its schedule and its lamp's
+settings included. The genie lives on one branch at a time, and every save goes to it; the first
+is `main`. With one branch, the page looks as it always did. With several, a row of chips above
+the lines names them, each with its colour, and two things are told apart:
+
+- the branch the page **shows**: its chip is lit, and its line is the one with words, down the
+  middle. Clicking a chip, or a line, shows that branch (`History.showLine`). That only changes
+  what the page shows, and is kept in the window's state, not in the lamp.
+- the branch the genie **lives on**: its chip has a flame-coloured edge and the genie's lamp, the
+  "now" node is on its line, and that line, when it is not the one shown, has a faint glow of the
+  flame.
+
+Every other branch with moments of its own is a lane to the left of the shown line (`Lines`,
+pure): a thin line in the branch's colour, a dot for each of its own moments, and no words; a
+tooltip names the branch and the moment. A moment on several branches, such as one from before a
+branch was started, is drawn once: on the shown line when it is on it, and otherwise on the
+leftmost lane of a branch it is on. A lane ends by bending into the moment its branch was started
+at. The other branches' moments saved between two moments of the shown line share one row
+between them, at most 72 units tall however many there are, so the shown line keeps its rhythm. A
+branch with no moment of its own yet has no lane; the card of the moment it stands at names it.
+When the shown line folds its older moments away, what the other branches saved before those is
+left out too, and the lanes that reach there go on past the bottom. Lanes stand in alphabetical
+order. Each branch's colour follows from its name, so it keeps it as others come and go: the
+flame's brightness and saturation at one of eight hues, none nearer the flame than a ninth of the
+circle (`Palette.branch`). When another line is shown, the rows settle in from the night over
+0.22 seconds; the rows themselves are already the new ones. Rows are values, so a new moment adds
+its row and leaves the others' components as they are.
+
+"New branch…", beside "Save now…", starts a branch at the newest moment of the branch the genie
+lives on (`LampDirectory.branch(name)`); "Start a branch here…", under a picked moment, starts
+one there, on any branch (`branch(name, snapshot)`). Both work awake or asleep, and the genie
+stays where it lives. The name is checked as oillamp checks it (`History.branchNameProblem`):
+lowercase letters, digits, `-`, `_` and `.`, beginning with a letter or a digit, at most 64
+characters, and not taken; the dialog asks again, saying what is wrong, until it is.
+
+**Moving the genie** to the branch shown is a button of its own under the chips, "Move Jafar to
+rust-rewrite…", offered only while the genie sleeps. After asking, `Genies.switchBranch` has the
+runner call `LampDirectory.switchTo`; oillamp saves what changed on the branch it leaves first.
+The genie's home, its lamp's file and its schedule are the other branch's then, so the
+conversations, the history, its settings, the schedule and the host access are read again, and
+the page follows the genie's branch again.
+
+**Deleting a branch.** "Delete rust-rewrite…" under the chips, for a branch the genie does not live
+on, first asks the lamp what would go (`wouldDeleteBranch`), and a banner says it: how many
+moments are on that branch alone. Only its Delete button calls `deleteBranch`.
 
 **Saving by hand.** "Save now…", on the page and in the genie's menu, asks for a few words to
 remember the moment by, which may be left out, and calls `LampDirectory.save`. The page picks the
 new moment, and the chat says it was saved; when nothing changed, both say so instead.
 
 **Going back.** Clicking a moment opens it, with "Go back to this moment…" and, after a run whose
-conversation is still there, a link that opens it in the chat. After asking, `Genies.goBack` has
-the genie's runner put its lamp out, since oillamp restores no lamp that is lit, and call
-`LampDirectory.restore`. oillamp saves the home first, if it changed, so nothing is lost. The
-conversations are read again; the chat stays in its conversation if it is still there, and goes
-to the most recent one otherwise. A genie that was awake wakes again. Going back is not offered
-while the genie wakes or works, or a job's run is going.
+conversation is still there, a link that opens it in the chat. Going back works only to a moment
+of the branch the genie lives on, as oillamp's restore does; on another branch's moment, the card
+offers to start a branch there instead. After asking, `Genies.goBack` has the genie's runner put
+its lamp out, since oillamp restores no lamp that is lit, and call `LampDirectory.restore`.
+oillamp saves the home first, if it changed, so nothing is lost. The conversations are read
+again; the chat stays in its conversation if it is still there, and goes to the most recent one
+otherwise. A genie that was awake wakes again. Going back is not offered while the genie wakes or
+works, or a job's run is going.
+
+**Resetting.** "Reset to here…", on a picked moment of the branch the genie lives on, while it
+sleeps, asks the lamp first (`wouldReset`), and a banner with a red edge says what it answered:
+how many moments would leave the branch, and whether changes no moment holds would be lost; that
+a reset keeps no copy and cannot be undone; and that going back keeps how it is now. It offers
+"Go back instead" beside the reset. Only "Reset main" calls `reset`, which reads the genie's home
+again as moving it does.
 
 **Undoing.** While going back is the last thing that changed the genie, a banner above the moments
 says where it went, with Undo: going back to the moment that was the newest before. Waking,
@@ -426,6 +500,21 @@ sleeping and a save before a run do not count; an answer or a save by hand ends 
 Undoing is itself a going back: it adds a moment "Undid going back to …", and the banner does not
 come back for it, since both ways are now moments to go back to. A going back counts as an undo
 when it goes to the moment the newest going back left.
+
+**How large it may grow.** Beside the moments, the page says how far the history may grow beyond
+its first moment, on all branches together, as `[history].max_growth_gb` says (2 GB unless the
+lamp's file says otherwise), and offers 0.5, 1, 2, 5 and 10 GB and "Never delete", which write it
+with `historyMaxGrowthGb(gb)` while the genie sleeps. Past that size, each save deletes the
+moments saved longest ago; each branch keeps its newest. When oillamp did, a `HistoryPruned`
+event, from the lamp's session or from a save Genies asked for, puts a quiet line under the sizes:
+how many moments went, what that freed, and how much the history takes of what it may.
+"Tidy up now…", while the genie sleeps, asks `wouldPruneHistory()`, says when nothing would go,
+and otherwise asks in a banner before `pruneHistory()` deletes.
+
+Every change that throws something away is asked about the same way: the lamp's preview becomes
+`History.plan`, the banner shows it, and the change waits for its button. The numbers hold only
+for the history the lamp counted them in, so a reading with other moments or branches drops the
+banner, and the user clicks the button again to see what the change would throw away now.
 
 ## Host access
 
@@ -604,10 +693,10 @@ painted without smoothing, which does nothing for squares on whole pixels but sl
 
 | Package | What is in it | Touches the outside world |
 |---|---|---|
-| `dev.gui.model` | `GeniesState`, `Genie`, `Transcript`, `Entry`, `Settings`, `OllamaSetup` and `Hardware` for the simple way to a model, `Handout`, `Conversations`, `Conversation` and `Talk` for the tree, `Fold` for the trees and the list of genies above a narrow window's genie, `Schedule`, `JobDraft`, `Recurrence`, `Timeline` and `DateWordingUtil` for the schedule, and `History` for the history: records with withers, every change a pure method | no |
+| `dev.gui.model` | `GeniesState`, `Genie`, `Transcript`, `Entry`, `Settings`, `OllamaSetup` and `Hardware` for the simple way to a model, `Handout`, `Conversations`, `Conversation` and `Talk` for the tree, `Fold` for the trees and the list of genies above a narrow window's genie, `Schedule`, `JobDraft`, `Recurrence`, `Timeline` and `DateWordingUtil` for the schedule, and `History` and `Lines` for the history: records with withers, every change a pure method | no |
 | `dev.gui.pi` | `PiEvent` (what the chat is told) | no |
 | `dev.gui.desktop` | `RfbConnection`, `X11KeysymUtil`, `Desktop` (its socket and its own size) | `RfbConnection` only |
-| `dev.gui.genie` | `GenieRunner` (one genie's life), `LampLighterImpl` (lamps through `dev.lamp`), `GenieFileTransferUtil` (files), `LampApiConversionUtil` (Lamp events and conversations as `PiEvent` values and tree rows), `GenieInstructionsUtil` (what a genie is told about living in Genies), `ScheduleKeeper` (the schedule, through the lamp), `HistoryKeeper` (the history, read and saved to through the lamp), `OllamaKeeper` (Ollama found, installed, started, and a model readied), `Shelf` (what is kept on disk) | yes |
+| `dev.gui.genie` | `GenieRunner` (one genie's life), `LampLighterImpl` (lamps through `dev.lamp`), `GenieFileTransferUtil` (files), `LampApiConversionUtil` (Lamp events and conversations as `PiEvent` values and tree rows), `GenieInstructionsUtil` (what a genie is told about living in Genies), `ScheduleKeeper` (the schedule, through the lamp), `HistoryKeeper` (the history and its branches, read, saved to and changed through the lamp), `OllamaKeeper` (Ollama found, installed, started, and a model readied), `Shelf` (what is kept on disk) | yes |
 | `dev.gui.view` | `GeniesView` (the window, bound to `Var<GeniesState>` through lenses), `SchedulePage`, `HistoryPage`, `SettingsPage`, `DesktopScreen`, the look | Swing only |
 | `dev.gui` | `Main` (the entry point, which gives the app its window), `Genies` (the app, as the window calls it) and `GeniesBackend` (which it is) | ties it together |
 
@@ -679,7 +768,8 @@ it, so `apt` installs it along.
 | `KeepingAGenieAliveSpec` | a genie's life through the Lamp API, from the model, instructions and key its lamp is lit with, with oillamp's engine in the test's JVM on a simulated machine and a stand-in pi that writes conversations as pi does; `lamp show` opening its desktop |
 | `PlanningAGeniesWeekSpec` | the ways a job repeats and their cron expressions, the editor's checks and sentence, and the timeline |
 | `KeepingAGeniesScheduleSpec` | the schedule read and changed through the lamp, asleep and awake, and a job's run followed on the page, against the engine in the test's JVM |
-| `KeepingAGeniesHistorySpec` | the history read and saved to, going back and undoing it, against the engine in the test's JVM; how a long history folds, and when undo is offered |
+| `KeepingAGeniesHistorySpec` | the history read and saved to, going back and undoing it, branches started, shown, moved to and deleted, a reset asked first, and the history's size read, changed and kept, against the engine in the test's JVM; how a long history folds, and when undo is offered |
+| `DrawingAGeniesBranchesSpec` | how the branches are drawn as lines, which branch is shown, readings that finish out of order, branch names, and the branches' colours |
 | `RunningARealGenieSpec` (spike) | the same with a real lamp, real pi, real wayvnc and, with a key, the real model |
 | `UsingGeniesForRealSpec` (spike) | the app's actions as the buttons call them, against real lamps, and with Ollama when it has the spike's model |
 
@@ -695,4 +785,4 @@ it, so `apt` installs it along.
 - A job's run cannot be followed live in the chat; its conversation opens there once it ended.
 - The timeline looks one week ahead and one week back.
 - Going back brings the whole home back; a single file cannot be taken from a moment. A moment
-  cannot be renamed or deleted from Genies.
+  cannot be renamed or deleted from Genies, nor a branch renamed.
