@@ -12,8 +12,8 @@ import java.util.regex.Pattern;
 
 /// Changes a few keys of one table in the text of a lamp's `oillamp.toml`, and nothing else:
 /// every other line, the user's comments among them, stays as it was. What
-/// `oillamp host-access <dir> on|off` and `oillamp history <dir> autosave ...` write, for an
-/// application's settings page.
+/// `oillamp host-access <dir> on|off`, `oillamp history <dir> autosave ...` and
+/// `oillamp history <dir> max-growth <gb>` write, for an application's settings page.
 ///
 /// This edits lines, it does not parse TOML. So the caller reads the result back with
 /// [ConfigLoadingUtil] and keeps it only when it says exactly what was asked; see

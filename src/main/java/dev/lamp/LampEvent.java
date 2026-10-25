@@ -290,6 +290,12 @@ public sealed interface LampEvent {
     record AutosaveSettings(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun)
             implements LampEvent {}
 
+    /// The value of `max_growth_gb` under `[history]` in a lamp's `oillamp.toml`: how far, in GB of
+    /// 1024³ bytes, the history may grow beyond its first snapshot, on all branches together,
+    /// before a save deletes the snapshots saved longest ago. Zero never deletes a snapshot.
+    /// Reported by `oillamp history <dir> max-growth`, after reading it or after writing it.
+    record HistoryGrowthLimit(double maxGrowthGb)        implements LampEvent {}
+
     /// Something went wrong but oillamp carried on.
     record Warning(LampProblem problem)                 implements LampEvent {}
     /// Something went wrong and oillamp stopped.

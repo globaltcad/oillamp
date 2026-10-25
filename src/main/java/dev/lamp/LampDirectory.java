@@ -1,6 +1,7 @@
 package dev.lamp;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -302,8 +303,8 @@ public final class LampDirectory {
                 LampEvent.HistoryOfAllBranches.class).snapshots().toList());
     }
 
-    /// Previews retention using `[history].max_growth_gb`, how far the history may grow beyond its first snapshot.
-    /// Empty when nothing would be pruned. The sandbox must be stopped.
+    /// Previews retention using `[history].max_growth_gb`, how far the history may grow beyond its
+    /// first snapshot, as [#historyMaxGrowthGb()] reads it. Empty when nothing would be pruned. The sandbox must be stopped.
     public Optional<LampEvent.HistoryPrunePlanned> wouldPruneHistory()
             throws IOException, InterruptedException, LampFailedException {
         Lamp.Ran ran = Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "prune");
@@ -518,6 +519,44 @@ public final class LampDirectory {
         return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "autosave",
                 "startup", Lamp.onOff(wanted.startup()), "shutdown", Lamp.onOff(wanted.shutdown()),
                 "before-run", Lamp.onOff(wanted.beforeRun()), "after-run", Lamp.onOff(wanted.afterRun())));
+    }
+
+    /// Reads how far this lamp's history may grow beyond its first snapshot, its baseline, in GB
+    /// of 1024³ bytes, on all branches together: the value of `max_growth_gb` in the `[history]`
+    /// table of its `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads
+    /// it. Past it, each save deletes the snapshots saved longest ago; zero never deletes one.
+    ///
+    /// Runs `oillamp history <dir> max-growth` as a short-lived engine process. It only reads the
+    /// file, so it works whether or not a session is running.
+    ///
+    /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
+    ///                     valid; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public double historyMaxGrowthGb() throws IOException, InterruptedException, LampFailedException {
+        return Lamp.maxGrowthOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "max-growth"));
+    }
+
+    /// Sets how far this lamp's history may grow beyond its first snapshot, in GB: the value of
+    /// `max_growth_gb` in the `[history]` table of its `oillamp.toml`. Returns it as the file now
+    /// has it. The next save deletes what the new size leaves no room for, and so does
+    /// [#pruneHistory]; [#wouldPruneHistory] says what that would be.
+    ///
+    /// Runs `oillamp history <dir> max-growth <gb>` as a short-lived engine process. The engine
+    /// replaces only that key and keeps every other line of the file, comments included.
+    ///
+    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+    /// reads the file only when it starts.
+    ///
+    /// @param gb from 0 to 10000; 0 never deletes a snapshot
+    /// @throws IllegalArgumentException when `gb` is outside that range, which would only fail later
+    /// @throws LampFailedException when the sandbox is running, or the lamp's file is not valid; the
+    ///                     problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public double historyMaxGrowthGb(double gb) throws IOException, InterruptedException, LampFailedException {
+        if (!Double.isFinite(gb) || gb < 0 || gb > 10_000)
+            throw new IllegalArgumentException("the history's growth is from 0 to 10000 GB, not " + gb);
+        return Lamp.maxGrowthOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "max-growth",
+                BigDecimal.valueOf(gb).stripTrailingZeros().toPlainString()));
     }
 
     /// This lamp's schedule: the jobs that wake the agent while a session runs.

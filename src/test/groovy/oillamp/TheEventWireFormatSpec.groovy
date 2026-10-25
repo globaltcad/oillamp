@@ -168,6 +168,8 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.HostAccessAsked('run-12', 'host_run', 'run `inkscape report.svg`, in ~/Documents'),
             new LampEvent.HostAccessSettings(true, '{"may_read": ["~/Documents"]}\nAnd nothing private.'),
             new LampEvent.AutosaveSettings(false, true, true, false),
+            new LampEvent.HistoryGrowthLimit(0.00003),
+            new LampEvent.HistoryGrowthLimit(2),
             new LampEvent.Warning(PROBLEM.withFix(LampProblem.Fix.of('another'))),
             new LampEvent.Failure(new LampProblem(new LampProblem.Code('OIL-LOCK-001'), LampProblem.Severity.ERROR,
                     'busy', '', '', Tuple.of(LampProblem.Evidence), Tuple.of(LampProblem.Fix), Optional.empty())),

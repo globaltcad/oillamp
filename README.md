@@ -184,10 +184,13 @@ whichever branch they are, until it fits again. The baseline is measured once, a
 first snapshot on disk, and stays the same after that snapshot itself is deleted. GB means 1024³
 bytes. Each branch's newest state is protected even if those states exceed the target.
 Old snapshots and branch forks may disappear, but retained ids and contents stay unchanged.
+`oillamp history <dir> max-growth` says what the lamp's file has, and `max-growth 0.5` writes a new
+size there, changing nothing else in the file, with the session stopped; the next save prunes to it.
 `oillamp history <dir> prune` previews cleanup; `prune --yes` applies it with the session stopped.
 Applications receive `LampEvent.HistoryPruned` with removed snapshots and branches, retained
 boundaries, reclaimed bytes, remaining bytes and the target. `LampDirectory.wouldPruneHistory`
-and `pruneHistory` expose manual cleanup.
+and `pruneHistory` expose manual cleanup, and `LampDirectory.historyMaxGrowthGb` reads and writes
+the size.
 
 A lamp can also keep several states side by side, as **branches**: let the agent try a Rust
 rewrite on one, keep the original on `main`, and go back and forth. Each branch has its own home,
@@ -316,6 +319,8 @@ oillamp history <dir> branch <name> [<snapshot>]     # start a branch; you stay 
 oillamp history <dir> switch <name>       # go to a branch (stop the session first)
 oillamp history <dir> reset <snapshot> [--yes]       # move the branch back, dropping what came after
 oillamp history <dir> branch --delete <name> [--yes] # delete a branch
+oillamp history <dir> prune [--yes]       # delete old snapshots to fit max_growth_gb (stop first)
+oillamp history <dir> max-growth [<gb>]   # how far the history may grow beyond its first snapshot
 oillamp schedule <dir> [add ...] # list or change the jobs that wake the agent
 oillamp ask <dir> "<prompt>"     # wake the agent in a running session, print its answer
 oillamp cancel <dir> [<run>]     # stop the agent's run

@@ -69,6 +69,9 @@ sealed interface Command {
             /// what the lamp's file has.
             record Autosave(Optional<Boolean> startup, Optional<Boolean> shutdown,
                             Optional<Boolean> beforeRun, Optional<Boolean> afterRun) implements History.Action {}
+            /// The new `[history].max_growth_gb`, in GB; without one, the action only says what
+            /// the lamp's file has.
+            record MaxGrowth(Optional<Double> gb) implements History.Action {}
         }
     }
     record Schedule(Path lamp, Schedule.Action action, Context.Options options) implements Command {
@@ -327,7 +330,7 @@ sealed interface Command {
                 if (action.isPresent() && !HISTORY_ACTIONS.contains(action.get()))
                     yield Result.err(ProblemCatalogUtil.usage("'" + action.get() + "' is not something "
                             + "`oillamp history <dir>` does; it does list, save, restore, autosave, branches, "
-                            + "branch, switch, reset and prune", usageOf("history")));
+                            + "branch, switch, reset, prune and max-growth", usageOf("history")));
                 if (message.isPresent() && !action.equals(Optional.of("save")))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "--message only goes with `oillamp history <dir> save`", usageOf("history <dir> save")));
@@ -392,6 +395,7 @@ sealed interface Command {
                         yield Result.ok(new History(lamp, new History.Action.CreateBranch(after.first(),
                                 after.size() > 1 ? Optional.of(after.get(1)) : Optional.empty()), options));
                     }
+                    case "max-growth" -> maxGrowth(lamp, after, options);
                     default -> autosave(lamp, after, options);
                 };
             }
@@ -501,6 +505,22 @@ sealed interface Command {
                 options));
     }
 
+    /// `oillamp history <dir> max-growth [<gb>]`, from the words after `max-growth`: a size in GB
+    /// from 0 to 10000, written as digits, with a point and more digits if need be.
+    private static Result<Command> maxGrowth(Path lamp, Tuple<String> words, Context.Options options) {
+        String usage = usageOf("history <dir> max-growth");
+        if (words.isEmpty())
+            return Result.ok(new History(lamp, new History.Action.MaxGrowth(Optional.empty()), options));
+        if (words.size() > 1)
+            return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> max-growth` takes one size, but was also given '"
+                    + words.get(1) + "'", usage));
+        String written = words.first();
+        if (!written.matches("[0-9]+(\\.[0-9]+)?") || Double.parseDouble(written) > LampConfig.History.MOST_GB)
+            return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> max-growth` \"" + written
+                    + "\": expected a size in GB from 0 to 10000, such as 2 or 0.5; 0 never deletes a snapshot", usage));
+        return Result.ok(new History(lamp, new History.Action.MaxGrowth(Optional.of(Double.parseDouble(written))), options));
+    }
+
     /// The options each command takes, besides `--verbose`, `--debug` and `--no-color`, which
     /// every command takes. `doctor` and `config` change nothing anyway, so they accept the two
     /// options that promise that.
@@ -543,7 +563,8 @@ sealed interface Command {
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
     ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave",
-                                                   "branches", "branch", "switch", "reset", "prune");
+                                                   "branches", "branch", "switch", "reset", "prune",
+                                                   "max-growth");
 
     /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
@@ -696,6 +717,11 @@ sealed interface Command {
                     this by itself. The setting is how far the history may grow beyond its
                     first snapshot, on all branches together. The snapshots saved longest ago
                     go first; every branch's newest snapshot is kept.
+              history <dir> max-growth [<gb>]
+                    Say how far the history may grow beyond its first snapshot, in GB:
+                    [history].max_growth_gb in oillamp.toml. With a size from 0 to 10000,
+                    write it there, and change nothing else in the file; 0 never deletes a
+                    snapshot. Writing needs the session to be stopped.
               schedule <dir> [add | remove <job> | enable <job> | disable <job> | pause | resume]
                     List the jobs that wake the agent while a session runs, or change them.
                     Jobs run only in a session started with --enable-scheduling, or with

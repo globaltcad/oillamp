@@ -354,7 +354,7 @@ class UsingTheCommandLineSpec extends Specification {
 
         and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
             !complete(script, 'oillamp', 'history', '').contains('save')
-            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset', 'prune']
+            complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset', 'prune', 'max-growth']
             complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
@@ -768,11 +768,11 @@ class UsingTheCommandLineSpec extends Specification {
     def 'Oillamp refuses a word after `history <dir>` that is not one of its actions: oillamp #line'() {
         reportInfo """
             Let's consider a person who types `oillamp history <dir> tidy`, expecting a clean-up
-            that does not exist. After the lamp, `oillamp history <dir>` knows eight actions:
-            `list`, `save`, `restore`, `autosave`, `branches`, `branch`, `switch` and `reset`. Any
-            other word is a usage error that names those eight and shows how each is written, and
-            oillamp reports it before it looks for the lamp, so a typo is reported as a typo and
-            not as a lamp that is missing.
+            that does not exist. After the lamp, `oillamp history <dir>` knows ten actions:
+            `list`, `save`, `restore`, `autosave`, `branches`, `branch`, `switch`, `reset`, `prune`
+            and `max-growth`. Any other word is a usage error that names those ten and shows how
+            each is written, and oillamp reports it before it looks for the lamp, so a typo is
+            reported as a typo and not as a lamp that is missing.
         """
         when:
             var outcome = host.oillamp.run(*line.replace('LAMP', host.lampPath().toString()).split(' '))
@@ -781,12 +781,12 @@ class UsingTheCommandLineSpec extends Specification {
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains(
                     "'${word}' is not something `oillamp history <dir>` does; it does list, save, restore, autosave, "
-                     + "branches, branch, switch, reset and prune")
+                     + "branches, branch, switch, reset, prune and max-growth")
             ['oillamp history <dir> [list] [--all]', 'oillamp history <dir> save [--message <text>]',
              'oillamp history <dir> restore <snapshot>', 'oillamp history <dir> autosave [',
              'oillamp history <dir> branches', 'oillamp history <dir> branch <name> [<snapshot>]',
              'oillamp history <dir> branch --delete <name> [--yes]', 'oillamp history <dir> switch <name>',
-             'oillamp history <dir> reset <snapshot> [--yes]'].every { outcome.console().contains(it) }
+             'oillamp history <dir> reset <snapshot> [--yes]', 'oillamp history <dir> max-growth [<gb>]'].every { outcome.console().contains(it) }
 
         where:
             line                        | word

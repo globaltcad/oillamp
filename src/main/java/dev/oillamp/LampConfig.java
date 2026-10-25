@@ -62,12 +62,21 @@ record LampConfig(
                               model, git, agentTools, image, host, timeouts, schedule, hostAccess, changed, history);
     }
 
+    /// The same configuration with another `[history]` setting.
+    public LampConfig withHistory(History changed) {
+        return new LampConfig(display, viewer, terminal, recording, limits, network, forwards, llm,
+                              model, git, agentTools, image, host, timeouts, schedule, hostAccess, autosave, changed);
+    }
+
     /// How far a lamp's history may grow beyond its first snapshot, the baseline, on all branches
     /// together: `[history].max_growth_gb`. Past it, each save deletes the snapshots saved longest
     /// ago. Zero never deletes a snapshot. Like recording retention, a GB here is 1024 cubed bytes.
     public record History(double maxGrowthGb) {
+        /// The largest `max_growth_gb` a lamp can have.
+        static final double MOST_GB = 10_000;
+
         public History {
-            if (!Double.isFinite(maxGrowthGb) || maxGrowthGb < 0 || maxGrowthGb > 10_000)
+            if (!Double.isFinite(maxGrowthGb) || maxGrowthGb < 0 || maxGrowthGb > MOST_GB)
                 throw new IllegalArgumentException("history.max_growth_gb must be between 0 and 10000");
         }
         long allowanceBytes() { return (long) (maxGrowthGb * 1024L * 1024L * 1024L); }

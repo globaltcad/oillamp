@@ -133,7 +133,7 @@ final class CommandExecutionUtil {
             }
             case Command.Recordings recordings ->
                     recordings(machine, context, recordings.lamp(), recordings.open(), recordings.prune());
-            // The lamp's history. `restore`, `switch`, `reset` and writing `autosave` need the lamp
+            // The lamp's history. `restore`, `switch`, `reset` and writing `autosave` or `max-growth` need the lamp
             // stopped; the others do not.
             case Command.History history -> switch (history.action()) {
                 case Command.History.Action.ListSnapshots list -> history(machine, context, history.lamp(), list.all());
@@ -177,6 +177,7 @@ final class CommandExecutionUtil {
                     yield reset(machine, context, history.lamp(), reset.snapshot(), reset.confirmed());
                 }
                 case Command.History.Action.Autosave asked -> autosave(machine, context, history.lamp(), asked);
+                case Command.History.Action.MaxGrowth asked -> maxGrowth(machine, context, history.lamp(), asked.gb());
             };
             // The schedule, and the agent it wakes. `schedule` works with or without a session;
             // `ask` needs one, since the session is what holds the agent.
@@ -1398,6 +1399,36 @@ final class CommandExecutionUtil {
                 file -> ConfigFileEditUtil.withValues(file, "autosave", values),
                 ((Result.Ok<LampConfig>) before).value().withAutosave(wanted),
                 () -> context.sink().accept(autosaveSettings(wanted)));
+    }
+
+    /// `oillamp history <dir> max-growth [<gb>]`: how far the lamp's file lets the history grow
+    /// beyond its first snapshot, after writing `gb` into it. Only `max_growth_gb` under
+    /// `[history]` changes, as with [#autosave]. The next save prunes to the new size.
+    private static LampExitStatus maxGrowth(Machine machine, Context context, Path lampPath, Optional<Double> gb) {
+        Result<LampLayout> found = layoutOf(machine, lampPath);
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<LampConfig> before = loadConfig(machine, layout.root());
+        if (before instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampConfig.History now = ((Result.Ok<LampConfig>) before).value().history();
+        if (gb.isEmpty()) {
+            context.sink().accept(new LampEvent.HistoryGrowthLimit(now.maxGrowthGb()));
+            return LampExitStatus.SUCCESS;
+        }
+
+        LampConfig.History wanted = new LampConfig.History(gb.get());
+        java.util.SequencedMap<String, String> values = new java.util.LinkedHashMap<>();
+        values.put("max_growth_gb", java.math.BigDecimal.valueOf(gb.get()).stripTrailingZeros().toPlainString());
+        return changeConfig(machine, context, layout, "[history]",
+                file -> ConfigFileEditUtil.withValues(file, "history", values),
+                ((Result.Ok<LampConfig>) before).value().withHistory(wanted),
+                () -> context.sink().accept(new LampEvent.HistoryGrowthLimit(wanted.maxGrowthGb())));
     }
 
     private static LampEvent.AutosaveSettings autosaveSettings(LampConfig.Autosave autosave) {

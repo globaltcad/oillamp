@@ -3,6 +3,7 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampExitStatus
+import dev.lamp.LampFailedException
 import spock.lang.Specification
 import spock.lang.TempDir
 
@@ -191,6 +192,103 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
         then: 'the first snapshot is deleted, and the second keeps its id'
             applied.removed()*.snapshot()*.id() == [first.id()]
             directory.history()*.id() == [newest.id()]
+    }
+
+    def 'An application reads and changes `history.max_growth_gb` with `LampDirectory.historyMaxGrowthGb`, and only that line of `oillamp.toml` changes'() {
+        reportInfo '''
+            Let's consider an application, a program built on oillamp's Java API, whose settings page shows
+            how far a lamp's history may grow beyond its first snapshot, and lets its user change that.
+            `LampDirectory.historyMaxGrowthGb()` reads `max_growth_gb` under `[history]` in the lamp's
+            `oillamp.toml`, and `LampDirectory.historyMaxGrowthGb(0.5)` writes it, each by running
+            `oillamp history <dir> max-growth`. The file is also the user's, so the comment on that line
+            stays, and every other line too.
+
+            Writing the size deletes nothing by itself: the next save does, or `LampDirectory.pruneHistory()`,
+            so the application can first show what `LampDirectory.wouldPruneHistory()` would delete. A size
+            outside 0 to 10000 GB is refused before the engine starts, with an `IllegalArgumentException`,
+            and `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
+        '''
+        given: 'a lamp with the file a new lamp gets, saved twice with two versions of a 64 KB file'
+            def lamp = host.lampPath()
+            assert host.oillamp.run('at', lamp.toString()).succeeded()
+            def directory = Lamp.at(lamp).launchedBy(host.launcher)
+            def file = Lamp.agentHome(lamp).orElseThrow().resolve('workspace/data.bin')
+            writeFileVersion(file, 1)
+            def first = directory.save('').orElseThrow()
+            writeFileVersion(file, 2)
+            def newest = directory.save('').orElseThrow()
+            def before = Files.readString(lamp.resolve('oillamp.toml'))
+
+        expect: 'the size a new lamp gets: 2 GB beyond the first snapshot'
+            directory.historyMaxGrowthGb() == 2d
+
+        when: 'the application sets half a GB'
+            def written = directory.historyMaxGrowthGb(0.5)
+
+        then: 'the file says so on the same line, with its comment, and nothing else in it changed'
+            written == 0.5d
+            directory.historyMaxGrowthGb() == 0.5d
+            def after = Files.readString(lamp.resolve('oillamp.toml'))
+            after.contains('max_growth_gb  = 0.5        # GB beyond the first snapshot; 0 = never delete snapshots\n')
+            after.readLines().findAll { !it.startsWith('max_growth_gb') } == before.readLines().findAll { !it.startsWith('max_growth_gb') }
+
+        and: '`oillamp history <dir> max-growth` says the same'
+            def shown = host.oillamp.run('history', lamp.toString(), 'max-growth')
+            shown.succeeded()
+            shown.events().find { it instanceof LampEvent.HistoryGrowthLimit } == new LampEvent.HistoryGrowthLimit(0.5)
+            shown.console().contains('may grow 0.5 GB beyond its first snapshot')
+
+        when: 'the user sets about 32 KB on the command line, less than one more version of the file'
+            def lowered = host.oillamp.run('history', lamp.toString(), 'max-growth', '0.00003')
+
+        then: 'nothing is deleted yet, and LampDirectory.wouldPruneHistory() names the first snapshot'
+            lowered.succeeded()
+            directory.historyMaxGrowthGb() == 0.00003d
+            directory.history()*.id() == [newest.id(), first.id()]
+            directory.wouldPruneHistory().orElseThrow().removed()*.snapshot()*.id() == [first.id()]
+
+        when: 'the application asks for a size no lamp can have'
+            directory.historyMaxGrowthGb(-1)
+
+        then: 'it is refused before the engine starts, and the file keeps its size'
+            thrown(IllegalArgumentException)
+            directory.historyMaxGrowthGb() == 0.00003d
+
+        when: 'the user types a word where the size goes'
+            def wrong = host.oillamp.run('history', lamp.toString(), 'max-growth', 'lots')
+
+        then:
+            wrong.status() == LampExitStatus.USAGE
+            wrong.console().contains('expected a size in GB from 0 to 10000, such as 2 or 0.5; 0 never deletes a snapshot')
+    }
+
+    def '`LampDirectory.historyMaxGrowthGb` refuses to change the size while a session runs'() {
+        reportInfo '''
+            Let's consider an application that holds a running session of a lamp, and whose user changes
+            how far the lamp's history may grow. A session reads `oillamp.toml` only as it starts, and its
+            saves prune with the size it read then, so a new `max_growth_gb` would not reach it. So
+            `LampDirectory.historyMaxGrowthGb(1)` throws a `LampFailedException` with the status
+            `LAMP_BUSY` while the session runs, and the file stays as it was. Reading the size works all
+            the same.
+        '''
+        given: 'a lamp whose session runs'
+            def lamp = host.lampPath()
+            assert host.oillamp.run('at', lamp.toString()).succeeded()
+            def directory = Lamp.at(lamp).launchedBy(host.launcher)
+            host.machine { it.windowsStayOpenFor(Duration.ofSeconds(60)) }
+            def running = directory.start()
+            assert running.awaitRunning(Duration.ofSeconds(30))
+
+        when: 'the application sets 1 GB'
+            directory.historyMaxGrowthGb(1)
+
+        then:
+            def busy = thrown(LampFailedException)
+            busy.status() == LampExitStatus.LAMP_BUSY
+            directory.historyMaxGrowthGb() == 2d
+
+        cleanup:
+            running?.close()
     }
 
     def 'A save that changed nothing deletes nothing, and a git tag stops oillamp from deleting snapshots'() {

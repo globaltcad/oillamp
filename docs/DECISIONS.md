@@ -293,7 +293,7 @@ the mark warns about. *(added on 2026-09-29)*
 
 Saving, listing, restoring, the autosave settings and the branches are one command group:
 `oillamp history <dir>` lists the snapshots, and `save`, `restore`, `autosave`, `branches`,
-`branch`, `switch` and `reset` after the lamp do the rest. There are no top-level `save`, `restore` or `autosave` commands, and no aliases for them.
+`branch`, `switch`, `reset`, `prune` and `max-growth` after the lamp do the rest. There are no top-level `save`, `restore` or `autosave` commands, and no aliases for them.
 
 *Why:* the four act on the same history, and oillamp already groups commands by what they act on,
 with the lamp before the action: `oillamp schedule <dir> add`, `oillamp config <dir> check`. One
@@ -311,6 +311,9 @@ is measured once and stays fixed. All branches share it; their newest snapshots 
 even when those alone exceed it. The snapshots saved longest ago are removed first, whichever branch they are on. Git shallow boundaries cut ancestry
 without rewriting commits, so retained ids stay stable and branches may lose their common fork.
 Oillamp sweeps unreachable loose objects itself; `git gc` would pack them into an unreadable form.
+`oillamp history <dir> max-growth` and `LampDirectory.historyMaxGrowthGb` read and write the
+setting, and nothing else in the file, only while the lamp sleeps, as for `[autosave]`: a session
+prunes with the size it read as it started.
 
 *Why:* a large initial home should not immediately exhaust the allowance: the first snapshot is
 what the user put in the lamp, its baseline. The setting is called `max_growth_gb`, not

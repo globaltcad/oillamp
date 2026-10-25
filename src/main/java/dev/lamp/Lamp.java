@@ -215,6 +215,14 @@ public final class Lamp implements AutoCloseable {
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no autosave settings"));
     }
 
+    /// The value the engine reported as a [LampEvent.HistoryGrowthLimit].
+    static double maxGrowthOf(Ran ran) throws LampFailedException {
+        ran.orThrow();
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.HistoryGrowthLimit(double maxGrowthGb)) return maxGrowthGb;
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no history size limit"));
+    }
+
     static String onOff(boolean on) { return on ? "on" : "off"; }
 
     static LampEvent.Schedule schedule(

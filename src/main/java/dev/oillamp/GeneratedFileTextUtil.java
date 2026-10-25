@@ -225,7 +225,7 @@ final class GeneratedFileTextUtil {
                 fi
                 # `oillamp history <dir> save`: the same.
                 if [ "$before" = history ]; then
-                    COMPREPLY=($(compgen -W 'list save restore autosave branches branch switch reset prune' -- "$current"))
+                    COMPREPLY=($(compgen -W 'list save restore autosave branches branch switch reset prune max-growth' -- "$current"))
                     return
                 fi
 

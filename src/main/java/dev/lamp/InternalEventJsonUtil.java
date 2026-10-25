@@ -62,6 +62,7 @@ final class InternalEventJsonUtil {
             case String text          -> NODES.textNode(text);
             case Integer number       -> NODES.numberNode(number);
             case Long number          -> NODES.numberNode(number);
+            case Double number        -> NODES.numberNode(number);
             case Boolean flag         -> NODES.booleanNode(flag);
             case Enum<?> constant     -> NODES.textNode(constant.name());
             case Path path            -> NODES.textNode(path.toString());
@@ -125,6 +126,7 @@ final class InternalEventJsonUtil {
         if (target == String.class)   return node.asText();
         if (target == int.class)      return node.asInt();
         if (target == long.class)     return node.asLong();
+        if (target == double.class)   return node.asDouble();
         if (target == boolean.class)  return node.asBoolean();
         if (target == Path.class)     return Path.of(node.asText());
         if (target == Duration.class) return Duration.parse(node.asText());

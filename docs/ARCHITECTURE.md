@@ -308,6 +308,8 @@ delivered after releasing the history lock so listeners can refresh history sync
 `HistoryPruned` carries removed snapshots with their previous branch membership, retained boundary
 ids, bytes reclaimed, bytes remaining and the target. Over-budget protected states are reported
 with that event too. `history prune` previews without writing; `--yes` applies it while stopped.
+`history max-growth` reports the setting as `HistoryGrowthLimit`, and with a size writes only that
+key, through `ConfigFileEditUtil` as `autosave` does, refused while a session runs.
 Run change summaries whose starting snapshot is gone explicitly report that changes are unavailable.
 
 A lamp keeps snapshots of itself in `.oillamp/history/`, a git repository. A snapshot is one
@@ -1818,6 +1820,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `autosave.shutdown` | false | save the lamp as a session ends, after the sandbox has stopped | yes |
 | `autosave.before_run` | true | save the lamp just before a run wakes the agent | yes |
 | `autosave.after_run` | true | save the lamp as a run ends; the next job's prompt reads the runs from these | yes |
+| `history.max_growth_gb` | 2 | how far the history may grow beyond its first snapshot, in GB, on all branches together; 0 never deletes a snapshot (0–10000) | yes |
 
 `oillamp config <dir> check` validates, `show-effective` prints a summary of the merged result,
 `path` prints the file's path. `check` and `show-effective` merge the global file and the lamp's,
