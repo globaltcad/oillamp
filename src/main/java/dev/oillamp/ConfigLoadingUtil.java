@@ -108,11 +108,11 @@ final class ConfigLoadingUtil {
         LampConfig.HostAccess hostAccess = readHostAccess(root.table("host_access"), defaults.hostAccess());
         LampConfig.Autosave autosave = readAutosave(root.table("autosave"), defaults.autosave());
         ConfigSection historySection = root.table("history");
-        historySection.allowOnly("max_total_gb");
-        double historyGb = historySection.number("max_total_gb", defaults.history().maxTotalGb());
+        historySection.allowOnly("max_growth_gb");
+        double historyGb = historySection.number("max_growth_gb", defaults.history().maxGrowthGb());
         if (!Double.isFinite(historyGb) || historyGb < 0 || historyGb > 10_000) {
-            historySection.invalid("max_total_gb", Double.toString(historyGb), "a size in GB from 0 to 10000, 0 for unlimited");
-            historyGb = defaults.history().maxTotalGb();
+            historySection.invalid("max_growth_gb", Double.toString(historyGb), "a size in GB from 0 to 10000, 0 for unlimited");
+            historyGb = defaults.history().maxGrowthGb();
         }
 
         return new LampConfig(display, viewer, terminal, recording, limits,

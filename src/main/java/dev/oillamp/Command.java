@@ -691,9 +691,11 @@ sealed interface Command {
                     With moments and on or off, write those there, and change nothing else
                     in the file. Writing needs the session to be stopped.
               history <dir> prune [--yes]
-                    Preview history retention, or apply it with --yes. Every new snapshot also
-                    prunes automatically. [history].max_total_gb is the shared allowance beyond
-                    the first snapshot; every branch's newest state is protected.
+                    Say which snapshots would be deleted to keep the history within
+                    [history].max_growth_gb, or delete them with --yes. Every save also does
+                    this by itself. The setting is how far the history may grow beyond its
+                    first snapshot, on all branches together. The snapshots saved longest ago
+                    go first; every branch's newest snapshot is kept.
               schedule <dir> [add | remove <job> | enable <job> | disable <job> | pause | resume]
                     List the jobs that wake the agent while a session runs, or change them.
                     Jobs run only in a session started with --enable-scheduling, or with

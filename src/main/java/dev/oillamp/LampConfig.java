@@ -62,14 +62,15 @@ record LampConfig(
                               model, git, agentTools, image, host, timeouts, schedule, hostAccess, changed, history);
     }
 
-    /// The disk allowance beyond the first snapshot, shared by all history branches. Zero disables
-    /// automatic pruning. Like recording retention, a GB here is 1024 cubed bytes.
-    public record History(double maxTotalGb) {
+    /// How far a lamp's history may grow beyond its first snapshot, the baseline, on all branches
+    /// together: `[history].max_growth_gb`. Past it, each save deletes the snapshots saved longest
+    /// ago. Zero never deletes a snapshot. Like recording retention, a GB here is 1024 cubed bytes.
+    public record History(double maxGrowthGb) {
         public History {
-            if (!Double.isFinite(maxTotalGb) || maxTotalGb < 0 || maxTotalGb > 10_000)
-                throw new IllegalArgumentException("history.max_total_gb must be between 0 and 10000");
+            if (!Double.isFinite(maxGrowthGb) || maxGrowthGb < 0 || maxGrowthGb > 10_000)
+                throw new IllegalArgumentException("history.max_growth_gb must be between 0 and 10000");
         }
-        long allowanceBytes() { return (long) (maxTotalGb * 1024L * 1024L * 1024L); }
+        long allowanceBytes() { return (long) (maxGrowthGb * 1024L * 1024L * 1024L); }
     }
 
     /// The version of the config schema this build writes and understands.

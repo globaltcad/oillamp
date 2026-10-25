@@ -170,15 +170,19 @@ file permissions and links, and the jobs on the schedule. Whatever the agent mad
 snapshot is removed, jobs included. Before it changes anything, `restore` saves the lamp once more
 and prints how to undo the restore. The agent cannot see or change these snapshots.
 
-Every new snapshot automatically prunes old history using a shared allowance for all branches:
+The history cannot grow forever. The lamp's first snapshot is its baseline: whatever the lamp held
+when it was first saved, such as a large repository the user put there, is not held against it.
+`max_growth_gb` says how far the history may grow beyond that, on all branches together:
 
 ```toml
 [history]
-max_total_gb = 2 # default: extra GB beyond the first snapshot; 0 disables pruning
+max_growth_gb = 2 # default; 0 never deletes a snapshot
 ```
 
-The first snapshot's compressed object size is measured once and added to this allowance. GB
-means 1024³ bytes. Each branch's newest state is protected even if those states exceed the target.
+When a save takes the history past that, oillamp deletes the snapshots saved longest ago, on
+whichever branch they are, until it fits again. The baseline is measured once, as the size of the
+first snapshot on disk, and stays the same after that snapshot itself is deleted. GB means 1024³
+bytes. Each branch's newest state is protected even if those states exceed the target.
 Old snapshots and branch forks may disappear, but retained ids and contents stay unchanged.
 `oillamp history <dir> prune` previews cleanup; `prune --yes` applies it with the session stopped.
 Applications receive `LampEvent.HistoryPruned` with removed snapshots and branches, retained

@@ -33,12 +33,20 @@ final class LampLock implements AutoCloseable {
     ///
     /// @return the held lock, or empty if another session has it
     public static Optional<LampLock> tryAcquire(Path lockFile) throws IOException {
+        return tryAcquire(lockFile, false);
+    }
+
+    /// Tries to claim the lock, or with `shared` a share of it, which others that only want a
+    /// share can hold at the same time.
+    ///
+    /// @return the held lock, or empty if another holds it in a way that excludes this
+    public static Optional<LampLock> tryAcquire(Path lockFile, boolean shared) throws IOException {
         Path parent = lockFile.getParent();
         if (parent != null) Files.createDirectories(parent);
         FileChannel channel = FileChannel.open(lockFile,
                 StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
         try {
-            FileLock lock = channel.tryLock();
+            FileLock lock = channel.tryLock(0, Long.MAX_VALUE, shared);
             if (lock == null) {
                 channel.close();
                 return Optional.empty();
@@ -63,9 +71,14 @@ final class LampLock implements AutoCloseable {
     ///
     /// @return the held lock, or empty if it was still taken after `patience`
     public static Optional<LampLock> acquireWithin(Path lockFile, Duration patience) throws IOException {
+        return acquireWithin(lockFile, false, patience);
+    }
+
+    /// The same, or with `shared` a share of it.
+    public static Optional<LampLock> acquireWithin(Path lockFile, boolean shared, Duration patience) throws IOException {
         long deadline = System.nanoTime() + patience.toNanos();
         while (true) {
-            Optional<LampLock> lock = tryAcquire(lockFile);
+            Optional<LampLock> lock = tryAcquire(lockFile, shared);
             if (lock.isPresent() || System.nanoTime() > deadline) return lock;
             try {
                 Thread.sleep(20);

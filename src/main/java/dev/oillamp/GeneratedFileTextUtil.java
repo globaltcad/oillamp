@@ -53,8 +53,11 @@ final class GeneratedFileTextUtil {
             max_age_days   = 14       # retention: delete recordings older than this
             max_total_gb   = 20       # retention: delete oldest until the total fits
 
+            # The lamp's first snapshot is its baseline: what it held when it was first saved. The
+            # history may grow this far beyond it, on all branches together; past that, each save
+            # deletes the snapshots saved longest ago. Every branch's newest snapshot is kept.
             [history]
-            max_total_gb   = 2        # GB on top of the first snapshot; shared by all branches, 0 = unlimited
+            max_growth_gb  = 2        # GB beyond the first snapshot; 0 = never delete snapshots
 
             [limits]
             memory = "16g"

@@ -47,6 +47,7 @@ import dev.lamp.LampEvent;
 
 import sprouts.Association;
 import sprouts.Tuple;
+import sprouts.ValueSet;
 
 /// A lamp's history: snapshots of its agent directory, its `oillamp.toml` and its schedule, kept
 /// as a git repository in `.oillamp/history`.
@@ -99,9 +100,6 @@ final class History {
     private final LampConfig.History policy;
     private final java.util.function.Consumer<LampEvent> sink;
     private final boolean stopped;
-    /// Snapshots being used by a restore or switch in this locked operation.
-    private final Set<String> inUse = new HashSet<>();
-    private final List<LampEvent> pendingEvents = new ArrayList<>();
 
     History(LampLayout layout) {
         this(layout, ConfigDefaultsUtil.lampConfig().history(), _ -> { });
@@ -167,11 +165,14 @@ final class History {
     ///                 snapshot is made either way, because it records what the agent said
     Result<Saving> save(LampSaveKind kind, String message, Optional<SessionId> session,
                         Association<String, String> trailers, boolean always, Instant now) {
-        return locked(() -> {
+        return lockedThenReport(() -> {
             try {
-                return Result.ok(saveUnlocked(kind, message, session, trailers, always, now));
+                Saving saving = saveUnlocked(kind, message, session, trailers, always, now);
+                return new Done<>(Result.ok(saving),
+                        saving.made().isPresent() ? maintain(now, ValueSet.of(String.class)) : Tuple.of(LampEvent.class));
             } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), ProblemCatalogUtil.reason(e)));
+                return new Done<>(Result.err(ProblemCatalogUtil.saveFailed(layout.root(), ProblemCatalogUtil.reason(e))),
+                        Tuple.of(LampEvent.class));
             }
         });
     }
@@ -252,57 +253,65 @@ final class History {
     /// Saves the lamp first, so the restore itself can be undone. Only call it while no session
     /// runs: the caller holds the lamp's lock.
     Result<Restoring> restore(String prefix, Instant now) {
-        return locked(() -> {
-            Tuple<GitObjectUtil.Commit> commits;
-            Result<LampSave> found;
-            try {
-                commits = commits();
-                found = onThisBranch(commits, prefix, "restore");
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-            if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
-            LampSave target = ok.value();
-            inUse.add(target.id());
-            GitObjectUtil.Commit wanted = commits.stream().filter(c -> c.id().equals(target.id())).findFirst().orElseThrow();
-
-            Saving safety;
-            try {
-                safety = saveUnlocked(LampSaveKind.BEFORE_RESTORE, "before restoring " + target.shortId(),
-                                      Optional.empty(), now);
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(),
-                        "the save before the restore failed, so nothing was restored: " + ProblemCatalogUtil.reason(e)));
-            }
-            // The newest snapshot now holds exactly what is on disk, apart from any skipped files.
-            GitObjectUtil.Commit current;
-            try {
-                current = commits().first();
-                inUse.add(current.id());
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-            Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
-                    : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
-            String restored;
-            try {
-                restored = withScheduleOf(wanted.tree(), current.tree());
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-            if (current.tree().equals(restored))
-                return Result.ok(new Restoring(target, safety.made(), Optional.empty(), safety.skipped()), warnings);
-            try {
-                bringBack(restored, current.tree());
-                String message = GitObjectUtil.message(LampSaveKind.RESTORE, "back to " + target.shortId()
-                        + " (" + target.kind().label() + ", " + target.at() + ")", Optional.empty());
-                LampSave result = commit(restored, Optional.of(current.id()), now, message);
-                return Result.ok(new Restoring(target, safety.made(), Optional.of(result), safety.skipped()), warnings);
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.restoreFailed(layout.root(), ProblemCatalogUtil.reason(e),
-                        current.snapshot().shortId()));
-            }
+        return lockedThenReport(() -> {
+            Result<Restoring> restored = restoreUnlocked(prefix, now);
+            // The target is kept, and with it every snapshot from it to the branch's newest, the
+            // save just before among them, so that the restore can still be undone.
+            if (restored instanceof Result.Ok<Restoring> ok
+                    && (ok.value().safety().isPresent() || ok.value().result().isPresent()))
+                return new Done<>(restored, maintain(now, ValueSet.of(ok.value().target().id())));
+            return new Done<>(restored, Tuple.of(LampEvent.class));
         });
+    }
+
+    private Result<Restoring> restoreUnlocked(String prefix, Instant now) {
+        Tuple<GitObjectUtil.Commit> commits;
+        Result<LampSave> found;
+        try {
+            commits = commits();
+            found = onThisBranch(commits, prefix, "restore");
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+        if (!(found instanceof Result.Ok<LampSave> ok)) return Result.err(found.problems());
+        LampSave target = ok.value();
+        GitObjectUtil.Commit wanted = commits.stream().filter(c -> c.id().equals(target.id())).findFirst().orElseThrow();
+
+        Saving safety;
+        try {
+            safety = saveUnlocked(LampSaveKind.BEFORE_RESTORE, "before restoring " + target.shortId(),
+                                  Optional.empty(), now);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.saveFailed(layout.root(),
+                    "the save before the restore failed, so nothing was restored: " + ProblemCatalogUtil.reason(e)));
+        }
+        // The newest snapshot now holds exactly what is on disk, apart from any skipped files.
+        GitObjectUtil.Commit current;
+        try {
+            current = commits().first();
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+        Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
+                : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
+        String restored;
+        try {
+            restored = withScheduleOf(wanted.tree(), current.tree());
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+        if (current.tree().equals(restored))
+            return Result.ok(new Restoring(target, safety.made(), Optional.empty(), safety.skipped()), warnings);
+        try {
+            bringBack(restored, current.tree());
+            String message = GitObjectUtil.message(LampSaveKind.RESTORE, "back to " + target.shortId()
+                    + " (" + target.kind().label() + ", " + target.at() + ")", Optional.empty());
+            LampSave result = commit(restored, Optional.of(current.id()), now, message);
+            return Result.ok(new Restoring(target, safety.made(), Optional.of(result), safety.skipped()), warnings);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.restoreFailed(layout.root(), ProblemCatalogUtil.reason(e),
+                    current.snapshot().shortId()));
+        }
     }
 
     /// The snapshot on the current branch, whose commits are `line`, that `prefix` names. One that
@@ -448,57 +457,59 @@ final class History {
     ///
     /// Only call it while no session runs: the caller holds the lamp's lock.
     Result<Switching> switchTo(String name, Instant now) {
-        return locked(() -> {
-            String from;
-            SortedSet<String> names;
-            try {
-                from = headBranch();
-                names = branchNames();
-                if (name.equals(from))
-                    return Result.ok(new Switching(from, new LampBranch(from, true,
-                            headCommit().map(GitObjectUtil.Commit::snapshot)), Optional.empty(), Tuple.of(String.class)));
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-            if (!names.contains(name))
-                return Result.err(ProblemCatalogUtil.noSuchBranch(name, layout.root(), Tuple.of(String.class, names)));
-
-            try {
-                inUse.add(ref(name).orElseThrow());
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-
-            Saving safety;
-            try {
-                safety = saveUnlocked(LampSaveKind.BEFORE_SWITCH, "before switching to " + name, Optional.empty(), now);
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), "the save before the switch failed, "
-                        + "so the lamp is still on " + from + ": " + ProblemCatalogUtil.reason(e)));
-            }
-            Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
-                    : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
-            // The newest snapshot of `from` now holds exactly what is on disk, apart from any skipped files.
-            GitObjectUtil.Commit current;
-            GitObjectUtil.Commit wanted;
-            String switched;
-            try {
-                current = headCommit().orElseThrow();
-                wanted = commitAt(ref(name).orElseThrow());
-                switched = withScheduleOf(wanted.tree(), current.tree());
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
-            }
-            try {
-                if (!switched.equals(current.tree())) bringBack(switched, current.tree());
-                writeHead(name);
-            } catch (IOException | RuntimeException e) {
-                return Result.err(ProblemCatalogUtil.switchFailed(layout.root(), ProblemCatalogUtil.reason(e),
-                        from, current.snapshot().shortId()));
-            }
-            return Result.ok(new Switching(from, new LampBranch(name, true, Optional.of(wanted.snapshot())),
-                    safety.made(), safety.skipped()), warnings);
+        return lockedThenReport(() -> {
+            Result<Switching> switched = switchUnlocked(name, now);
+            // Every branch's newest snapshot is kept anyway, so the switch needs nothing more kept.
+            if (switched instanceof Result.Ok<Switching> ok && ok.value().safety().isPresent())
+                return new Done<>(switched, maintain(now, ValueSet.of(String.class)));
+            return new Done<>(switched, Tuple.of(LampEvent.class));
         });
+    }
+
+    private Result<Switching> switchUnlocked(String name, Instant now) {
+        String from;
+        SortedSet<String> names;
+        try {
+            from = headBranch();
+            names = branchNames();
+            if (name.equals(from))
+                return Result.ok(new Switching(from, new LampBranch(from, true,
+                        headCommit().map(GitObjectUtil.Commit::snapshot)), Optional.empty(), Tuple.of(String.class)));
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+        if (!names.contains(name))
+            return Result.err(ProblemCatalogUtil.noSuchBranch(name, layout.root(), Tuple.of(String.class, names)));
+
+        Saving safety;
+        try {
+            safety = saveUnlocked(LampSaveKind.BEFORE_SWITCH, "before switching to " + name, Optional.empty(), now);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.saveFailed(layout.root(), "the save before the switch failed, "
+                    + "so the lamp is still on " + from + ": " + ProblemCatalogUtil.reason(e)));
+        }
+        Tuple<LampProblem> warnings = safety.skipped().isEmpty() ? Tuple.of(LampProblem.class)
+                : Tuple.of(LampProblem.class, ProblemCatalogUtil.filesNotSaved(layout.root(), safety.skipped()));
+        // The newest snapshot of `from` now holds exactly what is on disk, apart from any skipped files.
+        GitObjectUtil.Commit current;
+        GitObjectUtil.Commit wanted;
+        String switched;
+        try {
+            current = headCommit().orElseThrow();
+            wanted = commitAt(ref(name).orElseThrow());
+            switched = withScheduleOf(wanted.tree(), current.tree());
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+        try {
+            if (!switched.equals(current.tree())) bringBack(switched, current.tree());
+            writeHead(name);
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.switchFailed(layout.root(), ProblemCatalogUtil.reason(e),
+                    from, current.snapshot().shortId()));
+        }
+        return Result.ok(new Switching(from, new LampBranch(name, true, Optional.of(wanted.snapshot())),
+                safety.made(), safety.skipped()), warnings);
     }
 
     /// Brings the lamp and its current branch back to the snapshot whose id starts with `prefix`,
@@ -769,13 +780,6 @@ final class History {
         moveBranch(parent, id);
         LampSave snapshot = GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();
         if (snapshot.kind() == LampSaveKind.BEFORE_RUN) pinBaseUnlocked(id);
-        // The save is already durable. Maintenance failure must not turn it into a failed save.
-        try {
-            pruneUnlocked(true, now).ifPresent(pendingEvents::add);
-        } catch (IOException | RuntimeException e) {
-            pendingEvents.add(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
-                    "the snapshot was saved, but history pruning failed: " + ProblemCatalogUtil.reason(e))));
-        }
         return snapshot;
     }
 
@@ -1212,7 +1216,15 @@ final class History {
     }
 
     Result<Optional<LampEvent.HistoryPruned>> prune(boolean confirmed, Instant now) {
-        return reading(() -> Result.ok(pruneUnlocked(confirmed, now)));
+        return lockedThenReport(() -> {
+            try {
+                Pruning pruning = pruneUnlocked(confirmed, now, ValueSet.of(String.class));
+                return new Done<>(Result.ok(pruning.event()), pruning.warnings());
+            } catch (IOException | RuntimeException e) {
+                return new Done<>(Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e))),
+                        Tuple.of(LampEvent.class));
+            }
+        });
     }
 
     /// One fixed allowance, measured from the oldest initial snapshot when adopting an existing
@@ -1288,9 +1300,32 @@ final class History {
 
     /// Publish boundaries before sweeping. After interruption, traversal is already valid and a
     /// later sweep can reclaim what remains. No commit or branch ref is rewritten.
-    private Optional<LampEvent.HistoryPruned> pruneUnlocked(boolean confirmed, Instant now) throws IOException {
-        if (!Files.isRegularFile(repository.resolve("HEAD"))) return Optional.empty();
-        if (policy.maxTotalGb() == 0) {
+    /// What a prune did, or would do when it was not confirmed.
+    ///
+    /// @param event    what it removed; empty when it removed nothing and the history fits
+    /// @param warnings about what it could not finish
+    private record Pruning(Optional<LampEvent.HistoryPruned> event, Tuple<LampEvent> warnings) {}
+
+    /// Prunes after a save, a restore or a switch added a snapshot. The snapshot is already
+    /// saved, so a prune that fails is a warning, not a failed save.
+    ///
+    /// @param keep the snapshots the operation still uses, which are kept with every snapshot
+    ///             from them to their branch's newest
+    /// @return the events that tell what the prune did, to report once the lock is released
+    private Tuple<LampEvent> maintain(Instant now, ValueSet<String> keep) {
+        try {
+            Pruning pruning = pruneUnlocked(true, now, keep);
+            return pruning.event().<Tuple<LampEvent>>map(pruning.warnings()::add).orElse(pruning.warnings());
+        } catch (IOException | RuntimeException e) {
+            return Tuple.of(LampEvent.class, new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
+                    "the snapshot was saved, but history pruning failed: " + ProblemCatalogUtil.reason(e))));
+        }
+    }
+
+    private Pruning pruneUnlocked(boolean confirmed, Instant now, ValueSet<String> keep) throws IOException {
+        Tuple<LampEvent> warnings = Tuple.of(LampEvent.class);
+        if (!Files.isRegularFile(repository.resolve("HEAD"))) return new Pruning(Optional.empty(), warnings);
+        if (policy.maxGrowthGb() == 0) {
             if (confirmed && !Files.exists(repository.resolve("initial-bytes"))) {
                 List<OnBranches> all = everyCommit();
                 Map<String, Long> sizes = new HashMap<>();
@@ -1301,7 +1336,7 @@ final class History {
                 }
                 initialBytes(all, sizes, true);
             }
-            return Optional.empty();
+            return new Pruning(Optional.empty(), warnings);
         }
         Map<String, Long> sizes = new HashMap<>();
         Map<Path, Long> abandoned = new HashMap<>();
@@ -1317,8 +1352,7 @@ final class History {
         }
         List<OnBranches> all = everyCommit();
         long initial = initialBytes(all, sizes, confirmed);
-        long limit = policy.maxTotalGb() == 0 ? Long.MAX_VALUE : initial + policy.allowanceBytes();
-        if (policy.maxTotalGb() == 0) return Optional.empty();
+        long limit = initial + policy.allowanceBytes();
         // Tags, reflogs and replacement refs can retain history outside our branch graph. Refuse
         // that layout instead of silently deleting objects a person protected with git.
         try (Stream<Path> refs = Files.walk(repository.resolve("refs"))) {
@@ -1329,7 +1363,8 @@ final class History {
         if (packedRefs().stream().anyMatch(ref -> !ref.startsWith(HEADS, 41))
                 || Files.isDirectory(repository.resolve("logs")))
             throw new IOException("additional git refs or reflogs are not supported by history pruning");
-        Set<String> protectedIds = new HashSet<>(inUse);
+        Set<String> protectedIds = new HashSet<>();
+        for (String id : keep) protectedIds.add(id);
         Path pin = repository.resolve("active-base");
         if (stopped && confirmed) Files.deleteIfExists(pin);
         if (!stopped && Files.exists(pin)) {
@@ -1359,8 +1394,21 @@ final class History {
         Set<String> retained = new HashSet<>();
         for (OnBranches listed : all) retained.add(listed.commit().id());
         Tuple<LampSaveOnBranches> removed = Tuple.of(LampSaveOnBranches.class);
+        // Oldest first by when each was saved, not by how many come before it: a branch started at
+        // an old snapshot holds new work at a small depth. A snapshot counts as no older than the
+        // one before it, even if the clock was set back, so that a line is only ever cut from its
+        // start and no retained snapshot is left that no branch leads to.
+        Map<String, Instant> age = new HashMap<>();
+        List<OnBranches> byDepth = new ArrayList<>(all);
+        byDepth.sort(Comparator.comparingInt(OnBranches::depth));
+        for (OnBranches listed : byDepth) {
+            Instant at = listed.commit().snapshot().at();
+            Instant before = listed.commit().parent().map(age::get).orElse(at);
+            age.put(listed.commit().id(), at.isBefore(before) ? before : at);
+        }
         List<OnBranches> oldest = new ArrayList<>(all);
-        oldest.sort(Comparator.comparingInt(OnBranches::depth).thenComparing(c -> c.commit().snapshot().at()));
+        oldest.sort(Comparator.comparing((OnBranches listed) -> age.get(listed.commit().id()))
+                              .thenComparingInt(OnBranches::depth));
         for (OnBranches candidate : oldest) {
             if (kept <= limit) break;
             if (protectedIds.contains(candidate.commit().id())) continue;
@@ -1393,24 +1441,35 @@ final class History {
                 durableWrite(repository.resolve("durable-objects"), "1\n");
             }
             rememberPrunedRuns(removed, now);
-            if (!boundaries.equals(shallow()))
-                durableWrite(repository.resolve("shallow"), boundaries.isEmpty() ? "" : String.join("\n", boundaries) + "\n");
             long actualFreed = 0;
             List<String> failures = new ArrayList<>();
             Map<Path, Long> doomed = new HashMap<>(abandoned);
             for (String id : sizes.keySet()) if (!counts.containsKey(id)) doomed.put(objectPath(id), sizes.getOrDefault(id, 0L));
-            for (var object : doomed.entrySet()) {
-                try {
-                    if (Files.deleteIfExists(object.getKey())) actualFreed += object.getValue();
-                } catch (IOException e) { failures.add(ProblemCatalogUtil.reason(e)); }
+            // Reads wait from here on, and this waits for the reads already going, which may
+            // still follow the snapshots about to be cut off.
+            Optional<LampLock> alone = LampLock.acquireWithin(layout.historyReadLock(), false, LOCK_WAIT);
+            if (alone.isEmpty())
+                throw new IOException("reads of the history kept going for " + LOCK_WAIT.toMinutes()
+                        + " minutes, so nothing was pruned");
+            try {
+                if (!boundaries.equals(shallow()))
+                    durableWrite(repository.resolve("shallow"), boundaries.isEmpty() ? "" : String.join("\n", boundaries) + "\n");
+                for (var object : doomed.entrySet()) {
+                    try {
+                        if (Files.deleteIfExists(object.getKey())) actualFreed += object.getValue();
+                    } catch (IOException e) { failures.add(ProblemCatalogUtil.reason(e)); }
+                }
+            } finally {
+                alone.get().close();
             }
             freed = actualFreed;
             kept = total - actualFreed;
-            if (!failures.isEmpty()) pendingEvents.add(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
+            if (!failures.isEmpty()) warnings = warnings.add(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
                     "history boundaries were updated, but some unused objects could not be deleted: " + failures.getFirst())));
         }
-        return Optional.of(new LampEvent.HistoryPruned(removed, Tuple.of(String.class, boundaries), freed, kept, limit))
-                .filter(event -> !event.removed().isEmpty() || event.bytesFreed() > 0 || event.remainingBytes() > event.limitBytes());
+        return new Pruning(Optional.of(new LampEvent.HistoryPruned(removed, Tuple.of(String.class, boundaries), freed, kept, limit))
+                .filter(event -> !event.removed().isEmpty() || event.bytesFreed() > 0 || event.remainingBytes() > event.limitBytes()),
+                warnings);
     }
 
     /// Accounting for runs whose commit was removed automatically. Manual reset keeps its existing
@@ -1473,7 +1532,7 @@ final class History {
     }
 
     Result<Optional<String>> pinLatest() {
-        return reading(() -> {
+        return writing(() -> {
             Optional<String> id = headCommit().map(GitObjectUtil.Commit::id);
             if (id.isPresent()) pinBaseUnlocked(id.get());
             return Result.ok(id);
@@ -1481,7 +1540,7 @@ final class History {
     }
 
     Result<Boolean> releaseBase() {
-        return reading(() -> Result.ok(Files.deleteIfExists(repository.resolve("active-base"))));
+        return writing(() -> Result.ok(Files.deleteIfExists(repository.resolve("active-base"))));
     }
 
     Result<Optional<Changes>> runChanges(Optional<String> base, String tree, int limit) {
@@ -1518,9 +1577,28 @@ final class History {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) { channel.force(true); }
     }
 
-    /// Readers use the same short-lived lock as writers: a sweep must not remove an object while
-    /// a reader traverses it. Each read finishes with a consistent view of the retained history.
+    /// Runs `work`, which only reads, while holding a share of the read lock.
+    ///
+    /// Not the history lock: a save holds that for as long as it takes to read a large home, and
+    /// a read need not wait for it, because a save only adds files and moves a branch last. Only
+    /// the sweep of a prune removes files, and it waits for every read to finish first, so no
+    /// read finds a file gone halfway through.
     private <T> Result<T> reading(Reading<T> work) {
+        try {
+            Optional<LampLock> lock = LampLock.acquireWithin(layout.historyReadLock(), true, LOCK_WAIT);
+            if (lock.isEmpty()) return Result.err(ProblemCatalogUtil.historyBusy(layout.root(), LOCK_WAIT));
+            try {
+                return work.get();
+            } finally {
+                lock.get().close();
+            }
+        } catch (IOException | RuntimeException e) {
+            return Result.err(ProblemCatalogUtil.historyDamaged(repository, ProblemCatalogUtil.reason(e)));
+        }
+    }
+
+    /// Runs `work`, which changes the history, while holding the history lock.
+    private <T> Result<T> writing(Reading<T> work) {
         return locked(() -> {
             try { return work.get(); }
             catch (IOException | RuntimeException e) {
@@ -1529,23 +1607,32 @@ final class History {
         });
     }
 
+    /// What a locked operation did, and the events that tell the rest, such as what a prune
+    /// after a save removed. The events are reported once the lock is released, so that a
+    /// listener can read the history straight away.
+    private record Done<T>(Result<T> result, Tuple<LampEvent> events) {}
+
     /// Runs `work` while holding the history lock, waiting for another save, restore, switch,
     /// reset, or start or deletion of a branch of this lamp to finish first.
     private <T> Result<T> locked(Supplier<Result<T>> work) {
+        return lockedThenReport(() -> new Done<>(work.get(), Tuple.of(LampEvent.class)));
+    }
+
+    /// The same, and then reports the events `work` gave.
+    private <T> Result<T> lockedThenReport(Supplier<Done<T>> work) {
         Duration pause = Duration.ofMillis(200);
         try {
             for (long waited = 0; ; waited++) {
                 Optional<LampLock> lock = LampLock.tryAcquire(layout.historyLock());
                 if (lock.isPresent()) {
+                    Done<T> done;
                     try {
-                        return work.get();
+                        done = work.get();
                     } finally {
-                        inUse.clear();
                         lock.get().close();
-                        List<LampEvent> events = List.copyOf(pendingEvents);
-                        pendingEvents.clear();
-                        for (LampEvent event : events) sink.accept(event);
                     }
+                    for (LampEvent event : done.events()) sink.accept(event);
+                    return done.result();
                 }
                 if (pause.multipliedBy(waited).compareTo(LOCK_WAIT) > 0)
                     return Result.err(ProblemCatalogUtil.historyBusy(layout.root(), LOCK_WAIT));

@@ -839,7 +839,7 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             when it comes due the same day, it must be skipped: the run on `main` counts.
         """
         given: 'a lamp whose agent may run one job of its own a day, with the branch other'
-            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 1\n[history]\nmax_total_gb = ' + budget + '\n')
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 1\n[history]\nmax_growth_gb = ' + budget + '\n')
             assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             assert host.oillamp.run('history', lamp.toString(), 'branch', 'other').succeeded()
             anAgent { prompt -> 'Done.' }

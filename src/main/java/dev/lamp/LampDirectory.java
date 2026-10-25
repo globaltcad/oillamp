@@ -302,7 +302,7 @@ public final class LampDirectory {
                 LampEvent.HistoryOfAllBranches.class).snapshots().toList());
     }
 
-    /// Previews retention using `[history].max_total_gb`, the allowance beyond the first snapshot.
+    /// Previews retention using `[history].max_growth_gb`, how far the history may grow beyond its first snapshot.
     /// Empty when nothing would be pruned. The sandbox must be stopped.
     public Optional<LampEvent.HistoryPrunePlanned> wouldPruneHistory()
             throws IOException, InterruptedException, LampFailedException {

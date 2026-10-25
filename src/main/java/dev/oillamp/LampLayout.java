@@ -104,6 +104,9 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path historyDir()    { return stateDir().resolve("history"); }
     /// Held while a save or a restore runs, so that two never write the history at once.
     public Path historyLock()   { return stateDir().resolve("history.lock"); }
+    /// Held shared while the history is read, and alone only while a prune deletes what no
+    /// snapshot kept needs, so that no read finds a file gone halfway through.
+    public Path historyReadLock() { return stateDir().resolve("history-read.lock"); }
 
     /// The lamp's schedule: the jobs that wake the agent while a session runs. Never mounted
     /// into the container; the agent asks the session to change it.

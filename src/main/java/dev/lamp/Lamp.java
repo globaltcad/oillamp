@@ -160,8 +160,6 @@ public final class Lamp implements AutoCloseable {
         return Optional.empty();
     }
 
-    /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
-    /// they travel from the engine to here.
     /// The event of `kind` that answers a command, once the engine succeeded.
     ///
     /// @throws LampFailedException when the engine failed, or reported no such event
@@ -196,6 +194,8 @@ public final class Lamp implements AutoCloseable {
         return answer(runToEnd(launcher, listeners, command.toArray(String[]::new)), LampEvent.BranchCreated.class).branch();
     }
 
+    /// The values the engine reported as a [LampEvent.HostAccessSettings], which is only how
+    /// they travel from the engine to here.
     static HostAccess hostAccessOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
@@ -396,7 +396,6 @@ public final class Lamp implements AutoCloseable {
         return save(launcher, listeners, directory, message);
     }
 
-    /// This lamp's schedule, as [LampDirectory#schedule] reads it.
     /// Every branch of this lamp's history, as [LampDirectory#branches] lists them.
     public List<LampBranch> branches() throws IOException, InterruptedException, LampFailedException {
         return branches(launcher, listeners, directory);
@@ -415,6 +414,7 @@ public final class Lamp implements AutoCloseable {
         return branch(launcher, listeners, directory, name, snapshot);
     }
 
+    /// This lamp's schedule, as [LampDirectory#schedule] reads it.
     public LampEvent.Schedule schedule() throws IOException, InterruptedException, LampFailedException {
         return schedule(launcher, listeners, directory);
     }

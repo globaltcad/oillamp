@@ -896,7 +896,8 @@ final class CommandExecutionUtil {
         context.sink().accept(((Result.Ok<LampEvent>) listed).value());
         history.boundaries().map(ids -> {
             if (!ids.isEmpty()) context.sink().accept(new LampEvent.Info("history",
-                    "earlier history was pruned; retained boundaries: " + ids.join(", ")));
+                    "older snapshots were deleted to keep the history within [history].max_growth_gb; "
+                    + "the oldest kept: " + ids.map(id -> id.substring(0, 8)).join(", ")));
             return ids;
         });
         return LampExitStatus.SUCCESS;

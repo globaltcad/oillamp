@@ -168,10 +168,11 @@ known lifetime:
 | `<lamp>/.oillamp/sockets/*/` | the proxy (host); wayvnc and the ssh listener (container) | relays, viewer, socat | files outlive their servers; deleted before the next session |
 | `<lamp>/.oillamp/recordings/` | wf-recorder | you, the agent (read only) | until retention deletes them |
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
-| `<lamp>/.oillamp/history/` | `History`: saves, branch operations and retention | history commands, the session and git by hand | bounded by the fixed initial size plus `[history].max_total_gb`; branch tips and active bases survive |
+| `<lamp>/.oillamp/history/` | `History`: saves, branch operations and retention | history commands, the session and git by hand | bounded by the first snapshot's size plus `[history].max_growth_gb`; branch tips and active bases survive |
 | `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir>` `restore`, `switch` and `reset` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save, restore, switch, reset, or start or deletion of a branch runs | every other one of them, which waits for it | the lock ends with the process |
+| `<lamp>/.oillamp/history-read.lock` | `History`; shared by every read of the history, held alone only while a prune deletes | a prune's sweep, which waits for reads in progress | the lock ends with the process |
 | `<lamp>/agent-lamp-<id>/` | the agent; `LampPlanUtil` writes `AGENTS.md`, `.bashrc`, `.pi/agent/extensions/oillamp-conversations.js` with the schedule on, `.pi/agent/extensions/oillamp-schedule.js`, and with host access on,
 `.pi/agent/extensions/oillamp-host-access.js`; once the sandbox is up, `Harness` writes the session's instructions to `.pi/agent/APPEND_SYSTEM.md` and its model into `.pi/agent/settings.json` | the agent, you | until `oillamp remove` |
 | `$XDG_RUNTIME_DIR/oillamp/<id>/sockets` (a symlink) | `LampPlanUtil.planSkeleton`, every start | every host-side socket path | in memory: gone at reboot, made again next start |
@@ -221,6 +222,7 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   │   ├── refs/heads/<name>    each branch's newest snapshot
 │   │   └── objects/             every snapshot's files, trees and commits, one file each
 │   ├── history.lock             locked while the history is written
+│   ├── history-read.lock        shared while the history is read; alone while a prune deletes
 │   ├── schedule.json            the jobs that wake the agent; never attached; in every snapshot
 │   └── schedule.lock            locked while the schedule is changed
 └── agent-lamp-<agent id>/       attached read-write at /home/agent
@@ -270,22 +272,27 @@ The paths come from `LampLayout`. Why it is laid out like this:
 
 ### The history
 
-**Retention.** Every new commit applies `[history].max_total_gb` (default 2, zero disables it).
+**Retention.** Every new commit applies `[history].max_growth_gb` (default 2, zero disables it).
 This is extra space beyond the compressed objects of the first snapshot, measured once in
 `history/initial-bytes`; adopting an existing history measures its oldest root snapshot. The
 allowance is fixed even if that snapshot is later removed. Sizes count unique compressed object
 file lengths, not the home, filesystem allocation blocks, or metadata files. All branches share
 one target. Every branch tip survives, even if their combined objects exceed the target.
 
-Oldest ancestry is removed first, ordered by graph depth then time, so clocks going backwards
-cannot make a cut skip a retained descendant. Git's `history/shallow` lists retained commits at
+The snapshots saved longest ago are removed first, on whichever branch they are, not those with
+the fewest before them: a branch started at an old snapshot holds new work. A snapshot counts as
+no older than its parent, so a clock set back cannot make a cut leave a retained snapshot that no
+branch leads to. Git's `history/shallow` lists retained commits at
 which traversal stops. Commit ids and trees stay unchanged; when the fork goes, branches become
 disconnected but their homes still restore normally. Shared objects are counted once. Reachability
 incoming-edge counts in the object graph determine what can go, without storing each snapshot's
 full descendant set. Unreferenced loose objects and abandoned `incoming-*.tmp` writes are swept.
 Additional git refs, reflogs and packed objects refuse pruning rather than risk their contents.
 
-Readers hold the history lock too. A running agent pins its starting snapshot in `active-base`;
+Readers do not wait for the history lock, which a save of a large home holds for minutes: a save
+only adds files and moves a branch last. They hold a share of `history-read.lock` instead, and
+only a prune's sweep takes it alone, cutting ancestry and deleting objects once reads in progress
+are done. A running agent pins its starting snapshot in `active-base`;
 its path from the branch tip remains protected until the run finishes. Startup clears a pin left
 by a dead session; stopped saves and explicit pruning ignore stale pins too. Restore and switch
 protect snapshots used within their locked operation. Invalid current configuration does not

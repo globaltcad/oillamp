@@ -305,14 +305,16 @@ and a second spelling would have to be documented, completed and kept working.
 
 ### History retention cuts ancestry without changing retained snapshot ids
 
-Every new snapshot prunes automatically. `[history].max_total_gb`, default 2 and zero for
+Every new snapshot prunes automatically. `[history].max_growth_gb`, default 2 and zero for
 unlimited, is the extra allowance beyond the first snapshot's compressed object size. That size
 is measured once and stays fixed. All branches share it; their newest snapshots are protected
-even when those alone exceed it. Old roots are removed first. Git shallow boundaries cut ancestry
+even when those alone exceed it. The snapshots saved longest ago are removed first, whichever branch they are on. Git shallow boundaries cut ancestry
 without rewriting commits, so retained ids stay stable and branches may lose their common fork.
 Oillamp sweeps unreachable loose objects itself; `git gc` would pack them into an unreadable form.
 
-*Why:* a large initial home should not immediately exhaust the allowance. A snapshot already
+*Why:* a large initial home should not immediately exhaust the allowance: the first snapshot is
+what the user put in the lamp, its baseline. The setting is called `max_growth_gb`, not
+`max_total_gb` as for recordings, because it is not a total. A snapshot already
 contains a whole state, so keeping old changes does not require keeping their old commits. Stable
 ids matter to applications and run references. Retaining a branch state matters more than keeping
 its ancient common ancestor. Readers and active run bases must be coordinated with deletion.
