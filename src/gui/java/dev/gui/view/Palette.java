@@ -3,6 +3,8 @@ package dev.gui.view;
 import java.awt.Color;
 import java.awt.Font;
 
+import dev.gui.model.Lines;
+
 /// The colours of Genies: a lamp burning at night. Deep plum for the dark, brass for the lamp,
 /// and the amber of its flame for whatever is alive or asks to be clicked.
 final class Palette {
@@ -35,6 +37,16 @@ final class Palette {
     /// The selection while the keyboard is elsewhere, as when the user went back to the composer.
     static final Color SELECTION_ASIDE = new Color(0xa8, 0x9c, 0x8a, 48);
     static final Color TRANSPARENT = new Color(0, 0, 0, 0);
+
+    /// The colour of a branch on the history page, one of [Lines#COLOURS]. Each is the flame at
+    /// another hue, softened, so they all stand out against the night as the flame does, in
+    /// whatever the night is; and none comes nearer the flame's own hue than a ninth of the circle,
+    /// which stays the genie's, and says where it lives.
+    static Color branch(int colour) {
+        float[] flame = Color.RGBtoHSB(FLAME.getRed(), FLAME.getGreen(), FLAME.getBlue(), null);
+        float hue = flame[0] + (1 + Math.floorMod(colour, Lines.COLOURS)) / (Lines.COLOURS + 1f);
+        return Color.getHSBColor(hue % 1f, flame[1] * 0.55f, flame[2] * 0.95f);
+    }
 
     /// The fonts Genies brings along, installed before any is named.
     static {
