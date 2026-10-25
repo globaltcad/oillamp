@@ -16,12 +16,14 @@ import dev.gui.model.Schedule;
 import dev.gui.pi.PiEvent;
 import dev.lamp.LampEvent;
 import dev.lamp.LampAgentProgress;
+import dev.lamp.LampBranch;
 import dev.lamp.LampConversation;
 import dev.lamp.LampJob;
 import dev.lamp.LampJobAuthor;
 import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSave;
 import dev.lamp.LampSaveKind;
+import dev.lamp.LampSaveOnBranches;
 
 import sprouts.Tuple;
 
@@ -133,10 +135,12 @@ final class LampApiConversionUtil {
 
     // ─── the history ───────────────────────────────────────────────────────────────────────
 
-    /// The lamp's snapshots as the history page shows them, newest first, as oillamp lists them.
-    static Tuple<History.Moment> moments(List<LampSave> snapshots) {
+    /// The lamp's snapshots on every branch as the history page shows them, newest first, as
+    /// oillamp lists them, each with the branches it is on.
+    static Tuple<History.Moment> moments(List<LampSaveOnBranches> snapshots) {
         Tuple<History.Moment> moments = Tuple.of(History.Moment.class);
-        for (LampSave snapshot : snapshots) {
+        for (LampSaveOnBranches listed : snapshots) {
+            LampSave snapshot = listed.snapshot();
             History.Kind kind = switch (snapshot.kind()) {
                 case STARTUP -> History.Kind.WOKE;
                 case SHUTDOWN -> History.Kind.SLEPT;
@@ -144,12 +148,34 @@ final class LampApiConversionUtil {
                 case BEFORE_RUN -> History.Kind.BEFORE_RUN;
                 case RUN -> History.Kind.RAN;
                 case BEFORE_RESTORE -> History.Kind.BEFORE_GOING_BACK;
+                case BEFORE_SWITCH -> History.Kind.BEFORE_SWITCHING;
                 case RESTORE -> History.Kind.WENT_BACK;
             };
             moments = moments.add(new History.Moment(snapshot.id(), snapshot.at(), kind, snapshot.message(),
                     snapshot.run().orElse(""), snapshot.job().orElse(""),
-                    snapshot.outcome().map(LampApiConversionUtil::outcome), snapshot.conversation().orElse("")));
+                    snapshot.outcome().map(LampApiConversionUtil::outcome), snapshot.conversation().orElse(""),
+                    listed.branches()));
         }
         return moments;
+    }
+
+    /// The lamp's branches as the history page shows them.
+    static Tuple<History.Branch> branches(List<LampBranch> branches) {
+        Tuple<History.Branch> shown = Tuple.of(History.Branch.class);
+        for (LampBranch branch : branches)
+            shown = shown.add(new History.Branch(branch.name(), branch.current(), branch.newest().map(LampSave::id).orElse("")));
+        return shown;
+    }
+
+    /// What oillamp deleted to keep a history within its size, as the history page tells it.
+    static History.Pruned pruned(LampEvent.HistoryPruned pruned) {
+        return new History.Pruned(pruned.removed().size(), pruned.bytesFreed(), pruned.remainingBytes(), pruned.limitBytes());
+    }
+
+    /// What deleting the snapshots saved longest ago would delete, as the history page asks the user.
+    static History.Plan.Prune pruning(LampEvent.HistoryPrunePlanned planned) {
+        Tuple<String> branches = Tuple.of(String.class);
+        for (LampSaveOnBranches removed : planned.removed()) branches = branches.addAll(removed.branches());
+        return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
     }
 }
