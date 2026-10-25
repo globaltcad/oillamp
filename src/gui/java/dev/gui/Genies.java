@@ -112,6 +112,41 @@ public interface Genies {
     /// Writes when oillamp saves the genie's home by itself into its lamp. Only while it sleeps.
     void autosave(UUID genie, History.Autosave wanted);
 
+    /// Writes how far the genie's history may grow beyond its first moment, in GB, into its lamp;
+    /// 0 never deletes a moment. Only while it sleeps.
+    void maxGrowth(UUID genie, double gb);
+
+    /// Asks the genie's lamp which old moments keeping its history within its size would delete
+    /// now; the history page then asks the user. Only while it sleeps.
+    void planPruning(UUID genie);
+
+    /// Deletes those moments. The user confirmed. Only while it sleeps.
+    void prune(UUID genie);
+
+    /// Starts the branch `name` of the genie's history at the moment `moment`, or at the newest
+    /// moment of the branch it lives on when `moment` is empty. The genie stays where it lives.
+    /// Awake or asleep. The window checked the name with [History#branchNameProblem].
+    void startBranch(UUID genie, String name, String moment);
+
+    /// Moves the genie to the branch `branch` of its history: its home becomes that branch's.
+    /// Only while it sleeps. The window has asked the user already.
+    void switchBranch(UUID genie, String branch);
+
+    /// Asks the genie's lamp how many moments only the branch `branch` holds; the history page
+    /// then asks the user.
+    void planDeletingBranch(UUID genie, String branch);
+
+    /// Deletes the branch `branch`, which the genie does not live on. The user confirmed.
+    void deleteBranch(UUID genie, String branch);
+
+    /// Asks the genie's lamp what resetting the branch it lives on back to `moment` would throw
+    /// away; the history page then asks the user. Only while it sleeps.
+    void planReset(UUID genie, String moment);
+
+    /// Resets the branch the genie lives on back to `moment`, for good: what came after it leaves
+    /// the branch. The user confirmed. Only while it sleeps.
+    void reset(UUID genie, String moment);
+
     /// Writes the rules the genie's host access page shows into its lamp. Only while it sleeps.
     void saveHostAccess(UUID genie);
 

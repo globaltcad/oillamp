@@ -13,6 +13,7 @@ import dev.lamp.LampEvent
 import dev.lamp.LampConversation
 import dev.lamp.LampPrompt
 import dev.lamp.LampRun
+import dev.lamp.LampSessionStatus
 import oillamp.ScenarioHost
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -447,6 +448,42 @@ class KeepingAGenieAliveSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.BROKEN }
             genie.activity().contains('stopped')
             !runner.isAwake()
+    }
+
+    def 'A lamp put out to sleep cannot break the genie once it woke again, whatever it reports late'() {
+        reportInfo """
+            Let's consider Jafar, woken, put to sleep, and woken again, as happens when the user
+            goes back to an earlier moment. Each lamp reports its events on a thread of its own,
+            so the first lamp's last `SessionStateChanged`, saying its session stopped because
+            Genies, which started it, asked it to, can arrive after the second lamp is lit. That
+            event is old news: `GenieRunner` hears a lamp's events only until it puts that lamp
+            out, so Jafar stays awake rather than being shown broken.
+        """
+        given: 'a lighter that keeps where each lamp it lit sends its events'
+            var real = lighter()
+            var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
+            runner = new GenieRunner(lamp, [
+                    light: { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
+                        listeners << events
+                        real.light(directory, name, settings, key, progress, events)
+                    },
+                    unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
+                    { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
+
+        and: 'Jafar woke, slept, and woke again'
+            awake()
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
+            awake()
+
+        when: 'the first lamp reports, late, that its session stopped'
+            listeners.first().accept(new LampEvent.SessionStateChanged(
+                    new LampSessionStatus('stopped', 'asked to stop by the application that started it', Duration.ofMinutes(1), 0)))
+
+        then: 'Jafar is still awake, in its second lamp'
+            genie.phase() == Genie.Phase.READY
+            runner.isAwake()
+
     }
 
     def 'When the genie shows the user something, its desktop opens next to the chat, saying what'() {

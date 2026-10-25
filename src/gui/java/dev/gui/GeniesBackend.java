@@ -117,7 +117,7 @@ public final class GeniesBackend implements Genies {
             // The schedule too, whose jobs give their runs' moments their titles.
             if (!shown.equals(GeniesState.NONE)) {
                 // When it saves first: until the moments are read, the page says it is reading.
-                runner(shown).history().readAutosave();
+                runner(shown).history().readSettings();
                 runner(shown).history().read();
                 runner(shown).schedule().read();
             }
@@ -316,18 +316,60 @@ public final class GeniesBackend implements Genies {
 
     /// Not while the genie is awake or waking: its lamp read the file as it woke.
     @Override public void autosave(UUID id, History.Autosave wanted) {
+        if (asleep(id)) runner(id).history().autosave(wanted);
+    }
+
+    /// Not while the genie is awake or waking, as [#autosave].
+    @Override public void maxGrowth(UUID id, double gb) {
+        if (asleep(id)) runner(id).history().maxGrowth(gb);
+    }
+
+    /// Not while the genie is awake or waking: oillamp deletes moments only from a lamp that is out.
+    @Override public void planPruning(UUID id) {
+        if (asleep(id)) runner(id).history().planPruning();
+    }
+
+    @Override public void prune(UUID id) {
+        if (asleep(id)) runner(id).history().prune();
+    }
+
+    @Override public void startBranch(UUID id, String name, String moment) {
         Optional<Genie> genie = state.get().find(id);
-        if (genie.isEmpty() || genie.get().phase().isAwake() || genie.get().phase() == Genie.Phase.WAKING) return;
-        runner(id).history().autosave(wanted);
+        if (genie.isEmpty() || genie.get().history().branchNameProblem(name).isPresent()) return;
+        runner(id).history().startBranch(name, moment);
+    }
+
+    /// Not while the genie is awake or waking: moving it changes its home, which oillamp refuses
+    /// under a running sandbox. Unlike going back, the app does not put the genie to sleep for
+    /// it: the user moves a genie that sleeps, and wakes it on its new branch.
+    @Override public void switchBranch(UUID id, String branch) {
+        if (asleep(id)) runner(id).switchTo(branch);
+    }
+
+    @Override public void planDeletingBranch(UUID id, String branch) { runner(id).history().planDeletingBranch(branch); }
+
+    @Override public void deleteBranch(UUID id, String branch) { runner(id).history().deleteBranch(branch); }
+
+    /// Not while the genie is awake or waking, as [#switchBranch].
+    @Override public void planReset(UUID id, String moment) {
+        if (asleep(id)) runner(id).history().planReset(moment);
+    }
+
+    @Override public void reset(UUID id, String moment) {
+        if (asleep(id)) runner(id).reset(moment);
+    }
+
+    /// Whether the genie sleeps, or broke: its lamp is out, and its file and home can change.
+    private boolean asleep(UUID id) {
+        Optional<Genie> genie = state.get().find(id);
+        return genie.isPresent() && !genie.get().phase().isAwake() && genie.get().phase() != Genie.Phase.WAKING;
     }
 
     // ─── the host access ───────────────────────────────────────────────────────────────────
 
     /// Not while the genie is awake or waking: its lamp read the file as it woke.
     @Override public void saveHostAccess(UUID id) {
-        Optional<Genie> genie = state.get().find(id);
-        if (genie.isEmpty() || genie.get().phase().isAwake() || genie.get().phase() == Genie.Phase.WAKING) return;
-        runner(id).hostAccess().save(genie.get().hostAccess().draft());
+        if (asleep(id)) runner(id).hostAccess().save(state.get().find(id).orElseThrow().hostAccess().draft());
     }
 
     @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }

@@ -194,19 +194,20 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
             directory.history()*.id() == [newest.id()]
     }
 
-    def 'An application reads and changes `history.max_growth_gb` with `LampDirectory.historyMaxGrowthGb`, and only that line of `oillamp.toml` changes'() {
+    def '`LampDirectory.historyMaxGrowthGb()` reads `history.max_growth_gb`, and `historyMaxGrowthGb(0.5)` changes only that line of `oillamp.toml`'() {
         reportInfo '''
-            Let's consider an application, a program built on oillamp's Java API, whose settings page shows
-            how far a lamp's history may grow beyond its first snapshot, and lets its user change that.
-            `LampDirectory.historyMaxGrowthGb()` reads `max_growth_gb` under `[history]` in the lamp's
-            `oillamp.toml`, and `LampDirectory.historyMaxGrowthGb(0.5)` writes it, each by running
-            `oillamp history <dir> max-growth`. The file is also the user's, so the comment on that line
-            stays, and every other line too.
+            Let's consider a program that embeds oillamp, such as a desktop app with a settings page that
+            shows how far a lamp's history may grow beyond its first snapshot, and lets its user change
+            that. It calls `LampDirectory.historyMaxGrowthGb()`, which reads `max_growth_gb` under
+            `[history]` in the lamp's `oillamp.toml`, and `LampDirectory.historyMaxGrowthGb(0.5)`, which
+            writes it; each runs `oillamp history <dir> max-growth`. The file is also the user's, so the
+            comment on that line stays, and every other line too.
 
             Writing the size deletes nothing by itself: the next save does, or `LampDirectory.pruneHistory()`,
-            so the application can first show what `LampDirectory.wouldPruneHistory()` would delete. A size
-            outside 0 to 10000 GB is refused before the engine starts, with an `IllegalArgumentException`,
-            and `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
+            so the program can first show the user the snapshots `LampDirectory.wouldPruneHistory()` lists
+            as those it would delete. `LampDirectory.historyMaxGrowthGb(-1)`, a size outside 0 to 10000 GB,
+            throws an `IllegalArgumentException` before the engine starts, and
+            `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
         '''
         given: 'a lamp with the file a new lamp gets, saved twice with two versions of a 64 KB file'
             def lamp = host.lampPath()
@@ -222,7 +223,7 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
         expect: 'the size a new lamp gets: 2 GB beyond the first snapshot'
             directory.historyMaxGrowthGb() == 2d
 
-        when: 'the application sets half a GB'
+        when: 'the program calls LampDirectory.historyMaxGrowthGb(0.5)'
             def written = directory.historyMaxGrowthGb(0.5)
 
         then: 'the file says so on the same line, with its comment, and nothing else in it changed'
@@ -241,13 +242,13 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
         when: 'the user sets about 32 KB on the command line, less than one more version of the file'
             def lowered = host.oillamp.run('history', lamp.toString(), 'max-growth', '0.00003')
 
-        then: 'nothing is deleted yet, and LampDirectory.wouldPruneHistory() names the first snapshot'
+        then: 'nothing is deleted yet, and LampDirectory.wouldPruneHistory() lists the first snapshot as the one it would delete'
             lowered.succeeded()
             directory.historyMaxGrowthGb() == 0.00003d
             directory.history()*.id() == [newest.id(), first.id()]
             directory.wouldPruneHistory().orElseThrow().removed()*.snapshot()*.id() == [first.id()]
 
-        when: 'the application asks for a size no lamp can have'
+        when: 'the program calls LampDirectory.historyMaxGrowthGb(-1), a size no lamp can have'
             directory.historyMaxGrowthGb(-1)
 
         then: 'it is refused before the engine starts, and the file keeps its size'
@@ -264,8 +265,9 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
 
     def '`LampDirectory.historyMaxGrowthGb` refuses to change the size while a session runs'() {
         reportInfo '''
-            Let's consider an application that holds a running session of a lamp, and whose user changes
-            how far the lamp's history may grow. A session reads `oillamp.toml` only as it starts, and its
+            Let's consider a program that embeds oillamp and holds a running session of a lamp, as a
+            `Lamp` from `LampDirectory.start()`, and whose user changes how far the lamp's history may
+            grow. A session reads `oillamp.toml` only as it starts, and its
             saves prune with the size it read then, so a new `max_growth_gb` would not reach it. So
             `LampDirectory.historyMaxGrowthGb(1)` throws a `LampFailedException` with the status
             `LAMP_BUSY` while the session runs, and the file stays as it was. Reading the size works all
@@ -279,7 +281,7 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
             def running = directory.start()
             assert running.awaitRunning(Duration.ofSeconds(30))
 
-        when: 'the application sets 1 GB'
+        when: 'the program calls LampDirectory.historyMaxGrowthGb(1)'
             directory.historyMaxGrowthGb(1)
 
         then:

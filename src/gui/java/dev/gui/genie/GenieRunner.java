@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -26,6 +27,7 @@ import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampAgentProgress;
 import dev.lamp.LampConversation;
+import dev.lamp.LampDirectory;
 import dev.lamp.LampFailedException;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
@@ -58,6 +60,11 @@ public final class GenieRunner {
     /// whose service and key Genies cannot know.
     private volatile Optional<LitWith> litWith = Optional.empty();
     private volatile boolean sleeping;
+    /// How many lamps were put out. Each lamp's events are heard with the number it was lit or
+    /// joined under, and only while no lamp was put out since: a lamp's last events, such as its
+    /// session stopping, can arrive after it was put out and the genie woke again, and must not
+    /// break the genie that lives on.
+    private final AtomicLong lampsPutOut = new AtomicLong();
 
     /// Where the next message goes: the conversation's file, relative to the genie's home, and
     /// the entry it continues after. Both empty for a new conversation.
@@ -126,7 +133,7 @@ public final class GenieRunner {
             changes.accept(Genie::waking);
             try {
                 LampLighter.Lit lit = lighter.light(directory, name, settings, key,
-                        what -> changes.accept(genie -> genie.lampSays(what)), this::onLampEvent);
+                        what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp());
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays("waking the genie"));
@@ -302,7 +309,7 @@ public final class GenieRunner {
             heldWhileCatchingUp = Optional.of(new ArrayList<>());
             changes.accept(genie -> genie.waking().withActivity("joining its lamp, which was left running"));
             try {
-                Optional<LampLighter.Lit> lit = lighter.join(directory, this::onLampEvent);
+                Optional<LampLighter.Lit> lit = lighter.join(directory, heardFromThisLamp());
                 if (lit.isEmpty()) {
                     heldWhileCatchingUp = Optional.empty();
                     changes.accept(Genie::asleep);
@@ -408,6 +415,14 @@ public final class GenieRunner {
     }
 
     // ─── what the lamp reports ─────────────────────────────────────────────────────────────
+
+    /// Hears the events of the lamp lit or joined now, until it is put out.
+    private Consumer<LampEvent> heardFromThisLamp() {
+        long lampNumber = lampsPutOut.get();
+        return event -> {
+            if (lampNumber == lampsPutOut.get()) onLampEvent(event);
+        };
+    }
 
     /// Every event of the lamp's session, on the thread that reads them.
     private void onLampEvent(LampEvent event) {
@@ -544,12 +559,13 @@ public final class GenieRunner {
         sleeping = true;
         lamp.ifPresent(LampLighter.Lit::close);
         lamp = Optional.empty();
+        lampsPutOut.incrementAndGet();
         litWith = Optional.empty();
         history.wentOut();
         hostAccess.wentOut();
     }
 
-    // ─── going back in time ────────────────────────────────────────────────────────────────
+    // ─── going back in time, and other branches ───────────────────────────────────────────
 
     /// Brings the genie's home back to how it was at `moment`, conversations included. oillamp
     /// refuses while the sandbox runs, so a lit lamp is put out first, and the genie is left
@@ -562,23 +578,63 @@ public final class GenieRunner {
                 putOutLamp();
                 changes.accept(Genie::asleep);
             }
-            try {
-                lighter.unlit(directory).restore(moment.id());
-                showConversation(fileOrMostRecent(where.file()), where.leaf());
-                // The outbox went back too; it is looked into again when the genie wakes.
-                changes.accept(genie -> genie.withHandouts(Tuple.of(Handout.class))
-                        .withHistory(genie.history().withBusy("").withPicked("")));
-            } catch (IOException | LampFailedException failed) {
-                String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
-                changes.accept(genie -> genie.withHistory(genie.history().withBusy("").withProblem("oillamp could not go back: " + why)));
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-            reloadConversations();
-            history.read();
-            // The lamp's file went back too, and with it when oillamp saves by itself.
-            history.readAutosave();
+            changeHome("go back", lamp -> lamp.restore(moment.id()));
         });
+    }
+
+    /// Moves the genie to the branch `branch`: its home becomes that branch's newest moment, and
+    /// every save goes there from now on. oillamp saves what changed on the branch it leaves
+    /// first. Only while the genie sleeps, which the app makes sure of; a lamp lit meanwhile is
+    /// refused by oillamp, and the page says why.
+    public void switchTo(String branch) {
+        work.execute(() -> {
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Moving to " + branch + "…")
+                    .withNote("").withProblem("").withPlan(Optional.empty())));
+            changeHome("move to " + branch, lamp -> lamp.switchTo(branch));
+        });
+    }
+
+    /// Resets the branch the genie lives on back to `moment`, as the user confirmed: the moments
+    /// after it leave the branch, and changes no moment holds are thrown away. Nothing is saved
+    /// first, so this cannot be undone. Only while the genie sleeps, as [#switchTo].
+    public void reset(String moment) {
+        work.execute(() -> {
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Resetting…")
+                    .withNote("").withProblem("").withPlan(Optional.empty())));
+            changeHome("reset", lamp -> lamp.reset(moment));
+        });
+    }
+
+    /// A change to the genie's home, with its lamp out, through the history's keeper.
+    @FunctionalInterface
+    private interface HomeChange {
+        void change(LampDirectory lamp) throws IOException, InterruptedException, LampFailedException;
+    }
+
+    /// Makes `change` to the genie's asleep home, then reads what came of it: the home, its lamp's
+    /// file and its schedule are another moment's now, so the chat, the outbox, the history, its
+    /// settings, the schedule and the host access are read again. The chat stays in its
+    /// conversation if that is still there, and goes to the most recent one otherwise.
+    ///
+    /// @param what what the change is, as in "oillamp could not go back"
+    private void changeHome(String what, HomeChange change) {
+        try {
+            change.change(history.lamp());
+            showConversation(fileOrMostRecent(where.file()), where.leaf());
+            // The outbox changed too; it is looked into again when the genie wakes.
+            changes.accept(genie -> genie.withHandouts(Tuple.of(Handout.class))
+                    .withHistory(genie.history().withBusy("").withPicked("")));
+        } catch (IOException | LampFailedException failed) {
+            String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("").withProblem("oillamp could not " + what + ": " + why)));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        reloadConversations();
+        history.read();
+        history.readSettings();
+        schedule.read();
+        hostAccess.read();
     }
 
     // ─── files ─────────────────────────────────────────────────────────────────────────────
