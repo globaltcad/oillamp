@@ -22,6 +22,7 @@ final class WakePicture {
     private final Val<Genie> genie;
     private final Val<Cue> cue;
     private final Var<WakeScene> scene;
+    private Val<Boolean> visible = Val.of(false);
     private boolean playing;
 
     WakePicture(Val<Genie> genie) {
@@ -34,9 +35,11 @@ final class WakePicture {
         return scene.viewAs(Boolean.class, WakeScene::emerging);
     }
 
-    UIForAnySwing<?, ?> view() {
+    UIForAnySwing<?, ?> view(Val<Boolean> visible) {
+        this.visible = visible;
         return UI.box().withMinSize(0, 0).withPrefSize(320, 220)
                 .onView(Viewable.cast(cue), _ -> follow())
+                .onView(Viewable.cast(visible), _ -> follow())
                 .onShown(_ -> follow())
                 .withStyle(scene, (frame, it) -> {
                     int width = UI.scale(it.componentWidth());
@@ -56,9 +59,9 @@ final class WakePicture {
 
     private void follow() {
         scene.update(it -> it.follows(genie.get()));
-        if (playing || !scene.get().moving()) return;
+        if (playing || !moving()) return;
         playing = true;
-        UI.animateFor(LifeTime.of(1, TimeUnit.SECONDS)).asLongAs(_ -> scene.get().moving()).go(new Animation() {
+        UI.animateFor(LifeTime.of(1, TimeUnit.SECONDS)).asLongAs(_ -> moving()).go(new Animation() {
             private double previous;
 
             @Override public void run(AnimationStatus status) {
@@ -73,5 +76,9 @@ final class WakePicture {
                 follow();
             }
         });
+    }
+
+    private boolean moving() {
+        return scene.get().moving() || (visible.get() && scene.get().phase().isAwake());
     }
 }

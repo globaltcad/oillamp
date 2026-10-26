@@ -36,11 +36,11 @@ class WakingAGeniePictureSpec extends Specification {
             not to an invented percentage derived from the animation clock.
         '''
         given: 'Juniper has started waking'
-            def genie = Genie.named('Juniper')
-            def starting = WakeScene.of(genie).follows(genie.waking())
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie).follows(genie.waking())
 
         when: 'two minutes pass without the sandbox becoming ready'
-            def waiting = starting.after(120)
+            var waiting = starting.after(120)
 
         then: 'the lamp still animates in the burning part of the scene, with no emerging genie'
             starting.moving()
@@ -49,7 +49,7 @@ class WakingAGeniePictureSpec extends Specification {
             waiting.moment() >= 3.6 && waiting.moment() < 4.6
 
         when: 'the actual genie becomes ready'
-            def ready = waiting.follows(genie.waking().awake())
+            var ready = waiting.follows(genie.waking().awake())
 
         then: 'emergence starts from the beginning, however long startup took'
             ready.emerging()
@@ -67,8 +67,8 @@ class WakingAGeniePictureSpec extends Specification {
             would give the user more time, but would lose the wave itself.
         '''
         given: 'Juniper has just become ready after waking'
-            def genie = Genie.named('Juniper')
-            def ready = WakeScene.of(genie.waking()).follows(genie.waking().awake())
+            var genie = Genie.named('Juniper')
+            var ready = WakeScene.of(genie.waking()).follows(genie.waking().awake())
 
         expect: 'the greeting continues after formation and the shared scene keeps advancing'
             ready.after(2.2).emerging()
@@ -93,9 +93,9 @@ class WakingAGeniePictureSpec extends Specification {
             not manufacture another emergence.
         '''
         given: 'Juniper becomes ready after only a tenth of a second'
-            def genie = Genie.named('Juniper')
-            def ready = WakeScene.of(genie.waking()).after(0.1).follows(genie.waking().awake())
-            def working = ready.after(1).follows(genie.withPhase(Genie.Phase.WORKING))
+            var genie = Genie.named('Juniper')
+            var ready = WakeScene.of(genie.waking()).after(0.1).follows(genie.waking().awake())
+            var working = ready.after(1).follows(genie.withPhase(Genie.Phase.WORKING))
         expect: 'the picture greets with Juniper’s avatar while readiness and work take effect immediately'
             ready.phase() == Genie.Phase.READY
             ready.emerging()
@@ -115,18 +115,18 @@ class WakingAGeniePictureSpec extends Specification {
             pending greeting from the failed attempt.
         '''
         given: 'Juniper has spent ten seconds starting its sandbox'
-            def genie = Genie.named('Juniper')
-            def starting = WakeScene.of(genie.waking()).after(10)
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie.waking()).after(10)
 
         when: 'startup fails because no model is available'
-            def broken = starting.follows(genie.broken('No model'))
+            var broken = starting.follows(genie.broken('No model'))
 
         then: 'no startup or successful greeting animation continues'
             !broken.moving()
             broken.moment() == 1
 
         when: 'the user retries waking Juniper'
-            def retry = broken.follows(genie.waking())
+            var retry = broken.follows(genie.waking())
 
         then: 'the new attempt animates from the beginning, without a previously released genie'
             retry.moving()
@@ -143,8 +143,8 @@ class WakingAGeniePictureSpec extends Specification {
             the sleeping state. No remaining greeting should outlive the lifecycle it depicts.
         '''
         given: 'Juniper is partway through its emergence'
-            def genie = Genie.named('Juniper')
-            def emerging = WakeScene.of(genie.waking()).follows(genie.waking().awake()).after(0.5)
+            var genie = Genie.named('Juniper')
+            var emerging = WakeScene.of(genie.waking()).follows(genie.waking().awake()).after(0.5)
 
         expect: 'sleeping cancels the greeting and returns the scene to the cold lamp'
             !emerging.follows(genie.asleep()).moving()
@@ -161,10 +161,10 @@ class WakingAGeniePictureSpec extends Specification {
             starting lamp. In both cases the appearance must come from Sami's identity.
         '''
         given: 'Juniper is emerging and Sami is another genie in the list'
-            def genie = Genie.named('Juniper')
-            def starting = WakeScene.of(genie.waking()).after(10)
-            def emerging = starting.follows(genie.waking().awake()).after(0.5)
-            def other = Genie.named('Sami')
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie.waking()).after(10)
+            var emerging = starting.follows(genie.waking().awake()).after(0.5)
+            var other = Genie.named('Sami')
 
         expect: 'selecting sleeping Sami discards Juniper’s greeting and uses Sami’s appearance'
             !emerging.follows(other).moving()
@@ -187,18 +187,18 @@ class WakingAGeniePictureSpec extends Specification {
             genie, rather than leaving a lit lamp despite recording the correct identity.
         '''
         given: 'Juniper’s lamp has been lighting for two seconds and reports an image build'
-            def genie = Genie.named('Juniper')
-            def waiting = WakeScene.of(genie.waking()).after(2)
-            def reported = waiting.follows(genie.waking().lampSays('building the image'))
-            def formed = reported.follows(genie.waking().awake()).after(3)
-            def picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
-            def graphics = picture.createGraphics()
+            var genie = Genie.named('Juniper')
+            var waiting = WakeScene.of(genie.waking()).after(2)
+            var reported = waiting.follows(genie.waking().lampSays('building the image'))
+            var formed = reported.follows(genie.waking().awake()).after(3)
+            var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+            var graphics = picture.createGraphics()
         when: 'Juniper becomes ready and its formed greeting is painted'
             WelcomeScene.paint(graphics, 320, 220, formed.play(), formed.moment())
             graphics.dispose()
         then: 'the progress report preserved the presentation and Juniper’s body colour appears in the picture'
             reported == waiting
-            def colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
+            var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
             (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
     }
 }
