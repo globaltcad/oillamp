@@ -144,7 +144,12 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
 
     /// While the genie answers in another conversation than the chat shows, nothing is sent:
     /// the question would wait for that answer, and then go somewhere the user no longer looks.
-    public boolean canSend() { return phase.isAwake() && !draft.isBlank() && conversations.aside().isEmpty(); }
+    public boolean canSend() {
+        return phase.isAwake() &&
+                !draft.isBlank() &&
+                conversations.aside().isEmpty() &&
+                !conversations.overview();
+    }
 
     /// The draft becomes the user's next message, and the genie is working on it. Whoever calls
     /// this sends the draft, as it was before, to the genie's harness.
