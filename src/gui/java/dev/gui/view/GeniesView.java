@@ -518,7 +518,10 @@ public final class GeniesView extends JPanel {
         final Optional<UIForAnySwing<?, ?>> beside
     ) {
         Val<Boolean> open = fold.viewAs(Boolean.class, Fold::shown);
-        Val<Tuple<String>> here = rows.viewAs(Tuple.classTyped(String.class), Conversations::pathToHere);
+        Val<Tuple<String>> here = Viewable.of(Tuple.classTyped(String.class), rows,
+                state.viewAs(Conversations.class, it -> it.find(id).map(Genie::conversations).orElse(Conversations.NONE)),
+                (shownRows, conversations) -> conversations.selectionIn(shownRows)
+        );
         // The line that opens the tree brightens under the pointer, and so does the tree's row
         // under it, across the tree's width: the number of that row, or -1 for none.
         Var<Boolean> lineHovered = Var.of(false);
@@ -588,7 +591,16 @@ public final class GeniesView extends JPanel {
                         )
                         .isEnabledIf(browsable)
                         .withSelection(here)
-                        .onSelection(it -> goTo(id, it.leadPath(), it.lead()))
+                        .onSelection(it -> {
+                            if (it.selection().isEmpty()) {
+                                // The other tree is also cleared by the selection binding. Only
+                                // clearing this tree's current selection asks for the overview.
+                                if (!here.get().isEmpty())
+                                    state.update(From.VIEW, s -> s.update(id, g -> g.withConversations(g.conversations().withOverview(true))));
+                            }
+                            else
+                                goTo(id, it.leadPath(), it.lead());
+                        })
                         .onMouseMove(it -> {
                             JTree tree = it.getComponent();
                             int row = tree.getClosestRowForLocation(it.mouseX(), it.mouseY());
@@ -690,7 +702,12 @@ public final class GeniesView extends JPanel {
     /// genie is on already, which the tree selects by itself, goes nowhere.
     private void goTo(UUID id, Tuple<String> path, Optional<Talk> row) {
         state.get().find(id).ifPresent(genie -> {
-            if (path.isEmpty() || row.isEmpty() || path.equals(genie.conversations().herePath())) return;
+            if (path.isEmpty() || row.isEmpty())
+                return;
+            if (path.equals(genie.conversations().herePath())) {
+                state.update(From.VIEW, s -> s.select(id).update(id, g -> g.withConversations(g.conversations().withOverview(false))));
+                return;
+            }
             genie.conversations().fileOf(path.first()).ifPresent(file -> {
                 follow.ifPresent(FollowTheEnd::toEnd);
                 app.goTo(id, file, row.get().leaf());
@@ -1068,7 +1085,10 @@ public final class GeniesView extends JPanel {
         Val<Boolean> empty = entries.viewAs(Boolean.class, Tuple::isEmpty);
         Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.emerging(),
                 (it, emerging) -> it == Genie.Phase.WAKING || emerging);
-        Val<Boolean> pictureShown = Viewable.of(Boolean.class, empty, wakingPicture, (it, waking) -> it || waking);
+        Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
+        Val<Boolean> emptyOrOverview = Viewable.of(Boolean.class, empty, overview, (it, home) -> it || home);
+        Val<Boolean> pictureShown = Viewable.of(Boolean.class, emptyOrOverview, wakingPicture, (it, waking) -> it || waking);
+        Val<Boolean> livePicture = Viewable.of(Boolean.class, pictureShown, page, (shown, where) -> shown && where == GeniesState.Page.CHAT);
         // Working, with nothing streaming in: a bar says what the user waits for. The pulse, which
         // moves while the genie works, also moves on the time a job has run.
         Val<Boolean> waiting = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.WORKING
@@ -1090,7 +1110,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0, align center",
                 box("wrap 1, ins 30, gap 8, align center center", "[center, grow, fill]")
                 .isVisibleIf(pictureShown)
-                .add("growx, wmin 0", wakePicture.view())
+                .add("growx, wmin 0", wakePicture.view(livePicture))
                 .add("growx, wmin 0", label(genie.viewAsString(it -> switch (it.phase()) {
                         case READY, WORKING -> it.name() + " is listening.";
                         case WAKING -> it.name() + " is waking.";
@@ -1124,6 +1144,8 @@ public final class GeniesView extends JPanel {
     /// waking goes.
     private UIForAnySwing<?, ?> bottomBar() {
         Val<Boolean> awake = phase.viewAs(Boolean.class, Genie.Phase::isAwake);
+        Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
+        Val<Boolean> composing = Viewable.of(Boolean.class, awake, overview, (on, home) -> on && !home);
         Val<Boolean> canWake = phase.viewAs(Boolean.class, it -> it == Genie.Phase.ASLEEP || it == Genie.Phase.BROKEN);
         Val<Boolean> canSend = genie.viewAs(Boolean.class, Genie::canSend);
         Val<Boolean> answeringElsewhere = genie.viewAs(Boolean.class, it -> it.conversations().aside().isPresent());
@@ -1133,7 +1155,7 @@ public final class GeniesView extends JPanel {
                 ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
                               SUBTEXT, answeringElsewhere))
             .add("growx, wmin 0",
-                panel("fill, ins 0, gap 8", "[][grow][]", "[bottom]").group(Skin.COMPOSER).isVisibleIf(awake)
+                panel("fill, ins 0, gap 8", "[][grow][]", "[bottom]").group(Skin.COMPOSER).isVisibleIf(composing)
                 .add(button("＋").group(Skin.ICON_BUTTON).withTooltip("Give the genie a file; it lands in ~/inbox")
                      .onClick(_ -> giveFile()))
                 .add("growx, wmin 0, hmin 36, hmax 160",
@@ -1178,6 +1200,13 @@ public final class GeniesView extends JPanel {
                      .withStyle(canSend, (on, it) -> on ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
                          .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
                      .onClick(_ -> send())))
+            .add("growx, wmin 0",
+                button("New conversation").group(Skin.FLAME_BUTTON)
+                .isVisibleIf(Viewable.of(Boolean.class, awake, overview, (on, home) -> on && home))
+                .isEnabledIf(phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY))
+                .withTooltip("Start a new conversation, or select a conversation in the tree to return to it")
+                .onClick(_ -> app.startAfresh(genie.get().id()))
+            )
             .add("growx, wmin 0",
                 panel("fill, ins 4 8 4 4, gap 12, hidemode 3", "[grow][][]").group(Skin.COMPOSER)
                 .isVisibleIf(awake.viewAs(Boolean.class, it -> !it))

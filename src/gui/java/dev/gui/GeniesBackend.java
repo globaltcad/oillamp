@@ -202,7 +202,10 @@ public final class GeniesBackend implements Genies {
         switch (genie.get().phase()) {
             // Conversations are read from the lamp, so a sleeping genie's can be read too, and a
             // working genie's answer is kept aside while the user reads another.
-            case READY, WORKING, ASLEEP, BROKEN -> runner(id).goToConversation(conversation, leaf);
+            case READY, WORKING, ASLEEP, BROKEN -> {
+                state.update(From.VIEW, it -> it.update(id, g -> g.withConversations(g.conversations().withOverview(false))));
+                runner(id).goToConversation(conversation, leaf);
+            }
             case WAKING -> { }   // The tree does not move while the genie wakes.
         }
     }
@@ -211,7 +214,10 @@ public final class GeniesBackend implements Genies {
         Optional<Genie> genie = state.get().find(id);
         if (genie.isEmpty()) return;
         state.update(From.VIEW, it -> it.select(id));
-        if (genie.get().phase() != Genie.Phase.WORKING) runner(id).startAfresh();
+        if (genie.get().phase() != Genie.Phase.WORKING) {
+            state.update(From.VIEW, it -> it.update(id, g -> g.withConversations(g.conversations().withOverview(false))));
+            runner(id).startAfresh();
+        }
     }
 
     @Override public void forget(UUID id, String conversation) {

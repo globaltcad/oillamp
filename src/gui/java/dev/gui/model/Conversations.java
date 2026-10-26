@@ -16,7 +16,17 @@ import sprouts.Tuple;
 /// @param folded    whether the user folded both trees away into the genie's card, which they
 ///                  can only while the genie is not awake; awake, the trees are always there
 /// @param aside     the conversation the genie is answering in, while the chat shows another
-public record Conversations(Tuple<Conversation> all, Here here, Fold chatsFold, Fold jobsFold, boolean folded, Optional<Aside> aside) {
+/// @param overview  whether no conversation is selected and the lamp overview is shown; the
+///                  actual conversation and any answer in progress are kept
+public record Conversations(
+    Tuple<Conversation> all,
+    Here here,
+    Fold chatsFold,
+    Fold jobsFold,
+    boolean folded,
+    Optional<Aside> aside,
+    boolean overview
+) {
 
     /// The conversation the genie is answering the user in, put aside while the chat shows
     /// another one, and still growing with the answer. The chat takes it back when it goes there.
@@ -35,17 +45,23 @@ public record Conversations(Tuple<Conversation> all, Here here, Fold chatsFold, 
 
     public static final Conversations NONE = new Conversations(Tuple.of(Conversation.class), Here.UNKNOWN);
 
-    public Conversations(Tuple<Conversation> all, Here here) { this(all, here, Fold.CLOSED, Fold.CLOSED, false, Optional.empty()); }
+    public Conversations(Tuple<Conversation> all, Here here) { this(all, here, Fold.CLOSED, Fold.CLOSED, false, Optional.empty(), false); }
 
     /// The genie's home inside its sandbox.
     public static final String HOME = "/home/agent/";
 
-    public Conversations withAll(Tuple<Conversation> all) { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
-    public Conversations withHere(Here here)              { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
-    public Conversations withChatsFold(Fold chatsFold)    { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
-    public Conversations withJobsFold(Fold jobsFold)      { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
-    public Conversations withFolded(boolean folded)       { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
-    public Conversations withAside(Optional<Aside> aside) { return new Conversations(all, here, chatsFold, jobsFold, folded, aside); }
+    public Conversations withAll(Tuple<Conversation> all) { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withHere(Here here)              { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withChatsFold(Fold chatsFold)    { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withJobsFold(Fold jobsFold)      { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withFolded(boolean folded)       { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withAside(Optional<Aside> aside) { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+    public Conversations withOverview(boolean overview) { return new Conversations(all, here, chatsFold, jobsFold, folded, aside, overview); }
+
+    /// The visible selection, independently of where the genie's next message continues.
+    public Tuple<String> selectionIn(Tuple<Talk> rows) {
+        return overview ? Tuple.of(String.class) : pathToHere(rows);
+    }
 
     /// How many conversations the user had, a new one not yet on disk among them, and how many
     /// the jobs' runs had.

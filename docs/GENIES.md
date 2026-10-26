@@ -155,6 +155,16 @@ progress stays in the bottom bar. A failed wake, sleeping or selecting another g
 picture. `WakeScene` is immutable presentation data and `WakePicture` advances it on SwingTree's
 UI animation clock; neither changes the genie's actual lifecycle.
 
+Clearing the selected row in either conversation tree returns to the lamp overview, even when
+the transcript still contains messages. `Conversations.overview` keeps this presentation choice
+separate from the actual continuation point: the conversation, draft and answer in progress
+are preserved. Selecting that conversation again returns to it. Selecting a row in the other
+tree clears the first tree without opening the overview. An awake overview continuously plays
+the shared welcome scene after formation, with the same genie waving, blinking, floating and
+changing poses. It offers “New conversation”; selecting an existing conversation restores its
+composer instead. Animation continues while the awake picture is shown and pauses when the
+conversation or another page takes its place.
+
 Genies does not start pi. The lamp's session holds the genie's one pi, as it does for any lamp,
 and every message, scheduled job and `oillamp ask` goes through it, one run at a time.
 
