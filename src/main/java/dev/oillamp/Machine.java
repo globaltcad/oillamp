@@ -191,6 +191,28 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
         String work(String prompt) throws Exception;
     }
 
+    /// A simulated agent that also tells pi, while it works, which tools it runs and what it
+    /// thinks, as a real pi streams those the moment they happen. For scenarios about what a run
+    /// had done by the time it asked for something.
+    @FunctionalInterface
+    interface SimulatedAgentAtWork {
+        /// Does the work the prompt asks for, reporting to `pi` as it goes, and returns the
+        /// agent's last message.
+        ///
+        /// @throws InterruptedException when the run is stopped while it works
+        /// @throws Exception            for an agent, or a model, that fails
+        String work(String prompt, StandInPi pi) throws Exception;
+    }
+
+    /// The stand-in pi a [SimulatedAgentAtWork] works in.
+    interface StandInPi {
+        /// Reports a tool the agent ran, such as `bash` with the command `ls`, started and done.
+        void toolCall(String tool, String command);
+
+        /// Reports a piece of the agent's thinking.
+        void think(String text);
+    }
+
     /// Reads a system file such as `/etc/os-release`, `/etc/subuid` or a
     /// `/proc/sys` entry. Empty when it does not exist or cannot be read.
     Optional<String> readSystemFile(Path path);
@@ -582,6 +604,13 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
         /// An agent in the sandbox: pi, answering prompts the way `agent` does. Without one, the
         /// sandbox has no pi, and waking the agent fails as it would then.
         public SimulationBuilder agent(SimulatedAgent agent) {
+            builder.agent((prompt, pi) -> agent.work(prompt));
+            return this;
+        }
+
+        /// An agent in the sandbox that reports its tool calls and thinking to pi while it works,
+        /// as a real one's pi does, rather than only when it is done.
+        public SimulationBuilder agentAtWork(SimulatedAgentAtWork agent) {
             builder.agent(agent);
             return this;
         }

@@ -429,12 +429,15 @@ final class AgentRunner {
         }
     }
 
+    /// Puts what the run did on the session's queue first, and only then tells the application:
+    /// whoever has heard of a tool call can count on a host request made after it being judged
+    /// with that call among the run's activity.
     private void remember(LampAgentProgress progress, String run) {
-        context.sink().accept(new LampEvent.RunProgress(run, progress));
         if (progress instanceof LampAgentProgress.ToolStarted tool)
             post.accept(new SessionEvent.RunToolCalled(run, tool.tool(), tool.summary()));
         if (progress instanceof LampAgentProgress.Thought thought)
             post.accept(new SessionEvent.RunThought(run, thought.text()));
+        context.sink().accept(new LampEvent.RunProgress(run, progress));
     }
 
     /// Records that a job's run began. A job that runs once is then done, and comes off the schedule.

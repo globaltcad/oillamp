@@ -70,7 +70,7 @@ final class SimulatedMachine implements Machine {
     private final Duration applicationLeavesAfter;
     private final Optional<InputStream> standardInput;
     private final RealMachine realMachine = new RealMachine();
-    private final Optional<SimulatedAgent> agent;
+    private final Optional<SimulatedAgentAtWork> agent;
     private final Optional<Tuple<String>> modelsOffered;
 
     /// The sockets the simulated container is listening on, and whether it is still up.
@@ -520,7 +520,7 @@ final class SimulatedMachine implements Machine {
 
     /// pi in RPC mode, as far as oillamp uses it. It keeps its conversations as pi does, in session
     /// files in the agent's home, starts and opens them, moves within them with oillamp's
-    /// extension command, hands each prompt to the scenario's [SimulatedAgent], and reports the
+    /// extension command, hands each prompt to the scenario's [SimulatedAgentAtWork], and reports the
     /// answer the way pi does.
     ///
     /// It keeps track of its model as pi does, too. A new conversation starts on the default
@@ -538,7 +538,7 @@ final class SimulatedMachine implements Machine {
         private static final String PROVIDER = "edenai";
         private static final String DEFAULT_MODEL = "openai/gpt-4o";
 
-        private final SimulatedAgent agent;
+        private final SimulatedAgentAtWork agent;
         private final Optional<Path> home;
         /// The models `set_model` accepts; empty to accept any.
         private final Optional<Tuple<String>> offered;
@@ -558,7 +558,7 @@ final class SimulatedMachine implements Machine {
         private Optional<String> leaf = Optional.empty();
         private int entries;
 
-        SimulatedPi(SimulatedAgent agent, Optional<Path> home, Optional<Tuple<String>> offered) {
+        SimulatedPi(SimulatedAgentAtWork agent, Optional<Path> home, Optional<Tuple<String>> offered) {
             this.agent = agent;
             this.home = home;
             this.offered = offered;
@@ -742,7 +742,10 @@ final class SimulatedMachine implements Machine {
             String text = "";
             String error = "";
             try {
-                text = agent.work(prompt);
+                text = agent.work(prompt, new StandInPi() {
+                    @Override public void toolCall(String tool, String command) { reportToolCall(tool, command); }
+                    @Override public void think(String thought) { say(delta("thinking_delta", thought)); }
+                });
             } catch (InterruptedException aborted) {
                 stop = "aborted";
                 error = "Request was aborted";
@@ -752,19 +755,9 @@ final class SimulatedMachine implements Machine {
             }
             // A line `⚙ tool: what it does` at the start of the answer stands for a tool the agent ran.
             List<String> lines = new ArrayList<>(text.lines().toList());
-            int calls = 0;
             while (!lines.isEmpty() && lines.getFirst().startsWith("⚙ ") && lines.getFirst().contains(": ")) {
                 String call = lines.removeFirst().substring(2);
-                String id = "call-" + (++calls);
-                com.fasterxml.jackson.databind.node.ObjectNode start = JSON.createObjectNode()
-                        .put("type", "tool_execution_start").put("toolCallId", id)
-                        .put("toolName", call.substring(0, call.indexOf(": ")));
-                start.putObject("args").put("command", call.substring(call.indexOf(": ") + 2));
-                say(start);
-                com.fasterxml.jackson.databind.node.ObjectNode end = JSON.createObjectNode()
-                        .put("type", "tool_execution_end").put("toolCallId", id).put("isError", false);
-                end.putObject("result").putArray("content").addObject().put("type", "text").put("text", "done");
-                say(end);
+                reportToolCall(call.substring(0, call.indexOf(": ")), call.substring(call.indexOf(": ") + 2));
             }
             text = String.join("\n", lines);
             if (stop.equals("stop")) {
@@ -782,6 +775,22 @@ final class SimulatedMachine implements Machine {
             say(end);
             say(JSON.createObjectNode().put("type", "agent_end"));
             say(JSON.createObjectNode().put("type", "agent_settled"));
+        }
+
+        /// How many tool calls this pi has reported, for their ids.
+        private final java.util.concurrent.atomic.AtomicInteger toolCalls = new java.util.concurrent.atomic.AtomicInteger();
+
+        /// Says that a tool ran, as pi does: its start, with the command as its argument, and its end.
+        private void reportToolCall(String tool, String command) {
+            String id = "call-" + toolCalls.incrementAndGet();
+            com.fasterxml.jackson.databind.node.ObjectNode start = JSON.createObjectNode()
+                    .put("type", "tool_execution_start").put("toolCallId", id).put("toolName", tool);
+            start.putObject("args").put("command", command);
+            say(start);
+            com.fasterxml.jackson.databind.node.ObjectNode end = JSON.createObjectNode()
+                    .put("type", "tool_execution_end").put("toolCallId", id).put("isError", false);
+            end.putObject("result").putArray("content").addObject().put("type", "text").put("text", "done");
+            say(end);
         }
 
         private static com.fasterxml.jackson.databind.node.ObjectNode delta(String type, String text) {
@@ -979,7 +988,7 @@ final class SimulatedMachine implements Machine {
         /// session to come up and say so.
         private Duration applicationLeavesAfter = Duration.ofMillis(500);
         private Optional<InputStream> standardInput = Optional.empty();
-        private Optional<SimulatedAgent> agent = Optional.empty();
+        private Optional<SimulatedAgentAtWork> agent = Optional.empty();
         private Optional<Tuple<String>> modelsOffered = Optional.empty();
 
         private Instant clock = Instant.parse("2026-09-22T14:15:03Z");
@@ -1070,7 +1079,7 @@ final class SimulatedMachine implements Machine {
         public void clockRuns() { this.clockRuns = true; }
         public void clockRunsFaster(long times) { this.clockRuns = true; this.clockSpeed = times; }
         public void zone(ZoneId zone) { this.zone = zone; }
-        public void agent(SimulatedAgent agent) { this.agent = Optional.of(agent); }
+        public void agent(SimulatedAgentAtWork agent) { this.agent = Optional.of(agent); }
         public void modelsOffered(Tuple<String> models) { this.modelsOffered = Optional.of(models); }
         public void randomToken(String token) { this.randomToken = token; }
         public void scriptCommand(String prefix, Outcome outcome) { scriptedCommands.put(prefix, outcome); }

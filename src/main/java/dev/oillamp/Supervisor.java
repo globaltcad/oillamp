@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
 
 import dev.lamp.LampExitStatus;
@@ -75,6 +76,12 @@ final class Supervisor {
 
     /// Every thread may add events here; only the event loop takes them.
     private final BlockingQueue<Timed> events = new LinkedBlockingQueue<>();
+    /// How many events were put on the queue, and how many the loop has handled. Together they
+    /// let a thread wait until everything posted before a moment has reached the state; see
+    /// [#handledSoFar].
+    private final AtomicLong posted = new AtomicLong();
+    private long handled;
+    private final Object handling = new Object();
     private final AtomicBoolean shuttingDown = new AtomicBoolean();
 
     /// The session's state. Written only by the event loop, but read by four other threads: the
@@ -224,9 +231,39 @@ final class Supervisor {
                 if (action instanceof SessionAction.Exit(LampExitStatus status)) exit = status;
                 else perform(action);
             }
+            if (timed != null)
+                synchronized (handling) {
+                    handled++;
+                    handling.notifyAll();
+                }
         }
         return exit;
     }
+
+    /// The state, once every event posted before this call has been handled, or after
+    /// [#HANDLING_PATIENCE] as it is then. The host-access gate reads a run's activity this way:
+    /// pi's report of a tool call is posted before anyone hears of it, so a request made after
+    /// that is judged with the call in it, not by how fast the loop happened to be.
+    private SessionState handledSoFar() {
+        long upTo = posted.get();
+        long deadline = System.nanoTime() + HANDLING_PATIENCE.toNanos();
+        synchronized (handling) {
+            try {
+                while (handled < upTo && !state.isFinal()) {
+                    long left = deadline - System.nanoTime();
+                    if (left <= 0) break;
+                    TimeUnit.NANOSECONDS.timedWait(handling, left);
+                }
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return state;
+    }
+
+    /// How long [#handledSoFar] waits at most. The loop handles an event in far less; this only
+    /// bounds a loop that is busy shutting down.
+    private static final Duration HANDLING_PATIENCE = Duration.ofSeconds(2);
 
     /// Ends the session after the event loop failed.
     ///
@@ -269,6 +306,7 @@ final class Supervisor {
 
     /// Puts an event on the queue, stamped with the time it happened. Safe from any thread.
     private void post(SessionEvent event) {
+        posted.incrementAndGet();
         events.add(new Timed(event, machine.now()));
     }
 
@@ -479,7 +517,7 @@ final class Supervisor {
             HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
                     HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
                     context.sink(), this::awaitAnswered, runs::currentRun,
-                    run -> HostAccess.logOf(state.runs(), run),
+                    run -> HostAccess.logOf(handledSoFar().runs(), run),
                     HostAccess.secretVariables(prepared.config(), service, context.options()));
             Result<HostMcp.Server> door = HostMcp.Server.open(layout.hostAccessSocket(), granted, prepared.config().hostAccess());
             if (door instanceof Result.Err<HostMcp.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
