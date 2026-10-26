@@ -382,11 +382,18 @@ the count does, between ☰ and the genie's lamp, and pressed, shows what happen
 
 ## The schedule
 
-Each genie has two pages beside its chat, switched to in its header: its schedule, and its
-history (see below). The header's buttons have a sign beside their words, and it makes room in
-steps: below 780 units of width, the buttons and the switch show their signs alone; below 540, the
-switch steps aside, and the pages are in the menu behind "⋯" instead. A right-click on the genie's
-card opens that menu too. Menus open as their button is pressed, and a second press closes them.
+Each genie has pages beside its chat, switched to in its header: its schedule, its history (see
+below), its host access, and its actions: renaming it, a new conversation, saving now, sleeping or
+waking, and deleting it, each a tile with a button large enough for a finger. The name is renamed
+where it stands: Rename makes it editable, Enter or Save keeps the new one, Escape or Cancel the
+old. Starting a new conversation goes to the chat. The header's buttons
+have a sign beside their words, and it makes room in steps: below 900 units of width, the buttons
+and the switch show their signs alone; below 580, the switch nests into Chat and Manage (upright
+faders, unlike the lying sliders of the settings every genie shares). On any page Manage gathers,
+those pages stand in a row of their own under the header, with their words from 460 units. A
+narrow header has no Sleep button; the Actions page has it. A right-click on the genie's card opens
+a menu with the same actions. Menus open as their button is pressed, and a second press closes
+them.
 
 The jobs on the schedule wake the genie at their times, but only while it is awake; a job whose
 time came while it slept runs once, as soon as it wakes. The page says which of these holds.
@@ -493,7 +500,7 @@ the page follows the genie's branch again.
 on, first asks the lamp what would go (`wouldDeleteBranch`), and a banner says it: how many
 moments are on that branch alone. Only its Delete button calls `deleteBranch`.
 
-**Saving by hand.** "Save now…", on the page and in the genie's menu, asks for a few words to
+**Saving by hand.** "Save now…", on the page, on the Actions page and in the genie's menu, asks for a few words to
 remember the moment by, which may be left out, and calls `LampDirectory.save`. The page picks the
 new moment, and the chat says it was saved; when nothing changed, both say so instead.
 

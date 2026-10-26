@@ -119,16 +119,17 @@ class KeepingManyGeniesSpec extends Specification {
             taller.withViewWidth(1000).withViewWidth(600).genieList() == new Fold(false, 320)
     }
 
-    def 'The header makes room in steps: first its buttons drop their words, then the pages go into the menu'() {
+    def 'The header makes room in steps: first its buttons drop their words, then its pages nest'() {
         reportInfo """
             The header above a conversation holds the genie's name, the switch between its
-            pages (chat, schedule, history, host access) and buttons such as Desktop and Sleep. Each button
-            has a sign beside its words. With the list of genies open, a window that is not
-            narrow yet can still leave the header too little room for the words, and the last
-            button would be cut off. So the buttons show only their signs whenever the
+            pages (chat, schedule, history, host access, actions) and buttons such as Desktop and
+            Sleep. Each button has a sign beside its words. With the list of genies open, a window
+            that is not narrow yet can still leave the header too little room for the words, and
+            the last button would be cut off. So the buttons show only their signs whenever the
             conversation's area is small, whatever the window's width. In a smaller area still,
-            even the signs of the pages do not fit beside the genie's name; the switch steps
-            aside, and the pages are in the genie's menu behind "⋯" instead.
+            even the signs of the pages do not fit beside the genie's name. The switch nests then,
+            into Chat and Manage, and the pages Manage gathers come as a row of their own under
+            the header, while the user is on one of them. Sleep is then on the Actions page only.
         """
         expect: 'a roomy area has words, and the pages'
             state.withArea(1000, 700).roomForWords()
@@ -142,9 +143,51 @@ class KeepingManyGeniesSpec extends Specification {
         and: 'a narrow window has signs'
             !state.withArea(1000, 700).withViewWidth(600).roomForWords()
 
-        and: 'a smaller area has signs, and its pages in the menu'
+        and: 'a smaller area has signs, and nests its pages'
             !state.withArea(480, 700).roomForWords()
             !state.withArea(480, 700).roomForPages()
+    }
+
+    def 'In a narrow header, the pages beside the chat come as a row under it, while one of them is shown'() {
+        reportInfo """
+            Narrow, the header shows two parts: Chat, and Manage for the schedule, the history,
+            the host access and the actions. On the chat, the header is one row and the
+            conversation has all the room. On any of the others, Manage is lit and those four pages
+            stand in a row under the header, with their words while that row has room for them.
+            A roomy header has them all in its own row, and needs no second one.
+        """
+        given:
+            var shown = state.add(Genie.named('Jafar'))
+
+        expect: 'on the chat, no second row'
+            !shown.withArea(480, 700).pagesBelow()
+
+        and: 'on any page Manage gathers, a second row'
+            [GeniesState.Page.SCHEDULE, GeniesState.Page.HISTORY, GeniesState.Page.HOST_ACCESS, GeniesState.Page.ACTIONS]
+                .every { shown.withPage(it).withArea(480, 700).pagesBelow() && it.managing() }
+            !GeniesState.Page.CHAT.managing()
+            !GeniesState.Page.SETTINGS.managing()
+
+        and: 'with words while it has room for them'
+            shown.withPage(GeniesState.Page.ACTIONS).withArea(480, 700).roomForWordsBelow()
+            !shown.withPage(GeniesState.Page.ACTIONS).withArea(380, 700).roomForWordsBelow()
+
+        and: 'a roomy header needs no second row'
+            !shown.withPage(GeniesState.Page.ACTIONS).withArea(1000, 700).pagesBelow()
+    }
+
+    def 'Choosing another genie keeps the page Manage gathers that is on show'() {
+        reportInfo """
+            Comparing two genies' schedules, or going through their actions one after another,
+            should not need going back to the page each time.
+        """
+        given:
+            var one = state.add(Genie.named('Jafar'))
+            var two = one.add(Genie.named('Iago'))
+
+        expect:
+            two.withPage(GeniesState.Page.ACTIONS).select(one.genie().id()).page() == GeniesState.Page.ACTIONS
+            two.withPage(GeniesState.Page.CHAT).select(one.genie().id()).page() == GeniesState.Page.CHAT
     }
 
     def 'Out of the box, genies use Eden AI\'s EU endpoint with the key from the environment'() {
