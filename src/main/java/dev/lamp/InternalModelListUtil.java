@@ -24,7 +24,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 ///
 /// The rules for where the list is and which models are kept are the engine's too, in its relay
 /// and its `[model]` settings. They are written out here because this package must not depend on
-/// the engine; `ListingAServicesModelsSpec` checks both give the same answer.
+/// the engine; `ListingAServicesModelsSpec` and `ChoosingTheModelForALampSpec` show both ask the
+/// same place.
 final class InternalModelListUtil {
 
     private InternalModelListUtil() {}

@@ -99,11 +99,10 @@ If you need to change one of these rules, change the test deliberately and say w
 ## How the tests are organised
 
 All tests are Spock specifications. The engine's are in `src/test/groovy/oillamp/`, a package
-outside `dev.oillamp`, so they can only use the public types, like any other caller. The one
-exception is `src/test/groovy/dev/oillamp/ReadingCronExpressionsSpec.groovy`, which reads cron
-expressions through the package-private `CronExpression`. Genies' are in
-`src/test/groovy/gui/`, except two in `src/test/groovy/dev/gui/view/` that reach package-private
-view code. `src/test/groovy/dev/lamp/` tests the `dev.lamp` API on its own.
+outside `dev.oillamp`, so they can only use the public types, like any other caller: `dev.lamp`,
+`OilLamp.run` and the command line, the sockets a session serves, and the files it writes.
+Genies' are in `src/test/groovy/gui/`, except two in `src/test/groovy/dev/gui/view/` that reach
+package-private view code.
 
 ### Scenarios
 
@@ -158,7 +157,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `ChoosingTheModelForALampSpec` | an application choosing the model service and key |
 | `ChoosingTheAgentsModelSpec` | `--model`, `oillamp model` and the Lamp API's: one model for every run, old conversations too, written as pi's default; how a model gets from an application to an answer; with a stand-in pi that keeps track of its model |
 | `GivingTheAgentInstructionsSpec` | `--instructions-env` and `LampDirectory.instructions`: the text's way from an application to pi's `APPEND_SYSTEM.md`, leaving pi's files alone without, and refusing links the agent planted |
-| `ListingAServicesModelsSpec` | `Lamp.models`, against a stand-in server |
+| `ListingAServicesModelsSpec` | `Lamp.models`, against a stand-in server: where it asks, the key, the errors |
 
 Genies' scenarios, in `src/test/groovy/gui/` and `src/test/groovy/dev/gui/view/`, run its model
 and its `GenieRunner` without a window: `KeepingManyGeniesSpec`, `KeepingGeniesBetweenRunsSpec`,

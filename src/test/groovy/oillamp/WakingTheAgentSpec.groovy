@@ -297,6 +297,41 @@ class WakingTheAgentSpec extends Specification {
             'a step over the whole hour'             | '*/20 9 * * *'  || ['2026-09-23T07:00:00Z', '2026-09-23T07:20:00Z', '2026-09-23T07:40:00Z']
     }
 
+    def 'Oillamp reads the two day fields of a cron expression the way cron does: #meaning'() {
+        reportInfo """
+            A cron expression has two fields that name days: the third, the day of the month, and
+            the fifth, the day of the week. Cron, the Linux scheduler, combines them in a way that
+            surprises people, and oillamp reads them the same way, so that an expression copied
+            from a crontab runs when it did there:
+
+            - When both fields are restricted, a day counts when either one matches.
+              `0 0 13 * 5` is midnight on the 13th and also midnight on every Friday, not only on
+              a Friday that is the 13th.
+            - A field that starts with a star does not count as restricted, even with a step after
+              it. `0 0 */2 * 1` is every other day of the month starting with the 1st, and of those
+              only Mondays: both fields must match.
+
+            The scenario adds each expression with `oillamp schedule add --cron` on Tuesday
+            22 September 2026 at 16:15 in Berlin, and reads when the job says it runs next.
+            Berlin is two hours ahead of UTC in September, so midnight there is 22:00Z the day
+            before.
+        """
+        given: 'Tuesday 22 September, 16:15 in Berlin'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+
+        when: 'the user adds a job with the expression'
+            var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', cron, 'Look again')
+
+        then: 'it runs next on the day cron would run it'
+            added.succeeded()
+            added.events().find { it instanceof LampEvent.JobAdded }.job().next() == Optional.of(Instant.parse(next))
+
+        where:
+            meaning                                                        | cron           || next
+            'Friday the 25th counts, although it is not the 13th'          | '0 0 13 * 5'   || '2026-09-24T22:00:00Z'
+            'Monday the 28th is an even day, so the next is Monday 5 October' | '0 0 */2 * 1' || '2026-10-04T22:00:00Z'
+    }
+
     def 'A job can be written with --cron=, --at= and --expires=, and a prompt that starts with a dash goes after --'() {
         reportInfo """
             `--cron=@daily` means the same as `--cron @daily`, so a job comes out the same
@@ -806,6 +841,31 @@ class WakingTheAgentSpec extends Specification {
 
         and: 'the session reported the new job'
             reported.any { it instanceof LampEvent.JobAdded && it.job().id() == 'job-2' }
+    }
+
+    def 'Oillamp refuses the agent a job that runs too often, also when its frequent runs are days away'() {
+        reportInfo """
+            `schedule.min_agent_interval_minutes`, 15 by default, is the shortest time the agent's
+            own jobs may leave between two runs. Let's consider an agent that asks, on Tuesday
+            22 September, for `*/5 0 1 * *`: every five minutes, but only in the first hour of the
+            first day of a month. The next week holds no run of it at all, so a check that only
+            looked at the coming days would let it through, and the agent would get a job that
+            runs every five minutes whenever the month turns.
+
+            So oillamp looks at every run the job could make before it ends. The agent's jobs end
+            after `schedule.max_agent_days`, 14 by default, which from 22 September includes
+            1 October, and oillamp refuses the job, saying what the rule is.
+        """
+        given: 'a lamp whose schedule is on, on Tuesday 22 September'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            startASession(lamp)
+
+        when: 'the agent asks for a job that runs every five minutes, just after midnight on the 1st'
+            var asked = agentAsks(op: 'add', cron: '*/5 0 1 * *', prompt: 'Close the month')
+
+        then: 'oillamp refuses it, naming the shortest gap allowed'
+            !asked.ok
+            asked.error.contains('may run at most every 15 minutes')
     }
 
     def 'Oillamp ends the agent\'s jobs within schedule.max_agent_days, whatever end or time the agent asks for'() {
