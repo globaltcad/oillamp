@@ -35,7 +35,17 @@ final class SignSvgUtil {
     static final String UNFOLD = "<path d='M4 6l4 4 4-4'/>";
     static final String SETTINGS = "<path d='M2 4.5h12M2 11.5h12'/>"
                                  + "<circle cx='10.5' cy='4.5' r='2' fill='currentColor'/><circle cx='5.5' cy='11.5' r='2' fill='currentColor'/>";
-    static final String MORE = "<circle cx='3.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>"
+    /// Three faders standing up: a genie's own pages beside its chat. Upright, so that it is not
+    /// taken for the settings every genie shares, whose sliders lie down.
+    static final String MANAGE = "<path d='M4 2v12M8 2v12M12 2v12'/>"
+                               + "<circle cx='4' cy='10' r='1.8' fill='currentColor'/><circle cx='8' cy='5' r='1.8' fill='currentColor'/>"
+                               + "<circle cx='12' cy='9.5' r='1.8' fill='currentColor'/>";
+    /// A bolt: what can be done with a genie as a whole.
+    static final String ACTIONS = "<path d='M9.2 1.8L3.5 9.2h4.2l-1 5L12.5 6.8H8.3z'/>";
+    static final String RENAME = "<path d='M10.5 2.5l3 3-8 8h-3v-3z'/><path d='M9 4l3 3'/>";
+    static final String WAKE = "<circle cx='8' cy='8' r='2.8'/>"
+                             + "<path d='M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1'/>";
+    static final String MORE ="<circle cx='3.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>"
                              + "<circle cx='8' cy='8' r='1.2' fill='currentColor' stroke='none'/>"
                              + "<circle cx='12.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>";
 

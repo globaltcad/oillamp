@@ -13,7 +13,6 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
-import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTextArea;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
@@ -27,7 +26,6 @@ import swingtree.UIForAnySwing;
 import swingtree.UIForBox;
 import swingtree.UIForButton;
 import swingtree.UIForLabel;
-import swingtree.api.IconDeclaration;
 import swingtree.components.JBox;
 import swingtree.style.StyledString;
 
@@ -96,13 +94,6 @@ final class ViewPartsUtil {
     static JMenuItem item(String text, boolean enabled, Runnable action) {
         JMenuItem item = new JMenuItem(text);
         item.setEnabled(enabled);
-        item.addActionListener(_ -> action.run());
-        return item;
-    }
-
-    /// One of several places to go, with its sign, marked while it is where the user is.
-    static JRadioButtonMenuItem choice(String text, IconDeclaration sign, boolean chosen, Runnable action) {
-        JRadioButtonMenuItem item = new JRadioButtonMenuItem(text, sign.find().orElse(null), chosen);
         item.addActionListener(_ -> action.run());
         return item;
     }
