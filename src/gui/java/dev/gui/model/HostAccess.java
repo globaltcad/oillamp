@@ -120,10 +120,10 @@ public record HostAccess(boolean read, boolean lamp, PermissionRules saved, Perm
         }
     }
 
-    /// A request the genie's lamp asks the user to allow, such as running a program. The checker
+    /// A request the genie's lamp asks the user to allow, such as running a command. The checker
     /// model allowed it already; some requests need the user too.
     ///
-    /// @param tool such as `host_run`
+    /// @param tool such as `host_bash`
     /// @param what what is about to happen, in the lamp's words; the user's decision names the
     ///             request by this
     /// @param at   when the lamp asked
