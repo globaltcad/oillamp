@@ -127,7 +127,7 @@ class ReadingHostRequestsSpec extends Specification {
                     LampConfig.HostAccess.Commands.OFF, false, false)
 
         then: 'nothing that changes the host, or sends anything out of it, is offered'
-            HostTool.offeredBy(readOnly).toList()*.toolName == ['host_list_dir', 'host_stat', 'host_read_file', 'host_show']
+            HostTool.offeredBy(readOnly).toList()*.toolName == ['host_list_dir', 'host_stat', 'host_read_file', 'host_copy_in', 'host_show']
 
         and: 'opening a page is a way out, not a read, so a read-only lamp refuses it too'
             HostTool.tierOf(new HostTool.OpenUrl(URI.create('https://example.org/?q=secret'))) == LampHostRisk.ADDITIVE

@@ -37,6 +37,15 @@ enum HostToolKind {
     CLIPBOARD_READ("host_clipboard_read", LampHostRisk.PASSIVE,
             "Read the text on the user's clipboard.",
             "read the user's clipboard"),
+    // It writes, but only into the agent's own home, which the agent may change anyway. On the
+    // host it only reads, and what it hands the agent is what a read would.
+    COPY_IN("host_copy_in", LampHostRisk.PASSIVE,
+            "Copy a file from the user's own computer into your home in the sandbox, any kind of file, up to 64 MiB, "
+          + "such as a picture or a PDF that host_read_file refuses as not text. After copying, use your own "
+          + "read on the copy to see an image. The copy is never executable. oillamp checks the path and asks its checker first.",
+            "copy a file from the user's computer into your home here, to look at it with your own `read`",
+            Parameter.text("path", "The file on the user's machine: an absolute path, or one starting with ~/."),
+            Parameter.text("to", "Where to put it in the sandbox, such as ~/workspace/cat.png.")),
     SHOW("host_show", LampHostRisk.PASSIVE,
             "Open a file on the user's own computer with their default application, such as a PDF or an image. "
           + "Programs, scripts, launchers and executable files are refused.",

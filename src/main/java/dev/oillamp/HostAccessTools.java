@@ -37,7 +37,7 @@ final class HostAccessTools {
     /// The largest file `host_copy_out` copies. The whole file is held in memory on its way out.
     static final int LARGEST_COPY = 64 * 1024 * 1024;
 
-    /// The agent's home inside the sandbox, which [#sourceInAgentHome] maps onto the lamp.
+    /// The agent's home inside the sandbox, which [#inAgentHome] maps onto the lamp.
     static final String SANDBOX_HOME = "/home/agent";
 
     /// Names a desktop opens by running something rather than showing it. `xdg-open` hands a
@@ -86,6 +86,7 @@ final class HostAccessTools {
             case HostTool.ClipboardWrite _ -> clipboardWrite();
             case HostTool.Notify notify -> notifyUser(notify.title(), notify.text());
             case HostTool.CopyOut copy -> copyOut(copy.from(), resolved.first());
+            case HostTool.CopyIn copy -> copyIn(resolved.first(), copy.to());
             case HostTool.Bash bash -> bash(bash, resolved.first(), withdrawn);
         };
     }
@@ -122,21 +123,25 @@ final class HostAccessTools {
         return Optional.empty();
     }
 
-    /// The file a `host_copy_out` copies, as a path in the agent's home: `~/x` or `/home/agent/x`.
-    /// Anything else is not in the sandbox's home, and a `..` would leave it.
-    static Result<Path> sourceInAgentHome(String from) {
-        String text = from.strip();
+    /// A path in the sandbox, `~/x` or `/home/agent/x`, as a path inside the agent's home: where
+    /// `host_copy_out` reads from, and where `host_copy_in` writes to. Anything else is not in the
+    /// sandbox's home, and a `..` would leave it.
+    ///
+    /// @param tool     the tool, for the refusal
+    /// @param argument the argument that names it, such as `from`
+    static Result<Path> inAgentHome(String tool, String argument, String asked) {
+        String text = asked.strip();
         String inside = text.startsWith("~/") ? text.substring(2)
                       : text.startsWith(SANDBOX_HOME + "/") ? text.substring(SANDBOX_HOME.length() + 1)
                       : "";
         if (inside.isEmpty())
-            return Result.err(HostAccessProblems.badArguments("host_copy_out",
-                    "from: a file in the sandbox's home, such as ~/workspace/report.pdf"));
+            return Result.err(HostAccessProblems.badArguments(tool,
+                    argument + ": a file in the sandbox's home, such as ~/workspace/report.pdf"));
         Path relative = Path.of(inside).normalize();
         if (relative.isAbsolute() || relative.startsWith("..") || relative.toString().isEmpty()
                 || !relative.equals(Path.of(inside)))
-            return Result.err(HostAccessProblems.badArguments("host_copy_out",
-                    "from: a plain path in the sandbox's home, without . or .."));
+            return Result.err(HostAccessProblems.badArguments(tool,
+                    argument + ": a plain path in the sandbox's home, without . or .."));
         return Result.ok(relative);
     }
 
@@ -292,7 +297,7 @@ final class HostAccessTools {
     /// Copies a file out of the agent's home, read without following a link the agent may have
     /// put there, and writes it as data: never executable.
     private Result<String> copyOut(String from, HostPaths.ResolvedPath to) throws IOException {
-        Result<Path> source = sourceInAgentHome(from);
+        Result<Path> source = inAgentHome("host_copy_out", "from", from);
         if (!(source instanceof Result.Ok<Path>(Path relative, var ignored)))
             return Result.err(HostAccessProblems.failed("host_copy_out", from + " is not a file in the sandbox's home"));
         Optional<byte[]> bytes;
@@ -304,6 +309,34 @@ final class HostAccessTools {
         if (bytes.isEmpty())
             return Result.err(HostAccessProblems.failed("host_copy_out", from + " does not exist in the sandbox"));
         return write("host_copy_out", to, bytes.get());
+    }
+
+    /// Copies a file from the host into the agent's home, as data: `rw-r--r--`, never
+    /// executable.
+    ///
+    /// The host file is read where it was resolved and checked. The agent's home is the agent's
+    /// to change, so the copy is written as [FilesystemUtil#replaceInAgentHome] writes: one
+    /// directory at a time, never through a link. A link the agent planted at the destination is
+    /// replaced by the copy; a link at a directory on the way refuses the copy. Either way nothing
+    /// is written outside the agent's home, which would otherwise be a write anywhere on the host,
+    /// past the checker.
+    private Result<String> copyIn(HostPaths.ResolvedPath from, String to) throws IOException {
+        Result<Path> destination = inAgentHome("host_copy_in", "to", to);
+        if (!(destination instanceof Result.Ok<Path>(Path relative, var ignored)))
+            return Result.err(HostAccessProblems.failed("host_copy_in", to + " is not a file in the sandbox's home"));
+        Path file = from.hostPath();
+        if (!Files.isRegularFile(file))
+            return Result.err(HostAccessProblems.failed("host_copy_in", from.asked() + " is not a file"));
+        if (Files.size(file) > LARGEST_COPY)
+            return Result.err(HostAccessProblems.failed("host_copy_in", from.asked() + " is larger than "
+                    + LARGEST_COPY / (1024 * 1024) + " MiB"));
+        byte[] bytes = Files.readAllBytes(file);
+        try {
+            FilesystemUtil.replaceInAgentHome(agentHome, relative, bytes, PosixMode.PUBLIC_FILE);
+        } catch (FilesystemUtil.LinkInAgentHome link) {
+            return Result.err(HostAccessProblems.failed("host_copy_in", to + " passes through a link in the sandbox"));
+        }
+        return Result.ok("copied " + bytes.length + " bytes from " + file + " to " + to + " in the sandbox");
     }
 
     // ─── the desktop ──────────────────────────────────────────────────────────────────────

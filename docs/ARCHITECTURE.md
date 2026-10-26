@@ -1702,7 +1702,8 @@ returns an `Answer`: `Done`, `Refused` or `Failed`. `HostMcp` writes each as a t
    refused, or with `ask_the_user` marked for the person. For `host_bash` that path is the
    directory it runs in, and only that.
 4. What the tool rules out by itself: `host_show` of a file the desktop would run
-   (`HostAccessTools.whyNotShown`), `host_copy_out` from outside the sandbox's home, and a command
+   (`HostAccessTools.whyNotShown`), `host_copy_out` from outside the sandbox's home,
+   `host_copy_in` to outside it (`HostAccessTools.inAgentHome`), and a command
    longer than the checker is shown whole (`HostTool.LONGEST_COMMAND_TEXT`).
 5. `HostAccessChecker.check` asks the model, in a conversation of its own, and `HostTool.verdict`
    reads the answer; anything unreadable, untimed, or unreachable is a refusal.
@@ -1711,7 +1712,10 @@ returns an `Answer`: `Done`, `Refused` or `Failed`. `HostMcp` writes each as a t
    queue. The state machine asks one question at a time, and only while the session runs; any
    other is declined at once. The supervisor keeps one future per question, answered by
    `host-access-answer` on the control socket, and timed out after `HostAccess.USER_PATIENCE`.
-7. `HostAccessTools.perform` does the work, after the paths are resolved once more. A command runs
+7. `HostAccessTools.perform` does the work, after the paths are resolved once more.
+   `host_copy_in` writes into the agent's home with `FilesystemUtil.replaceInAgentHome`, one
+   directory at a time through handles that refuse links, as oillamp writes its own files
+   there; a link at the file itself is replaced, not written through. A command runs
    as `env -u <secret> … bash -c <command>` in its directory, with oillamp's environment minus
    the variables `HostAccess.secretVariables` names (the model key, and the variables an
    application named for its requirements and instructions).

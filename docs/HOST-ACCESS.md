@@ -148,6 +148,7 @@ shows the model each tool as `mcp__oillamp__<name>`.
 | `host_list_dir` | `path` | Lists names, kinds and sizes. A link is listed as a link, never followed. |
 | `host_stat` | `path` | Kind, size, times, permissions. |
 | `host_read_file` | `path`, `offset`, `max_bytes` | Returns text, or a refusal for binary files. Reads no more of the file than it returns. |
+| `host_copy_in` | `path`, `to` | Copies a host file, any kind, at most 64 MiB, into the agent's home (`~/…` or `/home/agent/…`), as `rw-r--r--`, never executable, so that pi's own `read` can show the model a picture or a PDF that `host_read_file` refuses as not text. Written one directory at a time and never through a link the agent planted: a link at `to` is replaced by the copy, a link at a directory on the way refuses it. Passive because on the host it only reads, and hands the agent what a read would. |
 | `host_clipboard_read` | none | The user's current clipboard text. *Not built; not offered.* |
 | `host_show` | `path` | Opens a file with the user's default application. Refuses anything the desktop would run instead of show: launchers (`.desktop`), scripts, installers, and any file with an execute bit. |
 
@@ -212,7 +213,8 @@ and the tools do not exist. A model that tries to call one gets pi's own "no suc
    - no request names a path inside the lamp or its state, compared with links followed on both
      sides, so a lamp opened through a link is no way in;
    - `host_show` is not of a file the desktop would run, `host_copy_out` reads from the
-     sandbox's home, and a command is no longer than the checker is shown whole.
+     sandbox's home, `host_copy_in` writes to it, and a command is no longer than the checker
+     is shown whole.
 4. **The checker call.** One model request, built entirely on the host, with the user's
    requirements as its system prompt and the request plus the run's activity as its message. The
    agent's conversation text never enters it.
@@ -409,6 +411,9 @@ deterministic check refused it.
   requirements, the run's instruction, the path names, and a file's contents when it is being
   judged. Eden AI's EU endpoint is the default. State this where the feature is turned on: a user
   turning it on is deciding that their model service may see these things.
+- **A file copied in is in the lamp.** What `host_copy_in` copies lands in the agent's home,
+  which is part of the lamp, so it is in the lamp's snapshots from then on and is restored with
+  them, until the history drops those snapshots. A copy of something private outlives the session.
 - **Host effects are outside the lamp's history.** `oillamp history <dir> restore` cannot undo a
   file written on the host. The log is the record; the additive tools are the ones that matter.
 - **The agent can still ask a person to do it.** The feature governs the way out; it does not stop

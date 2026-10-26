@@ -344,7 +344,7 @@ tools are an MCP server in the engine, which the sandbox's pi reaches through `s
 
 | What | Checked how |
 |---|---|
-| the gate: tiers, roots, the lamp's own files, the checker, the person, the log | `ReachingTheHostSpec`, against the simulated machine and a stand-in checker |
+| the gate: tiers, roots, the lamp's own files, the checker, the person, the log; `host_copy_in` byte for byte, not through links the agent planted, not past the roots or the checker | `ReachingTheHostSpec`, against the simulated machine and a stand-in checker |
 | `host_edit_file` and `host_bash`: exit status and output, refusal, `commands = "off"`/`"ask"`/`"checker"`, the whole command shown to the checker, timeouts that stop what a command started, a call cancelled before it runs, the model key kept out of a command's environment | `WorkingOnTheHostSpec`, with `env` and `bash` really running on the test machine |
 | MCP: `initialize` and version negotiation, `tools/list` with schemas, JSON-RPC errors, two calls on one connection, a closed connection withdrawing its calls, the socket gone when the session ends | `ServingTheHostToolsOverMcpSpec` |
 | a real pi 1.4.0 (`pi mcp list --json`, with the same `socat` registration the extension makes) connecting to a session's socket and listing the tools | tried by hand on 2026-10-26, against a session in a scenario, outside a sandbox |

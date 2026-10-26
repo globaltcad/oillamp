@@ -47,6 +47,11 @@ sealed interface HostTool {
     /// @param from where the file is in the sandbox: under `/home/agent`, or a path starting `~/`
     /// @param path where it goes on the host
     record CopyOut(String from, String path) implements HostTool {}
+    /// A file copied from the host into the sandbox's home.
+    ///
+    /// @param path where the file is on the host
+    /// @param to   where it goes in the sandbox: under `/home/agent`, or a path starting `~/`
+    record CopyIn(String path, String to) implements HostTool {}
     /// A bash command, run on the host.
     ///
     /// @param command what bash runs, as one argument to `bash -c`, never pasted into another
@@ -79,6 +84,7 @@ sealed interface HostTool {
             case ClipboardWrite _ -> HostToolKind.CLIPBOARD_WRITE;
             case Notify _ -> HostToolKind.NOTIFY;
             case CopyOut _ -> HostToolKind.COPY_OUT;
+            case CopyIn _ -> HostToolKind.COPY_IN;
             case Bash _ -> HostToolKind.BASH;
         };
     }
@@ -109,6 +115,7 @@ sealed interface HostTool {
             case ClipboardWrite write -> "put " + write.text().length() + " characters on the clipboard";
             case Notify notify -> "notify: " + notify.title();
             case CopyOut copy -> "copy " + copy.from() + " from the sandbox to " + copy.path() + ", without running it";
+            case CopyIn copy -> "copy " + copy.path() + " from the host into the sandbox as " + copy.to();
             case Bash bash -> "run in " + bash.cwd() + ": " + bash.command();
         };
     }
@@ -130,6 +137,7 @@ sealed interface HostTool {
             case ClipboardWrite write -> none.put("text", write.text());
             case Notify notify -> none.put("title", notify.title()).put("text", notify.text());
             case CopyOut copy -> none.put("from", copy.from()).put("path", copy.path());
+            case CopyIn copy -> none.put("path", copy.path()).put("to", copy.to());
             case Bash bash -> none.put("command", bash.command()).put("cwd", bash.cwd())
                                   .put("timeout_seconds", String.valueOf(bash.timeout().toSeconds()));
         };
@@ -151,7 +159,7 @@ sealed interface HostTool {
                                       + "(host_access.commands is \"off\")");
                 case ASK, CHECKER -> Optional.empty();
             };
-            case LIST_DIR, STAT, READ_FILE, SHOW -> Optional.empty();
+            case LIST_DIR, STAT, READ_FILE, COPY_IN, SHOW -> Optional.empty();
         };
     }
 
@@ -202,6 +210,7 @@ sealed interface HostTool {
             case CLIPBOARD_WRITE -> Result.ok(new ClipboardWrite(text(arguments, "text")));
             case NOTIFY -> Result.ok(new Notify(text(arguments, "title"), text(arguments, "text")));
             case COPY_OUT -> Result.ok(new CopyOut(text(arguments, "from"), text(arguments, "path")));
+            case COPY_IN -> Result.ok(new CopyIn(text(arguments, "path"), text(arguments, "to")));
             case BASH -> {
                 long seconds = number(arguments, "timeout_seconds").orElse(USUAL_COMMAND.toSeconds());
                 yield seconds < 1 || seconds > LONGEST_COMMAND.toSeconds()
@@ -266,7 +275,7 @@ sealed interface HostTool {
     /// The host paths a tool will touch, as the agent wrote them, before they are resolved. The
     /// clipboard, a URL and a notification touch none; `host_copy_out` names its destination
     /// here, and its source is a path in the sandbox, which [HostAccessTools] reads in the
-    /// agent's home. `host_bash` names the directory it starts in, and only that: what the
+    /// agent's home; `host_copy_in` names its source, and writes in the agent's home. `host_bash` names the directory it starts in, and only that: what the
     /// command touches from there, the roots do not bound.
     static Tuple<String> pathsOf(HostTool tool) {
         return switch (tool) {
@@ -277,6 +286,7 @@ sealed interface HostTool {
             case WriteFile write -> Tuple.of(String.class, write.path());
             case EditFile edit -> Tuple.of(String.class, edit.path());
             case CopyOut copy -> Tuple.of(String.class, copy.path());
+            case CopyIn copy -> Tuple.of(String.class, copy.path());
             case Bash bash -> Tuple.of(String.class, bash.cwd());
             case ClipboardRead _, OpenUrl _, ClipboardWrite _, Notify _ -> Tuple.of(String.class);
         };

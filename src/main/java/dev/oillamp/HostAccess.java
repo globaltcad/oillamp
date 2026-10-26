@@ -347,12 +347,14 @@ final class HostAccess implements AutoCloseable {
                            Association<String, String> arguments) {}
 
     /// What a tool rules out by itself, before any model: a `host_show` of something the desktop
-    /// would run, a `host_copy_out` from outside the sandbox's home, and a command too long to
-    /// show the checker whole.
+    /// would run, a `host_copy_out` from outside the sandbox's home, a `host_copy_in` to outside
+    /// it, and a command too long to show the checker whole.
     private static Optional<String> unfit(HostTool tool, Tuple<HostPaths.ResolvedPath> resolved) {
         return switch (tool) {
             case HostTool.Show _ -> HostAccessTools.whyNotShown(resolved.first().hostPath());
-            case HostTool.CopyOut copy -> HostAccessTools.sourceInAgentHome(copy.from()) instanceof Result.Err<java.nio.file.Path> bad
+            case HostTool.CopyOut copy -> HostAccessTools.inAgentHome("host_copy_out", "from", copy.from()) instanceof Result.Err<java.nio.file.Path> bad
+                    ? Optional.of(bad.problems().first().whatHappened()) : Optional.empty();
+            case HostTool.CopyIn copy -> HostAccessTools.inAgentHome("host_copy_in", "to", copy.to()) instanceof Result.Err<java.nio.file.Path> bad
                     ? Optional.of(bad.problems().first().whatHappened()) : Optional.empty();
             case HostTool.Bash bash -> bash.command().getBytes(StandardCharsets.UTF_8).length > HostTool.LONGEST_COMMAND_TEXT
                     ? Optional.of("the command is longer than " + HostTool.LONGEST_COMMAND_TEXT / 1024 + " KiB, more than "

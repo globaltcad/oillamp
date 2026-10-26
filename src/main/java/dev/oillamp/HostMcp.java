@@ -238,15 +238,17 @@ final class HostMcp {
     private static ObjectNode annotationsOf(HostToolKind kind) {
         ObjectNode hints = JsonUtil.object();
         hints.put("title", kind.summary);
-        hints.put("readOnlyHint", kind.tier == LampHostRisk.PASSIVE);
+        // A copy in changes nothing on the host, but it writes a file in the agent's home, and
+        // may replace one there, so it is neither read-only nor harmless to repeat.
+        hints.put("readOnlyHint", kind.tier == LampHostRisk.PASSIVE && kind != HostToolKind.COPY_IN);
         hints.put("destructiveHint", switch (kind) {
-            case WRITE_FILE, EDIT_FILE, COPY_OUT, CLIPBOARD_WRITE, BASH -> true;
+            case WRITE_FILE, EDIT_FILE, COPY_OUT, COPY_IN, CLIPBOARD_WRITE, BASH -> true;
             case LIST_DIR, STAT, READ_FILE, CLIPBOARD_READ, SHOW, OPEN_URL, NOTIFY -> false;
         });
         hints.put("openWorldHint", switch (kind) {
             case OPEN_URL, BASH -> true;
             case LIST_DIR, STAT, READ_FILE, CLIPBOARD_READ, SHOW, WRITE_FILE, EDIT_FILE, COPY_OUT,
-                 CLIPBOARD_WRITE, NOTIFY -> false;
+                 COPY_IN, CLIPBOARD_WRITE, NOTIFY -> false;
         });
         return hints;
     }

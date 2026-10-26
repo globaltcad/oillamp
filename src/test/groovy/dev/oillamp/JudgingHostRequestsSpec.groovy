@@ -151,8 +151,8 @@ class JudgingHostRequestsSpec extends Specification {
             path that leaves the home is not one.
         """
         expect:
-            (HostAccessTools.sourceInAgentHome(from) instanceof Result.Ok) == ok
-            !ok || (HostAccessTools.sourceInAgentHome(from) as Result.Ok).value() == Path.of(relative)
+            (HostAccessTools.inAgentHome('host_copy_out', 'from', from) instanceof Result.Ok) == ok
+            !ok || (HostAccessTools.inAgentHome('host_copy_out', 'from', from) as Result.Ok).value() == Path.of(relative)
 
         where:
             from                               | ok    | relative

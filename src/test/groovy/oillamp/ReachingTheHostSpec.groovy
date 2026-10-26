@@ -152,8 +152,8 @@ class ReachingTheHostSpec extends Specification {
 
         and: 'asked with tools/list, the server lists the tools this lamp offers, in the order the agent sees them'
             var listed = McpClient.initialized(hostAccessSocket()).withCloseable { it.request('tools/list', [:]) }
-            (listed.result.tools as List<Map>)*.name == ['host_list_dir', 'host_stat', 'host_read_file', 'host_show',
-                    'host_open_url', 'host_write_file', 'host_edit_file', 'host_notify', 'host_copy_out']
+            (listed.result.tools as List<Map>)*.name == ['host_list_dir', 'host_stat', 'host_read_file', 'host_copy_in',
+                    'host_show', 'host_open_url', 'host_write_file', 'host_edit_file', 'host_notify', 'host_copy_out']
 
         and: 'the agent\'s guide says it can reach the host, with which tools and under which folder'
             var guide = Files.readString(Lamp.agentHome(host.lampPath()).orElseThrow().resolve('AGENTS.md'))
@@ -356,6 +356,118 @@ class ReachingTheHostSpec extends Specification {
             linked.isError
             McpClient.text(linked).contains('link')
             !Files.exists(host.home.resolve('Documents/key.txt'))
+    }
+
+    def 'The tool `host_copy_in` copies a picture from the host into the agent\'s home byte for byte, and never executable'() {
+        reportInfo """
+            Let's consider a user who asks the agent to look at a picture in their `~/Documents`.
+            `host_read_file` hands the agent text only, and refuses a picture as not text. The
+            tool `host_copy_in` copies the file instead, from the host into the agent's home in
+            the sandbox, where pi's own `read` shows the model an image. It is in the passive
+            tier, like a read: on the host it changes nothing, and what it hands the agent is
+            what a read would. So it is offered whenever host access is on, and the host path
+            goes through the same checks as `host_read_file`: the roots, the lamp's own files, and
+            the checker.
+
+            The checker is shown both paths, `path` on the host and `to` in the sandbox, and so is
+            the session's log, `.oillamp/logs/host-access-<session>.jsonl`. The copy arrives byte
+            for byte, as `rw-r--r--`: a program copied in this way is never left executable.
+        """
+        given: 'a lamp that lets the agent read its Documents, and an executable picture there'
+            byte[] picture = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff] as byte[]
+            var cat = Files.write(host.home.resolve('Documents/cat.png'), picture)
+            Files.setPosixFilePermissions(cat, PosixFilePermissions.fromString('rwxr-xr-x'))
+            givenHostAccess(roots: [host.home.resolve('Documents')])
+            start()
+
+        when: 'the agent copies the picture into its workspace'
+            var copied = ask('host_copy_in', [path: '~/Documents/cat.png', to: '~/workspace/cat.png'])
+
+        then: 'the picture is in the agent\'s home, byte for byte, and not executable'
+            !copied.isError
+            var copy = Lamp.agentHome(host.lampPath()).orElseThrow().resolve('workspace/cat.png')
+            Files.readAllBytes(copy) == picture
+            PosixFilePermissions.toString(Files.getPosixFilePermissions(copy)) == 'rw-r--r--'
+
+        and: 'the checker saw where it came from and where it went, and so does the log'
+            var seen = StandInChecker.judged(checker.checked.first())
+            seen.request.arguments.path == '~/Documents/cat.png'
+            seen.request.arguments.to == '~/workspace/cat.png'
+            seen.request.does == 'copy ~/Documents/cat.png from the host into the sandbox as ~/workspace/cat.png'
+            var log = Files.list(host.lampPath().resolve('.oillamp/logs')).withCloseable { it.toList() }
+                    .find { it.fileName.toString().startsWith('host-access-') }
+            var entry = new groovy.json.JsonSlurper().parseText(Files.readAllLines(log).first()) as Map
+            entry.arguments == [path: '~/Documents/cat.png', to: '~/workspace/cat.png']
+    }
+
+    def 'A link the agent planted in its home does not lead `host_copy_in` to write anywhere on the host'() {
+        reportInfo """
+            The agent can change anything in its home, links included, and on the host the home
+            is a directory in the lamp. A copy written through a link the agent planted there
+            would land wherever the link points: a write anywhere on the user's computer, past the
+            checker, which only ever judged a copy into the sandbox. So `host_copy_in` writes
+            one directory at a time, and never through a link.
+
+            Here the agent planted two. `~/workspace/notes.txt` is a link to the user's
+            `~/Documents/precious.txt`: the copy replaces the link in the agent's home, and the
+            user's file stays as it was. `~/outside` is a link to the user's `~/Notes`
+            directory: a copy to `~/outside/cat.png` is refused, and nothing appears in `~/Notes`.
+        """
+        given: 'a picture and a precious file on the host, and a lamp that lets the agent read its Documents'
+            Files.write(host.home.resolve('Documents/cat.png'), [0x89, 0x50, 0x00] as byte[])
+            var precious = Files.writeString(host.home.resolve('Documents/precious.txt'), 'keep me')
+            var notes = Files.createDirectories(host.home.resolve('Notes'))
+            givenHostAccess(roots: [host.home.resolve('Documents')])
+            start()
+
+        and: 'links the agent planted in its home, one at a file and one at a directory'
+            var agentHome = Lamp.agentHome(host.lampPath()).orElseThrow()
+            Files.createSymbolicLink(agentHome.resolve('workspace/notes.txt'), precious)
+            Files.createSymbolicLink(agentHome.resolve('outside'), notes)
+
+        when: 'the agent copies the picture onto each'
+            var atFile = ask('host_copy_in', [path: '~/Documents/cat.png', to: '~/workspace/notes.txt'])
+            var throughDirectory = ask('host_copy_in', [path: '~/Documents/cat.png', to: '~/outside/cat.png'])
+
+        then: 'the link at the file was replaced by the copy, and the user\'s file is unchanged'
+            !atFile.isError
+            !Files.isSymbolicLink(agentHome.resolve('workspace/notes.txt'))
+            Files.readAllBytes(agentHome.resolve('workspace/notes.txt')) == [0x89, 0x50, 0x00] as byte[]
+            Files.readString(precious) == 'keep me'
+
+        and: 'the copy through the linked directory was refused, and nothing landed in ~/Notes'
+            throughDirectory.isError
+            McpClient.text(throughDirectory).contains('link')
+            Files.list(notes).withCloseable { it.toList() }.isEmpty()
+    }
+
+    def 'Oillamp does not copy a file into the sandbox that #why'() {
+        reportInfo """
+            `host_copy_in` hands a host file to the agent, so the file goes through the same
+            checks as a read with `host_read_file`. A file outside `host_access.roots` is refused
+            before the checker is asked; a file the checker refuses is not read. Either way
+            nothing arrives in the agent's home.
+        """
+        given: 'a lamp that lets the agent read its Documents, and a picture in it and outside it'
+            Files.createDirectories(host.home.resolve('Notes'))
+            Files.write(host.home.resolve('Notes/secret.png'), [0x89, 0x50] as byte[])
+            Files.write(host.home.resolve('Documents/cat.png'), [0x89, 0x50] as byte[])
+            givenHostAccess(roots: [host.home.resolve('Documents')])
+            checker.verdict = answer
+            start()
+
+        when: 'the agent asks to copy the picture into its workspace'
+            var refused = ask('host_copy_in', [path: asked, to: '~/workspace/copy.png'])
+
+        then: 'the agent is told why, and nothing arrived in its home'
+            refused.isError
+            McpClient.text(refused).contains(said)
+            !Files.exists(Lamp.agentHome(host.lampPath()).orElseThrow().resolve('workspace/copy.png'))
+
+        where:
+            why                             | asked                  | answer                                                                       | said
+            'is outside the roots'          | '~/Notes/secret.png'   | StandInChecker.ALLOW_PASSIVE                                                 | 'not under'
+            'the checker refuses'           | '~/Documents/cat.png'  | '{"decision":"deny","risk":"passive","reason":"Not a picture the user named."}' | 'Not a picture the user named.'
     }
 
     def 'Oillamp refuses a tool of a closed tier, and a file the desktop would run, before it asks the checker'() {

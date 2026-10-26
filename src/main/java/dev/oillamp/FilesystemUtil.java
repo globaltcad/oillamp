@@ -132,10 +132,25 @@ final class FilesystemUtil {
     /// @throws LinkInAgentHome when the file or a directory on the way is a link
     /// @throws IOException     when the file could not be written
     static void writeInAgentHome(Path home, Path relative, String content, PosixMode mode) throws IOException {
-        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        writeInAgentHome(home, relative, content.getBytes(StandardCharsets.UTF_8), mode, false);
+    }
+
+    /// Writes `content` as the file `relative` in the agent's `home`, as [#writeInAgentHome]
+    /// does, except that a link at the file itself is replaced by the file rather than refused:
+    /// for a file the agent asked for, at a name of its choosing. A link at a directory on the
+    /// way is still refused, and nothing is ever written through one.
+    ///
+    /// @throws LinkInAgentHome when a directory on the way is a link
+    /// @throws IOException     when the file could not be written
+    static void replaceInAgentHome(Path home, Path relative, byte[] content, PosixMode mode) throws IOException {
+        writeInAgentHome(home, relative, content, mode, true);
+    }
+
+    private static void writeInAgentHome(Path home, Path relative, byte[] bytes, PosixMode mode, boolean replaceLink)
+            throws IOException {
         inDirectoryOf(home, relative, true, (directory, name, where) -> {
             Optional<BasicFileAttributes> found = attributesOf(directory, name);
-            if (found.isPresent() && found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+            if (found.isPresent() && found.get().isSymbolicLink() && !replaceLink) throw new LinkInAgentHome(where);
             if (found.isPresent() && found.get().isDirectory()) throw new IOException(where + " is a directory");
             Path temporary = Path.of(".oillamp-" + UUID.randomUUID() + ".tmp");
             try {
