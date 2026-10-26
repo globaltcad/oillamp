@@ -58,8 +58,17 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
         }
     }
 
-    /// The selected genie's chat, its schedule or its history, or the settings every genie shares.
-    public enum Page { CHAT, SCHEDULE, HISTORY, HOST_ACCESS, SETTINGS }
+    /// The selected genie's chat, its schedule, its history, its host access or what can be done
+    /// with it, or the settings every genie shares.
+    public enum Page {
+        CHAT, SCHEDULE, HISTORY, HOST_ACCESS, ACTIONS, SETTINGS;
+
+        /// Whether this is one of a genie's pages beside its chat, which a narrow header gathers
+        /// behind its Manage button.
+        public boolean managing() {
+            return this == SCHEDULE || this == HISTORY || this == HOST_ACCESS || this == ACTIONS;
+        }
+    }
 
     /// The selection when there is no genie.
     public static final UUID NONE = new UUID(0, 0);
@@ -133,15 +142,27 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     static final int HEADER_WITH_WORDS_FROM = 900;
 
     /// Below this width of the conversation's area, the header has no room for the switch between
-    /// a genie's pages, even with signs alone; the pages are in the genie's menu then.
+    /// a genie's pages, even with signs alone. It nests them then: Chat, and Manage for the rest,
+    /// which are in a row of their own under the header.
     static final int HEADER_WITH_PAGES_FROM = 580;
+
+    /// From this width of the conversation's area, the row under a narrow header has room for
+    /// the words of its pages, beside their signs.
+    static final int PAGES_BELOW_WITH_WORDS_FROM = 460;
 
     /// Whether the header shows its buttons with words, which needs more room than a narrow
     /// window: the list of genies may take part of a window that is not narrow yet.
     public boolean roomForWords() { return !narrow && area.width() >= HEADER_WITH_WORDS_FROM; }
 
-    /// Whether the header shows the switch between a genie's pages.
+    /// Whether the header shows the switch between a genie's pages in one row.
     public boolean roomForPages() { return area.width() >= HEADER_WITH_PAGES_FROM; }
+
+    /// Whether a genie's pages beside its chat are in a row under the header: it has no room for
+    /// them in its own, and the user went to one of them through Manage.
+    public boolean pagesBelow() { return !roomForPages() && page.managing(); }
+
+    /// Whether the row under the header shows the words of its pages beside their signs.
+    public boolean roomForWordsBelow() { return area.width() >= PAGES_BELOW_WITH_WORDS_FROM; }
 
     /// Whether the chat and the desktop fit side by side.
     public boolean sideBySide() { return area.width() >= SIDE_BY_SIDE_FROM; }
@@ -222,11 +243,10 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
         return withGenies(rest).withSelected(next).withPage(rest.isEmpty() ? Page.SETTINGS : page);
     }
 
-    /// Shows genie `id`: its schedule, its history or its host access when another genie's is on
-    /// show, and its chat otherwise.
+    /// Shows genie `id`: its schedule, its history, its host access or its actions when another
+    /// genie's is on show, and its chat otherwise.
     public GeniesState select(UUID id) {
-        boolean genies = page == Page.SCHEDULE || page == Page.HISTORY || page == Page.HOST_ACCESS;
-        return find(id).isPresent() ? withSelected(id).withPage(genies ? page : Page.CHAT) : this;
+        return find(id).isPresent() ? withSelected(id).withPage(page.managing() ? page : Page.CHAT) : this;
     }
 
     /// The selected genie's schedule, laid out around [#now].
