@@ -88,6 +88,7 @@ public final class GeniesView extends JPanel {
     private final SchedulePage schedulePage;
     private final HistoryPage historyPage;
     private final HostAccessPage hostAccessPage;
+    private final ActionsPage actionsPage;
     private final WakePicture wakePicture;
     /// Whether the draft is setting the composer's text, which then is not written back into it.
     private boolean settingDraft = false;
@@ -132,6 +133,7 @@ public final class GeniesView extends JPanel {
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
         hostAccessPage = new HostAccessPage(state, app);
+        actionsPage = new ActionsPage(state, app, () -> historyPage.save(this), this::confirmDelete);
         wakePicture = new WakePicture(genie);
 
         UI.use(look, () ->
@@ -731,6 +733,7 @@ public final class GeniesView extends JPanel {
         Val<Boolean> onSchedule = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SCHEDULE);
         Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
         Val<Boolean> onHostAccess = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HOST_ACCESS);
+        Val<Boolean> onActions = page.viewAs(Boolean.class, it -> it == GeniesState.Page.ACTIONS);
         Val<Boolean> onSettings = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SETTINGS);
         Val<Boolean> hasGenies = state.viewAs(Boolean.class, GeniesState::hasGenies);
         return
@@ -741,6 +744,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0", schedulePage.view(Viewable.of(Boolean.class, onSchedule, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", historyPage.view(Viewable.of(Boolean.class, onHistory, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", hostAccessPage.view(Viewable.of(Boolean.class, onHostAccess, hasGenies, (a, b) -> a && b)))
+            .add("grow, push, wmin 0", actionsPage.view(Viewable.of(Boolean.class, onActions, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", SettingsPage.of(state, app, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
     }
 
@@ -749,7 +753,8 @@ public final class GeniesView extends JPanel {
         Val<Boolean> awake = Viewable.of(Boolean.class, phase, onChat, (it, chat) -> it.isAwake() && chat);
         Val<Boolean> working = phase.viewAs(Boolean.class, it -> it == Genie.Phase.WORKING);
         Val<Boolean> wide = state.viewAs(Boolean.class, GeniesState::roomForWords);
-        Val<Boolean> roomForPages = state.viewAs(Boolean.class, GeniesState::roomForPages);
+        // A quick way to sleep, while the header has room; in a narrow one, the genie's actions have it.
+        Val<Boolean> canSleepHere = Viewable.of(Boolean.class, phase, state, (it, s) -> it.isAwake() && s.roomForPages());
         // The list of genies says when something went wrong; while it is hidden, the header does.
         Val<Boolean> hiddenTroubles = state.viewAs(Boolean.class, it -> !it.genieList().shown() && !it.troubles().isEmpty());
         return
@@ -799,24 +804,12 @@ public final class GeniesView extends JPanel {
                  .onClick(_ -> app.stop(genie.get().id()))
             )
             .add(
-                 button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(phase.viewAs(Boolean.class, Genie.Phase::isAwake))
+                 button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
                  .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
                  .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
                  .onClick(_ -> app.sleep(genie.get().id()))
-            )
-            .add(
-                 button("").group(Skin.ICON_BUTTON)
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, SUBTEXT)))
-                 .withTooltip(roomForPages.viewAsString(it -> (it ? "" : "Chat, schedule, history or host access; ")
-                         + "rename, save, wake or sleep, or delete this genie"))
-                 .onMousePress(it ->
-                         ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id()))
-                 )
-                 .onPressed(Keyboard.Key.SPACE, it ->
-                         ViewPartsUtil.toggleBelow(it.getEvent(), () -> genieMenu(genie.get().id()))
-                 )
-            )
-        );
+            ))
+            .add("cell 0 1, span 5, growx, wmin 0", pagesBelow());
     }
 
     /// A request the selected genie's lamp asks the user to allow, such as running a program,
@@ -849,34 +842,92 @@ public final class GeniesView extends JPanel {
                  .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), true)));
     }
 
-    /// The pages of a genie, its chat, its schedule, its history and its host access, as one
-    /// switch of four parts. The schedule's part says how many jobs it has, once they were read. The header
-    /// makes room in steps as it narrows: first the parts drop their words and keep their signs,
-    /// as the header's other buttons do; then the switch steps aside for the menu behind "⋯",
-    /// which has the pages too.
+    /*
+     *  The pages of a genie as one switch in the header. The header makes room in steps as it
+     *  narrows: first the parts drop their words and keep their signs, as its other buttons do;
+     *  then the switch nests, into Chat and Manage, and the pages Manage gathers come as a row of
+     *  their own under the header, while the user is on one of them:
+     *
+     *      wide        [💬 Chat | 📅 Schedule 3 | 🕘 History | 🏠 Access | ⚡ Actions]
+     *      narrower    [💬 | 📅 3 | 🕘 | 🏠 | ⚡]
+     *      narrow      [💬 | ⫶]               on the chat
+     *                  [💬 | ⫶]               on any other of its pages, lit on Manage
+     *                  [📅 Schedule 3 | 🕘 History | 🏠 Access | ⚡ Actions]
+     *
+     *  Which of these shows is the state's, [GeniesState#roomForPages] and [GeniesState#pagesBelow];
+     *  each is made once, and shown or hidden.
+     */
     private UIForAnySwing<?, ?> pages() {
-        Val<Boolean> onChat = page.viewAs(Boolean.class, it -> it == GeniesState.Page.CHAT);
-        Val<Boolean> onSchedule = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SCHEDULE);
-        Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
-        Val<Boolean> onHostAccess = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HOST_ACCESS);
         Val<Boolean> wide = state.viewAs(Boolean.class, GeniesState::roomForWords);
-        Val<String> scheduleWords = Viewable.of(String.class, genie, wide, (shown, words) -> {
-            int jobs = shown.schedule().jobs().size();
-            return (words ? "Schedule  " : "") + (jobs == 0 ? "" : jobs);
-        });
+        Val<Boolean> roomForPages = state.viewAs(Boolean.class, GeniesState::roomForPages);
+        Val<Boolean> managing = page.viewAs(Boolean.class, GeniesState.Page::managing);
         return
-            box("ins 2, gap 2")
-            .isVisibleIf(state.viewAs(Boolean.class, GeniesState::roomForPages))
-            .withStyle(it -> it.backgroundColor(SMOKE).border(1, BORDER).borderRadius(11))
-            .add(half(worded("Chat"), SignSvgUtil.CHAT, onChat).withTooltip("Chat: talk with the genie")
-                 .onClick(_ -> page.set(From.VIEW, GeniesState.Page.CHAT)))
-            .add(half(scheduleWords, SignSvgUtil.SCHEDULE, onSchedule).withTooltip("Schedule: when jobs wake the genie, and what they did")
-                 .onClick(_ -> page.set(From.VIEW, GeniesState.Page.SCHEDULE)))
-            .add(half(worded("History"), SignSvgUtil.HISTORY, onHistory).withTooltip("History: the moments the genie's home was saved at, and going back to one")
-                 .onClick(_ -> page.set(From.VIEW, GeniesState.Page.HISTORY)))
-            .add(half(worded("Access"), SignSvgUtil.HOST_ACCESS, onHostAccess)
-                 .withTooltip("Host access: whether the genie may reach this computer, and its rules")
-                 .onClick(_ -> page.set(From.VIEW, GeniesState.Page.HOST_ACCESS)));
+            box("ins 0, gap 0, hidemode 3")
+            .add(
+                switchOfPages().isVisibleIf(roomForPages)
+                .add(part(GeniesState.Page.CHAT, wide))
+                .add(part(GeniesState.Page.SCHEDULE, wide))
+                .add(part(GeniesState.Page.HISTORY, wide))
+                .add(part(GeniesState.Page.HOST_ACCESS, wide))
+                .add(part(GeniesState.Page.ACTIONS, wide))
+            )
+            .add(
+                switchOfPages().isVisibleIf(roomForPages.viewAs(Boolean.class, it -> !it))
+                .add(part(GeniesState.Page.CHAT, wide))
+                .add(half(Val.of(""), SignSvgUtil.MANAGE, managing)
+                     .withTooltip("Manage: the genie's schedule, history, host access and actions")
+                     .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.SCHEDULE)))
+            );
+    }
+
+    /// The row under a narrow header with the pages Manage gathers, each part as wide as the next,
+    /// so they reach across the window, easy to hit with a finger.
+    private UIForAnySwing<?, ?> pagesBelow() {
+        Val<Boolean> words = state.viewAs(Boolean.class, GeniesState::roomForWordsBelow);
+        return
+            switchOfPages()
+            .withLayout("fillx, ins 2, gap 2", "[grow, sg, fill][grow, sg, fill][grow, sg, fill][grow, sg, fill]")
+            .isVisibleIf(state.viewAs(Boolean.class, GeniesState::pagesBelow))
+            .add(part(GeniesState.Page.SCHEDULE, words))
+            .add(part(GeniesState.Page.HISTORY, words))
+            .add(part(GeniesState.Page.HOST_ACCESS, words))
+            .add(part(GeniesState.Page.ACTIONS, words));
+    }
+
+    /// The well a switch between pages stands in, whose lit part stands out of it.
+    private static UIForBox<JBox> switchOfPages() {
+        return box("ins 2, gap 2").withStyle(it -> it.backgroundColor(SMOKE).border(1, BORDER).borderRadius(11));
+    }
+
+    /// The part of a switch that goes to `to`, with its words while `words` holds. The schedule's
+    /// says how many jobs it has, once they were read.
+    private UIForButton<JButton> part(GeniesState.Page to, Val<Boolean> words) {
+        Val<String> text = Viewable.of(String.class, genie, words, (shown, worded) -> switch (to) {
+            case SCHEDULE -> {
+                int jobs = shown.schedule().jobs().size();
+                yield (worded ? "Schedule  " : "") + (jobs == 0 ? "" : jobs);
+            }
+            case HISTORY -> worded ? "History" : "";
+            case HOST_ACCESS -> worded ? "Access" : "";
+            case ACTIONS -> worded ? "Actions" : "";
+            default -> worded ? "Chat" : "";
+        });
+        String sign = switch (to) {
+            case SCHEDULE -> SignSvgUtil.SCHEDULE;
+            case HISTORY -> SignSvgUtil.HISTORY;
+            case HOST_ACCESS -> SignSvgUtil.HOST_ACCESS;
+            case ACTIONS -> SignSvgUtil.ACTIONS;
+            default -> SignSvgUtil.CHAT;
+        };
+        String tooltip = switch (to) {
+            case SCHEDULE -> "Schedule: when jobs wake the genie, and what they did";
+            case HISTORY -> "History: the moments the genie's home was saved at, and going back to one";
+            case HOST_ACCESS -> "Host access: whether the genie may reach this computer, and its rules";
+            case ACTIONS -> "Actions: rename, save, wake or sleep, or delete the genie";
+            default -> "Chat: talk with the genie";
+        };
+        return half(text, sign, page.viewAs(Boolean.class, it -> it == to)).withTooltip(tooltip)
+                .onClick(_ -> page.set(From.VIEW, to));
     }
 
     /// One part of the switch between pages: its sign, and its words while there is room.
@@ -1255,8 +1306,6 @@ public final class GeniesView extends JPanel {
             Map.entry("PasswordField.background", hex(RAISED)),
             Map.entry("TextArea.background", hex(RAISED)),
             Map.entry("Tree.selectionArc", "6"),
-            // Behind the sign of the page the user is on, in a genie's menu, as in the header's switch.
-            Map.entry("MenuItem.checkBackground", hex(BORDER)),
             Map.entry("CheckBox.icon.selectedBackground", hex(FLAME)),
             Map.entry("CheckBox.icon.selectedBorderColor", hex(FLAME)),
             Map.entry("CheckBox.icon.checkmarkColor", hex(ON_FLAME)),
@@ -1302,21 +1351,14 @@ public final class GeniesView extends JPanel {
         return state.viewAsString(it -> it.roomForWords() ? words : "");
     }
 
-    /// What can be done with a genie beyond its everyday buttons: behind "⋯" in the header,
-    /// and a right-click on its card, which selects the genie first. While the header has no
-    /// room for the switch between its pages, they come first; deleting it is last, away from
-    /// the rest.
+    /// What can be done with a genie beyond its everyday buttons, as on its Actions page: a
+    /// right-click on its card, which selects the genie first. Deleting it is last, away from the
+    /// rest.
     private JPopupMenu genieMenu(UUID id) {
-        GeniesState.Page on = state.get().page();
         return UI.popupMenu().applyIfPresent(state.get().find(id).map( shown -> ui -> {
                 Genie.Phase now = shown.phase();
                 boolean idle = now != Genie.Phase.WORKING && now != Genie.Phase.WAKING;
-                ui.applyIf(!state.get().roomForPages(), pages -> pages
-                .add(ViewPartsUtil.choice("Chat", SignSvgUtil.sign(SignSvgUtil.CHAT, on == GeniesState.Page.CHAT ? TEXT : SUBTEXT), on == GeniesState.Page.CHAT, () -> page.set(From.VIEW, GeniesState.Page.CHAT)))
-                .add(ViewPartsUtil.choice("Schedule", SignSvgUtil.sign(SignSvgUtil.SCHEDULE, on == GeniesState.Page.SCHEDULE ? TEXT : SUBTEXT), on == GeniesState.Page.SCHEDULE, () -> page.set(From.VIEW, GeniesState.Page.SCHEDULE)))
-                .add(ViewPartsUtil.choice("History", SignSvgUtil.sign(SignSvgUtil.HISTORY, on == GeniesState.Page.HISTORY ? TEXT : SUBTEXT), on == GeniesState.Page.HISTORY, () -> page.set(From.VIEW, GeniesState.Page.HISTORY)))
-                .add(ViewPartsUtil.choice("Host access", SignSvgUtil.sign(SignSvgUtil.HOST_ACCESS, on == GeniesState.Page.HOST_ACCESS ? TEXT : SUBTEXT), on == GeniesState.Page.HOST_ACCESS, () -> page.set(From.VIEW, GeniesState.Page.HOST_ACCESS)))
-                .peek(JPopupMenu::addSeparator))
+                ui
                 .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
                 .add(ViewPartsUtil.item("New conversation", idle, () -> app.startAfresh(id)))
                 .add(ViewPartsUtil.item("Save now…", shown.history().busy().isEmpty(), () -> historyPage.save(this)))

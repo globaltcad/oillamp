@@ -213,7 +213,8 @@ public final class GeniesBackend implements Genies {
     @Override public void startAfresh(UUID id) {
         Optional<Genie> genie = state.get().find(id);
         if (genie.isEmpty()) return;
-        state.update(From.VIEW, it -> it.select(id));
+        // From any of the genie's pages, such as its actions, to the new conversation.
+        state.update(From.VIEW, it -> it.select(id).withPage(GeniesState.Page.CHAT));
         if (genie.get().phase() != Genie.Phase.WORKING) {
             state.update(From.VIEW, it -> it.update(id, g -> g.withConversations(g.conversations().withOverview(false))));
             runner(id).startAfresh();
