@@ -374,11 +374,13 @@ a row with New and the settings, then the genies' cards in an area 180 units tal
 a grip under the area makes it taller or shorter, as under a tree of conversations, and dragged
 to nothing, folds the list away. A window wide again has the list beside the genie, shown.
 
-☰ shows and hides the list, in either arrangement. It is always in the window's top left corner:
-in the list's top row while the list is shown, in the genie's header while it is not. So it stays
-under the pointer, and pressing it again undoes the first press. When something went wrong that
-Genies did not expect, anywhere in it, the list says so; while the list is hidden, a red ⚠ with
-the count does, between ☰ and the genie's lamp, and pressed, shows what happened.
+Genies draws its window's title bar itself, with FlatLaf, in the sidebar's colour, as it does its
+dialogs': ☰, the lamp and "Genies" on the left, the window's buttons on the right. Its empty part
+moves the window, as any title bar does. ☰ shows and hides the list, in either arrangement. Being
+in the title bar, it is always in the window's top left corner, so it stays under the pointer,
+and pressing it again undoes the first press. When something went wrong that Genies did not
+expect, anywhere in it, the list says so; while the list is hidden, a red ⚠ with the count does,
+first in the genie's header, and pressed, shows what happened.
 
 ## The schedule
 
