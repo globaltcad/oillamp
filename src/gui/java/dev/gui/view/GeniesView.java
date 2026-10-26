@@ -88,6 +88,7 @@ public final class GeniesView extends JPanel {
     private final SchedulePage schedulePage;
     private final HistoryPage historyPage;
     private final HostAccessPage hostAccessPage;
+    private final WakePicture wakePicture;
     /// Whether the draft is setting the composer's text, which then is not written back into it.
     private boolean settingDraft = false;
     /// Set once the conversation's scroll pane exists.
@@ -131,6 +132,7 @@ public final class GeniesView extends JPanel {
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
         hostAccessPage = new HostAccessPage(state, app);
+        wakePicture = new WakePicture(genie);
 
         UI.use(look, () ->
             of(this).group(Skin.FRAME)
@@ -1064,6 +1066,9 @@ public final class GeniesView extends JPanel {
 
     private UIForAnySwing<?, ?> transcript() {
         Val<Boolean> empty = entries.viewAs(Boolean.class, Tuple::isEmpty);
+        Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.emerging(),
+                (it, emerging) -> it == Genie.Phase.WAKING || emerging);
+        Val<Boolean> pictureShown = Viewable.of(Boolean.class, empty, wakingPicture, (it, waking) -> it || waking);
         // Working, with nothing streaming in: a bar says what the user waits for. The pulse, which
         // moves while the genie works, also moves on the time a job has run.
         Val<Boolean> waiting = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.WORKING
@@ -1074,7 +1079,7 @@ public final class GeniesView extends JPanel {
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][]")
             .add("grow, push, wmin 0",
                 scrollPanels().group(Skin.PAGE_SCROLL).withMinSize(0, 0).withPrefSize(560, 500).withEmptyBorder(0)
-                .isVisibleIf(empty.viewAs(Boolean.class, it -> !it))
+                .isVisibleIf(pictureShown.viewAs(Boolean.class, it -> !it))
                 .withStyle(it -> it.backgroundColor(TRANSPARENT).padding(12, 18, 12, 18))
                 .addAll(entries, rows::row)
                 // Follows the conversation while the user is at its end, and leaves them be
@@ -1084,8 +1089,8 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0", rows.waiting(waitingOn, waiting))
             .add("grow, push, wmin 0, align center",
                 box("wrap 1, ins 30, gap 8, align center center", "[center, grow, fill]")
-                .isVisibleIf(empty)
-                .add("align center", ViewPartsUtil.lamp(phase, 96))
+                .isVisibleIf(pictureShown)
+                .add("growx, wmin 0", wakePicture.view())
                 .add("growx, wmin 0", label(genie.viewAsString(it -> switch (it.phase()) {
                         case READY, WORKING -> it.name() + " is listening.";
                         case WAKING -> it.name() + " is waking.";
