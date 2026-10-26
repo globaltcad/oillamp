@@ -2,7 +2,7 @@ package oillamp
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import groovy.json.JsonOutput
+import groovy.json.JsonGenerator
 import groovy.json.JsonSlurper
 
 import java.nio.charset.StandardCharsets
@@ -28,8 +28,15 @@ class StandInChecker implements AutoCloseable {
     volatile String verdict = ALLOW_PASSIVE
     /** How long it takes before it answers. */
     volatile Duration thinking = Duration.ZERO
+    /**
+     * When set, the answer is sent in two chunks of HTTP's chunked encoding, split after the
+     * first byte of the first occurrence of this character: in the middle of it, when it takes
+     * more than one byte.
+     */
+    volatile String splitAt = null
 
     private final HttpServer server
+    private static final JsonGenerator AS_WRITTEN = new JsonGenerator.Options().disableUnicodeEscaping().build()
 
     StandInChecker() {
         server = HttpServer.create(new InetSocketAddress('127.0.0.1', 0), 0)
@@ -37,11 +44,23 @@ class StandInChecker implements AutoCloseable {
             String body = new String(exchange.requestBody.readAllBytes(), StandardCharsets.UTF_8)
             checked << body
             Thread.sleep(thinking.toMillis())
-            String answer = '{"choices":[{"message":{"role":"assistant","content":' + JsonOutput.toJson((String) verdict) + '}}]}'
+            // Written as it is, not escaped as \\u00e9, as a model service sends a reason in French.
+            String answer = '{"choices":[{"message":{"role":"assistant","content":' + AS_WRITTEN.toJson((String) verdict) + '}}]}'
             byte[] bytes = answer.getBytes(StandardCharsets.UTF_8)
             exchange.responseHeaders.set('Content-Type', 'application/json')
-            exchange.sendResponseHeaders(200, bytes.length)
-            exchange.responseBody.withCloseable { it.write(bytes) }
+            if (splitAt == null) {
+                exchange.sendResponseHeaders(200, bytes.length)
+                exchange.responseBody.withCloseable { it.write(bytes) }
+            } else {
+                // A length of 0 makes the server send the body in chunks, one for each flush.
+                int cut = answer.substring(0, answer.indexOf(splitAt)).getBytes(StandardCharsets.UTF_8).length + 1
+                exchange.sendResponseHeaders(200, 0)
+                exchange.responseBody.withCloseable { out ->
+                    out.write(bytes, 0, cut)
+                    out.flush()
+                    out.write(bytes, cut, bytes.length - cut)
+                }
+            }
         }
         // Each request is answered on a thread of its own; a single-threaded server would hold
         // the connection the client is still writing on.

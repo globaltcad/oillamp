@@ -452,7 +452,8 @@ final class SimulatedMachine implements Machine {
     @Override public Window launch(Command command, Window.Stdio stdio) {
         if (refusedWindows.contains(command.executable()))
             return Window.refused(command.executable(), "No such file or directory");
-        if (!executables.containsKey(command.executable()))
+        // A program is started by its name, or by the path locateExecutable found for it.
+        if (!executables.containsKey(command.executable()) && !executables.containsValue(Path.of(command.executable())))
             return Window.refused(command.executable(), "command not found");
         Optional<Path> socket = unixConnectTarget(command);
         Optional<Path> stopThrough = socket

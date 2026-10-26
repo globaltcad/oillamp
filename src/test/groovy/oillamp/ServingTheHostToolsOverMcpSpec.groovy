@@ -76,7 +76,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
             does speak, `2025-11-25`, which a client may accept or hang up on. The answer's
             `capabilities` say what the server offers: `tools`, and nothing else.
         """
-        given:
+        given: 'a running lamp with host access on'
             givenHostAccess()
             start()
 
@@ -110,7 +110,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
             Each tool also carries MCP's hints, such as `readOnlyHint` for a tool that only reads.
             They describe the tool for a client that wants to show them; they decide nothing.
         """
-        given:
+        given: 'a running lamp with host access on'
             givenHostAccess()
             start()
 
@@ -138,7 +138,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
             - A line that is not JSON at all: `-32700`, a parse error, with no `id`, since none
               could be read.
         """
-        given:
+        given: 'a running lamp with host access on, and a client connected to its socket'
             givenHostAccess()
             start()
             var client = McpClient.connect(hostAccessSocket())
@@ -155,7 +155,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
         and: 'then lists the tools after all'
             var listed = client.request('tools/list', [:])
 
-        then:
+        then: 'each wrong message gets its JSON-RPC error, and the connection still answers the next one'
             early.error.code == -32600
             resources.error.code == -32601
             garbled.error.code == -32700
@@ -175,7 +175,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
             the call. The session reports each as a `HostAccessRefused` event all the same, so an
             application can show the user that the agent tried.
         """
-        given:
+        given: 'a running lamp with host access on'
             givenHostAccess()
             start()
 
@@ -196,6 +196,64 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
 
         and: 'the user hears of both'
             events.findAll { it instanceof LampEvent.HostAccessRefused }*.tool() == ['host_take_screenshot', 'host_read_file']
+    }
+
+    def 'Oillamp refuses a call whose arguments do not fit its tool, saying what did not fit: #what'() {
+        reportInfo """
+            Every argument of a `tools/call` is checked against the schema `tools/list` gave for
+            the tool: an argument the tool does not take, one of the wrong JSON type, a required
+            one left out, or a value the tool cannot use. The answer is the JSON-RPC error
+            `-32602` with `OIL-HOSTACCESS-002`'s text, which names what was expected, so that the
+            model can correct its call. Nothing is coerced quietly: `"offset": "10"` is a string,
+            not a number. The checker is not asked, and nothing happens on the host.
+        """
+        given: 'a lamp that lets the checker alone allow commands'
+            givenHostAccess(commands: 'checker')
+            start()
+
+        when: 'the agent calls the tool with arguments that do not fit it'
+            Map answer = McpClient.initialized(hostAccessSocket()).withCloseable {
+                it.request('tools/call', [name: tool, arguments: arguments])
+            }
+
+        then: 'the call is refused with -32602, naming what was expected, and the checker was not asked'
+            answer.error.code == -32602
+            answer.error.message.contains(expected)
+            checker.checked.isEmpty()
+
+        where:
+            what                              | tool              | arguments                                                  | expected
+            'a path that is a number'         | 'host_read_file'  | [path: 42]                                                 | 'path: a string'
+            'no path'                         | 'host_read_file'  | [:]                                                        | 'path: a string'
+            'an offset that is a string'      | 'host_read_file'  | [path: '~/project/notes.md', offset: '10']                 | 'offset: a whole number'
+            'an argument it does not take'    | 'host_read_file'  | [path: '~/project/notes.md', run: 'run-999']               | 'not run'
+            'a file: address'                 | 'host_open_url'   | [url: 'file:///etc/passwd']                                | 'url: an http'
+            'an empty old_text'               | 'host_edit_file'  | [path: '~/project/notes.md', old_text: '', new_text: 'x']  | 'old_text'
+            'no directory to run in'          | 'host_bash'       | [command: 'make']                                          | 'cwd'
+            'a timeout over ten minutes'      | 'host_bash'       | [command: 'make', cwd: '~/project', timeout_seconds: 601]  | 'timeout_seconds: from 1 to 600'
+    }
+
+    def 'A read takes where to start and how much as JSON numbers, and hands back that part of the file'() {
+        reportInfo """
+            `host_read_file`'s schema says `offset` and `max_bytes` are whole numbers, so pi sends
+            them as JSON numbers, and the server reads them as such: a read from byte 5, of at most
+            6 bytes, hands back those bytes and says where the next read may start.
+        """
+        given: 'a running lamp that lets the agent read ~/project, where notes.md holds "Ship on Friday."'
+            givenHostAccess()
+            start()
+
+        when: 'the agent reads 6 bytes of notes.md, from byte 5'
+            var read = McpClient.initialized(hostAccessSocket()).withCloseable {
+                it.call('host_read_file', [path: '~/project/notes.md', offset: 5, max_bytes: 6])
+            }
+
+        then: 'it gets "on Fri", and where to read on'
+            !read.isError
+            var text = McpClient.text(read)
+            text.contains('byte 5 of 16:')
+            text.contains('\n\non Fri\n')
+            text.contains('read on with offset=11')
     }
 
     def 'Two calls on one connection are answered each by its id, the second while the first waits for the person'() {
@@ -269,7 +327,7 @@ class ServingTheHostToolsOverMcpSpec extends Specification {
             it closes every connection, so pi sees its MCP server go away, and removes the socket
             file, so that nothing can connect to a session that is gone.
         """
-        given:
+        given: 'a running lamp with host access on, and pi connected to its socket'
             givenHostAccess()
             start()
             var socket = hostAccessSocket()

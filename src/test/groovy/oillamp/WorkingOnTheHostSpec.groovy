@@ -219,6 +219,48 @@ class WorkingOnTheHostSpec extends Specification {
             !Files.exists(project.resolve('second'))
     }
 
+    def 'The person is asked one question at a time, and a second one meanwhile is declined at once'() {
+        reportInfo """
+            With `host_access.commands = "ask"`, every command the checker allows waits for the
+            person. A running session shows the person one question at a time, as a
+            `HostAccessAsked` event. A second command arriving while the first question is open
+            is not left waiting out its minute for a person who never sees it: it is refused at
+            once, with the reason, and its command does not run. Once the first question is
+            answered, the next command is asked about as usual.
+        """
+        given: 'a lamp that asks the person about every command'
+            givenHostAccess(commands: 'ask')
+            checker.verdict = ALLOW_EXECUTING
+            start()
+
+        when: 'the agent asks to run a command, and while the person is asked, a second one'
+            var first = CompletableFuture.supplyAsync { useTool('host_bash', [command: 'touch first', cwd: '~/project']) }
+            var asked = waitFor(LampEvent.HostAccessAsked) { true }
+            var second = useTool('host_bash', [command: 'touch second', cwd: '~/project'])
+
+        then: 'the second is refused at once, because the person is already being asked'
+            second.isError
+            McpClient.text(second).contains('could not be asked')
+            !Files.exists(project.resolve('second'))
+
+        when: 'the person allows the first, and the agent asks for a third'
+            lamp.decidePermission(asked.what(), true)
+            var firstAnswer = first.get(30, TimeUnit.SECONDS)
+            events.clear()
+            var third = CompletableFuture.supplyAsync { useTool('host_bash', [command: 'touch third', cwd: '~/project']) }
+
+        then: 'the first ran, and the third is asked about'
+            !firstAnswer.isError
+            Files.exists(project.resolve('first'))
+            waitFor(LampEvent.HostAccessAsked) { it.what() == 'run in ~/project: touch third' }
+
+        cleanup:
+            events.findAll { it instanceof LampEvent.HostAccessAsked }.each {
+                try { lamp.decidePermission(it.what(), false) } catch (Exception answeredAlready) { }
+            }
+            third?.get(30, TimeUnit.SECONDS)
+    }
+
     def 'With `commands = "off"`, the agent has no tool to run a command, and a call is refused without asking the checker'() {
         reportInfo """
             `host_access.commands` is `"off"` unless the lamp's `oillamp.toml` says otherwise. Then
@@ -270,7 +312,13 @@ class WorkingOnTheHostSpec extends Specification {
 
         then: 'the checker was asked once, and saw the first command whole, to its last character'
             checker.checked.size() == 1
-            StandInChecker.judged(checker.checked.first()).request.arguments.command == long3000
+            var request = StandInChecker.judged(checker.checked.first()).request
+            request.arguments.command == long3000
+
+        and: 'it saw the tier, and the two minutes a command gets when the agent names no timeout'
+            request.tier == 'executing'
+            request.arguments.cwd == '~/project'
+            request.arguments.timeout_seconds == '120'
 
         and: 'the session\'s log of host requests holds the whole command that ran'
             var log = Files.list(host.lampPath().resolve('.oillamp/logs')).withCloseable { it.toList() }
