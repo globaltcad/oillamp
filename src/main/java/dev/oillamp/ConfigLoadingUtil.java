@@ -454,7 +454,15 @@ final class ConfigLoadingUtil {
 
     private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {
         s.allowOnly("enabled", "requirements", "checker_model", "roots", "max_read_bytes",
-                    "commands", "allow_additive", "ask_the_user");
+                    "commands", "allow_additive", "ask_the_user", "executables");
+        // Lamps made before `commands` existed have `executables = []` in their file, from the
+        // template: no programs, which is what `commands = "off"` says. A list that names
+        // programs cannot be carried over, because `commands` lets any command run, not only
+        // those programs. So it is refused, with the setting that replaced it.
+        if (!s.strings("executables", Tuple.of(String.class)).isEmpty())
+            s.invalid("executables", "a list of programs",
+                    "nothing: host_access.executables was replaced by host_access.commands = \"off\", \"ask\" or \"checker\", "
+                  + "which lets the agent run any command, judged by the checker; remove the line and set commands");
         boolean enabled = s.bool("enabled", fallback.enabled());
         String requirements = s.string("requirements", fallback.requirements());
         Tuple<String> roots = s.strings("roots", fallback.roots());

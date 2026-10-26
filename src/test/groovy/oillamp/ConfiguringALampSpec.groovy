@@ -662,9 +662,15 @@ class ConfiguringALampSpec extends Specification {
             - `"checker"`: the checker's allow is enough.
 
             Any other word is refused with `OIL-CONFIG-004`, naming the key and the three words:
-            a typo must not open the way to running commands. The setting replaced
-            `host_access.executables`, a list of programs, which is now an unknown key
-            (`OIL-CONFIG-002`) rather than a setting that is quietly ignored.
+            a typo must not open the way to running commands.
+
+            The setting replaced `host_access.executables`, a list of programs. Every lamp made
+            before then has `executables = []` in its file, written there by oillamp's template,
+            and an empty list meant no programs, which is what `"off"` says. So that line is
+            accepted, and such a lamp starts as it did. A list that names programs is refused with
+            `OIL-CONFIG-004`, naming `host_access.commands`: `"ask"` or `"checker"` would let the
+            agent run any command, not only the programs listed, so oillamp does not choose one
+            on the user's behalf.
 
             The scenario checks a lamp's file with `oillamp config <dir> check`, and reads what a
             valid one means with `oillamp config <dir> show-effective`.
@@ -696,7 +702,8 @@ class ConfiguringALampSpec extends Specification {
             'commands = "ask"'              | null             | 'commands, each one asked of you first'
             'commands = "checker"'          | null             | 'commands, judged by the checker alone'
             'commands = "always"'           | 'OIL-CONFIG-004' | 'host_access.commands'
-            'executables = ["inkscape"]'    | 'OIL-CONFIG-002' | 'executables'
+            'executables = []'              | null             | 'no commands'
+            'executables = ["inkscape"]'    | 'OIL-CONFIG-004' | 'host_access.commands'
     }
 
     def 'Oillamp #verdict schedule.max_delay_minutes = #value'() {

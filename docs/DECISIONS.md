@@ -666,7 +666,9 @@ is longer than before. *(added on 2026-10-26)*
 `host_bash` runs a command with `bash -c` in a directory the agent names. It replaced `host_run`
 and its allowlist, `host_access.executables`. `host_access.commands` decides whether it exists:
 `"off"` (the default), `"ask"` (the checker, then the person, for every command) or `"checker"`
-(the checker alone).
+(the checker alone). Older lamps' files still say `executables = []`, from the template; that
+empty list is accepted, since it meant what `"off"` means. A list that names programs is refused
+with the setting that replaced it, because no value of `commands` allows only those programs.
 
 *Why:* the agent should be able to work on the user's machine as it would if pi ran there, and
 the work of a coding agent is commands: builds, tests, git. An allowlist of program names did not
