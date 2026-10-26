@@ -315,7 +315,7 @@ public final class GeniesView extends JPanel {
             return GenieSvgUtil.genie(GenieSvgUtil.appearanceOf(it.id()), pose, GenieSvgUtil.frameAt(pose, progress));
         });
         return
-            panel("fill, ins 7 8 7 8, gap 8, hidemode 3", "[26!][grow][]")
+            panel("fill, ins 7 8 7 8, gap 8, hidemode 3", "[grow][]")
             .withStyle(isSelected, (on, it) -> it
                 .backgroundColor(on ? RAISED : TRANSPARENT)
                 .border(1, on ? BORDER : TRANSPARENT)
@@ -359,7 +359,6 @@ public final class GeniesView extends JPanel {
                 if ( it.isRightMouseButton() )
                     genieMenu(id).show(it.getComponent(), it.mouseX(), it.mouseY());
             })
-            .add("top", ViewPartsUtil.lamp(shown.viewAs(Genie.Phase.class, Genie::phase), 26))
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 0, hidemode 3")
                 // Room for the genie, while it is out, so a long name ends before it.
@@ -425,7 +424,7 @@ public final class GeniesView extends JPanel {
                 .onClick(_ -> folded.update(From.VIEW, on -> !on))
             )
             // On a line of its own, whether the arrow is there or not.
-            .add("newline, span 3, growx, wmin 0",
+            .add("newline, span 2, growx, wmin 0",
                 conversationsOf(shown)
             );
     }
