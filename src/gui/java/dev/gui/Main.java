@@ -15,6 +15,11 @@ import dev.gui.genie.Shelf;
 import dev.gui.model.Genie;
 import dev.gui.view.GeniesView;
 
+import com.formdev.flatlaf.FlatClientProperties;
+
+import sprouts.From;
+import sprouts.Var;
+import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.components.JGlassPane;
 import swingtree.dialogs.ConfirmAnswer;
@@ -34,14 +39,21 @@ final class Main {
 
     private static void open(Shelf shelf, ErrorLog errors) {
         Genies app = Genies.open(shelf, errors);
-        JFrame frame = new JFrame("Genies");
+        // The window's title, which its title bar says too.
+        Var<String> title = Var.of("Genies");
+        JFrame frame = new JFrame(title.get());
+        Viewable.cast(title).onChange(From.ALL, it -> frame.setTitle(it.currentValue().orElse("Genies")));
         new JGlassPane(frame.getRootPane());
         GeniesView view = new GeniesView(app);
         frame.setContentPane(view);
+        // Genies draws the title bar itself, and says its name there.
+        frame.setJMenuBar(view.titleBar(title));
+        frame.getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_SHOW_ICON, false);
+        frame.getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_SHOW_TITLE, false);
         frame.setIconImage(GeniesView.windowIcon());
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent event) { quit(app, frame, view); }
+            @Override public void windowClosing(WindowEvent event) { quit(app, frame, title, view); }
         });
         // The timeline, and anything else said relative to now, moves on with the clock.
         new Timer(30_000, _ -> app.state().update(it -> it.withNow(Instant.now()))).start();
@@ -65,7 +77,7 @@ final class Main {
 
     /// Asks the user what becomes of the genies that are awake, then puts them to sleep or leaves
     /// them running, before the window goes. Without an answer, nothing closes.
-    private static void quit(Genies app, JFrame frame, GeniesView view) {
+    private static void quit(Genies app, JFrame frame, Var<String> title, GeniesView view) {
         List<String> awake = new ArrayList<>();
         for (Genie genie : app.state().get().genies())
             if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING) awake.add(genie.name());
@@ -78,7 +90,7 @@ final class Main {
             leaveRunning = answer.isNo();
         }
         boolean keep = leaveRunning;
-        frame.setTitle(keep ? "Genies — leaving the genies running…" : "Genies — putting the genies to sleep…");
+        title.set(keep ? "Genies — leaving the genies running…" : "Genies — putting the genies to sleep…");
         // A desktop shown at the size of the panel gets its own size back, for the genie that
         // goes on without the panel, before its lamp is let go. A genie put to sleep takes its
         // desktop with it.

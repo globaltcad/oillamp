@@ -176,12 +176,12 @@ public final class GeniesView extends JPanel {
      *      beside the genie                    above it, in a narrow window
      *
      *      ┌──────────────────┐                ┌──────────────────────────────────────┐
-     *      │ ☰ (lamp) Genies  │               │ ☰ (lamp) Genies        [+ New]  [⚙]  │
-     *      │ [+ New genie]    │                │ ┌──────────────────────────────────┐ │
-     *      │ YOUR GENIES      │                │ │ the genies' cards, scrolling,    │ │
-     *      │ ┌──────────────┐ │                │ │ as tall as the user dragged      │ │
-     *      │ │ the genies'  │ │                │ └──────────────────────────────────┘ │
-     *      │ │ cards        │ │                │ ────────────── grip ──────────────── │
+     *      │ [+ New genie]    │                │ [+ New genie                 ]  [⚙]  │
+     *      │ YOUR GENIES      │                │ ┌──────────────────────────────────┐ │
+     *      │ ┌──────────────┐ │                │ │ the genies' cards, scrolling,    │ │
+     *      │ │ the genies'  │ │                │ │ as tall as the user dragged      │ │
+     *      │ │ cards        │ │                │ └──────────────────────────────────┘ │
+     *      │ │              │ │                │ ────────────── grip ──────────────── │
      *      │ └──────────────┘ │                │ what went wrong, if anything         │
      *      │ what went wrong  │                └──────────────────────────────────────┘
      *      │ [⚙ Settings]     │
@@ -191,19 +191,17 @@ public final class GeniesView extends JPanel {
      *  the two is a change of the layout's value. The height above is the list's fold: dragging
      *  the grip to the top folds the list away, as does ☰.
      *
-     *  ☰ shows and hides the list. It is in the top left corner of the window either way: here
-     *  while the list is shown, in the genie's header while it is not. So it stays under the
-     *  pointer, and a second press undoes the first.
+     *  ☰ shows and hides the list. It is in the window's title bar, above both, with the lamp and
+     *  "Genies" ([#titleBar]). So it stays under the pointer, and a second press undoes the first.
      */
     private static final Layout BESIDE_THE_GENIE =
             Layout.mig("fill, ins 0, gap 10, hidemode 3",
-                MigAddConstraint.of("cell 0 0, growx, wmin 0"),             // ☰, the lamp and "Genies"
-                MigAddConstraint.of("cell 0 1, growx"),                     // a new genie
-                MigAddConstraint.of("cell 0 6, growx"),                     // the settings
-                MigAddConstraint.of("cell 0 2, growx, gaptop 6"),           // "YOUR GENIES"
-                MigAddConstraint.of("cell 0 3, grow, push, wmin 0, hmin 0"),// the cards
-                MigAddConstraint.of("cell 0 4"),                            // the grip, hidden
-                MigAddConstraint.of("cell 0 5, growx, wmin 0")              // what went wrong
+                MigAddConstraint.of("cell 0 0, growx"),                     // a new genie
+                MigAddConstraint.of("cell 0 5, growx"),                     // the settings
+                MigAddConstraint.of("cell 0 1, growx, gaptop 6"),           // "YOUR GENIES"
+                MigAddConstraint.of("cell 0 2, grow, push, wmin 0, hmin 0"),// the cards
+                MigAddConstraint.of("cell 0 3"),                            // the grip, hidden
+                MigAddConstraint.of("cell 0 4, growx, wmin 0")              // what went wrong
             );
 
     /// The same parts, in the same order, as [#BESIDE_THE_GENIE].
@@ -212,17 +210,16 @@ public final class GeniesView extends JPanel {
     private static Layout aboveTheGenie(int height) {
         return Layout.mig(
                 LayoutConstraint.of("fill, ins 0, gap 8 6, hidemode 3"),
-                LayoutConstraint.of("[grow][][]"),
+                LayoutConstraint.of("[grow][]"),
                 LayoutConstraint.of("")
             )
             .withChildConstraints(
                 MigAddConstraint.of("cell 0 0, growx, wmin 0"),
                 MigAddConstraint.of("cell 1 0"),
-                MigAddConstraint.of("cell 2 0"),
                 MigAddConstraint.of("cell 0 4"),
-                MigAddConstraint.of("cell 0 1, span 3, growx, wmin 0, h 0:pref:" + height),
-                MigAddConstraint.of("cell 0 2, span 3, growx, h 9!"),
-                MigAddConstraint.of("cell 0 3, span 3, growx, wmin 0"));
+                MigAddConstraint.of("cell 0 1, span 2, growx, wmin 0, h 0:pref:" + height),
+                MigAddConstraint.of("cell 0 2, span 2, growx, h 9!"),
+                MigAddConstraint.of("cell 0 3, span 2, growx, wmin 0"));
     }
 
     private UIForAnySwing<?, ?> sidebar() {
@@ -236,17 +233,7 @@ public final class GeniesView extends JPanel {
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
             .add(
-                // Inset so that ☰ is where the genie's header has it.
-                box("fill, ins 0 4 0 0, gap 8", "[][34!][grow]")
-                .add(
-                    button("").group(Skin.ICON_BUTTON)
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
-                    .withTooltip("Hide your genies")
-                    .onClick(_ -> genieList.update(From.VIEW, Fold::toggled)))
-                .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.READY), 34))
-                .add("growx, wmin 0", label("Genies").group(Skin.BRAND)))
-            .add(
-                button(narrow.viewAsString(it -> it ? "New" : "New genie")).group(Skin.FLAME_BUTTON).withIconTextGap(6)
+                button("New genie").group(Skin.FLAME_BUTTON).withIconTextGap(6)
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, ON_FLAME)))
                 .withTooltip("A new genie, with a sandboxed desktop of its own")
                 .onClick(_ -> app.newGenie()))
@@ -758,25 +745,19 @@ public final class GeniesView extends JPanel {
         // The list of genies says when something went wrong; while it is hidden, the header does.
         Val<Boolean> hiddenTroubles = state.viewAs(Boolean.class, it -> !it.genieList().shown() && !it.troubles().isEmpty());
         return
-            panel("fill, ins 0, gap 10, hidemode 3", "[]0[]0[30!][grow][]").group(Skin.HEADER)
+            panel("fill, ins 0, gap 10, hidemode 3", "[]0[30!][grow][]").group(Skin.HEADER)
             .isVisibleIf(visible)
-            // While the list is shown, ☰ is in its top row instead, in the same corner. Each part
-            // has its cell, and the hidden ones' gaps go with them, so the others keep their places.
-            .add("cell 0 0, gapright 10", button("").group(Skin.ICON_BUTTON)
-                 .isVisibleIf(genieList.viewAs(Boolean.class, it -> !it.shown()))
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
-                 .withTooltip("Show your genies")
-                 .onClick(_ -> genieList.update(From.VIEW, Fold::toggled))
-            )
-            // Not this genie's: what went wrong anywhere in Genies, so it stays beside ☰.
-            .add("cell 1 0, gapright 10", button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
+            // Each part has its cell, and the hidden ones' gaps go with them, so the others keep
+            // their places.
+            // Not this genie's: what went wrong anywhere in Genies, so it stays first, under ☰.
+            .add("cell 0 0, gapright 10", button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
                  .isVisibleIf(hiddenTroubles)
                  .withStyle(it -> it.backgroundColor(TROUBLE_WASH).border(1, TROUBLE).padding(3, 8, 3, 8).componentFont(f -> f.color(TROUBLE)))
                  .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
                  .onClick(_ -> showTroubles())
             )
-            .add("cell 2 0", ViewPartsUtil.lamp(phase, 30))
-            .add("cell 3 0, growx, wmin 0",
+            .add("cell 1 0", ViewPartsUtil.lamp(phase, 30))
+            .add("cell 2 0, growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 0")
                 .add("growx, wmin 0", label(name).group(Skin.TITLE)
                      .withTooltip("Double-click to rename")
@@ -785,7 +766,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
             )
             // One group on the right, so buttons that are hidden leave no gap behind.
-            .add("cell 4 0", box("ins 0, gap 10, hidemode 3, aligny center")
+            .add("cell 3 0", box("ins 0, gap 10, hidemode 3, aligny center")
             .add(pages())
             .add(
                  label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens()))).group(Skin.META)
@@ -809,7 +790,7 @@ public final class GeniesView extends JPanel {
                  .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
                  .onClick(_ -> app.sleep(genie.get().id()))
             ))
-            .add("cell 0 1, span 5, growx, wmin 0", pagesBelow());
+            .add("cell 0 1, span 4, growx, wmin 0", pagesBelow());
     }
 
     /// A request the selected genie's lamp asks the user to allow, such as running a program,
@@ -1320,12 +1301,58 @@ public final class GeniesView extends JPanel {
             Map.entry("ScrollBar.thumbArc", "999"),
             Map.entry("ScrollBar.thumbInsets", "2,2,2,2"),
             Map.entry("ToolTip.background", hex(RAISED)),
-            Map.entry("ToolTip.foreground", hex(TEXT))));
+            Map.entry("ToolTip.foreground", hex(TEXT)),
+            // The title bars Genies draws itself, of its window and its dialogs, in the sidebar's
+            // colour, a line under them as under the genie's header.
+            Map.entry("TitlePane.background", hex(SIDEBAR)),
+            Map.entry("TitlePane.inactiveBackground", hex(SIDEBAR)),
+            Map.entry("TitlePane.foreground", hex(TEXT)),
+            Map.entry("TitlePane.inactiveForeground", hex(SUBTEXT)),
+            Map.entry("TitlePane.embeddedForeground", hex(TEXT)),
+            Map.entry("TitlePane.borderColor", hex(BORDER)),
+            Map.entry("TitlePane.buttonHoverBackground", hex(RAISED)),
+            Map.entry("TitlePane.buttonPressedBackground", hex(BORDER)),
+            Map.entry("TitlePane.closeHoverBackground", hex(TROUBLE)),
+            Map.entry("TitlePane.closePressedBackground", hex(TROUBLE_WASH)),
+            Map.entry("MenuBar.background", hex(SIDEBAR)),
+            Map.entry("MenuBar.borderColor", hex(SIDEBAR)),
+            Map.entry("RootPane.activeBorderColor", hex(BORDER)),
+            Map.entry("RootPane.inactiveBorderColor", hex(BORDER))));
         com.formdev.flatlaf.FlatDarkLaf.setup();
+        // On Linux the desktop draws title bars, unless asked not to; FlatLaf then draws them, and
+        // the desktop still moves and resizes the window.
+        JFrame.setDefaultLookAndFeelDecorated(true);
+        JDialog.setDefaultLookAndFeelDecorated(true);
     }
 
     private static String hex(Color colour) {
         return String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue());
+    }
+
+    /// The window's title bar, drawn by Genies rather than the desktop, in its colours: ☰, the
+    /// lamp and "Genies" on the left, and the window's own buttons, which FlatLaf draws, on the
+    /// right. FlatLaf embeds it as the window's menu bar; where it shows nothing, dragging moves
+    /// the window, and a double-click maximizes it.
+    ///
+    /// ☰ is here so that it stays in the same corner whether the list of genies is shown or not,
+    /// and above it in a narrow window. Without genies there is no list, and no ☰.
+    ///
+    /// @param title the window's title, such as "Genies", which the bar says beside the lamp
+    public JMenuBar titleBar(Val<String> title) {
+        JMenuBar bar = new JMenuBar();
+        UI.use(look, () ->
+            UI.of(bar).withLayout("ins 0 6 0 0, gap 8, aligny center")
+            .withStyle(it -> it.backgroundColor(TRANSPARENT).border(0, TRANSPARENT))
+            .add(
+                button("").group(Skin.ICON_BUTTON)
+                .isVisibleIf(state.viewAs(Boolean.class, GeniesState::hasGenies))
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
+                .withTooltip(genieList.viewAsString(it -> it.shown() ? "Hide your genies" : "Show your genies"))
+                .onClick(_ -> genieList.update(From.VIEW, Fold::toggled)))
+            .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.READY), 26))
+            .add(label(title).group(Skin.BRAND).withStyle(it -> it.componentFont(f -> f.size(15))))
+        );
+        return bar;
     }
 
     /// The window's icon: Genies' icon, which the packages also install for the desktop's menus.
