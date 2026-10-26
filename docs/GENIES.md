@@ -143,7 +143,17 @@ start asleep, unless their lamp was left running: see "Closing Genies".
 3. The chat shows the conversation Genies was in, or else the user's most recent one, read with
    `Lamp.conversations`. A job's run is never opened this way: it is listed with the scheduled
    runs, and the user's next message must not land in it. With only job runs, the chat starts
-   empty.
+    empty.
+
+The chat's wake picture reuses the welcome's flame-to-genie animation, with that genie's own
+colour and outfit. Its lamp catches and burns while the sandbox starts; once the genie is ready,
+the flame turns to pixels, bursts and forms the genie. The emergence takes 2.2 seconds even for
+a quick start, followed by 1.6 seconds of waving at the user. The composer becomes usable as
+soon as the real genie is ready. Then its
+conversation returns, or the formed genie stays above “is listening” in an empty chat. Startup
+progress stays in the bottom bar. A failed wake, sleeping or selecting another genie resets the
+picture. `WakeScene` is immutable presentation data and `WakePicture` advances it on SwingTree's
+UI animation clock; neither changes the genie's actual lifecycle.
 
 Genies does not start pi. The lamp's session holds the genie's one pi, as it does for any lamp,
 and every message, scheduled job and `oillamp ask` goes through it, one run at a time.
