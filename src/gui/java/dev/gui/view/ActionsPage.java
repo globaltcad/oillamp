@@ -27,7 +27,8 @@ import static dev.gui.view.Palette.*;
 import static swingtree.UI.*;
 
 /// What can be done with a genie as a whole: renaming it, starting a new conversation with it,
-/// saving its home, sending it to sleep or waking it, and deleting it. Each is a tile with its
+/// saving its home, sending it to sleep or waking it, linking its folders into the user's, and
+/// deleting it. Each is a tile with its
 /// sign, a sentence on what it does, and a button large enough for a finger.
 ///
 /// A right-click on the genie's card offers the same as a menu, for those with a mouse. This page
@@ -43,11 +44,13 @@ final class ActionsPage {
 
     /*
      *  A responsive grid of tiles: two side by side from LARGE up, one under the other below.
-     *  Deleting the genie comes last, the whole width, away from the rest.
+     *  The genie's folders follow, the whole width, as a tree needs it, with a grid of its own
+     *  inside (see HomeFolders). Deleting the genie comes last, the whole width, away from the rest.
      *
      *                 very small  small  medium  large  very large  oversize
      *      on top          12       12     12     12       12          12
      *      a tile          12       12     12      6        6           6
+     *      the folders     12       12     12     12       12          12
      *      deleting        12       12     12     12       12          12
      */
     private static final int REFERENCE = 900;
@@ -72,6 +75,7 @@ final class ActionsPage {
     private final Var<String> newName;
     /// Set once the field with the name exists, which takes the keyboard on Rename.
     private Optional<JTextField> nameField = Optional.empty();
+    private final HomeFolders folders;
 
     /// @param saveNow asks the user what to remember the selected genie's home by, and saves it
     /// @param delete  asks the user whether to delete a genie for good, and does so
@@ -85,6 +89,7 @@ final class ActionsPage {
         name = genie.viewAsString(Genie::name);
         selected = state.viewAs(UUID.class, GeniesState::selected);
         newName = Var.of(name.get());
+        folders = new HomeFolders(state, app);
         // Renamed elsewhere, the field follows, unless the user is typing in it.
         Viewable.cast(name).onChange(From.ALL, it -> { if (!renaming.get()) newName.set(name.get()); });
         // Another genie chosen: what was typed was meant for the one before.
@@ -107,6 +112,7 @@ final class ActionsPage {
                 .add(TILE, startingAfresh())
                 .add(TILE, saving())
                 .add(TILE, sleepingOrWaking())
+                .add(WHOLE, folders())
                 .add(WHOLE, deleting()));
     }
 
@@ -218,6 +224,10 @@ final class ActionsPage {
                     if (phase.get().isAwake()) app.sleep(selected());
                     else app.wake(selected());
                 }));
+    }
+
+    private UIForAnySwing<?, ?> folders() {
+        return tile(SignSvgUtil.FOLDER, TEXT, Val.of("Folders"), folders.says(), folders.view());
     }
 
     private UIForAnySwing<?, ?> deleting() {

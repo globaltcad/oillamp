@@ -12,6 +12,7 @@ import dev.gui.genie.Shelf;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
+import dev.gui.model.Home;
 import dev.gui.model.Settings;
 import dev.lamp.LampLauncher;
 import sprouts.Tuple;
@@ -152,6 +153,30 @@ public interface Genies {
 
     /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
     void decidePermission(UUID genie, String request, boolean allowed);
+
+    /// Reads the genie's home folder `folder`, by names below its home, into its [Genie#home]:
+    /// the folders in it, and theirs. With an empty `folder`, the home itself, which the app
+    /// first looks for. Off Swing's event thread.
+    void readHome(UUID genie, Tuple<String> folder);
+
+    /// The genie's home folder `folder`, by names below its home, on this computer: there if
+    /// every step to it is a folder, none of them a link the genie made.
+    Optional<Path> folderOf(UUID genie, Tuple<String> folder);
+
+    /// Puts a link to the genie's home folder `folder` into the user's folder `into`, called
+    /// `name`; or `name 2`, and so on, when that is taken by something else. A link of that name
+    /// to the same folder is kept as it was. Quick: a link is one small file.
+    ///
+    /// @throws IOException when there is no such folder, `name` is no plain name, or the link
+    ///                     could not be made; its message says which, to the user
+    Home.Link link(UUID genie, Tuple<String> folder, Path into, String name) throws IOException;
+
+    /// Opens the genie's home folder `folder` in this computer's file manager.
+    void showInFileManager(UUID genie, Tuple<String> folder);
+
+    /// The user's documents folder, such as `~/Documents`, where a genie's folders are linked
+    /// unless the user picks another.
+    Path documents();
 
     /// Shows the genie's chat at the conversation pi knows by `conversation`, such as the one a
     /// job's run had.

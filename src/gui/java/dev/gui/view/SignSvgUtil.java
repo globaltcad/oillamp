@@ -42,7 +42,9 @@ final class SignSvgUtil {
                                + "<circle cx='12' cy='9.5' r='1.8' fill='currentColor'/>";
     /// A bolt: what can be done with a genie as a whole.
     static final String ACTIONS = "<path d='M9.2 1.8L3.5 9.2h4.2l-1 5L12.5 6.8H8.3z'/>";
-    static final String RENAME = "<path d='M10.5 2.5l3 3-8 8h-3v-3z'/><path d='M9 4l3 3'/>";
+    /// A folder: a genie's home, and each folder in it.
+    static final String FOLDER = "<path d='M2 4.5A1.5 1.5 0 0 1 3.5 3h2.8l1.5 1.5h4.7A1.5 1.5 0 0 1 14 6v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12z'/>";
+    static final String RENAME ="<path d='M10.5 2.5l3 3-8 8h-3v-3z'/><path d='M9 4l3 3'/>";
     static final String WAKE = "<circle cx='8' cy='8' r='2.8'/>"
                              + "<path d='M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1'/>";
     static final String MORE ="<circle cx='3.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>"

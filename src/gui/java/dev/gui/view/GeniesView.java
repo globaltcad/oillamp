@@ -33,6 +33,7 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -348,7 +349,7 @@ public final class GeniesView extends JPanel {
             .onMousePress(it -> {
                 state.update(From.VIEW, s -> s.select(id));
                 if ( it.isRightMouseButton() )
-                    genieMenu(id).show(it.getComponent(), it.mouseX(), it.mouseY());
+                    genieMenu(id).show(it.getComponent(), it.getEvent().getX(), it.getEvent().getY());
             })
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 0, hidemode 3")
@@ -592,9 +593,11 @@ public final class GeniesView extends JPanel {
                         })
                         .onMouseMove(it -> {
                             JTree tree = it.getComponent();
-                            int row = tree.getClosestRowForLocation(it.mouseX(), it.mouseY());
+                            // In the tree's own pixels, as its rows are: mouseX() and mouseY() are unscaled.
+                            int x = it.getEvent().getX(), y = it.getEvent().getY();
+                            int row = tree.getClosestRowForLocation(x, y);
                             Rectangle bounds = tree.getRowBounds(row);
-                            boolean onRow = bounds != null && it.mouseY() >= bounds.y && it.mouseY() < bounds.y + bounds.height;
+                            boolean onRow = bounds != null && y >= bounds.y && y < bounds.y + bounds.height;
                             pointed.set(onRow ? row : -1);
                             tree.setCursor(Cursor.getPredefinedCursor(onRow && tree.isEnabled() ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
                         })
@@ -904,7 +907,7 @@ public final class GeniesView extends JPanel {
             case SCHEDULE -> "Schedule: when jobs wake the genie, and what they did";
             case HISTORY -> "History: the moments the genie's home was saved at, and going back to one";
             case HOST_ACCESS -> "Host access: whether the genie may reach this computer, and its rules";
-            case ACTIONS -> "Actions: rename, save, wake or sleep, or delete the genie";
+            case ACTIONS -> "Actions: rename, save, wake or sleep, link its folders, or delete the genie";
             default -> "Chat: talk with the genie";
         };
         return half(text, sign, page.viewAs(Boolean.class, it -> it == to)).withTooltip(tooltip)
@@ -1389,6 +1392,7 @@ public final class GeniesView extends JPanel {
                 .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
                 .add(ViewPartsUtil.item("New conversation", idle, () -> app.startAfresh(id)))
                 .add(ViewPartsUtil.item("Save now…", shown.history().busy().isEmpty(), () -> historyPage.save(this)))
+                .add(ViewPartsUtil.item("Link its workspace into " + app.documents().getFileName(), true, () -> linkWorkspace(id)))
                 .peek(JPopupMenu::addSeparator)
                 .applyIf(now.isAwake(), ui1 -> ui1
                     .add(ViewPartsUtil.item("Sleep", true, () -> app.sleep(id)))
@@ -1411,6 +1415,22 @@ public final class GeniesView extends JPanel {
                     "Rename a genie", JOptionPane.PLAIN_MESSAGE, null, null, named.name());
             if (answer instanceof String text && !text.isBlank())
                 state.update(From.VIEW, it -> it.update(id, genie -> genie.withName(text.strip())));
+        });
+    }
+
+    /// Links the genie's workspace into the user's documents, called as the Actions page calls it
+    /// unless the user names it, and says where the link is, or why there is none.
+    private void linkWorkspace(UUID id) {
+        state.get().find(id).ifPresent(genie -> {
+            try {
+                Home.Link link = app.link(id, Home.WORKSPACE, app.documents(), Home.linkName(genie.name(), Home.WORKSPACE));
+                JOptionPane.showMessageDialog(this, genie.name() + "'s workspace " + (link.madeNow() ? "is" : "was")
+                        + " in your " + app.documents().getFileName() + (link.madeNow() ? " now" : " already")
+                        + ", as \"" + link.at().getFileName() + "\".\nIt is a link, not a copy: " + genie.name()
+                        + " sees what you change there.", "Linked", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException failed) {
+                JOptionPane.showMessageDialog(this, failed.getMessage(), "Could not link", JOptionPane.WARNING_MESSAGE);
+            }
         });
     }
 
