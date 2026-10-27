@@ -140,8 +140,18 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
         return new Timeline(laidOut, week.size() - shown);
     }
 
-    private static Moment moment(Schedule schedule, Kind kind, String clock, String title, String detail, String job,
-                                 String run, Optional<String> conversation, Optional<Schedule.Outcome> outcome, boolean byGenie) {
+    private static Moment moment(
+        final Schedule schedule,
+        final Kind kind,
+        final String clock,
+        final String title,
+        final String detail,
+        final String job,
+        final String run,
+        final Optional<String> conversation,
+        final Optional<Schedule.Outcome> outcome,
+        final boolean byGenie
+    ) {
         if (kind == Kind.WORKING && !schedule.picked().equals(job)) return new Moment(kind, clock, title, detail, job, run,
                 conversation, outcome, byGenie, Emphasis.PLAIN);
         Emphasis emphasis = schedule.picked().isEmpty() ? (schedule.paused() && kind != Kind.RAN ? Emphasis.FADED : Emphasis.PLAIN)

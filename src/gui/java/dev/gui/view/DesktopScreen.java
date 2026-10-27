@@ -169,9 +169,14 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// The scale fit draws the desktop at right now, so that zooming from fit starts there.
     double fitScale() {
         Dimension room = getParent() instanceof JViewport viewport ? viewport.getExtentSize() : getSize();
-        return connection.map(desktop -> Math.min((double) room.width / desktop.screen().getWidth(),
-                                                  (double) room.height / desktop.screen().getHeight()))
-                         .filter(scale -> scale > 0).orElse(1.0);
+        return
+            connection
+            .map(desktop -> Math.min(
+                (double) room.width / desktop.screen().getWidth(),
+                (double) room.height / desktop.screen().getHeight()
+            ))
+            .filter(scale -> scale > 0)
+            .orElse(1.0);
     }
 
     // ─── in a scroll pane ──────────────────────────────────────────────────────────────────
@@ -180,10 +185,13 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// size at that scale.
     @Override public Dimension getPreferredSize() {
         if (zoom <= 0) return new Dimension(UI.scale(320), UI.scale(200));
-        return connection.map(desktop -> new Dimension(
-                        (int) Math.round(desktop.screen().getWidth() * zoom),
-                        (int) Math.round(desktop.screen().getHeight() * zoom)))
-                .orElse(new Dimension(UI.scale(320), UI.scale(200)));
+        return
+            connection
+            .map(desktop -> new Dimension(
+                (int) Math.round(desktop.screen().getWidth() * zoom),
+                (int) Math.round(desktop.screen().getHeight() * zoom)
+            ))
+            .orElse(new Dimension(UI.scale(320), UI.scale(200)));
     }
 
     @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
@@ -274,8 +282,10 @@ final class DesktopScreen extends JComponent implements Scrollable {
         if (zoom >= 0 || keepsItsSize.get() || getWidth() <= 0 || getHeight() <= 0 || getGraphicsConfiguration() == null)
             return new Dimension(desktop.ownWidth(), desktop.ownHeight());
         double pixels = getGraphicsConfiguration().getDefaultTransform().getScaleX();
-        return new Dimension(Math.max(SMALLEST_WIDTH, (int) Math.floor(getWidth() * pixels)),
-                             Math.max(SMALLEST_HEIGHT, (int) Math.floor(getHeight() * pixels)));
+        return new Dimension(
+            Math.max(SMALLEST_WIDTH, (int) Math.floor(getWidth() * pixels)),
+            Math.max(SMALLEST_HEIGHT, (int) Math.floor(getHeight() * pixels))
+        );
     }
 
     private void connect(Desktop desktop) {

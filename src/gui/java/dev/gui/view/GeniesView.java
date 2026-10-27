@@ -106,8 +106,13 @@ public final class GeniesView extends JPanel {
         page         = state.zoomTo(GeniesState::page, GeniesState::withPage);
         genieList    = state.zoomTo(GeniesState::genieList, GeniesState::withGenieList);
         // Leaving the settings goes back to the chat, as their Done does.
-        settingsShown = page.zoomTo(it -> it == GeniesState.Page.SETTINGS, (it, shown) -> shown ? GeniesState.Page.SETTINGS
-                                                                       : it == GeniesState.Page.SETTINGS ? GeniesState.Page.CHAT : it);
+        settingsShown = page.zoomTo(
+            it -> it == GeniesState.Page.SETTINGS,
+            (it, shown) ->
+                shown
+                    ? GeniesState.Page.SETTINGS
+                    : it == GeniesState.Page.SETTINGS ? GeniesState.Page.CHAT : it
+        );
         // Genies and entries keep their id while they change, so their rows are bound through a
         // lens onto each one: a row built from a plain value would never be redrawn.
         genies       = state.zoomTo(GeniesState::genies, GeniesState::withGenies);
@@ -129,8 +134,15 @@ public final class GeniesView extends JPanel {
         Viewable.cast(genies).onChange(From.ALL, _ -> {
             if (anyWorksOrWakes()) breathe();
         });
-        rows = new ChatRows(look, genie, this::saveHandout, pulse, this::askInstead,
-                           phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY), this::showLeaf);
+        rows = new ChatRows(
+            look,
+            genie,
+            this::saveHandout,
+            pulse,
+            this::askInstead,
+            phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY),
+            this::showLeaf
+        );
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
         hostAccessPage = new HostAccessPage(state, app);
@@ -150,13 +162,15 @@ public final class GeniesView extends JPanel {
 
     /// The genies beside the selected one, or, in a narrow window, above it. The genie keeps
     /// some height whatever the list's, so the list cannot push it out of the window.
-    private static final Layout SIDE_BY_SIDE = Layout.mig("fill, ins 0, gap 0, hidemode 3",
-            MigAddConstraint.of("growy, width 250!"),
-            MigAddConstraint.of("grow, push, wmin 0")
+    private static final Layout SIDE_BY_SIDE = Layout.mig(
+        "fill, ins 0, gap 0, hidemode 3",
+        MigAddConstraint.of("growy, width 250!"),
+        MigAddConstraint.of("grow, push, wmin 0")
     );
-    private static final Layout ONE_COLUMN = Layout.mig("fill, wrap 1, ins 0, gap 0, hidemode 3",
-            MigAddConstraint.of("growx, wmin 0"),
-            MigAddConstraint.of("grow, push, wmin 0, hmin 160")
+    private static final Layout ONE_COLUMN = Layout.mig(
+        "fill, wrap 1, ins 0, gap 0, hidemode 3",
+        MigAddConstraint.of("growx, wmin 0"),
+        MigAddConstraint.of("grow, push, wmin 0, hmin 160")
     );
 
     // ─── the sidebar: every genie ──────────────────────────────────────────────────────────
@@ -195,21 +209,22 @@ public final class GeniesView extends JPanel {
      *  ☰ shows and hides the list. It is in the window's title bar, above both, with the lamp and
      *  "Genies" ([#titleBar]). So it stays under the pointer, and a second press undoes the first.
      */
-    private static final Layout BESIDE_THE_GENIE =
-            Layout.mig("fill, ins 0, gap 10, hidemode 3",
-                MigAddConstraint.of("cell 0 0, growx"),                     // a new genie
-                MigAddConstraint.of("cell 0 5, growx"),                     // the settings
-                MigAddConstraint.of("cell 0 1, growx, gaptop 6"),           // "YOUR GENIES"
-                MigAddConstraint.of("cell 0 2, grow, push, wmin 0, hmin 0"),// the cards
-                MigAddConstraint.of("cell 0 3"),                            // the grip, hidden
-                MigAddConstraint.of("cell 0 4, growx, wmin 0")              // what went wrong
-            );
+    private static final Layout BESIDE_THE_GENIE = Layout.mig(
+        "fill, ins 0, gap 10, hidemode 3",
+        MigAddConstraint.of("cell 0 0, growx"),                      // a new genie
+        MigAddConstraint.of("cell 0 5, growx"),                      // the settings
+        MigAddConstraint.of("cell 0 1, growx, gaptop 6"),            // "YOUR GENIES"
+        MigAddConstraint.of("cell 0 2, grow, push, wmin 0, hmin 0"), // the cards
+        MigAddConstraint.of("cell 0 3"),                             // the grip, hidden
+        MigAddConstraint.of("cell 0 4, growx, wmin 0")               // what went wrong
+    );
 
     /// The same parts, in the same order, as [#BESIDE_THE_GENIE].
     ///
     /// @param height the most the cards' area takes: the list's fold
     private static Layout aboveTheGenie(int height) {
-        return Layout.mig(
+        return
+            Layout.mig(
                 LayoutConstraint.of("fill, ins 0, gap 8 6, hidemode 3"),
                 LayoutConstraint.of("[grow][]"),
                 LayoutConstraint.of("")
@@ -220,7 +235,8 @@ public final class GeniesView extends JPanel {
                 MigAddConstraint.of("cell 0 4"),
                 MigAddConstraint.of("cell 0 1, span 2, growx, wmin 0, h 0:pref:" + height),
                 MigAddConstraint.of("cell 0 2, span 2, growx, h 9!"),
-                MigAddConstraint.of("cell 0 3, span 2, growx, wmin 0"));
+                MigAddConstraint.of("cell 0 3, span 2, growx, wmin 0")
+            );
     }
 
     private UIForAnySwing<?, ?> sidebar() {
@@ -230,18 +246,25 @@ public final class GeniesView extends JPanel {
         return
             panel().group(Skin.SIDEBAR)
             .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? aboveTheGenie(it.genieList().height()) : BESIDE_THE_GENIE))
-            .withStyle(narrow, (on, it) -> on ? it.borderAt(UI.Edge.RIGHT, 0, TRANSPARENT).borderAt(UI.Edge.BOTTOM, 1, BORDER).padding(12, 12, 2, 12) : it)
+            .withStyle(narrow, (on, it) ->
+                on
+                    ? it.borderAt(UI.Edge.RIGHT, 0, TRANSPARENT).borderAt(UI.Edge.BOTTOM, 1, BORDER).padding(12, 12, 2, 12)
+                    : it
+            )
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
             .add(
                 button("New genie").group(Skin.FLAME_BUTTON).withIconTextGap(6)
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, ON_FLAME)))
                 .withTooltip("A new genie, with a sandboxed desktop of its own")
-                .onClick(_ -> app.newGenie()))
+                .onClick(_ -> app.newGenie())
+            )
             .add(
-                toggleButton(narrow.viewAsString(it -> it ? "" : "Settings"), settingsShown).group(Skin.QUIET_BUTTON).withIconTextGap(6)
+                toggleButton(narrow.viewAsString(it -> it ? "" : "Settings"), settingsShown)
+                .group(Skin.QUIET_BUTTON).withIconTextGap(6)
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SETTINGS, TEXT)))
-                .withTooltip("Settings: the model every genie uses. Pressed again, back to the genie"))
+                .withTooltip("Settings: the model every genie uses. Pressed again, back to the genie")
+            )
             .add(label("YOUR GENIES").group(Skin.SECTION).isVisibleIf(wide))
             .add(
                 // As tall as the cards, so that above the genie a few of them take only their room.
@@ -251,7 +274,8 @@ public final class GeniesView extends JPanel {
                 .group(Skin.PAGE_SCROLL).withMinSize(0, 0).withEmptyBorder(0)
                 .peek(it -> cards[0] = it)
                 .withStyle(it -> it.backgroundColor(TRANSPARENT))
-                .addAll(genies, this::genieChip))
+                .addAll(genies, this::genieChip)
+            )
             .add(
                 grip(
                     genieList,
@@ -265,7 +289,8 @@ public final class GeniesView extends JPanel {
                 .add("left",
                     ViewPartsUtil.link("Add a lamp from elsewhere…")
                     .withTooltip("Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself")
-                    .onClick(_ -> addLamp()))
+                    .onClick(_ -> addLamp())
+                )
                 .add("growx",
                     button(state.viewAsString(it -> troubleInfoMessage(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(it -> it
@@ -293,24 +318,34 @@ public final class GeniesView extends JPanel {
     /// stands above the first of them.
     private UIForAnySwing<?, ?> genieChip(Var<Genie> shown) {
         UUID id = shown.get().id();
-        Val<Boolean> firstFromElsewhere = state.viewAs(Boolean.class, it -> it.genies().stream()
-                .filter(Genie::fromElsewhere).findFirst().map(first -> first.id().equals(id)).orElse(false));
+        Val<Boolean> firstFromElsewhere = state.viewAs(Boolean.class, it ->
+            it.genies().stream()
+            .filter(Genie::fromElsewhere)
+            .findFirst()
+            .map(first -> first.id().equals(id))
+            .orElse(false)
+        );
         return UI.of(UI.use(look, () ->
             panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
             .add("growx, wmin 0, gaptop 14, gapbottom 4",
                 label("LAMPS FROM ELSEWHERE").group(Skin.SECTION)
                 .isVisibleIf(firstFromElsewhere)
-                .withTooltip("Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are"))
+                .withTooltip("Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are")
+            )
             .add("growx, wmin 0", genieChipBody(shown))
-            .get(JPanel.class)));
+            .get(JPanel.class)
+        ));
     }
 
     /// Where a lamp from elsewhere is, with `~` for the user's home, as a person types it.
     private static String whereFrom(Genie genie) {
         String home = System.getProperty("user.home");
-        return genie.elsewhere().map(Path::toString)
-                .map(it -> it.startsWith(home + "/") ? "~" + it.substring(home.length()) : it).orElse("");
+        return
+            genie.elsewhere()
+            .map(Path::toString)
+            .map(it -> it.startsWith(home + "/") ? "~" + it.substring(home.length()) : it)
+            .orElse("");
     }
 
     /// [#whereFrom], short enough for a card: a long path keeps its end, such as `…/lamps/west`,
@@ -335,8 +370,9 @@ public final class GeniesView extends JPanel {
         // twice its twenty pixels. Asleep, waking or broken, it is in the lamp, so not shown, and
         // that corner has an arrow that folds the genie's conversations away, or shows them again.
         Val<Boolean> awakeAndOut = shown.viewAs(Boolean.class, it -> it.phase().isAwake());
-        Var<Boolean> folded = shown.zoomTo(Genie::conversations, Genie::withConversations)
-                                   .zoomTo(Conversations::folded, Conversations::withFolded);
+        Var<Boolean> folded =
+            shown.zoomTo(Genie::conversations, Genie::withConversations)
+            .zoomTo(Conversations::folded, Conversations::withFolded);
         Var<Boolean> hovered = Var.of(false);
         Val<IconDeclaration> picture = Viewable.of(IconDeclaration.class, shown, pulse, (it, progress) -> {
             if (!it.phase().isAwake()) return GenieSvgUtil.NONE;
@@ -356,9 +392,10 @@ public final class GeniesView extends JPanel {
             )
             // Under the pointer, a card that is not selected yet lights halfway to selected.
             .withTransitionalStyle(hovered, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) ->
-                isSelected.get() ? it
+                isSelected.get()
+                    ? it
                     : it.backgroundColor(ViewPartsUtil.withAlpha(RAISED, (int) Math.round(150 * status.progress())))
-                        .border(1, ViewPartsUtil.withAlpha(BORDER, (int) Math.round(255 * status.progress())))
+                      .border(1, ViewPartsUtil.withAlpha(BORDER, (int) Math.round(255 * status.progress())))
             )
             .onMouseEnter(_ -> hovered.set(true))
             .onMouseExit(_ -> hovered.set(false))
@@ -412,46 +449,46 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add("growx, wmin 0",
-                     label(shown.viewAsString(GeniesView::whereFromInShort))
-                     .isVisibleIf(shown.viewAs(Boolean.class, Genie::fromElsewhere))
-                     .withTooltip(shown.viewAsString(it -> it.elsewhere().map(Path::toString).orElse("")))
-                     .withStyle(it -> it
-                         .componentFont(f -> f
-                             .family(MONO)
-                             .size(11)
-                             .color(BRASS)
-                         )
-                     )
+                    label(shown.viewAsString(GeniesView::whereFromInShort))
+                    .isVisibleIf(shown.viewAs(Boolean.class, Genie::fromElsewhere))
+                    .withTooltip(shown.viewAsString(it -> it.elsewhere().map(Path::toString).orElse("")))
+                    .withStyle(it -> it
+                        .componentFont(f -> f
+                            .family(MONO)
+                            .size(11)
+                            .color(BRASS)
+                        )
+                    )
                 )
                 .add("growx, wmin 0",
-                     html(
-                         Viewable.of(String.class, shown, state, (it, s) ->
-                             !it.hostAccess().waitingAt(s.now()).isEmpty()
-                                 ? "⌂  asks you to allow something"
-                                 : "⌂  may reach this computer"
-                         )
-                     )
-                     .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
-                             it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty())
-                     )
-                     .withStyle(it -> it
-                         .componentFont(f -> f
-                             .family(FONT)
-                             .size(11)
-                             .color(BRASS)
-                         )
-                     )
+                    html(
+                        Viewable.of(String.class, shown, state, (it, s) ->
+                            !it.hostAccess().waitingAt(s.now()).isEmpty()
+                                ? "⌂  asks you to allow something"
+                                : "⌂  may reach this computer"
+                        )
+                    )
+                    .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
+                        it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty()
+                    ))
+                    .withStyle(it -> it
+                        .componentFont(f -> f
+                            .family(FONT)
+                            .size(11)
+                            .color(BRASS)
+                        )
+                    )
                 )
                 .add("growx, wmin 0",
-                     label(shown.viewAsString(it -> "▣  shows you: " + it.showing()))
-                     .isVisibleIf(showsElsewhere)
-                     .withStyle(it -> it
-                         .componentFont(f -> f
-                             .family(FONT)
-                             .size(11)
-                             .color(FLAME)
-                         )
-                     )
+                    label(shown.viewAsString(it -> "▣  shows you: " + it.showing()))
+                    .isVisibleIf(showsElsewhere)
+                    .withStyle(it -> it
+                        .componentFont(f -> f
+                            .family(FONT)
+                            .size(11)
+                            .color(FLAME)
+                        )
+                    )
                 )
             )
             .add("top",
@@ -489,10 +526,10 @@ public final class GeniesView extends JPanel {
         Val<Boolean> awake = shown.viewAs(Boolean.class, it -> it.phase().isAwake());
         Val<Boolean> idle = shown.viewAs(Boolean.class, it -> it.phase() != Genie.Phase.WORKING);
         Val<Boolean> canForget = shown.viewAs(Boolean.class, it ->
-                            it.phase() != Genie.Phase.WORKING &&
-                            it.phase() != Genie.Phase.WAKING &&
-                            it.conversations().current().isPresent()
-                    );
+            it.phase() != Genie.Phase.WORKING &&
+            it.phase() != Genie.Phase.WAKING &&
+            it.conversations().current().isPresent()
+        );
         Val<Boolean> eitherOpen = Viewable.of(Boolean.class, chats, jobs, (c, j) -> c.shown() || j.shown());
         return
             box("fill, wrap 1, ins 0, gap 2, hidemode 3", "[grow]")
@@ -504,11 +541,11 @@ public final class GeniesView extends JPanel {
                     conversations.viewAsString(it ->
                         howMany(it.jobCount(), "scheduled run", "")
                     ),
-                     "Show or hide the conversations the runs of this genie's scheduled jobs had",
-                     conversations.viewAs(Boolean.class, it -> it.jobCount() > 0),
-                     conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::jobRuns),
-                     browsable,
-                     Optional.empty()
+                    "Show or hide the conversations the runs of this genie's scheduled jobs had",
+                    conversations.viewAs(Boolean.class, it -> it.jobCount() > 0),
+                    conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::jobRuns),
+                    browsable,
+                    Optional.empty()
                 )
             )
             .add("growx, wmin 0, gaptop 4",
@@ -520,7 +557,8 @@ public final class GeniesView extends JPanel {
                     ),
                     "Show or hide your conversations with this genie",
                     Val.of(true),
-                    conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::chats), browsable,
+                    conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::chats),
+                    browsable,
                     Optional.of(
                         button("").group(Skin.ICON_BUTTON).isVisibleIf(awake).isEnabledIf(idle)
                         .withStyle(it -> it
@@ -533,11 +571,11 @@ public final class GeniesView extends JPanel {
                 )
             )
             .add("left, gaptop 2",
-                 button("Delete…").group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
-                 .isVisibleIf(eitherOpen)
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, SUBTEXT)))
-                 .withTooltip("Delete the conversation this genie is in, with all its branches")
-                 .onClick(_ -> confirmForget(id))
+                button("Delete…").group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
+                .isVisibleIf(eitherOpen)
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, SUBTEXT)))
+                .withTooltip("Delete the conversation this genie is in, with all its branches")
+                .onClick(_ -> confirmForget(id))
             );
     }
 
@@ -557,9 +595,11 @@ public final class GeniesView extends JPanel {
         final Optional<UIForAnySwing<?, ?>> beside
     ) {
         Val<Boolean> open = fold.viewAs(Boolean.class, Fold::shown);
-        Val<Tuple<String>> here = Viewable.of(Tuple.classTyped(String.class), rows,
-                state.viewAs(Conversations.class, it -> it.find(id).map(Genie::conversations).orElse(Conversations.NONE)),
-                (shownRows, conversations) -> conversations.selectionIn(shownRows)
+        Val<Tuple<String>> here = Viewable.of(
+            Tuple.classTyped(String.class),
+            rows,
+            state.viewAs(Conversations.class, it -> it.find(id).map(Genie::conversations).orElse(Conversations.NONE)),
+            (shownRows, conversations) -> conversations.selectionIn(shownRows)
         );
         // The line that opens the tree brightens under the pointer, and so does the tree's row
         // under it, across the tree's width: the number of that row, or -1 for none.
@@ -589,7 +629,8 @@ public final class GeniesView extends JPanel {
                     .onMouseExit(_ -> lineHovered.set(false))
                     .onMouseClick(_ -> fold.update(From.VIEW, Fold::toggled))
                 )
-                .applyIfPresent(beside.map(it -> line -> line.add(it))))
+                .applyIfPresent(beside.map(it -> line -> line.add(it)))
+            )
             .add("growx, wmin 0, hmin 0",
                 scrollPane(conf -> conf.fitWidth(true))
                 .withEmptyBorder(0).withMinSize(0, 0)
@@ -612,19 +653,17 @@ public final class GeniesView extends JPanel {
                                 .children(Talk.Chat::branches)
                                 .text(Talk.Chat::title)
                                 .toolTip(chat ->
-                                        chat.title() + " — " + (
-                                                chat.turns() == 0
-                                                        ? "its first question was asked differently"
-                                                        : questions(chat.turns(), chat.branches())
-                                        )
+                                    chat.title() + " — " + (
+                                        chat.turns() == 0
+                                            ? "its first question was asked differently"
+                                            : questions(chat.turns(), chat.branches())
+                                    )
                                 )
                             )
                             .nodesOf(Talk.Branch.class, it -> it
                                 .children(Talk.Branch::forks)
                                 .text(Talk.Branch::title)
-                                .toolTip(branch ->
-                                        branch.title() + " — " + questions(branch.turns(), branch.forks())
-                                )
+                                .toolTip(branch -> branch.title() + " — " + questions(branch.turns(), branch.forks()))
                             )
                             .leafWhenEmpty(true)
                         )
@@ -635,7 +674,9 @@ public final class GeniesView extends JPanel {
                                 // The other tree is also cleared by the selection binding. Only
                                 // clearing this tree's current selection asks for the overview.
                                 if (!here.get().isEmpty())
-                                    state.update(From.VIEW, s -> s.update(id, g -> g.withConversations(g.conversations().withOverview(true))));
+                                    state.update(From.VIEW, s ->
+                                        s.update(id, g -> g.withConversations(g.conversations().withOverview(true)))
+                                    );
                             }
                             else
                                 goTo(id, it.leadPath(), it.lead());
@@ -648,12 +689,15 @@ public final class GeniesView extends JPanel {
                             Rectangle bounds = tree.getRowBounds(row);
                             boolean onRow = bounds != null && y >= bounds.y && y < bounds.y + bounds.height;
                             pointed.set(onRow ? row : -1);
-                            tree.setCursor(Cursor.getPredefinedCursor(onRow && tree.isEnabled() ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+                            boolean clickable = onRow && tree.isEnabled();
+                            tree.setCursor(Cursor.getPredefinedCursor(clickable ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
                         })
                         .onMouseExit(_ -> pointed.set(-1))
                         .withStyle(pointed, (row, it) -> {
                             JTree tree = it.component();
-                            return it.backgroundColor(TRANSPARENT).componentFont(f -> f.family(FONT).size(12).color(TEXT))
+                            return
+                                it.backgroundColor(TRANSPARENT)
+                                .componentFont(f -> f.family(FONT).size(12).color(TEXT))
                                 .painter(UI.Layer.BACKGROUND, g -> {
                                     Rectangle bounds = row < 0 || !tree.isEnabled() ? null : tree.getRowBounds(row);
                                     if (bounds == null) return;
@@ -691,8 +735,7 @@ public final class GeniesView extends JPanel {
             .withTooltip(tip)
             .withStyle(it -> {
                 int width = it.componentWidth(), height = it.componentHeight();
-                return it.backgroundColor(TRANSPARENT)
-                        .painter(UI.Layer.CONTENT, g -> grip(g, width, height));
+                return it.backgroundColor(TRANSPARENT).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
             })
             .onMousePress(it -> {
                 dragFrom[0] = UI.unscale(it.mouseYOnScreen());
@@ -724,10 +767,10 @@ public final class GeniesView extends JPanel {
 
     private static String questions(int turns, Tuple<Talk.Branch> forks) {
         return (turns == 1 ? "one question" : turns + " questions") + (
-                     forks.isEmpty()
-                             ? ""
-                             : ", then asked differently " + (forks.size() == 2 ? "once" : forks.size() - 1 + " times")
-                );
+            forks.isEmpty()
+                ? ""
+                : ", then asked differently " + (forks.size() == 2 ? "once" : forks.size() - 1 + " times")
+        );
     }
 
     /// "no conversations yet", "1 conversation", "3 conversations", and so on.
@@ -746,7 +789,9 @@ public final class GeniesView extends JPanel {
             if (path.isEmpty() || row.isEmpty())
                 return;
             if (path.equals(genie.conversations().herePath())) {
-                state.update(From.VIEW, s -> s.select(id).update(id, g -> g.withConversations(g.conversations().withOverview(false))));
+                state.update(From.VIEW, s ->
+                    s.select(id).update(id, g -> g.withConversations(g.conversations().withOverview(false)))
+                );
                 return;
             }
             genie.conversations().fileOf(path.first()).ifPresent(file -> {
@@ -758,9 +803,11 @@ public final class GeniesView extends JPanel {
 
     private void confirmForget(UUID id) {
         state.get().find(id).flatMap(genie -> genie.conversations().current()).ifPresent(doomed -> {
-            ConfirmAnswer answer = UI.confirmation("Delete the conversation \"" + doomed.title()
-                    + "\" for good, with all its branches?").titled("Delete a conversation")
-                    .yesOption("Delete").noOption("Keep").cancelOption("").show();
+            ConfirmAnswer answer =
+                UI.confirmation("Delete the conversation \"" + doomed.title() + "\" for good, with all its branches?")
+                .titled("Delete a conversation")
+                .yesOption("Delete").noOption("Keep").cancelOption("")
+                .show();
             if (answer == ConfirmAnswer.YES) app.forget(id, doomed.file());
         });
     }
@@ -802,46 +849,56 @@ public final class GeniesView extends JPanel {
             // Each part has its cell, and the hidden ones' gaps go with them, so the others keep
             // their places.
             // Not this genie's: what went wrong anywhere in Genies, so it stays first, under ☰.
-            .add("cell 0 0, gapright 10", button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
-                 .isVisibleIf(hiddenTroubles)
-                 .withStyle(it -> it.backgroundColor(TROUBLE_WASH).border(1, TROUBLE).padding(3, 8, 3, 8).componentFont(f -> f.color(TROUBLE)))
-                 .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
-                 .onClick(_ -> showTroubles())
+            .add("cell 0 0, gapright 10",
+                button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
+                .isVisibleIf(hiddenTroubles)
+                .withStyle(it -> it
+                    .backgroundColor(TROUBLE_WASH)
+                    .border(1, TROUBLE)
+                    .padding(3, 8, 3, 8)
+                    .componentFont(f -> f.color(TROUBLE))
+                )
+                .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
+                .onClick(_ -> showTroubles())
             )
             .add("cell 1 0", ViewPartsUtil.lamp(phase, 30))
             .add("cell 2 0, growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 0")
-                .add("growx, wmin 0", label(name).group(Skin.TITLE)
-                     .withTooltip("Double-click to rename")
-                     .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); })
+                .add("growx, wmin 0",
+                    label(name).group(Skin.TITLE)
+                    .withTooltip("Double-click to rename")
+                    .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); })
                 )
                 .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
             )
             // One group on the right, so buttons that are hidden leave no gap behind.
-            .add("cell 3 0", box("ins 0, gap 10, hidemode 3, aligny center")
-            .add(pages())
-            .add(
-                 label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens()))).group(Skin.META)
-                 .isVisibleIf(wide)
-                 .withTooltip("Tokens the model counted for this genie since Genies started")
+            .add("cell 3 0",
+                box("ins 0, gap 10, hidemode 3, aligny center")
+                .add(pages())
+                .add(
+                    label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens())))
+                    .group(Skin.META)
+                    .isVisibleIf(wide)
+                    .withTooltip("Tokens the model counted for this genie since Genies started")
+                )
+                .add(
+                    toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, TEXT)))
+                    .withTooltip("Desktop: watch the genie's desktop, and use it")
+                )
+                .add(
+                    button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
+                    .withTooltip("Stop what the genie is doing")
+                    .onClick(_ -> app.stop(genie.get().id()))
+                )
+                .add(
+                    button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
+                    .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
+                    .onClick(_ -> app.sleep(genie.get().id()))
+                )
             )
-            .add(
-                 toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, TEXT)))
-                 .withTooltip("Desktop: watch the genie's desktop, and use it")
-            )
-            .add(
-                 button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
-                 .withTooltip("Stop what the genie is doing")
-                 .onClick(_ -> app.stop(genie.get().id()))
-            )
-            .add(
-                 button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
-                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
-                 .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
-                 .onClick(_ -> app.sleep(genie.get().id()))
-            ))
             .add("cell 0 1, span 4, growx, wmin 0", pagesBelow());
     }
 
@@ -851,13 +908,13 @@ public final class GeniesView extends JPanel {
     /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then.
     private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
         Val<String> request = Viewable.of(String.class, genie, state, (it, s) ->
-                                    it.hostAccess()
-                                        .waitingAt(s.now())
-                                        .stream()
-                                        .findFirst()
-                                        .map(HostAccess.RequestForPermission::what)
-                                        .orElse("")
-                                );
+            it.hostAccess()
+            .waitingAt(s.now())
+            .stream()
+            .findFirst()
+            .map(HostAccess.RequestForPermission::what)
+            .orElse("")
+        );
         Val<Boolean> shown = Viewable.of(Boolean.class, visible, request, (on, what) -> on && !what.isEmpty());
         return
             panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[grow][][]")
@@ -865,14 +922,29 @@ public final class GeniesView extends JPanel {
             .withStyle(it -> it.backgroundColor(YOURS).borderAt(UI.Edge.LEFT, 3, BRASS).borderAt(UI.Edge.BOTTOM, 1, BORDER))
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(Viewable.of(String.class, name, request,
-                        (who, what) -> who + " asks you to allow: " + what), TEXT, Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.note("A model allowed it already; this one needs you too. "
-                        + "Nothing happens until you decide, and after a minute it is refused.", Val.of(true))))
-            .add(button("Refuse").group(Skin.QUIET_BUTTON)
-                 .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), false)))
-            .add(button("Allow").group(Skin.FLAME_BUTTON)
-                 .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), true)));
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        Viewable.of(String.class, name, request, (who, what) -> who + " asks you to allow: " + what),
+                        TEXT,
+                        Val.of(true)
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.note(
+                        "A model allowed it already; this one needs you too. "
+                        + "Nothing happens until you decide, and after a minute it is refused.",
+                        Val.of(true)
+                    )
+                )
+            )
+            .add(
+                button("Refuse").group(Skin.QUIET_BUTTON)
+                .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), false))
+            )
+            .add(
+                button("Allow").group(Skin.FLAME_BUTTON)
+                .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), true))
+            );
     }
 
     /*
@@ -907,9 +979,11 @@ public final class GeniesView extends JPanel {
             .add(
                 switchOfPages().isVisibleIf(roomForPages.viewAs(Boolean.class, it -> !it))
                 .add(part(GeniesState.Page.CHAT, wide))
-                .add(half(Val.of(""), SignSvgUtil.MANAGE, managing)
-                     .withTooltip("Manage: the genie's schedule, history, host access and actions")
-                     .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.SCHEDULE)))
+                .add(
+                    half(Val.of(""), SignSvgUtil.MANAGE, managing)
+                    .withTooltip("Manage: the genie's schedule, history, host access and actions")
+                    .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.SCHEDULE))
+                )
             );
     }
 
@@ -959,17 +1033,23 @@ public final class GeniesView extends JPanel {
             case ACTIONS -> "Actions: rename, save, wake or sleep, link its folders, or delete the genie";
             default -> "Chat: talk with the genie";
         };
-        return half(text, sign, page.viewAs(Boolean.class, it -> it == to)).withTooltip(tooltip)
-                .onClick(_ -> page.set(From.VIEW, to));
+        return
+            half(text, sign, page.viewAs(Boolean.class, it -> it == to))
+            .withTooltip(tooltip)
+            .onClick(_ -> page.set(From.VIEW, to));
     }
 
     /// One part of the switch between pages: its sign, and its words while there is room.
     private static UIForButton<JButton> half(Val<String> text, String sign, Val<Boolean> shown) {
-        return button(text).group(Skin.ICON_BUTTON).withIconTextGap(6)
-                .withStyle(shown, (on, it) -> it.borderRadius(9).padding(4, 10, 4, 10)
-                    .icon(SignSvgUtil.sign(sign, on ? TEXT : SUBTEXT))
-                    .backgroundColor(on ? RAISED : TRANSPARENT)
-                    .componentFont(f -> f.family(FONT).size(12).weight(on ? 2f : 1f).color(on ? TEXT : SUBTEXT)));
+        return
+            button(text).group(Skin.ICON_BUTTON).withIconTextGap(6)
+            .withStyle(shown, (on, it) -> it
+                .borderRadius(9)
+                .padding(4, 10, 4, 10)
+                .icon(SignSvgUtil.sign(sign, on ? TEXT : SUBTEXT))
+                .backgroundColor(on ? RAISED : TRANSPARENT)
+                .componentFont(f -> f.family(FONT).size(12).weight(on ? 2f : 1f).color(on ? TEXT : SUBTEXT))
+            );
     }
 
     /*
@@ -992,21 +1072,32 @@ public final class GeniesView extends JPanel {
     private static Layout arrangement(GeniesState it) {
         LayoutConstraint fill = LayoutConstraint.of("fill, ins 0, gap 0, hidemode 3");
         if (!it.desktopOnScreen())
-            return Layout.mig(fill, LayoutConstraint.of("[grow]"), LayoutConstraint.of("[" + it.height() + "!]"))
-                    .withChildConstraints(MigAddConstraint.of("cell 0 0, grow, wmin 0"));
+            return
+                Layout.mig(fill, LayoutConstraint.of("[grow]"), LayoutConstraint.of("[" + it.height() + "!]"))
+                .withChildConstraints(MigAddConstraint.of("cell 0 0, grow, wmin 0"));
         if (it.sideBySide())
-            return Layout.mig(fill, LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][grow]"),
-                                    LayoutConstraint.of("[" + it.height() + "!]"))
-                    .withChildConstraints(
-                        MigAddConstraint.of("cell 0 0, grow, wmin 0"),
-                        MigAddConstraint.of("cell 1 0, grow"),
-                        MigAddConstraint.of("cell 2 0, grow, wmin 0"));
-        return Layout.mig(fill, LayoutConstraint.of("[grow]"),
-                                LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][" + it.desktopPart() + "!]"))
+            return
+                Layout.mig(
+                    fill,
+                    LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][grow]"),
+                    LayoutConstraint.of("[" + it.height() + "!]")
+                )
                 .withChildConstraints(
                     MigAddConstraint.of("cell 0 0, grow, wmin 0"),
-                    MigAddConstraint.of("cell 0 1, grow"),
-                    MigAddConstraint.of("cell 0 2, grow, wmin 0"));
+                    MigAddConstraint.of("cell 1 0, grow"),
+                    MigAddConstraint.of("cell 2 0, grow, wmin 0")
+                );
+        return
+            Layout.mig(
+                fill,
+                LayoutConstraint.of("[grow]"),
+                LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][" + it.desktopPart() + "!]")
+            )
+            .withChildConstraints(
+                MigAddConstraint.of("cell 0 0, grow, wmin 0"),
+                MigAddConstraint.of("cell 0 1, grow"),
+                MigAddConstraint.of("cell 0 2, grow, wmin 0")
+            );
     }
 
     /// The chat, and with it the genie's desktop when the user watches.
@@ -1028,9 +1119,11 @@ public final class GeniesView extends JPanel {
                     .withStyle(it -> it.backgroundColor(TRANSPARENT))
                     .add("grow, push, wmin 0", transcript())
                     .add("growx, wmin 0", outbox())
-                    .add("growx, wmin 0", bottomBar()))
+                    .add("growx, wmin 0", bottomBar())
+                )
                 .add(splitGrip(shown))
-                .add(desktopPane(shown)));
+                .add(desktopPane(shown))
+            );
     }
 
     /// The grip between the chat and the desktop, a line along it like the grips under the
@@ -1045,8 +1138,10 @@ public final class GeniesView extends JPanel {
             panel()
             .isVisibleIf(shown)
             .withCursor(beside.viewAs(UI.Cursor.class, it -> it ? UI.Cursor.RESIZE_RIGHT : UI.Cursor.RESIZE_BOTTOM))
-            .withTooltip("Drag to share the room between the chat and the desktop, or all the way to close the desktop."
-                       + " Double-click to let Genies share it")
+            .withTooltip(
+                "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
+                + " Double-click to let Genies share it"
+            )
             .withStyle(it -> {
                 int width = it.componentWidth(), height = it.componentHeight();
                 return it.backgroundColor(TRANSPARENT).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
@@ -1075,10 +1170,12 @@ public final class GeniesView extends JPanel {
         Val<Boolean> keeps = Viewable.of(Boolean.class, zoom, desktop.keepsItsSize(), (it, kept) -> it.isFit() && kept);
         Val<Boolean> zooms = Viewable.of(Boolean.class, zoom, keeps, (it, kept) -> !it.isFit() || kept);
         Val<String> panelSize = Viewable.of(String.class, keeps, desktop.desktopSize(), (kept, size) -> kept ? "fitted" : size);
-        Val<String> scale = Viewable.of(String.class, zoom, panelSize,
-                (it, size) -> it.isFit() ? size : it.isFixed() ? "fitted" : it.label());
-        Val<String> hint = Viewable.of(String.class, keeps, state.viewAs(Boolean.class, GeniesState::narrow),
-                (kept, narrow) -> kept ? "Recorded, so it keeps its own size" : narrow ? "" : "Click the desktop to use it");
+        Val<String> scale = Viewable.of(String.class, zoom, panelSize, (it, size) ->
+            it.isFit() ? size : it.isFixed() ? "fitted" : it.label()
+        );
+        Val<String> hint = Viewable.of(String.class, keeps, state.viewAs(Boolean.class, GeniesState::narrow), (kept, narrow) ->
+            kept ? "Recorded, so it keeps its own size" : narrow ? "" : "Click the desktop to use it"
+        );
         return
             // No row constraints: the line on what the genie shows is hidden at times, which moves
             // the rows under it up. Only the desktop's own "push" makes its row grow.
@@ -1090,94 +1187,131 @@ public final class GeniesView extends JPanel {
                 label(genie.viewAsString(it -> "✦  " + it.name() + " shows you: " + it.showing()))
                 .isVisibleIf(showing)
                 .withTooltip(genie.viewAsString(Genie::showing))
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(FLAME))))
+                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(FLAME)))
+            )
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 2, hidemode 3")
                 .add(
                     modeButton(
-                        "⤢  Fit", "Give the desktop the size of this panel, so what the genie shows fills it." +
-                        " It gets its own size back when you close it.",
+                        "⤢  Fit",
+                        "Give the desktop the size of this panel, so what the genie shows fills it."
+                        + " It gets its own size back when you close it.",
                         zoom.viewAs(Boolean.class, DesktopZoom::isFit)
                     )
-                    .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIT)))
+                    .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIT))
+                )
                 .add(
                     modeButton(
                         "⊡  Fixed",
                         "Show the whole desktop at its own size, shrunk into this panel",
-                         zoom.viewAs(Boolean.class, DesktopZoom::isFixed)
+                        zoom.viewAs(Boolean.class, DesktopZoom::isFixed)
                     )
                     .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIXED))
                 )
                 // At the panel's size, the desktop is drawn pixel for pixel: there is nothing to
                 // zoom, and between these the desktop's size could pass for something they change.
                 // A desktop that keeps its own size is drawn fitted, and zooms as from Fit.
-                .add(zoomButton("−", "Smaller (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
-                     .onClick(_ -> zoom.update(From.VIEW, z -> z.out(desktop.fitScale()))))
-                .add(label(scale).group(Skin.META)
-                     .withMinSize(70, 0).withHorizontalAlignment(UI.HorizontalAlignment.CENTER))
-                .add(zoomButton("+", "Larger (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
-                     .onClick(_ -> zoom.update(From.VIEW, z -> z.in(desktop.fitScale()))))
+                .add(
+                    zoomButton("−", "Smaller (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
+                    .onClick(_ -> zoom.update(From.VIEW, z -> z.out(desktop.fitScale())))
+                )
+                .add(
+                    label(scale).group(Skin.META)
+                    .withMinSize(70, 0).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
+                )
+                .add(
+                    zoomButton("+", "Larger (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
+                    .onClick(_ -> zoom.update(From.VIEW, z -> z.in(desktop.fitScale())))
+                )
                 .add("wmin 0, pushx, alignx right", label(hint).group(Skin.META))
-                .add(button(state.viewAsString(it -> it.narrow() ? "" : "Keys")).group(Skin.ICON_BUTTON).withIconTextGap(6)
-                     .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.KEYS, SUBTEXT))
-                         .componentFont(f -> f.family(FONT).size(12).color(SUBTEXT)))
-                     .withTooltip("The keys that make a window on the desktop fullscreen, close it or minimize it")
-                     .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
-                     .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))))
+                .add(
+                    button(state.viewAsString(it -> it.narrow() ? "" : "Keys")).group(Skin.ICON_BUTTON).withIconTextGap(6)
+                    .withStyle(it -> it
+                        .icon(SignSvgUtil.sign(SignSvgUtil.KEYS, SUBTEXT))
+                        .componentFont(f -> f.family(FONT).size(12).color(SUBTEXT))
+                    )
+                    .withTooltip("The keys that make a window on the desktop fullscreen, close it or minimize it")
+                    .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
+                    .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
+                )
+            )
             .add("grow, push, wmin 0, hmin 0",
                 scrollPane()
                 .withEmptyBorder(0).withMinSize(0, 0)
                 .withStyle(it -> it.backgroundColor(SMOKE).border(1, BORDER).borderRadius(10))
-                .add(UI.of(desktop)));
+                .add(UI.of(desktop))
+            );
     }
 
     /// The keys sway answers on the desktop, behind "Keys" above it. sway draws no buttons on a
     /// window's title bar, so these are the only way to close, minimize or fullscreen a window
     /// whose program offers none.
     private JPopupMenu desktopKeys() {
-        return UI.use(look, () -> UI.popupMenu()
-            .add(panel("wrap 2, ins 12 14 12 14, gap 14 7", "[][]")
+        return UI.use(look, () ->
+            UI.popupMenu()
+            .add(
+                panel("wrap 2, ins 12 14 12 14, gap 14 7", "[][]")
                 .withStyle(it -> it.backgroundColor(TRANSPARENT))
-                .add("span 2", label("Keys for the desktop")
-                     .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT))))
+                .add("span 2",
+                    label("Keys for the desktop")
+                    .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT)))
+                )
                 .add("span 2, gapbottom 4", label("Click a window first, so that it has the keyboard.").group(Skin.META))
                 .add(keyCaps("F"))
-                .add(label("Fullscreen, and back").withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT))))
+                .add(keyLabel("Fullscreen, and back"))
                 .add(keyCaps("Q"))
-                .add(label("Close the window").withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT))))
+                .add(keyLabel("Close the window"))
                 .add(keyCaps("M"))
-                .add(label("Minimize the window").withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT))))
+                .add(keyLabel("Minimize the window"))
                 .add(keyCaps("N"))
-                .add(label("Bring every minimized window back").withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT))))
-                .add("span 2, gaptop 4", label("Super is the key with the Windows logo.").group(Skin.META)))
-            .get(JPopupMenu.class));
+                .add(keyLabel("Bring every minimized window back"))
+                .add("span 2, gaptop 4", label("Super is the key with the Windows logo.").group(Skin.META))
+            )
+            .get(JPopupMenu.class)
+        );
+    }
+
+    /// What a key of the desktop does, beside its [#keyCaps].
+    private static UIForLabel<JLabel> keyLabel(String text) {
+        return label(text).withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT)));
     }
 
     /// Ctrl + Super + `letter`, each drawn as a key on a keyboard.
     private static UIForBox<JBox> keyCaps(String letter) {
         UIForBox<JBox> caps = box("ins 0, gap 4, aligny center");
         for (String key : List.of("Ctrl", "Super", letter)) {
-            if (!key.equals("Ctrl")) caps = caps.add(label("+").withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))));
-            caps = caps.add(label(key).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
-                     .withStyle(it -> it.backgroundColor(RAISED).border(1, BORDER).borderRadius(5).padding(1, 7, 2, 7)
-                         .componentFont(f -> f.family(FONT).size(11).weight(2f).color(TEXT))));
+            if (!key.equals("Ctrl"))
+                caps = caps.add(label("+").withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))));
+            caps = caps.add(
+                label(key).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
+                .withStyle(it -> it
+                    .backgroundColor(RAISED)
+                    .border(1, BORDER)
+                    .borderRadius(5)
+                    .padding(1, 7, 2, 7)
+                    .componentFont(f -> f.family(FONT).size(11).weight(2f).color(TEXT))
+                )
+            );
         }
         return caps;
     }
 
     private UIForAnySwing<?, ?> transcript() {
         Val<Boolean> empty = entries.viewAs(Boolean.class, Tuple::isEmpty);
-        Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.emerging(),
-                (it, emerging) -> it == Genie.Phase.WAKING || emerging);
+        Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.emerging(), (it, emerging) ->
+            it == Genie.Phase.WAKING || emerging
+        );
         Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
         Val<Boolean> emptyOrOverview = Viewable.of(Boolean.class, empty, overview, (it, home) -> it || home);
         Val<Boolean> pictureShown = Viewable.of(Boolean.class, emptyOrOverview, wakingPicture, (it, waking) -> it || waking);
         Val<Boolean> livePicture = Viewable.of(Boolean.class, pictureShown, page, (shown, where) -> shown && where == GeniesState.Page.CHAT);
         // Working, with nothing streaming in: a bar says what the user waits for. The pulse, which
         // moves while the genie works, also moves on the time a job has run.
-        Val<Boolean> waiting = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.WORKING
-                && it.conversations().aside().isEmpty()
-                && (it.transcript().isEmpty() || !it.transcript().entries().last().isWriting()));
+        Val<Boolean> waiting = genie.viewAs(Boolean.class, it ->
+            it.phase() == Genie.Phase.WORKING &&
+            it.conversations().aside().isEmpty() &&
+            (it.transcript().isEmpty() || !it.transcript().entries().last().isWriting())
+        );
         Val<Genie.Waiting> waitingOn = Viewable.of(Genie.Waiting.class, genie, pulse, (it, _) -> it.waitingOn(Instant.now()));
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][]")
@@ -1189,24 +1323,34 @@ public final class GeniesView extends JPanel {
                 // Follows the conversation while the user is at its end, and leaves them be
                 // while they scroll back to read. Another genie's conversation starts at its end.
                 .peek(pane -> follow = Optional.of(FollowTheEnd.on(pane)))
-                .onView(Viewable.cast(selected), _ -> follow.ifPresent(FollowTheEnd::toEnd)))
+                .onView(Viewable.cast(selected), _ -> follow.ifPresent(FollowTheEnd::toEnd))
+            )
             .add("growx, wmin 0", rows.waiting(waitingOn, waiting))
             .add("grow, push, wmin 0, align center",
                 box("wrap 1, ins 30, gap 8, align center center", "[center, grow, fill]")
                 .isVisibleIf(pictureShown)
                 .add("growx, wmin 0", wakePicture.view(livePicture))
-                .add("growx, wmin 0", label(genie.viewAsString(it -> switch (it.phase()) {
+                .add("growx, wmin 0",
+                    label(genie.viewAsString(it -> switch (it.phase()) {
                         case READY, WORKING -> it.name() + " is listening.";
                         case WAKING -> it.name() + " is waking.";
                         case ASLEEP -> it.name() + " is in the lamp.";
                         case BROKEN -> it.name() + " could not wake.";
-                    })).group(Skin.EMPTY_TITLE).withHorizontalAlignment(UI.HorizontalAlignment.CENTER))
-                .add("growx, wmin 0", label(genie.viewAsString(it -> switch (it.phase()) {
+                    }))
+                    .group(Skin.EMPTY_TITLE)
+                    .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
+                )
+                .add("growx, wmin 0",
+                    label(genie.viewAsString(it -> switch (it.phase()) {
                         case READY, WORKING -> "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.";
                         case WAKING -> "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.";
                         case ASLEEP -> "Wake it to talk. It keeps its own desktop, safely away from yours.";
                         case BROKEN -> "What went wrong is said below. Try again once that is sorted out.";
-                    })).group(Skin.EMPTY_TEXT).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)));
+                    }))
+                    .group(Skin.EMPTY_TEXT)
+                    .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
+                )
+            );
     }
 
     /// The files in the genie's outbox, any of which the user can save.
@@ -1221,7 +1365,9 @@ public final class GeniesView extends JPanel {
                     button("⤓ " + file.name() + "  ·  " + file.readableSize()).group(Skin.QUIET_BUTTON)
                     .withTooltip("Save " + file.name() + " somewhere on this computer")
                     .onClick(_ -> saveHandout(file.name()))
-                    .get(JButton.class)))));
+                    .get(JButton.class)
+                )))
+            );
     }
 
     /// The composer while the genie is awake; otherwise a bar that wakes it, and says how
@@ -1236,12 +1382,18 @@ public final class GeniesView extends JPanel {
         return
             box("fill, wrap 1, ins 6 18 16 18, gap 0, hidemode 3", "[grow]")
             .add("growx, wmin 0, gapbottom 6",
-                ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
-                              SUBTEXT, answeringElsewhere))
+                ViewPartsUtil.wrapped(
+                    genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
+                    SUBTEXT,
+                    answeringElsewhere
+                )
+            )
             .add("growx, wmin 0",
                 panel("fill, ins 0, gap 8", "[][grow][]", "[bottom]").group(Skin.COMPOSER).isVisibleIf(composing)
-                .add(button("＋").group(Skin.ICON_BUTTON).withTooltip("Give the genie a file; it lands in ~/inbox")
-                     .onClick(_ -> giveFile()))
+                .add(
+                    button("＋").group(Skin.ICON_BUTTON).withTooltip("Give the genie a file; it lands in ~/inbox")
+                    .onClick(_ -> giveFile())
+                )
                 .add("growx, wmin 0, hmin 36, hmax 160",
                     scrollPane().withEmptyBorder(0).withMinSize(0, 36)
                     .withHorizontalScrollBarPolicy(UI.Active.NEVER)
@@ -1268,8 +1420,9 @@ public final class GeniesView extends JPanel {
                         .withTooltip("Return sends; Shift and Return starts a new line")
                         // Swing stops laying out at the scroll pane, so the composer never learns
                         // that the text grew or shrank; told here, it grows up to its hmax, then scrolls.
-                        .onTextChange(it -> SwingUtilities.getAncestorOfClass(JScrollPane.class, it.getComponent())
-                                                          .getParent().revalidate())
+                        .onTextChange(it ->
+                            SwingUtilities.getAncestorOfClass(JScrollPane.class, it.getComponent()).getParent().revalidate()
+                        )
                         .onKeyPress(it -> {
                             KeyEvent key = it.getEvent();
                             if (key.getKeyCode() != KeyEvent.VK_ENTER) return;
@@ -1278,12 +1431,23 @@ public final class GeniesView extends JPanel {
                             // would do nothing at all; the line is put in here.
                             if (key.isShiftDown()) it.getComponent().replaceSelection("\n");
                             else send();
-                        })))
-                .add(button("Send  ➤").group(Skin.FLAME_BUTTON).isEnabledIf(canSend)
-                     // With nothing to send, it steps back rather than glowing half-lit.
-                     .withStyle(canSend, (on, it) -> on ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
-                         .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                     .onClick(_ -> send())))
+                        })
+                    )
+                )
+                .add(
+                    button("Send  ➤").group(Skin.FLAME_BUTTON).isEnabledIf(canSend)
+                    // With nothing to send, it steps back rather than glowing half-lit.
+                    .withStyle(canSend, (on, it) ->
+                        on
+                            ? it
+                            : it.backgroundColor(RAISED)
+                              .foregroundColor(SUBTEXT)
+                              .componentFont(f -> f.color(SUBTEXT))
+                              .cursor(UI.Cursor.DEFAULT)
+                    )
+                    .onClick(_ -> send())
+                )
+            )
             .add("growx, wmin 0",
                 button("New conversation").group(Skin.FLAME_BUTTON)
                 .isVisibleIf(Viewable.of(Boolean.class, awake, overview, (on, home) -> on && home))
@@ -1294,15 +1458,30 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0",
                 panel("fill, ins 4 8 4 4, gap 12, hidemode 3", "[grow][][]").group(Skin.COMPOSER)
                 .isVisibleIf(awake.viewAs(Boolean.class, it -> !it))
-                .add("growx, wmin 0", waving(label(genie.viewAsString(it -> switch (it.phase()) {
-                        case WAKING -> "Waking " + it.name() + ": " + it.activity() + "…";
-                        default -> it.name() + " is asleep. Its sandbox is off, its home and conversation are kept.";
-                    })).group(Skin.SUBTITLE), genie).isVisibleIf(phase.viewAs(Boolean.class, it -> it != Genie.Phase.BROKEN)))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(genie.viewAsString(it -> it.name() + " could not wake: " + it.activity()),
-                     TROUBLE, phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)))
-                .add(button(genie.viewAsString(it -> it.phase() == Genie.Phase.BROKEN ? "Try again" : "✦  Wake"))
-                     .group(Skin.FLAME_BUTTON).isVisibleIf(canWake)
-                     .onClick(_ -> app.wake(genie.get().id()))));
+                .add("growx, wmin 0",
+                    waving(
+                        label(genie.viewAsString(it -> switch (it.phase()) {
+                            case WAKING -> "Waking " + it.name() + ": " + it.activity() + "…";
+                            default -> it.name() + " is asleep. Its sandbox is off, its home and conversation are kept.";
+                        }))
+                        .group(Skin.SUBTITLE),
+                        genie
+                    )
+                    .isVisibleIf(phase.viewAs(Boolean.class, it -> it != Genie.Phase.BROKEN))
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        genie.viewAsString(it -> it.name() + " could not wake: " + it.activity()),
+                        TROUBLE,
+                        phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
+                    )
+                )
+                .add(
+                    button(genie.viewAsString(it -> it.phase() == Genie.Phase.BROKEN ? "Try again" : "✦  Wake"))
+                    .group(Skin.FLAME_BUTTON).isVisibleIf(canWake)
+                    .onClick(_ -> app.wake(genie.get().id()))
+                )
+            );
     }
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────
@@ -1369,7 +1548,8 @@ public final class GeniesView extends JPanel {
             Map.entry("MenuBar.background", hex(SIDEBAR)),
             Map.entry("MenuBar.borderColor", hex(SIDEBAR)),
             Map.entry("RootPane.activeBorderColor", hex(BORDER)),
-            Map.entry("RootPane.inactiveBorderColor", hex(BORDER))));
+            Map.entry("RootPane.inactiveBorderColor", hex(BORDER))
+        ));
         com.formdev.flatlaf.FlatDarkLaf.setup();
         // On Linux the desktop draws title bars, unless asked not to; FlatLaf then draws them, and
         // the desktop still moves and resizes the window.
@@ -1400,7 +1580,8 @@ public final class GeniesView extends JPanel {
                 .isVisibleIf(state.viewAs(Boolean.class, GeniesState::hasGenies))
                 .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
                 .withTooltip(genieList.viewAsString(it -> it.shown() ? "Hide your genies" : "Show your genies"))
-                .onClick(_ -> genieList.update(From.VIEW, Fold::toggled)))
+                .onClick(_ -> genieList.update(From.VIEW, Fold::toggled))
+            )
             .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.READY), 26))
             .add(label(title).group(Skin.BRAND).withStyle(it -> it.componentFont(f -> f.size(15))))
         );
@@ -1414,15 +1595,20 @@ public final class GeniesView extends JPanel {
 
     /// One of the ways to show the desktop, lit while it is the one in use.
     private static UIForButton<JButton> modeButton(String text, String tip, Val<Boolean> on) {
-        return button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
-                .withStyle(on, (lit, it) -> it.borderRadius(9).padding(3, 10, 3, 10)
-                    .backgroundColor(lit ? RAISED : TRANSPARENT)
-                    .componentFont(f -> f.family(FONT).size(12).weight(lit ? 2f : 1f).color(lit ? TEXT : SUBTEXT)));
+        return
+            button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
+            .withStyle(on, (lit, it) -> it
+                .borderRadius(9)
+                .padding(3, 10, 3, 10)
+                .backgroundColor(lit ? RAISED : TRANSPARENT)
+                .componentFont(f -> f.family(FONT).size(12).weight(lit ? 2f : 1f).color(lit ? TEXT : SUBTEXT))
+            );
     }
 
     private static UIForButton<JButton> zoomButton(String text, String tip) {
-        return button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT)));
+        return
+            button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
+            .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT)));
     }
 
     /// A button's words while the header has room for them; its sign alone says it otherwise.
@@ -1434,9 +1620,13 @@ public final class GeniesView extends JPanel {
     /// right-click on its card, which selects the genie first. Deleting it is last, away from the
     /// rest.
     private JPopupMenu genieMenu(UUID id) {
-        return UI.popupMenu().applyIfPresent(state.get().find(id).map( shown -> ui -> {
+        return
+            UI.popupMenu()
+            .applyIfPresent(state.get().find(id).map(shown -> ui -> {
                 Genie.Phase now = shown.phase();
                 boolean idle = now != Genie.Phase.WORKING && now != Genie.Phase.WAKING;
+                String wake = now == Genie.Phase.BROKEN ? "Try waking again" : "Wake";
+                String delete = (shown.fromElsewhere() ? "Remove from Genies" : "Delete " + shown.name()) + "…";
                 ui
                 .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
                 .add(ViewPartsUtil.item("New conversation", idle, () -> app.startAfresh(id)))
@@ -1447,11 +1637,11 @@ public final class GeniesView extends JPanel {
                     .add(ViewPartsUtil.item("Sleep", true, () -> app.sleep(id)))
                 )
                 .applyIf(!now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item(now == Genie.Phase.BROKEN ? "Try waking again" : "Wake", now != Genie.Phase.WAKING, () -> app.wake(id)))
+                    .add(ViewPartsUtil.item(wake, now != Genie.Phase.WAKING, () -> app.wake(id)))
                 )
                 .peek(JPopupMenu::addSeparator)
                 .add(
-                    UI.of(ViewPartsUtil.item((shown.fromElsewhere() ? "Remove from Genies" : "Delete " + shown.name()) + "…", true, () -> confirmDelete(id)))
+                    UI.of(ViewPartsUtil.item(delete, true, () -> confirmDelete(id)))
                     .withForeground(TROUBLE)
                 );
             }))
@@ -1460,8 +1650,15 @@ public final class GeniesView extends JPanel {
 
     private void rename(UUID id) {
         state.get().find(id).ifPresent(named -> {
-            Object answer = JOptionPane.showInputDialog(this, "A new name for " + named.name() + ":",
-                    "Rename a genie", JOptionPane.PLAIN_MESSAGE, null, null, named.name());
+            Object answer = JOptionPane.showInputDialog(
+                this,
+                "A new name for " + named.name() + ":",
+                "Rename a genie",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                null,
+                named.name()
+            );
             if (answer instanceof String text && !text.isBlank())
                 state.update(From.VIEW, it -> it.update(id, genie -> genie.withName(text.strip())));
         });
@@ -1473,10 +1670,15 @@ public final class GeniesView extends JPanel {
         state.get().find(id).ifPresent(genie -> {
             try {
                 Home.Link link = app.link(id, Home.WORKSPACE, app.documents(), Home.linkName(genie.name(), Home.WORKSPACE));
-                JOptionPane.showMessageDialog(this, genie.name() + "'s workspace " + (link.madeNow() ? "is" : "was")
-                        + " in your " + app.documents().getFileName() + (link.madeNow() ? " now" : " already")
-                        + ", as \"" + link.at().getFileName() + "\".\nIt is a link, not a copy: " + genie.name()
-                        + " sees what you change there.", "Linked", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(
+                    this,
+                    genie.name() + "'s workspace " + (link.madeNow() ? "is" : "was")
+                    + " in your " + app.documents().getFileName() + (link.madeNow() ? " now" : " already")
+                    + ", as \"" + link.at().getFileName() + "\".\nIt is a link, not a copy: " + genie.name()
+                    + " sees what you change there.",
+                    "Linked",
+                    JOptionPane.INFORMATION_MESSAGE
+                );
             } catch (IOException failed) {
                 JOptionPane.showMessageDialog(this, failed.getMessage(), "Could not link", JOptionPane.WARNING_MESSAGE);
             }
@@ -1490,24 +1692,33 @@ public final class GeniesView extends JPanel {
         if (seen.isEmpty()) return;
         StringBuilder details = new StringBuilder();
         for (int i = seen.size() - 1; i >= 0; i--) details.append(seen.get(i).details()).append('\n');
-        String what = seen.size() == 1 ? "Something went wrong that Genies did not expect."
-                                       : seen.size() + " things went wrong that Genies did not expect.";
+        String what = seen.size() == 1
+            ? "Something went wrong that Genies did not expect."
+            : seen.size() + " things went wrong that Genies did not expect.";
         UI.dialog(SwingUtilities.getWindowAncestor(this), "What went wrong")
             .withOnCloseOperation(UI.OnWindowClose.DISPOSE)
             .onClosed(_ -> state.update(From.VIEW, now -> now.withoutTroubles(seen)))
             .add(UI.use(look, () ->
                 panel("fill, wrap 1, ins 16 18 16 18, gap 10", "[grow]", "[][][grow][]").group(Skin.FRAME)
                 .add("growx, wmin 0", label(what).group(Skin.TITLE))
-                .add("growx, wmin 0", label("Genies carried on. All of it is kept in " + app.errorLog()
-                                            + ", which helps whoever fixes it.").group(Skin.META))
+                .add("growx, wmin 0",
+                    label("Genies carried on. All of it is kept in " + app.errorLog() + ", which helps whoever fixes it.")
+                    .group(Skin.META)
+                )
                 .add("grow, push, w 760, h 380",
-                    scrollPane().add(textArea(details.toString()).group(Skin.INPUT)
+                    scrollPane()
+                    .add(
+                        textArea(details.toString()).group(Skin.INPUT)
                         .withStyle(it -> it.componentFont(f -> f.family(MONO).size(12)))
-                        .peek(area -> { area.setEditable(false); area.setCaretPosition(0); })))
+                        .peek(area -> { area.setEditable(false); area.setCaretPosition(0); })
+                    )
+                )
                 .add("right",
                     button("Close").group(Skin.QUIET_BUTTON)
-                    .onClick(it -> SwingUtilities.getWindowAncestor(it.getComponent()).dispose()))
-                .get(JPanel.class)))
+                    .onClick(it -> SwingUtilities.getWindowAncestor(it.getComponent()).dispose())
+                )
+                .get(JPanel.class)
+            ))
             .show();
     }
 
@@ -1516,11 +1727,20 @@ public final class GeniesView extends JPanel {
     private void confirmDelete(UUID id) {
         state.get().find(id).ifPresent(doomed -> {
             ConfirmAnswer answer = doomed.fromElsewhere()
-                ? UI.confirmation("Remove " + doomed.name() + " from Genies? Its lamp stays where it is, at "
-                        + whereFrom(doomed) + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\".")
-                    .titled("Remove a lamp from Genies").yesOption("Remove").noOption("Keep").cancelOption("").show()
-                : UI.confirmation("Delete " + doomed.name() + " for good? Its home, everything it made "
-                    + "and your conversations with it are deleted.").titled("Delete a genie").yesOption("Delete").noOption("Keep").cancelOption("").show();
+                ? UI.confirmation(
+                      "Remove " + doomed.name() + " from Genies? Its lamp stays where it is, at "
+                      + whereFrom(doomed) + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\"."
+                  )
+                  .titled("Remove a lamp from Genies")
+                  .yesOption("Remove").noOption("Keep").cancelOption("")
+                  .show()
+                : UI.confirmation(
+                      "Delete " + doomed.name() + " for good? Its home, everything it made "
+                      + "and your conversations with it are deleted."
+                  )
+                  .titled("Delete a genie")
+                  .yesOption("Delete").noOption("Keep").cancelOption("")
+                  .show();
             if (answer == ConfirmAnswer.YES) app.delete(id);
         });
     }
@@ -1543,9 +1763,13 @@ public final class GeniesView extends JPanel {
         JTextArea text = new JTextArea(question.text(), 6, 48);
         text.setLineWrap(true);
         text.setWrapStyleWord(true);
-        int answer = JOptionPane.showConfirmDialog(this, new JScrollPane(text),
-                "Ask " + genie.get().name() + " differently", JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE);
+        int answer = JOptionPane.showConfirmDialog(
+            this,
+            new JScrollPane(text),
+            "Ask " + genie.get().name() + " differently",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE
+        );
         String changed = text.getText().strip();
         if (answer == JOptionPane.OK_OPTION && !changed.isEmpty() && !changed.equals(question.text().strip())) {
             follow.ifPresent(FollowTheEnd::toEnd);
@@ -1588,11 +1812,11 @@ public final class GeniesView extends JPanel {
         if (breathing) return;
         breathing = true;
         UI.animateFor(1.2, TimeUnit.SECONDS)
-          .asLongAs(_ -> anyWorksOrWakes())
-          .go(new Animation() {
-              @Override public void run(AnimationStatus status) { pulse.set(status.progress()); }
-              @Override public void finish(AnimationStatus status) { breathing = false; }
-          });
+        .asLongAs(_ -> anyWorksOrWakes())
+        .go(new Animation() {
+            @Override public void run(AnimationStatus status) { pulse.set(status.progress()); }
+            @Override public void finish(AnimationStatus status) { breathing = false; }
+        });
     }
 
     private boolean anyWorksOrWakes() {
@@ -1602,10 +1826,20 @@ public final class GeniesView extends JPanel {
     /// `status`, through whose words a wave of the flame's light runs while `genie` wakes. Making
     /// a sandbox can take minutes with the same words shown; the wave shows that it goes on.
     private UIForLabel<JLabel> waving(UIForLabel<JLabel> status, Val<Genie> genie) {
-        return status.withStyle(Viewable.of(Wave.class, genie, pulse, (it, at) -> it.phase() == Genie.Phase.WAKING ? new Wave(true, at) : Wave.NONE),
-            (wave, it) -> !wave.on() ? it : it.componentFont(f -> f.gradient(g -> g
-                .type(UI.GradientType.LINEAR).span(UI.Span.LEFT_TO_RIGHT).cycle(UI.Cycle.REPEAT)
-                .colors(SUBTEXT, FLAME, SUBTEXT).size(WAVE_LENGTH).offset(wave.at() * WAVE_LENGTH, 0))));
+        return status.withStyle(
+            Viewable.of(Wave.class, genie, pulse, (it, at) -> it.phase() == Genie.Phase.WAKING ? new Wave(true, at) : Wave.NONE),
+            (wave, it) ->
+                !wave.on()
+                    ? it
+                    : it.componentFont(f -> f.gradient(g -> g
+                        .type(UI.GradientType.LINEAR)
+                        .span(UI.Span.LEFT_TO_RIGHT)
+                        .cycle(UI.Cycle.REPEAT)
+                        .colors(SUBTEXT, FLAME, SUBTEXT)
+                        .size(WAVE_LENGTH)
+                        .offset(wave.at() * WAVE_LENGTH, 0)
+                    ))
+        );
     }
 
     /// Whether a wave runs through a status, and where it is, from 0 to 1 of its length.
