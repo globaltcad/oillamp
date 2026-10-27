@@ -35,9 +35,16 @@ class EngineInThisProcess extends Process {
     EngineInThisProcess(Machine.SimulationBuilder simulation, List<String> arguments, Map<String, String> environment) {
         this.arguments = List.copyOf(arguments)
         this.environment = Map.copyOf(environment)
-        environment.each { name, value -> simulation.environmentVariable(name, value) }
         OutputStream engineWrites = Channels.newOutputStream(fromEngine.sink())
-        Machine machine = simulation.standardInput(Channels.newInputStream(toEngine.source())).build()
+        // One builder serves every engine of a scenario, and an application may start two at
+        // once, such as one following a session while another lists the sandboxes. Set and
+        // built in one step, each machine gets its own engine's standard input; otherwise the
+        // follower could be built with the lister's, and stop following when the lister ends.
+        Machine machine
+        synchronized (simulation) {
+            environment.each { name, value -> simulation.environmentVariable(name, value) }
+            machine = simulation.standardInput(Channels.newInputStream(toEngine.source())).build()
+        }
         runner = Thread.start('engine-in-this-process') {
             try {
                 var outcome = OilLamp.on(machine).observedBy { event ->
