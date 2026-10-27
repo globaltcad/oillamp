@@ -92,9 +92,18 @@ public final class GenieRunner {
     /// Whether the lamp was left running as the app closes. What it reports after that is for
     /// the app that joins it next.
     private volatile boolean leftRunning;
+    /// Whether someone made the lamp elsewhere, with `oillamp at`, not Genies. See the constructor.
+    private final boolean fromElsewhere;
 
     public GenieRunner(Path directory, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
+        this(directory, false, lighter, changes);
+    }
+
+    /// @param fromElsewhere whether someone made the lamp elsewhere, with `oillamp at`: Genies
+    ///                      joins it when it is lit, and lights it as it is when it is not
+    public GenieRunner(Path directory, boolean fromElsewhere, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
         this.directory = directory;
+        this.fromElsewhere = fromElsewhere;
         this.lighter = lighter;
         this.changes = changes;
         this.schedule = new ScheduleKeeper(lighter.unlit(directory), changes);
@@ -129,11 +138,19 @@ public final class GenieRunner {
     public void wake(String name, Settings settings, String key, String conversation, String leaf) {
         work.execute(() -> {
             if (lamp.isPresent()) return;
+            // Lit elsewhere, it is joined: lighting it again would find it taken.
+            if (fromElsewhere && lighter.isLit(directory)) {
+                join(conversation, leaf);
+                return;
+            }
             sleeping = false;
             changes.accept(Genie::waking);
             try {
-                LampLighter.Lit lit = lighter.light(directory, name, settings, key,
-                        what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp());
+                LampLighter.Lit lit = fromElsewhere
+                        ? lighter.lightAsItIs(directory, settings, key,
+                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp())
+                        : lighter.light(directory, name, settings, key,
+                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp());
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays("waking the genie"));
@@ -304,29 +321,54 @@ public final class GenieRunner {
     public void rejoin(String conversation, String leaf) {
         work.execute(() -> {
             if (lamp.isPresent() || !lighter.isLit(directory)) return;
-            sleeping = false;
-            rejoinAt = new Conversations.Here(conversation, leaf);
-            heldWhileCatchingUp = Optional.of(new ArrayList<>());
-            changes.accept(genie -> genie.waking().withActivity("joining its lamp, which was left running"));
-            try {
-                Optional<LampLighter.Lit> lit = lighter.join(directory, heardFromThisLamp());
-                if (lit.isEmpty()) {
-                    heldWhileCatchingUp = Optional.empty();
-                    changes.accept(Genie::asleep);
-                    return;
-                }
-                lamp = lit;
-                var files = GenieFileTransferUtil.list(lit.get());
-                changes.accept(genie -> genie.withHandouts(files).awake());
-                reloadConversations();
-            } catch (IOException | RuntimeException failed) {
-                heldWhileCatchingUp = Optional.empty();
-                putOutLamp();
-                changes.accept(genie -> genie.broken(reasonOf(failed)));
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
+            join(conversation, leaf);
         });
+    }
+
+    /// Joins the lamp, which is lit, on the worker's thread. A lamp that cannot be joined, or
+    /// that fails as it is joined, is let go of, never put out: its session goes on, whoever
+    /// started it. One from elsewhere then says that it is lit, but not joined, rather than
+    /// seeming asleep, which Wake would take at its word.
+    private void join(String conversation, String leaf) {
+        sleeping = false;
+        rejoinAt = new Conversations.Here(conversation, leaf);
+        heldWhileCatchingUp = Optional.of(new ArrayList<>());
+        changes.accept(genie -> genie.waking().withActivity(fromElsewhere ? "joining its lamp, lit elsewhere"
+                                                                          : "joining its lamp, which was left running"));
+        try {
+            Optional<LampLighter.Lit> lit = lighter.join(directory, heardFromThisLamp());
+            if (lit.isEmpty()) {
+                heldWhileCatchingUp = Optional.empty();
+                if (fromElsewhere && lighter.isLit(directory))
+                    changes.accept(genie -> genie.broken("Its lamp is lit, but Genies could not join it. It goes on as it is; "
+                            + "an oillamp of another version may have lit it."));
+                else changes.accept(Genie::asleep);
+                return;
+            }
+            lamp = lit;
+            var files = GenieFileTransferUtil.list(lit.get());
+            changes.accept(genie -> genie.withHandouts(files).awake());
+            reloadConversations();
+        } catch (IOException | RuntimeException failed) {
+            heldWhileCatchingUp = Optional.empty();
+            letGo();
+            changes.accept(genie -> genie.broken(reasonOf(failed).replaceAll("[.\\s]+$", "") + ". Its lamp goes on as it is."));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /// Stops following the lamp, and leaves its session running. What it reports after that is
+    /// not this genie's to hear.
+    private void letGo() {
+        schedule.wentOut();
+        sleeping = true;
+        lamp.ifPresent(LampLighter.Lit::leaveRunning);
+        lamp = Optional.empty();
+        lampsPutOut.incrementAndGet();
+        litWith = Optional.empty();
+        history.wentOut();
+        hostAccess.wentOut();
     }
 
     /// The catch-up of a lamp being joined has ended. A question of the user's that the genie
@@ -503,7 +545,8 @@ public final class GenieRunner {
     /// every request to the service and with the key it was lit with, which may not know a
     /// model from another place at all. Otherwise, and for a lamp that was joined, whose service
     /// and key are not known, the genie keeps its model until it next wakes, with all the new
-    /// settings. Nothing happens while the genie sleeps either.
+    /// settings. Nothing happens while the genie sleeps either, nor ever for a lamp from
+    /// elsewhere, whose own configuration names its model.
     ///
     /// @param key the key `settings` give, or empty when they give none
     public void useModel(Settings settings, String key) {
@@ -511,7 +554,8 @@ public final class GenieRunner {
             String wanted = settings.model().strip();
             Optional<LampLighter.Lit> lit = lamp;
             Optional<LitWith> was = litWith;
-            if (lit.isEmpty() || was.isEmpty() || wanted.isEmpty() || wanted.equals(was.get().model())) return;
+            // A lamp from elsewhere answers with the model its own configuration names.
+            if (fromElsewhere || lit.isEmpty() || was.isEmpty() || wanted.isEmpty() || wanted.equals(was.get().model())) return;
             if (!was.get().service().equals(settings.service().strip()) || !was.get().key().equals(key)) return;
             try {
                 lit.get().useModel(wanted);

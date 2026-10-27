@@ -2,6 +2,7 @@ package dev.gui.genie;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -33,6 +34,18 @@ public interface LampLighter {
               Consumer<LampEvent> events)
             throws IOException, InterruptedException;
 
+    /// Starts a lamp someone made elsewhere, with `oillamp at`, as its own configuration has it:
+    /// with the settings' model service and key, which the engine keeps to itself, but without
+    /// the settings' model and a genie's instructions, which the engine would write into the
+    /// agent's home, changing how it answers wherever it is lit next.
+    ///
+    /// The default lights it as [#light] does, for a lighter that makes no difference.
+    default Lit lightAsItIs(Path directory, Settings settings, String key, Consumer<String> progress,
+                            Consumer<LampEvent> events) throws IOException, InterruptedException {
+        Path name = directory.getFileName();
+        return light(directory, name == null ? directory.toString() : name.toString(), settings, key, progress, events);
+    }
+
     /// The lamp in `directory`, not lit, for what works without its sandbox: its schedule and
     /// its history.
     default LampDirectory unlit(Path directory) {
@@ -42,6 +55,14 @@ public interface LampLighter {
     /// Whether the lamp in `directory` is lit already: left running when the app last closed.
     default boolean isLit(Path directory) {
         return unlit(directory).isRunning();
+    }
+
+    /// The directories of the lamps lit on this computer, whoever lit them: Genies, or a person
+    /// with `oillamp at`. None, for a lighter that lights no real lamps.
+    ///
+    /// @throws IOException when it could not be found out; the message says why
+    default List<Path> running() throws IOException, InterruptedException {
+        return List.of();
     }
 
     /// Joins the lamp in `directory`, lit already, and returns once its sandbox is reached.

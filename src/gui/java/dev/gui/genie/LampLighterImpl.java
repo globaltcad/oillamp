@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -17,6 +18,7 @@ import dev.lamp.LampFailedException;
 import dev.lamp.LampLauncher;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
+import dev.lamp.LampSandbox;
 
 /// Lights genies' lamps with oillamp, the way any application does: through [Lamp], and nothing
 /// else.
@@ -50,16 +52,27 @@ public final class LampLighterImpl implements LampLighter {
     @Override
     public Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress,
                      Consumer<LampEvent> events) throws IOException, InterruptedException {
-        AtomicReference<String> problem = new AtomicReference<>("");
         LampDirectory starting;
         try {
             starting = unlit(directory).model(settings.model().strip());
         } catch (IllegalArgumentException wrong) {
             throw new IOException("\"" + settings.model().strip() + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol", wrong);
         }
+        return light(starting.instructions(GenieInstructionsUtil.about(name)).enableScheduling(), settings, key, progress, events);
+    }
+
+    /// Its own model, instructions and schedule, as its `oillamp.toml` and its agent's home
+    /// have them; Genies' model service and key, which are not written anywhere.
+    @Override
+    public Lit lightAsItIs(Path directory, Settings settings, String key, Consumer<String> progress,
+                           Consumer<LampEvent> events) throws IOException, InterruptedException {
+        return light(unlit(directory), settings, key, progress, events);
+    }
+
+    private Lit light(LampDirectory starting, Settings settings, String key, Consumer<String> progress,
+                      Consumer<LampEvent> events) throws IOException, InterruptedException {
+        AtomicReference<String> problem = new AtomicReference<>("");
         Lamp lamp = starting
-                .instructions(GenieInstructionsUtil.about(name))
-                .enableScheduling()
                 .modelService(URI.create(settings.service().strip()))
                 .modelKey(key)
                 .onEvent(event -> {
@@ -128,6 +141,16 @@ public final class LampLighterImpl implements LampLighter {
             }
             @Override public void leaveRunning() { lamp.leaveRunning(); }
         };
+    }
+
+    @Override
+    public List<Path> running() throws IOException, InterruptedException {
+        try {
+            List<LampSandbox> sandboxes = launcher.isPresent() ? Lamp.running(launcher.get()) : Lamp.running();
+            return sandboxes.stream().map(LampSandbox::lamp).toList();
+        } catch (LampFailedException failed) {
+            throw new IOException(failed.problem().title() + ": " + failed.problem().whatHappened(), failed);
+        }
     }
 
     @Override

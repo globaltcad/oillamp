@@ -262,6 +262,10 @@ public final class GeniesView extends JPanel {
             )
             .add(
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3")
+                .add("left",
+                    ViewPartsUtil.link("Add a lamp from elsewhere…")
+                    .withTooltip("Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself")
+                    .onClick(_ -> addLamp()))
                 .add("growx",
                     button(state.viewAsString(it -> troubleInfoMessage(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(it -> it
@@ -284,12 +288,45 @@ public final class GeniesView extends JPanel {
     }
 
     /// Built later than the constructor, so it enters the style sheet again.
+    ///
+    /// The lamps from elsewhere follow Genies' own genies, under a heading of their own, which
+    /// stands above the first of them.
     private UIForAnySwing<?, ?> genieChip(Var<Genie> shown) {
-        return UI.of(UI.use(look, () -> genieChipBody(shown).get(JPanel.class)));
+        UUID id = shown.get().id();
+        Val<Boolean> firstFromElsewhere = state.viewAs(Boolean.class, it -> it.genies().stream()
+                .filter(Genie::fromElsewhere).findFirst().map(first -> first.id().equals(id)).orElse(false));
+        return UI.of(UI.use(look, () ->
+            panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
+            .withStyle(it -> it.backgroundColor(TRANSPARENT))
+            .add("growx, wmin 0, gaptop 14, gapbottom 4",
+                label("LAMPS FROM ELSEWHERE").group(Skin.SECTION)
+                .isVisibleIf(firstFromElsewhere)
+                .withTooltip("Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are"))
+            .add("growx, wmin 0", genieChipBody(shown))
+            .get(JPanel.class)));
+    }
+
+    /// Where a lamp from elsewhere is, with `~` for the user's home, as a person types it.
+    private static String whereFrom(Genie genie) {
+        String home = System.getProperty("user.home");
+        return genie.elsewhere().map(Path::toString)
+                .map(it -> it.startsWith(home + "/") ? "~" + it.substring(home.length()) : it).orElse("");
+    }
+
+    /// [#whereFrom], short enough for a card: a long path keeps its end, such as `…/lamps/west`,
+    /// which tells lamps apart, where its start would say the same for each.
+    private static String whereFromInShort(Genie genie) {
+        String where = whereFrom(genie);
+        if (where.length() <= 28) return where;
+        Path path = Path.of(where);
+        int parts = path.getNameCount();
+        return parts < 2 ? where : "…/" + path.subpath(parts - 2, parts);
     }
 
     private UIForPanel<JPanel> genieChipBody(Var<Genie> shown) {
         UUID id = shown.get().id();
+        // A lamp from elsewhere is marked in brass, the colour of the lamp, rather than the flame.
+        Color accent = shown.get().fromElsewhere() ? BRASS : FLAME;
         Val<Boolean> isSelected = selected.viewAs(Boolean.class, it -> it.equals(id));
         // What the genie shows on its desktop, said here until the user is at its chat to see it.
         Val<Boolean> atItsChat = state.viewAs(Boolean.class, it -> it.selected().equals(id) && it.page() == GeniesState.Page.CHAT);
@@ -312,7 +349,7 @@ public final class GeniesView extends JPanel {
                 .backgroundColor(on ? RAISED : TRANSPARENT)
                 .border(1, on ? BORDER : TRANSPARENT)
                 // Always there, lit when selected, so selecting a genie moves nothing.
-                .borderAt(UI.Edge.LEFT, 3, on ? FLAME : TRANSPARENT)
+                .borderAt(UI.Edge.LEFT, 3, on ? accent : TRANSPARENT)
                 .borderRadius(10)
                 // A thin gap between one card's border and the next.
                 .margin(2, 0, 2, 0)
@@ -373,6 +410,18 @@ public final class GeniesView extends JPanel {
                         label(shown.viewAsString(Genie::status)).group(Skin.META),
                         shown
                     )
+                )
+                .add("growx, wmin 0",
+                     label(shown.viewAsString(GeniesView::whereFromInShort))
+                     .isVisibleIf(shown.viewAs(Boolean.class, Genie::fromElsewhere))
+                     .withTooltip(shown.viewAsString(it -> it.elsewhere().map(Path::toString).orElse("")))
+                     .withStyle(it -> it
+                         .componentFont(f -> f
+                             .family(MONO)
+                             .size(11)
+                             .color(BRASS)
+                         )
+                     )
                 )
                 .add("growx, wmin 0",
                      html(
@@ -1402,7 +1451,7 @@ public final class GeniesView extends JPanel {
                 )
                 .peek(JPopupMenu::addSeparator)
                 .add(
-                    UI.of(ViewPartsUtil.item("Delete " + shown.name() + "…", true, () -> confirmDelete(id)))
+                    UI.of(ViewPartsUtil.item((shown.fromElsewhere() ? "Remove from Genies" : "Delete " + shown.name()) + "…", true, () -> confirmDelete(id)))
                     .withForeground(TROUBLE)
                 );
             }))
@@ -1462,12 +1511,31 @@ public final class GeniesView extends JPanel {
             .show();
     }
 
+    /// Asks before a genie is deleted for good. A lamp from elsewhere is not deleted, only
+    /// removed from Genies, so the question says that instead.
     private void confirmDelete(UUID id) {
         state.get().find(id).ifPresent(doomed -> {
-            ConfirmAnswer answer = UI.confirmation("Delete " + doomed.name() + " for good? Its home, everything it made "
+            ConfirmAnswer answer = doomed.fromElsewhere()
+                ? UI.confirmation("Remove " + doomed.name() + " from Genies? Its lamp stays where it is, at "
+                        + whereFrom(doomed) + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\".")
+                    .titled("Remove a lamp from Genies").yesOption("Remove").noOption("Keep").cancelOption("").show()
+                : UI.confirmation("Delete " + doomed.name() + " for good? Its home, everything it made "
                     + "and your conversations with it are deleted.").titled("Delete a genie").yesOption("Delete").noOption("Keep").cancelOption("").show();
             if (answer == ConfirmAnswer.YES) app.delete(id);
         });
+    }
+
+    /// Asks which lamp to add, and adds it, or says why it cannot.
+    private void addLamp() {
+        JFileChooser chooser = new JFileChooser(System.getProperty("user.home"));
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setDialogTitle("Add a lamp made with `oillamp at`");
+        if (chooser.showDialog(this, "Add") != JFileChooser.APPROVE_OPTION) return;
+        try {
+            app.addLamp(chooser.getSelectedFile().toPath());
+        } catch (IOException failed) {
+            JOptionPane.showMessageDialog(this, failed.getMessage(), "Not a lamp", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     /// Lets the user change a question they asked, in a dialog holding the question as it was.
