@@ -153,6 +153,30 @@ class KeepingLampsFromElsewhereSpec extends Specification {
             Lamp.running(sandbox.launcher)*.lamp() == [north]
     }
 
+    def 'A sleeping lamp from elsewhere that a person lights is joined when Genies looks for lamps'() {
+        reportInfo '''
+            Let's consider a lamp Genies already lists, asleep, which a person then lights from
+            a terminal while Genies runs. The user does not press Wake: Genies notices by itself,
+            the next time it looks for lamps, as `Genies.lookForLamps` does at once. It joins the
+            person's session, so the genie is awake, and it does not list the lamp a second time.
+        '''
+        given: 'the user added "north" while it slept, and then a person lit it'
+            sandbox.givenConfig(north, 'schema_version = 1\n')
+            SwingUtilities.invokeAndWait { app.addLamp(north) }
+            UUID fromElsewhere = app.state().get().selected()
+            assert app.state().get().find(fromElsewhere).orElseThrow().phase() == Genie.Phase.ASLEEP
+            lightFromTheCommandLine(north)
+
+        when: 'Genies looks for lamps'
+            SwingUtilities.invokeAndWait { app.lookForLamps() }
+
+        then: 'it is awake, joined, listed once, and still the person\'s'
+            waitUntil { app.state().get().find(fromElsewhere).orElseThrow().phase().isAwake() }
+            app.state().get().genies()*.name() == ['Juniper', 'north']
+            person.alive
+            Lamp.running(sandbox.launcher)*.lamp() == [north]
+    }
+
     def 'Genies lights a lamp from elsewhere as it is, without a genie\'s instructions'() {
         reportInfo '''
             When Genies lights one of its own genies, it gives the engine the genie's
