@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -91,6 +92,14 @@ public final class GeniesBackend implements Genies {
     private final Val<String> actionsShown;
     /// Where the user's documents are, where a genie's folders are linked unless they pick another.
     private final Path documents;
+    /// The lamps from elsewhere the user removed, which Genies does not take in again when it
+    /// finds them lit. Only touched on Swing's event thread.
+    private Tuple<Path> removedLamps;
+    /// How often Genies looks for lamps lit elsewhere. Each look starts oillamp's engine once,
+    /// which asks podman, so not more often than this.
+    private static final Duration LOOKING_FOR_LAMPS_EVERY = Duration.ofMinutes(1);
+    /// The thread that looks for lamps now and then, until Genies quits.
+    private volatile Optional<Thread> lookingForLamps = Optional.empty();
 
     GeniesBackend(Var<GeniesState> state, Shelf shelf, LampLighter lighter, OllamaKeeper ollama) {
         this(state, shelf, lighter, ollama, GenieHomeUtil.documents(name -> Optional.ofNullable(System.getenv(name))));
@@ -102,6 +111,7 @@ public final class GeniesBackend implements Genies {
         this.lighter = lighter;
         this.ollama = ollama;
         this.documents = documents;
+        this.removedLamps = shelf.removedLamps();
         this.names = state.viewAs(Tuple.classTyped(String.class),
                 it -> it.genies().mapTo(String.class, genie -> genie.id() + " " + genie.name()));
         Viewable.cast(names).onChange(From.ALL, _ -> keepGenies());
@@ -174,6 +184,17 @@ public final class GeniesBackend implements Genies {
             app.rejoin(genie.id());
         });
         app.lookForOllama();
+        // Lamps someone lit elsewhere, now and then, from the first moment on.
+        app.lookingForLamps = Optional.of(Thread.ofVirtual().name("look for lamps now and then").start(() -> {
+            try {
+                while (true) {
+                    SwingUtilities.invokeLater(app::lookForLamps);
+                    Thread.sleep(LOOKING_FOR_LAMPS_EVERY);
+                }
+            } catch (InterruptedException quitting) {
+                // Genies quits.
+            }
+        }));
         return app;
     }
 
@@ -283,10 +304,27 @@ public final class GeniesBackend implements Genies {
     }
 
     /// The genie leaves the window at once; its lamp is put out and removed in the background.
+    ///
+    /// A lamp from elsewhere is not Genies' to remove: Genies lets go of it, leaving it running
+    /// if it runs, and it stays where it is, as it is. Genies then does not take it in again when
+    /// it finds it lit, unless the user adds it by hand.
     @Override public void delete(UUID id) {
+        Path lamp = lampOf(id);
+        boolean fromElsewhere = state.get().find(id).map(Genie::fromElsewhere).orElse(false);
         GenieRunner runner = runners.remove(id);
         state.update(From.VIEW, it -> it.remove(id));
-        Path lamp = shelf.lampOf(id);
+        if (fromElsewhere) {
+            removedLamps = removedLamps.remove(lamp).add(lamp);
+            keepRemovedLamps();
+            if (runner != null) Thread.ofVirtual().name("let go of a lamp").start(() -> {
+                try {
+                    runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            return;
+        }
         Thread.ofVirtual().name("delete genie").start(() -> {
             try {
                 if (runner != null) runner.sleepAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
@@ -303,6 +341,74 @@ public final class GeniesBackend implements Genies {
         });
     }
 
+    // ─── lamps from elsewhere ──────────────────────────────────────────────────────────────
+
+    /// Each lamp found lit that Genies does not know yet joins the list, after Genies' own, and
+    /// Genies joins its session. Only the lamps the user removed are left out, and Genies' own
+    /// lamps, lit or not. Off Swing's event thread. When it cannot be found out, as without
+    /// podman, nothing changes: Genies says so when a genie wakes, and this is asked again.
+    @Override public void lookForLamps() {
+        Thread.ofVirtual().name("look for lamps").start(() -> {
+            try {
+                List<Path> lit = lighter.running();
+                SwingUtilities.invokeLater(() -> {
+                    for (Path lamp : lit) {
+                        Path found = lamp.toAbsolutePath().normalize();
+                        if (known(found) || removedLamps.contains(found)) continue;
+                        take(found, false);
+                    }
+                });
+            } catch (IOException unknown) {
+                // Asked again next time.
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// A lamp the user picked joins the list, and is shown; Genies joins its session if it is lit.
+    /// One already in the list is shown. A removed one is no longer.
+    @Override public void addLamp(Path directory) throws IOException {
+        Path lamp = directory.toAbsolutePath().normalize();
+        if (lamp.startsWith(shelf.root().toAbsolutePath().normalize()))
+            throw new IOException(lamp + " is a genie's lamp already, kept by Genies itself.");
+        if (!Files.isDirectory(lamp.resolve(".oillamp")) && !Files.isRegularFile(lamp.resolve("oillamp.toml")))
+            throw new IOException(lamp + " is no lamp: it has no oillamp.toml, nor a .oillamp folder. "
+                    + "`oillamp at " + lamp + "` makes one there.");
+        removedLamps = removedLamps.remove(lamp);
+        keepRemovedLamps();
+        Optional<Genie> listed = state.get().genies().stream().filter(it -> lampOf(it.id()).equals(lamp)).findFirst();
+        if (listed.isPresent()) state.update(From.VIEW, it -> it.select(listed.get().id()));
+        else take(lamp, true);
+    }
+
+    /// Whether `lamp` is a genie's lamp already, or one on the shelf, whose genie was deleted
+    /// while its lamp went on running.
+    private boolean known(Path lamp) {
+        if (lamp.startsWith(shelf.root().toAbsolutePath().normalize())) return true;
+        return state.get().genies().stream().anyMatch(it -> lampOf(it.id()).toAbsolutePath().normalize().equals(lamp));
+    }
+
+    /// Takes the lamp in `directory` in as a genie, and reads what a sleeping genie shows; joins
+    /// its session if it is lit.
+    ///
+    /// @param shown whether the window shows it then, as when the user picked it
+    private void take(Path directory, boolean shown) {
+        Genie genie = Genie.elsewhere(UUID.randomUUID(), directory).withConversations(Conversations.NONE.withFolded(true));
+        state.update(From.VIEW, it -> shown ? it.add(genie) : it.found(genie));
+        runner(genie.id()).reloadConversations();
+        runner(genie.id()).hostAccess().read();
+        rejoin(genie.id());
+    }
+
+    private void keepRemovedLamps() {
+        try {
+            shelf.keepRemovedLamps(removedLamps);
+        } catch (IOException failed) {
+            report(new IOException("could not keep the removed lamps in " + shelf.root(), failed));
+        }
+    }
+
     @Override public void giveFile(UUID id, Path file) { runner(id).giveFile(file); }
 
     @Override public void saveOutboxFile(UUID id, String name, Path target) { runner(id).saveOutboxFile(name, target); }
@@ -311,7 +417,7 @@ public final class GeniesBackend implements Genies {
 
     /// A folder deleted since it was shown leaves the tree as it was, until its parent is read again.
     @Override public void readHome(UUID id, Tuple<String> folder) {
-        Path lamp = shelf.lampOf(id);
+        Path lamp = lampOf(id);
         Thread.ofVirtual().name("read home").start(() -> {
             Optional<Path> where = GenieHomeUtil.home(lamp);
             Optional<Home.Folder> read = Optional.empty();
@@ -328,12 +434,12 @@ public final class GeniesBackend implements Genies {
     }
 
     @Override public Optional<Path> folderOf(UUID id, Tuple<String> folder) {
-        return GenieHomeUtil.home(shelf.lampOf(id)).flatMap(home -> GenieHomeUtil.folder(home, folder));
+        return GenieHomeUtil.home(lampOf(id)).flatMap(home -> GenieHomeUtil.folder(home, folder));
     }
 
     @Override public Home.Link link(UUID id, Tuple<String> folder, Path into, String name) throws IOException {
         String genie = state.get().find(id).map(Genie::name).orElse("The genie");
-        Path home = GenieHomeUtil.home(shelf.lampOf(id))
+        Path home = GenieHomeUtil.home(lampOf(id))
                 .orElseThrow(() -> new IOException(genie + " has no home yet. It gets one as it first wakes."));
         Path target = GenieHomeUtil.folder(home, folder)
                 .orElseThrow(() -> new IOException(genie + "'s home has no folder " + String.join("/", folder) + "."));
@@ -534,7 +640,10 @@ public final class GeniesBackend implements Genies {
         return Optional.ofNullable(runners.get(id)).flatMap(GenieRunner::desktop);
     }
 
-    @Override public Path lampOf(UUID id) { return shelf.lampOf(id); }
+    /// A lamp from elsewhere is where it was found; any other is on the shelf.
+    @Override public Path lampOf(UUID id) {
+        return state.get().find(id).flatMap(Genie::elsewhere).orElseGet(() -> shelf.lampOf(id));
+    }
 
     // ─── the rest ──────────────────────────────────────────────────────────────────────────
 
@@ -557,7 +666,7 @@ public final class GeniesBackend implements Genies {
     }
 
     private GenieRunner runner(UUID id) {
-        return runners.computeIfAbsent(id, genie -> new GenieRunner(shelf.lampOf(genie), lighter,
+        return runners.computeIfAbsent(id, genie -> new GenieRunner(lampOf(genie), state.get().find(genie).map(Genie::fromElsewhere).orElse(false), lighter,
                 change -> SwingUtilities.invokeLater(() -> state.update(it -> it.update(genie, change)))));
     }
 
@@ -611,18 +720,25 @@ public final class GeniesBackend implements Genies {
         return genie.conversations().current().isPresent() ? genie.conversations().here().leaf() : "";
     }
 
+    /// A lamp from elsewhere is left running whatever the user chose: whoever lit it decides
+    /// when it goes out.
     @Override public void quit(boolean leaveRunning, Optional<Thread> first, Runnable whenDone) {
         keepGenies();
         keepSettings();
+        lookingForLamps.ifPresent(Thread::interrupt);
+        Map<UUID, Boolean> fromElsewhere = new ConcurrentHashMap<>();
+        for (Genie genie : state.get().genies()) fromElsewhere.put(genie.id(), genie.fromElsewhere());
         Thread.ofVirtual().name("quit").start(() -> {
             try {
                 if (first.isPresent()) first.get().join();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
-            for (GenieRunner runner : runners.values()) {
+            for (Map.Entry<UUID, GenieRunner> each : runners.entrySet()) {
+                GenieRunner runner = each.getValue();
                 try {
-                    if (leaveRunning) runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
+                    if (leaveRunning || fromElsewhere.getOrDefault(each.getKey(), false))
+                        runner.leaveRunningAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
                     else runner.sleepAndWait(SECONDS_TO_LET_GO_OF_A_LAMP);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();

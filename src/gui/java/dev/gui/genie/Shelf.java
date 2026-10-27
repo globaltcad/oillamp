@@ -23,7 +23,9 @@ import sprouts.Tuple;
 
 /// Where Genies keeps what outlives it, in one directory:
 ///
-/// - `genies.json`: each genie's id and name, in order;
+/// - `genies.json`: each genie's id and name, in order, and the directory of each lamp Genies
+///   did not make, but found lit elsewhere or was given;
+/// - `removed-lamps.json`: the lamps from elsewhere the user removed, not to be taken in again;
 /// - `settings.json`: the model settings, readable by this user only, because it can hold a key;
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
 /// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it.
@@ -64,21 +66,43 @@ public final class Shelf {
         Tuple<Genie> genies = Tuple.of(Genie.class);
         for (JsonNode entry : read("genies.json").path("genies")) {
             try {
+                Optional<Path> elsewhere = entry.hasNonNull("lamp") ? Optional.of(Path.of(entry.path("lamp").asText())) : Optional.empty();
                 genies = genies.add(Genie.asleep(UUID.fromString(entry.path("id").asText()), entry.path("name").asText())
+                                         .withElsewhere(elsewhere)
                                          .withConversations(Conversations.NONE.withFolded(true)));
-            } catch (IllegalArgumentException notAnId) {
+            } catch (IllegalArgumentException notAnIdOrAPath) {
                 // An entry someone edited by hand into something else is skipped.
             }
         }
         return genies;
     }
 
+    /// Keeps the genies, and the lamp's directory of each whose lamp Genies did not make.
     public void keep(Tuple<Genie> genies) throws IOException {
         ArrayNode list = JSON.createArrayNode();
-        for (Genie genie : genies) list.addObject().put("id", genie.id().toString()).put("name", genie.name());
+        for (Genie genie : genies) {
+            ObjectNode entry = list.addObject().put("id", genie.id().toString()).put("name", genie.name());
+            genie.elsewhere().ifPresent(lamp -> entry.put("lamp", lamp.toString()));
+        }
         ObjectNode file = JSON.createObjectNode();
         file.set("genies", list);
         write("genies.json", file);
+    }
+
+    /// The lamps from elsewhere the user removed from Genies, by directory: Genies does not take
+    /// them in again when it finds them lit, unless the user adds one by hand.
+    public Tuple<Path> removedLamps() {
+        Tuple<Path> removed = Tuple.of(Path.class);
+        for (JsonNode lamp : read("removed-lamps.json").path("lamps")) removed = removed.add(Path.of(lamp.asText()));
+        return removed;
+    }
+
+    public void keepRemovedLamps(Tuple<Path> removed) throws IOException {
+        ArrayNode list = JSON.createArrayNode();
+        for (Path lamp : removed) list.add(lamp.toString());
+        ObjectNode file = JSON.createObjectNode();
+        file.set("lamps", list);
+        write("removed-lamps.json", file);
     }
 
     /// The settings as last kept, or the defaults.
