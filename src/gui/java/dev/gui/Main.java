@@ -78,9 +78,10 @@ final class Main {
     /// Asks the user what becomes of the genies that are awake, then puts them to sleep or leaves
     /// them running, before the window goes. Without an answer, nothing closes.
     private static void quit(Genies app, JFrame frame, Var<String> title, GeniesView view) {
+        // A lamp from elsewhere is left running whatever the answer, so it is not asked about.
         List<String> awake = new ArrayList<>();
         for (Genie genie : app.state().get().genies())
-            if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING) awake.add(genie.name());
+            if (!genie.fromElsewhere() && (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) awake.add(genie.name());
         boolean leaveRunning = false;
         if (!awake.isEmpty()) {
             ConfirmAnswer answer = UI.confirmation(awakeQuestion(awake))
