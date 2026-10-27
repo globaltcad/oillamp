@@ -24,11 +24,11 @@ final class LampSvgUtil {
             case ASLEEP -> "none";
         };
         String smoke = phase == Genie.Phase.ASLEEP
-                ? "<path d='M33 20 C29 16 36 13 32 8 C30 5 33 3 34 1' fill='none' stroke='#6f6479' stroke-width='2' stroke-linecap='round'/>"
-                : "";
+            ? "<path d='M33 20 C29 16 36 13 32 8 C30 5 33 3 34 1' fill='none' stroke='#6f6479' stroke-width='2' stroke-linecap='round'/>"
+            : "";
         String glow = phase == Genie.Phase.READY || phase == Genie.Phase.WORKING
-                ? "<circle cx='33' cy='14' r='12' fill='" + flame + "' opacity='0.22'/>"
-                : "";
+            ? "<circle cx='33' cy='14' r='12' fill='" + flame + "' opacity='0.22'/>"
+            : "";
         return drawn(glow + "<path d='M33 4 C38 10 39 15 33 21 C27 15 28 10 33 4 Z' fill='" + flame + "'/>" + smoke);
     }
 

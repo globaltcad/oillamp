@@ -39,27 +39,44 @@ final class ViewPartsUtil {
 
     /// The lamp of a genie in `phase`, drawn from SVG at `size`.
     static UIForAnySwing<?, ?> lamp(Val<Genie.Phase> phase, int size) {
-        return box().withPrefSize(size, size).withMinSize(size, size)
-                .withStyle(phase.viewAsString(LampSvgUtil::lamp), (svg, it) -> it.image(img -> img.svg(svg).fitMode(UI.FitComponent.MIN_DIM)));
+        return
+            box().withPrefSize(size, size).withMinSize(size, size)
+            .withStyle(phase.viewAsString(LampSvgUtil::lamp), (svg, it) ->
+                it.image(img -> img.svg(svg).fitMode(UI.FitComponent.MIN_DIM))
+            );
     }
 
     /// A few lines of small print, wrapped to the width they are given.
     static UIForAnySwing<?, ?> note(String text, Val<Boolean> shown) {
-        return box().withMinSize(0, 0).isVisibleIf(shown)
-                // Some padding, on purpose: text painted by the style engine sets its component's
-                // height when it is painted, and a component of no height is never painted.
-                .withStyle(it -> it.padding(2, 0, 2, 0).text(t -> t
-                        .content(StyledString.of(f -> f.family(FONT).size(11).color(SUBTEXT), text))
-                        .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)));
+        return
+            box().withMinSize(0, 0).isVisibleIf(shown)
+            // Some padding, on purpose: text painted by the style engine sets its component's
+            // height when it is painted, and a component of no height is never painted.
+            .withStyle(it ->
+                it.padding(2, 0, 2, 0)
+                .text(t ->
+                    t.content(StyledString.of(f -> f.family(FONT).size(11).color(SUBTEXT), text))
+                    .placement(UI.Placement.TOP_LEFT)
+                    .wrapLines(true)
+                    .autoPreferredHeight(true)
+                )
+            );
     }
 
     /// Text that changes, such as a problem, wrapped to the width it is given rather than cut
     /// short: the end of a message is often the part that says what to do.
     static UIForAnySwing<?, ?> wrapped(Val<String> text, Color colour, Val<Boolean> shown) {
-        return box().withMinSize(0, 0).isVisibleIf(shown)
-                .withStyle(text, (words, it) -> it.padding(2, 0, 2, 0).text(t -> t
-                        .content(StyledString.of(f -> f.family(FONT).size(12).color(colour), words))
-                        .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)));
+        return
+            box().withMinSize(0, 0).isVisibleIf(shown)
+            .withStyle(text, (words, it) ->
+                it.padding(2, 0, 2, 0)
+                .text(t ->
+                    t.content(StyledString.of(f -> f.family(FONT).size(12).color(colour), words))
+                    .placement(UI.Placement.TOP_LEFT)
+                    .wrapLines(true)
+                    .autoPreferredHeight(true)
+                )
+            );
     }
 
     /// Line wrapping for a text area, which has no SwingTree method, so this one Swing setter is
@@ -100,35 +117,43 @@ final class ViewPartsUtil {
 
     /// A round dot of `size`.
     static UIForBox<JBox> dot(Val<Color> colour, int size) {
-        return box().withPrefSize(size, size).withMinSize(size, size).withMaxSize(size, size)
-                .withStyle(colour, (c, it) -> it.backgroundColor(c).borderRadius(size));
+        return
+            box().withPrefSize(size, size).withMinSize(size, size).withMaxSize(size, size)
+            .withStyle(colour, (c, it) -> it.backgroundColor(c).borderRadius(size));
     }
 
     /// Text painted by the style engine, wrapped to the width it gets.
     static UIForBox<JBox> words(String text, int size, float weight, Color colour) {
-        return box().withMinSize(0, 0)
-                .withStyle(it -> it.padding(1, 0, 1, 0).text(t -> t
-                        .content(StyledString.of(f -> f.family(FONT).size(size).weight(weight).color(colour), text))
-                        .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)));
+        return
+            box().withMinSize(0, 0)
+            .withStyle(it ->
+                it.padding(1, 0, 1, 0)
+                .text(t ->
+                    t.content(StyledString.of(f -> f.family(FONT).size(size).weight(weight).color(colour), text))
+                    .placement(UI.Placement.TOP_LEFT)
+                    .wrapLines(true)
+                    .autoPreferredHeight(true)
+                )
+            );
     }
 
     /// A few words on a small rounded patch, such as "added by Rex".
     static UIForLabel<JLabel> tag(Val<String> text) {
-        return label(text)
-                .withStyle(it -> it
-                        .backgroundColor(RAISED)
-                        .borderRadius(8)
-                        .padding(2, 8, 2, 8)
-                        .componentFont(f -> f
-                            .family(FONT).size(11).color(SUBTEXT)
-                        )
-                );
+        return
+            label(text)
+            .withStyle(it -> it
+                .backgroundColor(RAISED)
+                .borderRadius(8)
+                .padding(2, 8, 2, 8)
+                .componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))
+            );
     }
 
     /// A button that reads as a link, in brass.
     static UIForButton<JButton> link(String text) {
-        return button(text).group(Skin.ICON_BUTTON)
-                .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(FONT).size(12).color(BRASS)));
+        return
+            button(text).group(Skin.ICON_BUTTON)
+            .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(FONT).size(12).color(BRASS)));
     }
 
     /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
@@ -150,11 +175,18 @@ final class ViewPartsUtil {
         return
             button(text).group(Skin.ICON_BUTTON)
             .isEnabledIf(changeable)
-            .withStyle(looks, (part, it) -> it.borderRadius(9).padding(4, 12, 4, 12)
+            .withStyle(looks, (part, it) -> it
+                .borderRadius(9)
+                .padding(4, 12, 4, 12)
                 .backgroundColor(!part.chosen() ? TRANSPARENT : part.changeable() ? RAISED : CARD)
                 .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
-                .componentFont(f -> f.family(FONT).size(12).weight(part.chosen() ? 2f : 1f)
-                    .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : dim(SUBTEXT))))
+                .componentFont(f -> f
+                    .family(FONT)
+                    .size(12)
+                    .weight(part.chosen() ? 2f : 1f)
+                    .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : dim(SUBTEXT))
+                )
+            )
             .onClick(_ -> choose.run());
     }
 

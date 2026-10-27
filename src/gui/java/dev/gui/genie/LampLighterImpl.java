@@ -50,8 +50,14 @@ public final class LampLighterImpl implements LampLighter {
     static final Duration WAKING_TIME = Duration.ofMinutes(45);
 
     @Override
-    public Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress,
-                     Consumer<LampEvent> events) throws IOException, InterruptedException {
+    public Lit light(
+        final Path directory,
+        final String name,
+        final Settings settings,
+        final String key,
+        final Consumer<String> progress,
+        final Consumer<LampEvent> events
+    ) throws IOException, InterruptedException {
         LampDirectory starting;
         try {
             starting = unlit(directory).model(settings.model().strip());
@@ -64,13 +70,23 @@ public final class LampLighterImpl implements LampLighter {
     /// Its own model, instructions and schedule, as its `oillamp.toml` and its agent's home
     /// have them; Genies' model service and key, which are not written anywhere.
     @Override
-    public Lit lightAsItIs(Path directory, Settings settings, String key, Consumer<String> progress,
-                           Consumer<LampEvent> events) throws IOException, InterruptedException {
+    public Lit lightAsItIs(
+        final Path directory,
+        final Settings settings,
+        final String key,
+        final Consumer<String> progress,
+        final Consumer<LampEvent> events
+    ) throws IOException, InterruptedException {
         return light(unlit(directory), settings, key, progress, events);
     }
 
-    private Lit light(LampDirectory starting, Settings settings, String key, Consumer<String> progress,
-                      Consumer<LampEvent> events) throws IOException, InterruptedException {
+    private Lit light(
+        final LampDirectory starting,
+        final Settings settings,
+        final String key,
+        final Consumer<String> progress,
+        final Consumer<LampEvent> events
+    ) throws IOException, InterruptedException {
         AtomicReference<String> problem = new AtomicReference<>("");
         Lamp lamp = starting
                 .modelService(URI.create(settings.service().strip()))

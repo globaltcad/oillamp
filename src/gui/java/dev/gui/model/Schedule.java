@@ -24,9 +24,19 @@ import sprouts.Tuple;
 /// @param earlier whether the timeline shows every run of the last week, not only the last few
 /// @param problem why the last change could not be made, in the lamp's words; empty when it could
 /// @param busy    whether a change is on its way to the lamp
-public record Schedule(boolean read, boolean paused, ZoneId zone, Tuple<Job> jobs, Tuple<Run> runs,
-                       Optional<Running> running, Optional<JobDraft> draft, String picked,
-                       boolean earlier, String problem, boolean busy) {
+public record Schedule(
+    boolean read,
+    boolean paused,
+    ZoneId zone,
+    Tuple<Job> jobs,
+    Tuple<Run> runs,
+    Optional<Running> running,
+    Optional<JobDraft> draft,
+    String picked,
+    boolean earlier,
+    String problem,
+    boolean busy
+) {
 
     /// A job as oillamp lists it, read into the page's terms.
     ///
@@ -37,9 +47,17 @@ public record Schedule(boolean read, boolean paused, ZoneId zone, Tuple<Job> job
     /// @param upcoming when it runs over the next seven days, after now, earliest first
     /// @param byGenie whether the genie added it itself
     /// @param expires when it comes off the schedule; empty for never
-    public record Job(String id, Optional<Recurrence> repeats, Optional<Instant> at, Optional<Instant> next, Tuple<Instant> upcoming,
-                      String prompt, boolean byGenie, Optional<Instant> expires, boolean enabled)
-            implements HasId<String> {
+    public record Job(
+        String id,
+        Optional<Recurrence> repeats,
+        Optional<Instant> at,
+        Optional<Instant> next,
+        Tuple<Instant> upcoming,
+        String prompt,
+        boolean byGenie,
+        Optional<Instant> expires,
+        boolean enabled
+    ) implements HasId<String> {
 
         /// The first line of its prompt, cut at 90 characters.
         public String title() { return firstLine(prompt, 90); }

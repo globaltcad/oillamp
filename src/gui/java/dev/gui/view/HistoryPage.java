@@ -85,16 +85,25 @@ final class HistoryPage {
      *  holds, above it.
      */
     private static final int REFERENCE = 1100;
-    private static final FlowCell WHOLE = AUTO_SPAN(it -> it
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12));
-    private static final FlowCell WIDE_SIDE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(7));
-    private static final FlowCell NARROW_SIDE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5));
-    private static final FlowCell SAYING = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(8).veryLarge(8).oversize(8));
-    private static final FlowCell BUTTONS = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(4).veryLarge(4).oversize(4));
+    private static final FlowCell WHOLE = AUTO_SPAN(it ->
+        it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
+    );
+    private static final FlowCell WIDE_SIDE = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(7)
+    );
+    private static final FlowCell NARROW_SIDE = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5)
+    );
+    private static final FlowCell SAYING = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(8).veryLarge(8).oversize(8)
+    );
+    private static final FlowCell BUTTONS = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(4).veryLarge(4).oversize(4)
+    );
 
     /// The rail's columns and where a node sits, as on the schedule's timeline. Between the clock
     /// and the rail stand the lanes of the other branches, a lane each.
@@ -149,21 +158,26 @@ final class HistoryPage {
         genie   = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         history = genie.zoomTo(Genie::history, Genie::withHistory);
         wide    = state.viewAs(Boolean.class, GeniesState::sideBySide);
-        notNow  = genie.viewAsString(it -> !it.history().busy().isEmpty() ? it.history().busy()
-                : it.phase() == Genie.Phase.WAKING ? it.name() + " is waking; go back once it is awake"
-                : it.phase() == Genie.Phase.WORKING ? it.name() + " is working; go back once it is done"
-                : it.schedule().running().isPresent() ? "A job is running; go back once it is done"
-                : "");
-        homeLocked = genie.viewAsString(it -> !it.history().busy().isEmpty() ? it.history().busy()
-                : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
-                    ? "Send " + it.name() + " to sleep first: its home changes only while it sleeps."
-                : "");
+        notNow  = genie.viewAsString(it ->
+            !it.history().busy().isEmpty() ? it.history().busy()
+            : it.phase() == Genie.Phase.WAKING ? it.name() + " is waking; go back once it is awake"
+            : it.phase() == Genie.Phase.WORKING ? it.name() + " is working; go back once it is done"
+            : it.schedule().running().isPresent() ? "A job is running; go back once it is done"
+            : ""
+        );
+        homeLocked = genie.viewAsString(it ->
+            !it.history().busy().isEmpty() ? it.history().busy()
+            : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
+                ? "Send " + it.name() + " to sleep first: its home changes only while it sleeps."
+            : ""
+        );
         autosave = history.viewAs(History.Autosave.class, it -> it.autosave().orElse(UNLESS_SAID));
         settingsLocked = genie.viewAsString(HistoryPage::settingsLocked);
         zone = genie.viewAs(ZoneId.class, it -> it.schedule().zone());
         lines = Viewable.of(Lines.class, history, zone, History::lines);
         wording = Viewable.of(Wording.class, genie, state, (it, s) ->
-                new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate()));
+            new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate())
+        );
         shownLine = history.viewAsString(History::shownLine);
     }
 
@@ -213,9 +227,13 @@ final class HistoryPage {
     private static Status status(Genie genie) {
         if (!genie.history().busy().isEmpty()) return new Status(BRASS, genie.history().busy());
         String when = genie.history().autosave().orElse(UNLESS_SAID).when();
-        String saved = (when.isEmpty() ? genie.name() + " is saved only when you save it by hand. "
-                                       : "Saved whenever " + genie.name() + " " + when + ". ")
-                       + "Going back keeps how it is now, so you can always return.";
+        String saved =
+            (
+                when.isEmpty()
+                    ? genie.name() + " is saved only when you save it by hand. "
+                    : "Saved whenever " + genie.name() + " " + when + ". "
+            )
+            + "Going back keeps how it is now, so you can always return.";
         return switch (genie.phase()) {
             case READY -> new Status(CONTENT, saved);
             case WORKING -> new Status(BRASS, genie.name() + " is working. You can go back once it is done.");
@@ -265,8 +283,10 @@ final class HistoryPage {
                     button("⑂  New branch…")
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(branchable)
-                    .withTooltip(genie.viewAsString(it -> "Keep how " + it.name() + " was last saved as a branch of "
-                        + "its own, to try something else from there. " + it.name() + " stays where it lives"))
+                    .withTooltip(genie.viewAsString(it ->
+                        "Keep how " + it.name() + " was last saved as a branch of "
+                        + "its own, to try something else from there. " + it.name() + " stays where it lives"
+                    ))
                     .onClick(it -> startBranch(it.getComponent(), ""))
                 )
                 .add(
@@ -283,15 +303,17 @@ final class HistoryPage {
     private UIForAnySwing<?, ?> undoBanner() {
         // The newest going back: a genie woken again after it may have saved a moment since.
         Val<String> wentBack = wording.viewAsString(it ->
-                                    it.history()
-                                        .moments()
-                                        .stream()
-                                        .filter(moment -> moment.kind() == History.Kind.WENT_BACK)
-                                        .findFirst()
-                                        .map(it::title)
-                                        .orElse("")
-                                );
-        Val<Boolean> shown = history.viewAs(Boolean.class, it -> it.busy().isEmpty() && it.plan().isEmpty() && it.undo().isPresent());
+            it.history()
+            .moments()
+            .stream()
+            .filter(moment -> moment.kind() == History.Kind.WENT_BACK)
+            .findFirst()
+            .map(it::title)
+            .orElse("")
+        );
+        Val<Boolean> shown = history.viewAs(Boolean.class, it ->
+            it.busy().isEmpty() && it.plan().isEmpty() && it.undo().isPresent()
+        );
         return
             panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[][grow][]")
             .isVisibleIf(shown)
@@ -332,29 +354,43 @@ final class HistoryPage {
             case History.Plan.Reset reset -> {
                 String when = history.find(reset.target()).map(wording::when).orElse("then");
                 String branch = history.lampBranch();
+                String unsaved = reset.unsaved()
+                    ? "What changed in " + wording.name() + "'s home since the newest moment was never saved, and is lost. "
+                    : "";
                 yield new Asked(
                     "Reset " + branch + " to how it was " + when + "?",
-                    (reset.moments() == 0 ? "No moment comes after it on " + branch + ". "
+                    (
+                        reset.moments() == 0 ? "No moment comes after it on " + branch + ". "
                         : reset.moments() == 1 ? "The moment after it leaves " + branch + ". "
-                        : "The " + reset.moments() + " moments after it leave " + branch + ". ")
-                    + (reset.unsaved() ? "What changed in " + wording.name() + "'s home since the newest moment was never saved, and is lost. " : "")
+                        : "The " + reset.moments() + " moments after it leave " + branch + ". "
+                    )
+                    + unsaved
                     + "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
                     + "Going back instead keeps how it is now as a moment of its own.",
-                    "Reset " + branch, true, true);
+                    "Reset " + branch,
+                    true,
+                    true
+                );
             }
             case History.Plan.DeleteBranch delete -> new Asked(
                 "Delete the branch " + delete.branch() + "?",
                 delete.moments() == 0 ? "Every moment on it is on another branch too, so no moment is lost."
-                    : delete.moments() == 1 ? "One moment is on " + delete.branch() + " alone, and goes with it."
-                    : delete.moments() + " moments are on " + delete.branch() + " alone, and go with it.",
-                "Delete " + delete.branch(), delete.moments() > 0, false);
+                : delete.moments() == 1 ? "One moment is on " + delete.branch() + " alone, and goes with it."
+                : delete.moments() + " moments are on " + delete.branch() + " alone, and go with it.",
+                "Delete " + delete.branch(),
+                delete.moments() > 0,
+                false
+            );
             case History.Plan.Prune prune -> new Asked(
                 "Delete the " + (prune.moments() == 1 ? "oldest moment" : prune.moments() + " oldest moments") + "?",
                 (prune.moments() == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
-                    + (prune.branches().isEmpty() ? "" : ", on " + words(prune.branches())) + ". Deleting "
-                    + (prune.moments() == 1 ? "it" : "them") + " frees " + bytes(prune.bytesFreed())
-                    + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
-                "Delete " + (prune.moments() == 1 ? "it" : "them"), true, false);
+                + (prune.branches().isEmpty() ? "" : ", on " + words(prune.branches())) + ". Deleting "
+                + (prune.moments() == 1 ? "it" : "them") + " frees " + bytes(prune.bytesFreed())
+                + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
+                "Delete " + (prune.moments() == 1 ? "it" : "them"),
+                true,
+                false
+            );
         }).orElse(new Asked("", "", "", false, false));
     }
 
@@ -394,9 +430,11 @@ final class HistoryPage {
                 .add(
                     button(asked.viewAsString(Asked::confirm))
                     .group(Skin.QUIET_BUTTON)
-                    .withStyle(asked, (it, style) -> it.forGood()
-                        ? style.border(1, TROUBLE).componentFont(f -> f.family(FONT).size(12).weight(2f).color(TROUBLE))
-                        : style.componentFont(f -> f.family(FONT).size(12).weight(2f).color(TEXT)))
+                    .withStyle(asked, (it, style) ->
+                        it.forGood()
+                            ? style.border(1, TROUBLE).componentFont(f -> f.family(FONT).size(12).weight(2f).color(TROUBLE))
+                            : style.componentFont(f -> f.family(FONT).size(12).weight(2f).color(TEXT))
+                    )
                     .onClick(_ -> confirmPlan())
                 )
             );
@@ -426,17 +464,20 @@ final class HistoryPage {
     private record Drawn(Tuple<Lines.Lane> lanes, Lines.Row row) {}
 
     private UIForAnySwing<?, ?> momentsColumn() {
-        Val<Tuple<Drawn>> rows = lines.viewAs(Tuple.classTyped(Drawn.class),
-                it -> it.rows().mapTo(Drawn.class, row -> new Drawn(it.lanes(), row)));
+        Val<Tuple<Drawn>> rows = lines.viewAs(
+            Tuple.classTyped(Drawn.class),
+            it -> it.rows().mapTo(Drawn.class, row -> new Drawn(it.lanes(), row))
+        );
         Val<Integer> lanes = lines.viewAs(Integer.class, it -> it.lanes().size());
         Val<Integer> hidden = history.viewAs(Integer.class, History::hidden);
         Val<Boolean> earlier = history.viewAs(Boolean.class, History::earlier);
         Val<Boolean> reading = history.viewAs(Boolean.class, it -> !it.read());
         Val<Boolean> none = history.viewAs(Boolean.class, it -> it.read() && it.all().isEmpty());
         Val<String> earlierButtonText = Viewable.of(String.class, hidden, earlier, (more, shown) ->
-                                            shown ? "Show only the newest moments"
-                                                  : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
-                                        );
+            shown
+                ? "Show only the newest moments"
+                : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
+        );
         Val<Boolean> earlierButtonShown = Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown);
         return
             box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
@@ -455,8 +496,10 @@ final class HistoryPage {
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
-                        genie.viewAsString(it -> it.name() + "'s home is saved the first time "
-                            + "it wakes, and from then on whenever something changed. Each save is a moment you can bring it back to."),
+                        genie.viewAsString(it ->
+                            it.name() + "'s home is saved the first time it wakes, and from then on "
+                            + "whenever something changed. Each save is a moment you can bring it back to."
+                        ),
                         SUBTEXT,
                         Val.of(true)
                     )
@@ -498,7 +541,9 @@ final class HistoryPage {
     private static void passTheWheelOn(JScrollPane lines, MouseWheelEvent event) {
         JScrollBar bar = lines.getVerticalScrollBar();
         boolean down = event.getWheelRotation() > 0 || event.getPreciseWheelRotation() > 0;
-        boolean atTheEnd = down ? bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() : bar.getValue() <= bar.getMinimum();
+        boolean atTheEnd = down
+            ? bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum()
+            : bar.getValue() <= bar.getMinimum();
         if (!atTheEnd || !(SwingUtilities.getAncestorOfClass(JScrollPane.class, lines) instanceof JScrollPane page)) return;
         page.dispatchEvent(SwingUtilities.convertMouseEvent(lines, event, page));
     }
@@ -554,8 +599,9 @@ final class HistoryPage {
 
     /// Now, at the top: where going back starts from, on the line of the branch the genie lives on.
     private UIForPanel<JPanel> nowRow(Tuple<Lines.Lane> lanes, Lines.Row.Now now) {
-        Val<String> words = genie.viewAsString(it -> "How " + it.name() + " is now"
-                + (now.lampLane().isPresent() ? ", on " + it.history().lampBranch() : ""));
+        Val<String> words = genie.viewAsString(it ->
+            "How " + it.name() + " is now" + (now.lampLane().isPresent() ? ", on " + it.history().lampBranch() : "")
+        );
         return
             panel("fill, ins 0, gap 0", columns(lanes))
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
@@ -613,8 +659,9 @@ final class HistoryPage {
     }
 
     private UIForAnySwing<?, ?> rails(Tuple<Lines.Lane> lanes, Lines.Row row, int height, Val<Boolean> lit) {
-        Val<String> tooltip = lanes.isEmpty() ? Val.of("")
-                : wording.viewAsString(it -> lanesTooltip(lanes, row, it));
+        Val<String> tooltip = lanes.isEmpty()
+            ? Val.of("")
+            : wording.viewAsString(it -> lanesTooltip(lanes, row, it));
         return
             box()
             .withPrefSize(railsWidth(lanes), height)
@@ -637,9 +684,10 @@ final class HistoryPage {
         if (lane < 0 || lane >= lanes.size()) return;
         Lines.Strand strand = row.strands().get(lane);
         int slots = row instanceof Lines.Row.Between between ? between.slots() : 0;
-        Optional<String> dot = strand.dots().stream()
-                .min((a, b) -> Double.compare(Math.abs(slotY(a.slot(), slots) - y), Math.abs(slotY(b.slot(), slots) - y)))
-                .map(it -> it.moment().id());
+        Optional<String> dot =
+            strand.dots().stream()
+            .min((a, b) -> Double.compare(Math.abs(slotY(a.slot(), slots) - y), Math.abs(slotY(b.slot(), slots) - y)))
+            .map(it -> it.moment().id());
         String branch = lanes.get(lane).branch();
         history.update(From.VIEW, it -> {
             History shown = it.showLine(branch);
@@ -657,9 +705,10 @@ final class HistoryPage {
                 said.add(branch + ": " + wording.title(dot.moment()) + ", " + wording.when(dot.moment()));
         }
         if (said.isEmpty()) return "";
-        return String.join("\n", said.subList(0, Math.min(8, said.size())))
-               + (said.size() > 8 ? "\nand " + (said.size() - 8) + " more" : "")
-               + "\nClick a line to show it here";
+        return
+            String.join("\n", said.subList(0, Math.min(8, said.size())))
+            + (said.size() > 8 ? "\nand " + (said.size() - 8) + " more" : "")
+            + "\nClick a line to show it here";
     }
 
     private static double spacing(int slots) {
@@ -780,33 +829,41 @@ final class HistoryPage {
     private UIForPanel<JPanel> momentCard(Lines.Row.Shown shown, Val<Boolean> picked) {
         History.Moment moment = shown.moment();
         Var<Boolean> hovered = Var.of(false);
-        boolean quiet = moment.kind() == History.Kind.WOKE
-                     || moment.kind() == History.Kind.SLEPT
-                     || moment.kind() == History.Kind.BEFORE_RUN;
-        boolean failed = moment.outcome()
-                               .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
-                               .isPresent();
+        boolean quiet =
+            moment.kind() == History.Kind.WOKE ||
+            moment.kind() == History.Kind.SLEPT ||
+            moment.kind() == History.Kind.BEFORE_RUN;
+        boolean failed =
+            moment.outcome()
+            .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
+            .isPresent();
         String detail = moment.detail();
-        String standsHere = shown.newestOf().isEmpty() ? ""
-                : "⑂  " + words(shown.newestOf()) + (shown.newestOf().size() == 1 ? " stands here" : " stand here");
+        String standsHere = shown.newestOf().isEmpty()
+            ? ""
+            : "⑂  " + words(shown.newestOf()) + (shown.newestOf().size() == 1 ? " stands here" : " stand here");
         Val<String> title = wording.viewAsString(it -> it.title(moment));
-        Val<Boolean> canOpen = genie.viewAs(Boolean.class, it -> !moment.conversation().isEmpty()
-                && it.conversations().find(moment.conversation()).isPresent());
+        Val<Boolean> canOpen = genie.viewAs(Boolean.class, it ->
+            !moment.conversation().isEmpty() &&
+            it.conversations().find(moment.conversation()).isPresent()
+        );
         // Going back and resetting stay on the branch the genie lives on.
         Val<Boolean> whereItLives = history.viewAs(Boolean.class, it -> moment.isOn(it.lampBranch()));
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
         Val<Boolean> hot = Viewable.of(Boolean.class, picked, hovered, (isPicked, isHovered) -> isPicked || isHovered);
         Val<String> tooltipText = picked.viewAsString(it ->
-                                      it ? "Click again to close" : "Click to go back to this moment, start a branch from it, or open its conversation"
-                                  );
+            it ? "Click again to close" : "Click to go back to this moment, start a branch from it, or open its conversation"
+        );
         return
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
             .withMinSize(0, 0)
             .withCursor(UI.Cursor.HAND)
             .withTooltip(tooltipText)
             .withTransitionalStyle(hot, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> it
-                .backgroundColor(picked.get() ? ViewPartsUtil.withAlpha(FLAME, 26 + (int) (20 * status.progress()))
-                                              : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress())))
+                .backgroundColor(
+                    picked.get()
+                        ? ViewPartsUtil.withAlpha(FLAME, 26 + (int) (20 * status.progress()))
+                        : ViewPartsUtil.withAlpha(RAISED, (int) (200 * status.progress()))
+                )
                 .borderRadius(10)
                 .borderAt(UI.Edge.LEFT, 2, picked.get() ? FLAME : TRANSPARENT)
             )
@@ -861,8 +918,10 @@ final class HistoryPage {
                     button("⑂  Start a branch here…")
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(idle)
-                    .withTooltip(genie.viewAsString(it -> "Keep this moment as a branch of its own, to try something "
-                        + "else from here. " + it.name() + " stays where it lives"))
+                    .withTooltip(genie.viewAsString(it ->
+                        "Keep this moment as a branch of its own, to try something "
+                        + "else from here. " + it.name() + " stays where it lives"
+                    ))
                     .onClick(it -> startBranch(it.getComponent(), moment.id()))
                 )
                 .add(
@@ -894,16 +953,25 @@ final class HistoryPage {
     /// second has the genie's lamp and a flame-coloured edge.
     private UIForAnySwing<?, ?> branchesBar() {
         Val<Tuple<Chip>> chips = history.viewAs(Tuple.classTyped(Chip.class), it ->
-                it.branches().mapTo(Chip.class, branch -> new Chip(branch.name(), Lines.colour(it.branches(), branch.name()),
-                        branch.lampIsOn(), branch.name().equals(it.shownLine()))));
+            it.branches().mapTo(Chip.class, branch ->
+                new Chip(
+                    branch.name(),
+                    Lines.colour(it.branches(), branch.name()),
+                    branch.lampIsOn(),
+                    branch.name().equals(it.shownLine())
+                )
+            )
+        );
         Val<Boolean> several = history.viewAs(Boolean.class, it -> it.branches().size() > 1);
         Val<Boolean> elsewhere = history.viewAs(Boolean.class, it -> !it.shownLine().equals(it.lampBranch()));
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
-        Val<String> about = genie.viewAsString(it -> it.history().shownLine().equals(it.history().lampBranch())
+        Val<String> about = genie.viewAsString(it ->
+            it.history().shownLine().equals(it.history().lampBranch())
                 ? it.name() + " lives on " + it.history().lampBranch() + ", and every save goes there. "
-                    + "Click another branch, or its line, to look at it."
+                  + "Click another branch, or its line, to look at it."
                 : "You are looking at " + it.history().shownLine() + ". " + it.name() + " lives on "
-                    + it.history().lampBranch() + ", and stays there until you move it.");
+                  + it.history().lampBranch() + ", and stays there until you move it."
+        );
         return
             box("fillx, wrap 1, ins 0 0 6 0, gap 6, hidemode 3", "[grow]")
             .isVisibleIf(several)
@@ -923,7 +991,9 @@ final class HistoryPage {
                     .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
                     .withStyle(homeLocked, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
                     .withTooltip(homeLocked.viewAsString(it ->
-                        it.isEmpty() ? "Make this branch the genie's home: its files and conversations become this branch's newest moment" : it
+                        it.isEmpty()
+                            ? "Make this branch the genie's home: its files and conversations become this branch's newest moment"
+                            : it
                     ))
                     .onClick(_ -> confirmSwitch())
                 )
@@ -938,8 +1008,9 @@ final class HistoryPage {
     }
 
     private UIForPanel<JPanel> chipView(Chip chip) {
-        String tooltip = (chip.lampIsOn() ? genie.get().name() + " lives on this branch. " : "")
-                       + (chip.shown() ? "Its line is the one with words" : "Click to look at its line");
+        String tooltip =
+            (chip.lampIsOn() ? genie.get().name() + " lives on this branch. " : "")
+            + (chip.shown() ? "Its line is the one with words" : "Click to look at its line");
         var view =
             panel("ins 3 10 3 10, gap 6, aligny center")
             .withCursor(UI.Cursor.HAND)
@@ -969,8 +1040,8 @@ final class HistoryPage {
     private static String settingsLocked(Genie genie) {
         if (genie.history().autosave().isEmpty())
             return genie.history().read()
-                    ? "Wake " + genie.name() + " once first. Its settings are kept in its lamp, which it gets as it first wakes."
-                    : "Reading its settings…";
+                ? "Wake " + genie.name() + " once first. Its settings are kept in its lamp, which it gets as it first wakes."
+                : "Reading its settings…";
         if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
             return "Send " + genie.name() + " to sleep to change these. While it is awake, it keeps what it woke with.";
         return "";
@@ -1003,7 +1074,7 @@ final class HistoryPage {
                 .add("span 2, growx, wmin 0",
                     ViewPartsUtil.note(
                         "A job is told what its last runs said and changed from "
-                            + "what was saved as they ended. Saving by hand works whatever these say.",
+                        + "what was saved as they ended. Saving by hand works whatever these say.",
                         Val.of(true)
                     )
                 )
@@ -1020,32 +1091,40 @@ final class HistoryPage {
                 .group(Skin.TILE)
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
-                        genie.viewAsString(it -> it.name() + "'s home: the files it made, "
-                            + "its notes and its conversations, and the settings of its lamp. Going back brings all of these back together."),
+                        genie.viewAsString(it ->
+                            it.name() + "'s home: the files it made, its notes and its conversations, "
+                            + "and the settings of its lamp. Going back brings all of these back together."
+                        ),
                         TEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
-                        Val.of("Its schedule stays as it is, and so does everything "
-                            + "on this computer outside the genie's lamp."),
+                        Val.of(
+                            "Its schedule stays as it is, and so does everything "
+                            + "on this computer outside the genie's lamp."
+                        ),
                         SUBTEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
-                        genie.viewAsString(it -> "A branch is a line of moments with a home of its own, schedule and settings "
-                            + "included, to try something without losing the rest. " + it.name() + " lives on one at a time."),
+                        genie.viewAsString(it ->
+                            "A branch is a line of moments with a home of its own, schedule and settings "
+                            + "included, to try something without losing the rest. " + it.name() + " lives on one at a time."
+                        ),
                         SUBTEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
-                        Val.of("Save by hand before something you might want to undo, "
-                            + "such as a big change to a project."),
+                        Val.of(
+                            "Save by hand before something you might want to undo, "
+                            + "such as a big change to a project."
+                        ),
                         SUBTEXT,
                         Val.of(true)
                     )
@@ -1061,20 +1140,32 @@ final class HistoryPage {
     /// oillamp last deleted to stay within it, and deleting what does not fit now.
     private UIForAnySwing<?, ?> sizeTile(Val<Boolean> changeable) {
         Val<Tuple<Growth>> choices = history.viewAs(Tuple.classTyped(Growth.class), it -> {
-            Tuple<Double> offered = it.maxGrowthGb().filter(gb -> !GROWTH_CHOICES.contains(gb))
-                                      .map(gb -> GROWTH_CHOICES.addAt(GROWTH_CHOICES.size() - 1, gb)).orElse(GROWTH_CHOICES);
+            Tuple<Double> offered =
+                it.maxGrowthGb()
+                .filter(gb -> !GROWTH_CHOICES.contains(gb))
+                .map(gb -> GROWTH_CHOICES.addAt(GROWTH_CHOICES.size() - 1, gb))
+                .orElse(GROWTH_CHOICES);
             return offered.mapTo(Growth.class, gb -> new Growth(gb, it.maxGrowthGb().equals(Optional.of(gb))));
         });
-        Val<String> about = genie.viewAsString(it -> it.history().maxGrowthGb().map(gb -> gb == 0
-                ? "Nothing is ever deleted: " + it.name() + "'s history may grow without end."
-                : it.name() + "'s history may grow " + gigabytes(gb) + " beyond its first moment, on all branches "
-                    + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest.")
-                .orElse(""));
-        Val<String> pruned = history.viewAsString(it -> it.pruned().map(last ->
+        Val<String> about = genie.viewAsString(it ->
+            it.history().maxGrowthGb()
+            .map(gb ->
+                gb == 0
+                    ? "Nothing is ever deleted: " + it.name() + "'s history may grow without end."
+                    : it.name() + "'s history may grow " + gigabytes(gb) + " beyond its first moment, on all branches "
+                      + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest."
+            )
+            .orElse("")
+        );
+        Val<String> pruned = history.viewAsString(it ->
+            it.pruned()
+            .map(last ->
                 "The last time, oillamp deleted " + (last.moments() == 1 ? "one old moment" : last.moments() + " old moments")
                 + " to stay within it, which freed " + bytes(last.bytesFreed()) + ". The history now takes "
-                + bytes(last.remainingBytes()) + " of the " + bytes(last.limitBytes()) + " it may, its first moment included.")
-                .orElse(""));
+                + bytes(last.remainingBytes()) + " of the " + bytes(last.limitBytes()) + " it may, its first moment included."
+            )
+            .orElse("")
+        );
         return
             panel("fill, wrap 1, gap 8, hidemode 3", "[grow]")
             .group(Skin.TILE)
@@ -1092,8 +1183,11 @@ final class HistoryPage {
                 .isVisibleIf(history.viewAs(Boolean.class, it -> it.maxGrowthGb().filter(gb -> gb > 0).isPresent()))
                 .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
                 .withStyle(homeLocked, (why, it) -> why.isEmpty() ? it : it.backgroundColor(SMOKE).cursor(UI.Cursor.DEFAULT))
-                .withTooltip(homeLocked.viewAsString(it -> it.isEmpty()
-                    ? "Delete what does not fit now, rather than at the next save. You are told first what that is" : it))
+                .withTooltip(homeLocked.viewAsString(it ->
+                    it.isEmpty()
+                        ? "Delete what does not fit now, rather than at the next save. You are told first what that is"
+                        : it
+                ))
                 .onClick(_ -> app.planPruning(selected()))
             );
     }
@@ -1103,7 +1197,9 @@ final class HistoryPage {
             button(growth.gb() == 0 ? "Never delete" : gigabytes(growth.gb()))
             .group(Skin.CHIP)
             .isEnabledIf(changeable)
-            .withStyle(it -> growth.chosen() ? it.backgroundColor(YOURS).border(1, FLAME).componentFont(f -> f.color(TEXT).weight(2f)) : it)
+            .withStyle(it ->
+                growth.chosen() ? it.backgroundColor(YOURS).border(1, FLAME).componentFont(f -> f.color(TEXT).weight(2f)) : it
+            )
             .onClick(_ -> app.maxGrowth(selected(), growth.gb()));
     }
 
@@ -1121,8 +1217,8 @@ final class HistoryPage {
             size /= 1024;
             unit++;
         }
-        return (unit == 0 || size >= 10 ? String.valueOf(Math.round(size)) : String.format(Locale.ROOT, "%.1f", size))
-               + " " + units[unit];
+        String number = unit == 0 || size >= 10 ? String.valueOf(Math.round(size)) : String.format(Locale.ROOT, "%.1f", size);
+        return number + " " + units[unit];
     }
 
     /// Names as a sentence lists them: "main", "main and docs", "a, b and c".
@@ -1134,9 +1230,9 @@ final class HistoryPage {
     /// The switch for one of the moments oillamp saves at by itself, which it writes into the
     /// lamp at once.
     private UIForAnySwing<?, ?> autosaveSwitch(
-        Function<History.Autosave, Boolean> on,
-        BiFunction<History.Autosave, Boolean, History.Autosave> with,
-        Val<Boolean> changeable
+        final Function<History.Autosave, Boolean> on,
+        final BiFunction<History.Autosave, Boolean, History.Autosave> with,
+        final Val<Boolean> changeable
     ) {
         return ViewPartsUtil.yesOrNo(
             autosave.viewAs(Boolean.class, on),
@@ -1150,8 +1246,15 @@ final class HistoryPage {
     /// Asks what to remember the moment by, then saves; leaving the words out is fine.
     void save(Component parent) {
         Genie shown = genie.get();
-        Object answer = JOptionPane.showInputDialog(parent, "What should this moment be remembered by? You may leave it empty.",
-                "Save " + shown.name() + " as it is now", JOptionPane.PLAIN_MESSAGE, null, null, "");
+        Object answer = JOptionPane.showInputDialog(
+            parent,
+            "What should this moment be remembered by? You may leave it empty.",
+            "Save " + shown.name() + " as it is now",
+            JOptionPane.PLAIN_MESSAGE,
+            null,
+            null,
+            ""
+        );
         if (answer instanceof String words) app.save(shown.id(), words.strip());
     }
 
@@ -1163,11 +1266,16 @@ final class HistoryPage {
         String name = "";
         String problem = "";
         while (true) {
-            Object answer = JOptionPane.showInputDialog(parent,
-                    (problem.isEmpty() ? "" : problem + "\n\n") + "What should the new branch be called? " + rules + "\n"
-                    + shown.name() + " stays on " + shown.history().lampBranch() + "; you can move it later, while it sleeps.",
-                    moment.isEmpty() ? "Start a branch from the newest moment" : "Start a branch from this moment",
-                    JOptionPane.PLAIN_MESSAGE, null, null, name);
+            Object answer = JOptionPane.showInputDialog(
+                parent,
+                (problem.isEmpty() ? "" : problem + "\n\n") + "What should the new branch be called? " + rules + "\n"
+                + shown.name() + " stays on " + shown.history().lampBranch() + "; you can move it later, while it sleeps.",
+                moment.isEmpty() ? "Start a branch from the newest moment" : "Start a branch from this moment",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                null,
+                name
+            );
             if (!(answer instanceof String words)) return;
             name = words.strip();
             Optional<String> wrong = genie.get().history().branchNameProblem(name);
@@ -1182,10 +1290,15 @@ final class HistoryPage {
     private void confirmGoBack(History.Moment moment) {
         Genie shown = genie.get();
         String when = History.when(moment.at(), shown.schedule().zone(), state.get().localNow());
-        ConfirmAnswer answer = UI.confirmation("Bring " + shown.name() + " back to how it was " + when + "?\n"
+        ConfirmAnswer answer =
+            UI.confirmation(
+                "Bring " + shown.name() + " back to how it was " + when + "?\n"
                 + "Its files and conversations become what they were then. How it is now is kept, so you can return."
-                + (shown.phase().isAwake() ? "\n" + shown.name() + " sleeps while it goes back, and wakes again after." : ""))
-                .titled("Go back in time").yesOption("Go back").noOption("Stay").cancelOption("").show();
+                + (shown.phase().isAwake() ? "\n" + shown.name() + " sleeps while it goes back, and wakes again after." : "")
+            )
+            .titled("Go back in time")
+            .yesOption("Go back").noOption("Stay").cancelOption("")
+            .show();
         if (answer == ConfirmAnswer.YES) app.goBack(shown.id(), moment.id());
     }
 
@@ -1193,11 +1306,16 @@ final class HistoryPage {
         Genie shown = genie.get();
         String branch = shown.history().shownLine();
         String from = shown.history().lampBranch();
-        ConfirmAnswer answer = UI.confirmation("Move " + shown.name() + " to " + branch + "?\n"
+        ConfirmAnswer answer =
+            UI.confirmation(
+                "Move " + shown.name() + " to " + branch + "?\n"
                 + "Its files and conversations become those of the newest moment on " + branch
                 + ", and every save goes to " + branch + " from now on.\n"
-                + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost.")
-                .titled("Move to another branch").yesOption("Move").noOption("Stay").cancelOption("").show();
+                + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost."
+            )
+            .titled("Move to another branch")
+            .yesOption("Move").noOption("Stay").cancelOption("")
+            .show();
         if (answer == ConfirmAnswer.YES) app.switchBranch(shown.id(), branch);
     }
 

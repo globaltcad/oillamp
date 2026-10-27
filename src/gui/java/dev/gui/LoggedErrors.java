@@ -50,8 +50,13 @@ public final class LoggedErrors implements SLF4JServiceProvider {
 
         @Override protected @Nullable String getFullyQualifiedCallerName() { return null; }
 
-        @Override protected void handleNormalizedLoggingCall(Level level, @Nullable Marker marker, String pattern,
-                                                             Object @Nullable [] arguments, @Nullable Throwable thrown) {
+        @Override protected void handleNormalizedLoggingCall(
+            final Level level,
+            final @Nullable Marker marker,
+            final String pattern,
+            final Object @Nullable [] arguments,
+            final @Nullable Throwable thrown
+        ) {
             String message = MessageFormatter.basicArrayFormat(pattern, arguments);
             if (level == Level.ERROR && Thread.getDefaultUncaughtExceptionHandler() instanceof ErrorLog log)
                 log.record(name + ", which logged: " + message,
