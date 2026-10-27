@@ -16,6 +16,7 @@ import java.util.function.Function;
 import javax.swing.SwingUtilities;
 
 import dev.gui.desktop.Desktop;
+import dev.gui.genie.GenieHomeUtil;
 import dev.gui.genie.GenieRunner;
 import dev.gui.genie.LampLighter;
 import dev.gui.genie.OllamaKeeper;
@@ -25,6 +26,7 @@ import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
+import dev.gui.model.Home;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Settings;
 import dev.lamp.LampExitStatus;
@@ -83,12 +85,23 @@ public final class GeniesBackend implements Genies {
     /// The genie whose host access is on show, or [GeniesState#NONE]. Kept as a field for the
     /// same reason: the host access is read from its lamp when it comes on show.
     private final Val<UUID> hostAccessShown;
+    /// The genie whose Actions page is on show and its phase, or nothing. Kept as a field for the
+    /// same reason: its home is looked for when the page comes on show, and again as the genie
+    /// wakes, which makes it the first time.
+    private final Val<String> actionsShown;
+    /// Where the user's documents are, where a genie's folders are linked unless they pick another.
+    private final Path documents;
 
     GeniesBackend(Var<GeniesState> state, Shelf shelf, LampLighter lighter, OllamaKeeper ollama) {
+        this(state, shelf, lighter, ollama, GenieHomeUtil.documents(name -> Optional.ofNullable(System.getenv(name))));
+    }
+
+    GeniesBackend(Var<GeniesState> state, Shelf shelf, LampLighter lighter, OllamaKeeper ollama, Path documents) {
         this.state = state;
         this.shelf = shelf;
         this.lighter = lighter;
         this.ollama = ollama;
+        this.documents = documents;
         this.names = state.viewAs(Tuple.classTyped(String.class),
                 it -> it.genies().mapTo(String.class, genie -> genie.id() + " " + genie.name()));
         Viewable.cast(names).onChange(From.ALL, _ -> keepGenies());
@@ -127,6 +140,13 @@ public final class GeniesBackend implements Genies {
             UUID shown = it.currentValue().orElse(GeniesState.NONE);
             if (!shown.equals(GeniesState.NONE)) runner(shown).hostAccess().read();
         });
+        this.actionsShown = state.viewAsString(it -> it.page() != GeniesState.Page.ACTIONS ? ""
+                : it.find(it.selected()).map(genie -> genie.id() + " " + genie.phase()).orElse(""));
+        Viewable.cast(actionsShown).onChange(From.ALL, _ -> {
+            GeniesState now = state.get();
+            if (now.page() == GeniesState.Page.ACTIONS && now.find(now.selected()).isPresent())
+                readHome(now.selected(), Tuple.of(String.class));
+        });
     }
 
     /// The app as it is on the shelf, without a window. See [Genies#open].
@@ -143,7 +163,7 @@ public final class GeniesBackend implements Genies {
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
         GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
-                                shelf, lighter, ollama);
+                                shelf, lighter, ollama, GenieHomeUtil.documents(environment));
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
         // whether it may reach this computer, which its card says. A genie left running when
@@ -286,6 +306,51 @@ public final class GeniesBackend implements Genies {
     @Override public void giveFile(UUID id, Path file) { runner(id).giveFile(file); }
 
     @Override public void saveOutboxFile(UUID id, String name, Path target) { runner(id).saveOutboxFile(name, target); }
+
+    // ─── the home ──────────────────────────────────────────────────────────────────────────
+
+    /// A folder deleted since it was shown leaves the tree as it was, until its parent is read again.
+    @Override public void readHome(UUID id, Tuple<String> folder) {
+        Path lamp = shelf.lampOf(id);
+        Thread.ofVirtual().name("read home").start(() -> {
+            Optional<Path> where = GenieHomeUtil.home(lamp);
+            Optional<Home.Folder> read = Optional.empty();
+            try {
+                if (where.isPresent()) read = Optional.of(GenieHomeUtil.read(where.get(), folder));
+            } catch (IOException gone) {
+                // Deleted, or made a link, since it was shown.
+            }
+            Optional<Home.Folder> fresh = read;
+            SwingUtilities.invokeLater(() -> state.update(it -> it.update(id, genie -> genie.withHome(
+                    fresh.map(found -> genie.home().withRead(where, folder, found))
+                         .orElseGet(() -> genie.home().read() && genie.home().where().equals(where) ? genie.home() : Home.at(where))))));
+        });
+    }
+
+    @Override public Optional<Path> folderOf(UUID id, Tuple<String> folder) {
+        return GenieHomeUtil.home(shelf.lampOf(id)).flatMap(home -> GenieHomeUtil.folder(home, folder));
+    }
+
+    @Override public Home.Link link(UUID id, Tuple<String> folder, Path into, String name) throws IOException {
+        String genie = state.get().find(id).map(Genie::name).orElse("The genie");
+        Path home = GenieHomeUtil.home(shelf.lampOf(id))
+                .orElseThrow(() -> new IOException(genie + " has no home yet. It gets one as it first wakes."));
+        Path target = GenieHomeUtil.folder(home, folder)
+                .orElseThrow(() -> new IOException(genie + "'s home has no folder " + String.join("/", folder) + "."));
+        return GenieHomeUtil.link(target, into, name);
+    }
+
+    @Override public void showInFileManager(UUID id, Tuple<String> folder) {
+        folderOf(id, folder).ifPresent(shown -> Thread.ofVirtual().name("show in file manager").start(() -> {
+            try {
+                GenieHomeUtil.showInFileManager(shown);
+            } catch (IOException failed) {
+                report(new IOException("could not open " + shown + " in the file manager", failed));
+            }
+        }));
+    }
+
+    @Override public Path documents() { return documents; }
 
     // ─── the schedule ──────────────────────────────────────────────────────────────────────
 
