@@ -14,6 +14,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
@@ -87,6 +89,8 @@ final class History {
     static final String FIRST_BRANCH = "main";
     /// Where git keeps the branches, each a file named after its branch.
     private static final String HEADS = "refs/heads/";
+    /// What the last save found of each file, in the history: see [FileStats].
+    private static final String FILE_STATS = "file-stats";
     /// The longest name a branch can be given.
     static final int LONGEST_BRANCH_NAME = 64;
     /// How long a save waits for another save or restore of the same lamp to finish.
@@ -578,6 +582,8 @@ final class History {
         /// One line per path whose permissions are not what git restores by default, as
         /// `0600 agent-lamp-x/.ssh/id_ed25519` and a NUL byte, since a name may hold a newline.
         final StringBuilder modes = new StringBuilder();
+        /// What the last save found of each file, so that an unchanged one is not read again.
+        FileStats stats = FileStats.none();
     }
 
     private Saving saveUnlocked(LampSaveKind kind, String message, Optional<SessionId> session, Instant now)
@@ -608,9 +614,18 @@ final class History {
         Tuple<GitObjectUtil.Entry> top = Tuple.of(GitObjectUtil.Entry.class);
         Path agent = layout.agentDir();
         String agentName = fileName(agent);
+        tally.stats = readFileStats();
         if (Files.isDirectory(agent, LinkOption.NOFOLLOW_LINKS))
             top = top.add(new GitObjectUtil.Entry(agentName, GitObjectUtil.EntryMode.DIRECTORY,
                     storeDirectory(agent, agentName, tally)));
+        // Only a save keeps them: without one, the blobs they name may not be stored.
+        if (tally.write) {
+            try {
+                FilesystemUtil.writeBytes(repository.resolve(FILE_STATS), tally.stats.written(), PosixMode.PRIVATE_FILE);
+            } catch (IOException notKept) {
+                // The next save reads every file again, as without them.
+            }
+        }
         if (Files.isRegularFile(layout.config(), LinkOption.NOFOLLOW_LINKS))
             top = top.add(new GitObjectUtil.Entry(CONFIG_FILE, GitObjectUtil.EntryMode.FILE,
                     storeSmall("blob", Files.readAllBytes(layout.config()), tally.write)));
@@ -657,7 +672,7 @@ final class History {
                             storeDirectory(child, path, tally)));
                     if (permissions != 0755) tally.modes.append(octal(permissions)).append(' ').append(path).append('\0');
                 } else if (attributes.isRegularFile()) {
-                    Optional<String> blob = storeFile(child, attributes.size(), tally.write);
+                    Optional<String> blob = storeFile(child, path, attributes, tally);
                     if (blob.isEmpty()) {
                         tally.skipped = tally.skipped.add(path + " (kept changing while it was read)");
                         continue;
@@ -678,11 +693,59 @@ final class History {
         return storeSmall("tree", GitObjectUtil.tree(entries), tally.write);
     }
 
+    /// Stores the file at `path`, and returns the name of its blob, without reading it when its
+    /// stat is as the last save found it. Empty when the file kept changing while it was read,
+    /// three times in a row.
+    private Optional<String> storeFile(Path file, String path, PosixFileAttributes attributes, Tally tally) throws IOException {
+        Optional<FileStats.Stat> stat = statOf(file, attributes);
+        Optional<String> known = stat.flatMap(it -> tally.stats.blob(path, it));
+        Optional<String> blob = known.isPresent() ? known : storeContent(file, attributes.size(), tally.write);
+        if (blob.isPresent() && stat.isPresent()) tally.stats.stored(path, stat.get(), blob.get());
+        return blob;
+    }
+
+    /// What the last save found of each file, for a save that begins now. When it began is read
+    /// from the clock of the filesystem the history is on, which is where the files' times come
+    /// from: a file is made in it, and removed again. None, when the last save left none that
+    /// can be read.
+    private FileStats readFileStats() throws IOException {
+        Path marker = Files.createTempFile(repository.resolve("objects"), "began-", ".tmp");
+        long began;
+        try {
+            began = Files.getLastModifiedTime(marker).to(TimeUnit.NANOSECONDS);
+        } finally {
+            Files.deleteIfExists(marker);
+        }
+        byte[] written;
+        try {
+            written = Files.readAllBytes(repository.resolve(FILE_STATS));
+        } catch (IOException missingOrUnreadable) {
+            return FileStats.none();
+        }
+        return FileStats.of(written, began);
+    }
+
+    /// The stat of `file`, whose `attributes` were just read. Empty when the filesystem does not
+    /// say when its inode changed, or which one it is.
+    private static Optional<FileStats.Stat> statOf(Path file, PosixFileAttributes attributes) throws IOException {
+        Map<String, Object> unix;
+        try {
+            unix = Files.readAttributes(file, "unix:ctime,ino,dev", LinkOption.NOFOLLOW_LINKS);
+        } catch (UnsupportedOperationException | IllegalArgumentException noUnixView) {
+            return Optional.empty();
+        }
+        if (!(unix.get("ctime") instanceof FileTime ctime) || !(unix.get("ino") instanceof Long inode)
+                || !(unix.get("dev") instanceof Long device))
+            return Optional.empty();
+        return Optional.of(new FileStats.Stat(attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS),
+                ctime.to(TimeUnit.NANOSECONDS), inode, device));
+    }
+
     /// Stores one file's content, and returns the name of its blob. Empty when the file kept
     /// changing while it was read, three times in a row.
     ///
     /// @param write whether to store it; without, it is only named
-    private Optional<String> storeFile(Path file, long size, boolean write) throws IOException {
+    private Optional<String> storeContent(Path file, long size, boolean write) throws IOException {
         if (size <= SMALL_FILE) {
             byte[] content = Files.readAllBytes(file);
             return Optional.of(storeSmall("blob", content, write));
@@ -1454,6 +1517,16 @@ final class History {
             try {
                 if (!boundaries.equals(shallow()))
                     durableWrite(repository.resolve("shallow"), boundaries.isEmpty() ? "" : String.join("\n", boundaries) + "\n");
+                // A save takes the blob of an unchanged file without looking for it, so the file
+                // stats forget the blobs about to go first. Should that fail, none goes.
+                Set<String> blobs = new HashSet<>();
+                for (Path object : doomed.keySet())
+                    blobs.add(repository.resolve("objects").relativize(object).toString().replace("/", ""));
+                Path stats = repository.resolve(FILE_STATS);
+                if (Files.exists(stats)) {
+                    Optional<byte[]> remaining = FileStats.without(Files.readAllBytes(stats), blobs);
+                    if (remaining.isPresent()) FilesystemUtil.writeBytes(stats, remaining.get(), PosixMode.PRIVATE_FILE);
+                }
                 for (var object : doomed.entrySet()) {
                     try {
                         if (Files.deleteIfExists(object.getKey())) actualFreed += object.getValue();

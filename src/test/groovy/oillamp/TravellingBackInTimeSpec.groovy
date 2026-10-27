@@ -222,6 +222,49 @@ class TravellingBackInTimeSpec extends Specification {
             bareSnapshot.message() == '--'
     }
 
+    def 'Oillamp saves a file whose content changed although its size and time of modification are as they were'() {
+        reportInfo """
+            Let's consider an agent directory of many gigabytes, of which a run changes a few files.
+            Reading all of it for every save would take minutes, so a save remembers, in
+            `.oillamp/history/file-stats`, each file's size, time of modification, inode and the
+            time its inode last changed, and the next save takes the stored content of a file whose
+            four are unchanged, without reading it. It remembers only files that last changed
+            seconds before it began, so that a change in the same tick of the filesystem's clock
+            always gives a file another time.
+
+            `cp -p`, `rsync -t` and `tar` set a file's time of modification back to the one it had,
+            and a file of fixed length, such as a database page, keeps its size. In the rare case of
+            both, only the time the inode last changed tells the file apart, which no program can set
+            back. Here a file of four bytes settles, is saved, gets four other bytes with its old
+            time of modification, and is saved again: the second `oillamp history <dir> save` makes a
+            snapshot, and `oillamp history <dir> restore` of it brings the new bytes back.
+        """
+        given: 'a file that last changed several seconds before it was saved'
+            var lamp = aLampThatHasRun()
+            var data = home(lamp).resolve('workspace/data.bin')
+            Files.writeString(data, 'aaaa')
+            var modified = Files.getLastModifiedTime(data)
+            Thread.sleep(4_000)
+            assert host.oillamp.run('history', lamp.toString(), 'save', '-m', 'first').succeeded()
+
+        when: 'its content changes, with its size and its time of modification as they were, and it is saved again'
+            Files.writeString(data, 'bbbb')
+            Files.setLastModifiedTime(data, modified)
+            var second = host.oillamp.run('history', lamp.toString(), 'save', '-m', 'second')
+
+        then: 'the second save made a snapshot'
+            second.succeeded()
+            var made = second.events().find { it instanceof LampEvent.Saved }?.snapshot()
+            made?.message() == 'second'
+
+        when: 'the file changes once more, and the second snapshot is restored'
+            Files.writeString(data, 'cccc')
+            assert host.oillamp.run('history', lamp.toString(), 'restore', made.shortId()).succeeded()
+
+        then: 'it holds the bytes the second save found'
+            Files.readString(data) == 'bbbb'
+    }
+
     def 'Oillamp\'s `history <dir> restore` brings back exactly what was saved, and removes what came after'() {
         reportInfo """
             The whole point of a snapshot is that the agent's home comes back as it was: every

@@ -272,6 +272,19 @@ The paths come from `LampLayout`. Why it is laid out like this:
 
 ### The history
 
+**Unchanged files are not read again.** A save writes `history/file-stats`: for each file it
+stored, its size, time of modification, inode, device and the time its inode last changed
+(`unix:ctime`), with the blob it became, as git's index does. The next save takes that blob for a
+file whose five are the same, without reading the file, so a save of a large home costs a listing
+and a stat per file, and reading only what changed. A file is remembered only if both its times
+are more than `FileStats.SETTLED` (3 s) older than the save's start, which is read from the
+filesystem's own clock by making a file in `history/objects`; a change in the same tick of a
+coarse clock, or one that sets the time of modification back (`cp -p`, `tar`), still gives it
+another `ctime`. A save that only compares (a reset without `--yes`) reads the stats but does not
+write them, since the blobs it named are not stored. A prune's sweep has the stats forget the
+blobs it is about to delete before it deletes any, so a blob the stats name is always there. A
+missing or damaged file counts as empty: the save then reads everything.
+
 **Retention.** Every new commit applies `[history].max_growth_gb` (default 2, zero disables it).
 This is extra space beyond the compressed objects of the first snapshot, measured once in
 `history/initial-bytes`; adopting an existing history measures its oldest root snapshot. The
