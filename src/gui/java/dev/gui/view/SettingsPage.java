@@ -70,25 +70,41 @@ final class SettingsPage {
     private static final int PAGE_REFERENCE = 900;
     private static final int CARD_REFERENCE = 760;
     private static final int HALF_REFERENCE = 560;
-    private static final FlowCell CARD = AUTO_SPAN(it -> it.fill(true)
-            .verySmall(12).small(12).medium(12).large(10).veryLarge(8).oversize(8));
-    private static final FlowCell WHOLE = AUTO_SPAN(it -> it
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12));
-    private static final FlowCell HALF = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(6));
-    private static final FlowCell LABEL = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(4).oversize(3));
-    private static final FlowCell FIELD = AUTO_SPAN(it -> it
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(8).oversize(9));
+    private static final FlowCell CARD = AUTO_SPAN(it ->
+        it.fill(true)
+        .verySmall(12).small(12).medium(12).large(10).veryLarge(8).oversize(8)
+    );
+    private static final FlowCell WHOLE = AUTO_SPAN(it ->
+        it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
+    );
+    private static final FlowCell HALF = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(6)
+    );
+    private static final FlowCell LABEL = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(4).oversize(3)
+    );
+    private static final FlowCell FIELD = AUTO_SPAN(it ->
+        it.verySmall(12).small(12).medium(12).large(12).veryLarge(8).oversize(9)
+    );
 
     /// The card's heading: its title and what it is for, with the switch between the simple way
     /// and the advanced way in the top right corner of a wide card, under the words in a narrow one.
-    private static final Layout SWITCH_BESIDE = Layout.mig(LayoutConstraint.of("fill, ins 0, gap 24 0"),
-                LayoutConstraint.of("[grow][]"), LayoutConstraint.of(""))
-            .withChildConstraints(MigAddConstraint.of("growx, wmin 0, top"), MigAddConstraint.of("top, gaptop 4"));
-    private static final Layout SWITCH_UNDER = Layout.mig(LayoutConstraint.of("fill, wrap 1, ins 0, gap 0 12"),
-                LayoutConstraint.of("[grow]"), LayoutConstraint.of(""))
-            .withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""));
+    private static final Layout SWITCH_BESIDE =
+        Layout.mig(
+            LayoutConstraint.of("fill, ins 0, gap 24 0"),
+            LayoutConstraint.of("[grow][]"),
+            LayoutConstraint.of("")
+        )
+        .withChildConstraints(MigAddConstraint.of("growx, wmin 0, top"), MigAddConstraint.of("top, gaptop 4"));
+    private static final Layout SWITCH_UNDER =
+        Layout.mig(
+            LayoutConstraint.of("fill, wrap 1, ins 0, gap 0 12"),
+            LayoutConstraint.of("[grow]"),
+            LayoutConstraint.of("")
+        )
+        .withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""));
 
     /*
      *  The welcome on a grid of its own, its words and the room for its picture:
@@ -107,13 +123,17 @@ final class SettingsPage {
     /// width: as much larger as it is wider.
     private static final double MOST_LARGER = 1.35;
     private static final int BESIDE_SPAN = 5;
-    private static final FlowCell WORDS = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.CENTER)
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(12 - BESIDE_SPAN).oversize(12 - BESIDE_SPAN));
-    private static final FlowCell BESIDE = AUTO_SPAN(it -> it
-            .verySmall(12).small(12).medium(12).large(12).veryLarge(BESIDE_SPAN).oversize(BESIDE_SPAN));
+    private static final FlowCell WORDS = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.CENTER)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12 - BESIDE_SPAN).oversize(12 - BESIDE_SPAN)
+    );
+    private static final FlowCell BESIDE = AUTO_SPAN(it ->
+        it.verySmall(12).small(12).medium(12).large(12).veryLarge(BESIDE_SPAN).oversize(BESIDE_SPAN)
+    );
 
-    private static final String KEY_STAYS_HERE = "The key stays on this computer. Genies never see it: oillamp adds it to "
-            + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.";
+    private static final String KEY_STAYS_HERE =
+        "The key stays on this computer. Genies never see it: oillamp adds it to "
+        + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.";
 
     /// When the welcome's words fade in, and how long they take, in seconds of its play.
     private static final double WORDS_FROM = 7.4;
@@ -159,8 +179,10 @@ final class SettingsPage {
         Var<OllamaSetup> ollama = state.zoomTo(GeniesState::ollama, GeniesState::withOllama);
         Var<String> wanted = ollama.zoomTo(OllamaSetup::wanted, OllamaSetup::withWanted);
         // Only what the service now named offered; after the place or address changed, nothing.
-        Val<Tuple<String>> offered = state.viewAs(Tuple.classTyped(String.class),
-                it -> it.lookUp().isFor(it.settings()) ? it.lookUp().models() : Tuple.of(String.class));
+        Val<Tuple<String>> offered = state.viewAs(
+            Tuple.classTyped(String.class),
+            it -> it.lookUp().isFor(it.settings()) ? it.lookUp().models() : Tuple.of(String.class)
+        );
         Val<String> lookUpNote = state.viewAsString(it -> it.lookUp().isFor(it.settings()) ? it.lookUp().note() : "");
         Val<Boolean> simple = advanced.viewAs(Boolean.class, it -> !it);
         Val<Boolean> isEdenAi = state.viewAs(Boolean.class, it -> it.advanced() && it.settings().place() == Settings.Place.EDEN_AI);
@@ -206,7 +228,8 @@ final class SettingsPage {
                 .withMinSize(0, 0).withPrefSize(PAGE_REFERENCE, 0)
                 // The welcome's light, on the whole page behind it, so that only the window's
                 // edges cut it off.
-                .withStyle(clock, (at, it) -> it.backgroundColor(Palette.TRANSPARENT).padding(0, 16, 0, 16)
+                .withStyle(clock, (at, it) ->
+                    it.backgroundColor(Palette.TRANSPARENT).padding(0, 16, 0, 16)
                     .painter(UI.Layer.BACKGROUND, g -> {
                         JComponent shown = welcomeBox.get();
                         if (shown == null || !shown.isVisible()) return;
@@ -214,7 +237,8 @@ final class SettingsPage {
                         g.scale(1 / UI.scale(), 1 / UI.scale());
                         g.translate(shown.getX() + asideBy(shown.getWidth(), aside.get()), shown.getY());
                         WelcomeScene.light(g, shown.getWidth(), UI.scale(PICTURE_HEIGHT), UI.scale(cut.get()), scene.get(), at);
-                    }))
+                    })
+                )
                 .add(CARD, welcome(state, clock, scene, cut, fit, aside, welcomeBox, welcome))
                 .add(CARD,
                     panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 12).group(Skin.CARD)
@@ -222,24 +246,41 @@ final class SettingsPage {
                     // Split where the grid puts the halves side by side: past its reference width.
                     .onResize(it -> split.set(it.getComponent().getWidth() > UI.scale(CARD_REFERENCE)))
                     // Without genies, the card comes after the welcome has had its moment.
-                    .isVisibleIf(Viewable.of(Boolean.class, welcome, clock, (first, at) -> !first || at >= (fit.get().wide() ? CARD_BESIDE_AT : CARD_AT)))
+                    .isVisibleIf(
+                        Viewable.of(Boolean.class, welcome, clock, (first, at) ->
+                            !first || at >= (fit.get().wide() ? CARD_BESIDE_AT : CARD_AT)
+                        )
+                    )
                     .add(WHOLE,
                         box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
                         .add(
                             box("fill, wrap 1, ins 0, gap 12")
                             .add("growx, wmin 0", label(welcome.viewAsString(it -> it ? "Your genies' model" : "Settings")).group(Skin.EMPTY_TITLE))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(advanced.viewAsString(it -> it
-                                    ? "Where your genies' model runs, and how they reach it."
-                                    : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."),
-                                    SUBTEXT, Val.of(true)))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, SUBTEXT, anyAwake)))
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    advanced.viewAsString(it -> it
+                                        ? "Where your genies' model runs, and how they reach it."
+                                        : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."
+                                    ),
+                                    SUBTEXT,
+                                    Val.of(true)
+                                )
+                            )
+                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, SUBTEXT, anyAwake))
+                        )
                         .add(
                             box("ins 0, hidemode 3")
-                            .add(ViewPartsUtil.link("Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
-                                 .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
-                                 .onClick(_ -> advanced.set(From.VIEW, true)))
-                            .add(ViewPartsUtil.link("‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
-                                 .onClick(_ -> advanced.set(From.VIEW, false)))))
+                            .add(
+                                ViewPartsUtil.link("Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
+                                .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
+                                .onClick(_ -> advanced.set(From.VIEW, true))
+                            )
+                            .add(
+                                ViewPartsUtil.link("‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
+                                .onClick(_ -> advanced.set(From.VIEW, false))
+                            )
+                        )
+                    )
 
                     // ── the simple way: Ollama, set up by Genies ──
                     // What this computer has in one half, the model and setting it up in the other.
@@ -247,46 +288,99 @@ final class SettingsPage {
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(simple)
                         .add(LABEL, label("This computer"))
-                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(it -> it.step() == OllamaSetup.Step.LOOKING
-                                ? "Genies is looking what this computer has…" : it.found().hardware().words()), TEXT, Val.of(true)))
+                        .add(FIELD,
+                            ViewPartsUtil.wrapped(
+                                ollama.viewAsString(it ->
+                                    it.step() == OllamaSetup.Step.LOOKING
+                                        ? "Genies is looking what this computer has…"
+                                        : it.found().hardware().words()
+                                ),
+                                TEXT,
+                                Val.of(true)
+                            )
+                        )
                         .add(LABEL, label("Ollama"))
-                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::words), TEXT, Val.of(true))))
+                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::words), TEXT, Val.of(true)))
+                    )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(simple)
                         .add(LABEL, label("Model"))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4, hidemode 3")
-                            .add("growx, wmin 0", comboBox(wanted, ollama.viewAs(Tuple.classTyped(String.class), OllamaSetup::offered))
-                                 .isEditableIf(true).isEnabledIf(busy.viewAs(Boolean.class, it -> !it)))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(it -> it.found().hardware().words(it.wanted())), TEXT,
-                                 ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())))
-                            .add("growx, wmin 0", ViewPartsUtil.note("Genies suggests the best model this computer runs well. Any other "
-                                    + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.", Val.of(true))))
+                            .add("growx, wmin 0",
+                                comboBox(wanted, ollama.viewAs(Tuple.classTyped(String.class), OllamaSetup::offered))
+                                .isEditableIf(true).isEnabledIf(busy.viewAs(Boolean.class, it -> !it))
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    ollama.viewAsString(it -> it.found().hardware().words(it.wanted())),
+                                    TEXT,
+                                    ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())
+                                )
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.note(
+                                    "Genies suggests the best model this computer runs well. Any other "
+                                    + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.",
+                                    Val.of(true)
+                                )
+                            )
+                        )
                         .add(LABEL, label(""))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6, hidemode 3")
-                            .add(button(ollama.viewAsString(OllamaSetup::todo)).group(Skin.FLAME_BUTTON)
-                                 .isVisibleIf(state.viewAs(Boolean.class, it -> !it.ollama().step().isBusy() && it.ollama().step() != OllamaSetup.Step.LOOKING
-                                                                             && !it.ollama().inUse(it.settings()) && !it.ollama().wanted().isBlank()))
-                                 .onClick(_ -> app.setUpOllama()))
-                            .add("growx, wmin 0", label(ollama.viewAsString(it -> "✓  Your genies use " + it.wanted().strip() + "."))
-                                 .group(Skin.FINE).isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working)))
+                            .add(
+                                button(ollama.viewAsString(OllamaSetup::todo)).group(Skin.FLAME_BUTTON)
+                                .isVisibleIf(state.viewAs(Boolean.class, it ->
+                                    !it.ollama().step().isBusy() &&
+                                    it.ollama().step() != OllamaSetup.Step.LOOKING &&
+                                    !it.ollama().inUse(it.settings()) &&
+                                    !it.ollama().wanted().isBlank()
+                                ))
+                                .onClick(_ -> app.setUpOllama())
+                            )
+                            .add("growx, wmin 0",
+                                label(ollama.viewAsString(it -> "✓  Your genies use " + it.wanted().strip() + "."))
+                                .group(Skin.FINE)
+                                .isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working))
+                            )
                             .add("growx, wmin 0",
                                 box("fill, ins 0, gap 10", "[grow][]").isVisibleIf(busy)
                                 .add("growx, wmin 60, h 6!", progress(ollama.viewAs(Double.class, OllamaSetup::progress)))
-                                .add(button("Stop").group(Skin.QUIET_BUTTON)
-                                     .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
-                                     .onClick(_ -> app.stopSettingUp())))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
-                                 SUBTEXT, ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::says),
-                                 TROUBLE, ollama.viewAs(Boolean.class, it -> it.step() == OllamaSetup.Step.FAILED)))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(settings.viewAsString(it -> "Until then, your genies use " + switch (it.place()) {
-                                     case EDEN_AI -> "Eden AI.";
-                                     case ELSEWHERE -> "the model server at " + it.elsewhere().address().strip() + ".";
-                                     case THIS_MACHINE -> "the model server at " + it.local().address().strip() + ".";
-                                 }), SUBTEXT, state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())))))
+                                .add(
+                                    button("Stop").group(Skin.QUIET_BUTTON)
+                                    .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
+                                    .onClick(_ -> app.stopSettingUp())
+                                )
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    ollama.viewAsString(OllamaSetup::says),
+                                    SUBTEXT,
+                                    ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())
+                                )
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    ollama.viewAsString(OllamaSetup::says),
+                                    TROUBLE,
+                                    ollama.viewAs(Boolean.class, it -> it.step() == OllamaSetup.Step.FAILED)
+                                )
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    settings.viewAsString(it -> "Until then, your genies use " + switch (it.place()) {
+                                        case EDEN_AI -> "Eden AI.";
+                                        case ELSEWHERE -> "the model server at " + it.elsewhere().address().strip() + ".";
+                                        case THIS_MACHINE -> "the model server at " + it.local().address().strip() + ".";
+                                    }),
+                                    SUBTEXT,
+                                    state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())
+                                )
+                            )
+                        )
+                    )
 
                     // ── the advanced way: where the model runs in one half, how to reach it in the other ──
                     .add(HALF,
@@ -298,15 +392,27 @@ final class SettingsPage {
                             .add("wmin 0", radioButton("at Eden AI", Settings.Place.EDEN_AI, place))
                             .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note("In the EU, with your Eden AI key.", Val.of(true)))
                             .add("wmin 0", radioButton("on a server elsewhere", Settings.Place.ELSEWHERE, place))
-                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note("A model server of your own on another machine, "
-                                    + "such as Ollama behind a proxy that asks for a key.", Val.of(true)))
+                            .add("growx, wmin 0, gapleft 24",
+                                ViewPartsUtil.note(
+                                    "A model server of your own on another machine, "
+                                    + "such as Ollama behind a proxy that asks for a key.",
+                                    Val.of(true)
+                                )
+                            )
                             .add("wmin 0", radioButton("on this computer", Settings.Place.THIS_MACHINE, place))
-                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note("A model server such as Ollama, LM Studio or llama.cpp.", Val.of(true)))))
+                            .add("growx, wmin 0, gapleft 24",
+                                ViewPartsUtil.note("A model server such as Ollama, LM Studio or llama.cpp.", Val.of(true))
+                            )
+                        )
+                    )
 
                     // One half above the other, a line across the card between them: below it are
                     // the settings of the place chosen above.
-                    .add(WHOLE, box().isVisibleIf(Viewable.of(Boolean.class, advanced, split, (shown, beside) -> shown && !beside))
-                                     .withStyle(it -> it.borderAt(UI.Edge.TOP, 1, Palette.BORDER)))
+                    .add(WHOLE,
+                        box()
+                        .isVisibleIf(Viewable.of(Boolean.class, advanced, split, (shown, beside) -> shown && !beside))
+                        .withStyle(it -> it.borderAt(UI.Edge.TOP, 1, Palette.BORDER))
+                    )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(advanced)
@@ -315,33 +421,55 @@ final class SettingsPage {
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6").isVisibleIf(isEdenAi)
                             .add("wmin 0", radioButton("Use " + Settings.KEY_VARIABLE, Settings.KeySource.ENVIRONMENT, source))
-                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note(found ? "Found where Genies was started."
-                                    : "Not set where Genies was started.", Val.of(true)))
+                            .add("growx, wmin 0, gapleft 24",
+                                ViewPartsUtil.note(
+                                    found ? "Found where Genies was started." : "Not set where Genies was started.",
+                                    Val.of(true)
+                                )
+                            )
                             .add("wmin 0", radioButton("Use this key:", Settings.KeySource.ENTERED, source))
-                            .add("growx, wmin 0", passwordField(edenKey).group(Skin.INPUT)
-                                 .isEnabledIf(source.viewAs(Boolean.class, it -> it == Settings.KeySource.ENTERED)))
-                            .add("growx, wmin 0", ViewPartsUtil.note(KEY_STAYS_HERE, Val.of(true))))
+                            .add("growx, wmin 0",
+                                passwordField(edenKey).group(Skin.INPUT)
+                                .isEnabledIf(source.viewAs(Boolean.class, it -> it == Settings.KeySource.ENTERED))
+                            )
+                            .add("growx, wmin 0", ViewPartsUtil.note(KEY_STAYS_HERE, Val.of(true)))
+                        )
 
                         // ── a model server elsewhere ──
                         .add(LABEL, label("Address").isVisibleIf(isElsewhere))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isElsewhere)
                             .add("growx, wmin 0", textField(remoteAddress).group(Skin.INPUT))
-                            .add("growx, wmin 0", ViewPartsUtil.note("Where the server's OpenAI-style API is, such as "
-                                    + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.", Val.of(true))))
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.note(
+                                    "Where the server's OpenAI-style API is, such as "
+                                    + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
+                                    Val.of(true)
+                                )
+                            )
+                        )
                         .add(LABEL, label("Key").isVisibleIf(isElsewhere))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isElsewhere)
                             .add("growx, wmin 0", passwordField(remoteKey).group(Skin.INPUT))
-                            .add("growx, wmin 0", ViewPartsUtil.note("Leave it empty if the server asks for none. " + KEY_STAYS_HERE, Val.of(true))))
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.note("Leave it empty if the server asks for none. " + KEY_STAYS_HERE, Val.of(true))
+                            )
+                        )
 
                         // ── a model server on this computer ──
                         .add(LABEL, label("Address").isVisibleIf(isLocal))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isLocal)
                             .add("growx, wmin 0", textField(localAddress).group(Skin.INPUT))
-                            .add("growx, wmin 0", ViewPartsUtil.note("Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
-                                    + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.", Val.of(true))))
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.note(
+                                    "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
+                                    + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.",
+                                    Val.of(true)
+                                )
+                            )
+                        )
 
                         // ── the model, wherever it runs ──
                         .add(LABEL, label("Model"))
@@ -350,34 +478,69 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 box("fill, ins 0, gap 8", "[grow][]")
                                 .add("growx, wmin 0", comboBox(model, offered).isEditableIf(true))
-                                .add(button("Look up").group(Skin.QUIET_BUTTON)
-                                     .withTooltip("Ask the service which models it offers")
-                                     .onClick(_ -> app.lookUpModels())))
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(lookUpNote, Palette.SUBTEXT,
-                                 lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())))))
+                                .add(
+                                    button("Look up").group(Skin.QUIET_BUTTON)
+                                    .withTooltip("Ask the service which models it offers")
+                                    .onClick(_ -> app.lookUpModels())
+                                )
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    lookUpNote,
+                                    Palette.SUBTEXT,
+                                    lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())
+                                )
+                            )
+                        )
+                    )
 
-                    .add(WHOLE, label("Changes take effect when a genie wakes.").group(Skin.META).isVisibleIf(welcome.viewAs(Boolean.class, it -> !it)))
+                    .add(WHOLE,
+                        label("Changes take effect when a genie wakes.").group(Skin.META)
+                        .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
+                    )
                     .add(WHOLE, ViewPartsUtil.wrapped(problem, Palette.TROUBLE, hasProblem))
                     .add(WHOLE, label("✓  Your genies can reach their model.").group(Skin.FINE).isVisibleIf(fine))
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")
-                        .add(button("Done").group(Skin.FLAME_BUTTON).isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
-                             .onClick(_ -> app.settingsDone()))
-                        .add(button("+  Your first genie").group(Skin.FLAME_BUTTON)
-                             .withTooltip("A genie, with a sandboxed desktop of its own, that wakes at once")
-                             .isVisibleIf(state.viewAs(Boolean.class, it -> !it.hasGenies() && it.settingsProblem().isEmpty() && !it.ollama().step().isBusy()))
-                             .onClick(_ -> app.newGenie())))));
+                        .add(
+                            button("Done").group(Skin.FLAME_BUTTON)
+                            .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
+                            .onClick(_ -> app.settingsDone())
+                        )
+                        .add(
+                            button("+  Your first genie").group(Skin.FLAME_BUTTON)
+                            .withTooltip("A genie, with a sandboxed desktop of its own, that wakes at once")
+                            .isVisibleIf(state.viewAs(Boolean.class, it ->
+                                !it.hasGenies() &&
+                                it.settingsProblem().isEmpty() &&
+                                !it.ollama().step().isBusy()
+                            ))
+                            .onClick(_ -> app.newGenie())
+                        )
+                    )
+                )
+            );
     }
 
     /// The welcome, above the settings while there are no genies: its picture, and its words. In
     /// a wide welcome, the genie moves aside once it has taken form, and the words fade in on its
     /// left; in a narrow one, they fade in below it.
-    private static UIForAnySwing<?, ?> welcome(Var<GeniesState> state, Val<Double> clock, Var<WelcomeScene.Play> scene, Var<Integer> cut,
-                                               Var<Fit> fit, Val<Double> aside, AtomicReference<JComponent> welcomeBox, Val<Boolean> welcome) {
-        Val<String> foundKey = state.viewAsString(it -> it.environmentKey().isPresent() && it.settings().place() == Settings.Place.EDEN_AI
+    private static UIForAnySwing<?, ?> welcome(
+        final Var<GeniesState> state,
+        final Val<Double> clock,
+        final Var<WelcomeScene.Play> scene,
+        final Var<Integer> cut,
+        final Var<Fit> fit,
+        final Val<Double> aside,
+        final AtomicReference<JComponent> welcomeBox,
+        final Val<Boolean> welcome
+    ) {
+        Val<String> foundKey = state.viewAsString(it ->
+            it.environmentKey().isPresent() && it.settings().place() == Settings.Place.EDEN_AI
                 ? "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
                   + "Or have Genies set up a model on this computer instead: the simple way, below."
-                : "To think, genies need a model. Genies can set one up for you, right here on this computer.");
+                : "To think, genies need a model. Genies can set one up for you, right here on this computer."
+        );
         Val<Integer> room = cut.viewAs(Integer.class, it -> PICTURE_HEIGHT - it);
         return
             panel().withFlowLayout(UI.HorizontalAlignment.CENTER, 0, 12)
@@ -389,8 +552,10 @@ final class SettingsPage {
                 cut.set((int) Math.round(PICTURE_CUT * Math.max(0, Math.min(1, narrowed))));
                 // Wide where the grid puts the words beside the picture: from four fifths of its
                 // reference width on.
-                fit.set(new Fit(5 * width >= 4 * UI.scale(WELCOME_REFERENCE),
-                                Math.max(1, Math.min(MOST_LARGER, UI.unscale(width) / (double) WELCOME_REFERENCE))));
+                fit.set(new Fit(
+                    5 * width >= 4 * UI.scale(WELCOME_REFERENCE),
+                    Math.max(1, Math.min(MOST_LARGER, UI.unscale(width) / (double) WELCOME_REFERENCE))
+                ));
             })
             // Painted whole, its cut top above the welcome, and as far aside as it has moved.
             .withStyle(clock, (at, it) -> {
@@ -406,25 +571,56 @@ final class SettingsPage {
             // poof, and another genie comes.
             .onMouseMove(it -> {
                 int width = it.getComponent().getWidth();
-                it.getComponent().setCursor(Cursor.getPredefinedCursor(scene.get().formed(clock.get())
-                        && WelcomeScene.hits(width, UI.scale(PICTURE_HEIGHT), it.mouseX() - asideBy(width, aside.get()), it.mouseY() + UI.scale(cut.get()))
-                        ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+                boolean onGenie =
+                    scene.get().formed(clock.get()) &&
+                    WelcomeScene.hits(
+                        width, UI.scale(PICTURE_HEIGHT),
+                        it.mouseX() - asideBy(width, aside.get()),
+                        it.mouseY() + UI.scale(cut.get())
+                    );
+                it.getComponent().setCursor(Cursor.getPredefinedCursor(onGenie ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
             })
             .onMouseClick(it -> {
                 int width = it.getComponent().getWidth();
-                if (scene.get().formed(clock.get())
-                        && WelcomeScene.hits(width, UI.scale(PICTURE_HEIGHT), it.mouseX() - asideBy(width, aside.get()), it.mouseY() + UI.scale(cut.get())))
+                if (
+                    scene.get().formed(clock.get()) &&
+                    WelcomeScene.hits(
+                        width, UI.scale(PICTURE_HEIGHT),
+                        it.mouseX() - asideBy(width, aside.get()),
+                        it.mouseY() + UI.scale(cut.get())
+                    )
+                )
                     scene.set(scene.get().poof(clock.get()));
             })
             // The room for the picture: above the words in a narrow welcome, beside them in a wide one.
-            .add(WHOLE, box().withMinSize(0, 0).withHeightExactly(room).isVisibleIf(fit.viewAs(Boolean.class, it -> !it.wide())))
+            .add(WHOLE,
+                box().withMinSize(0, 0)
+                .withHeightExactly(room)
+                .isVisibleIf(fit.viewAs(Boolean.class, it -> !it.wide()))
+            )
             .add(WORDS,
                 box("wrap 1, ins 0, gap 12", "[grow, fill]").withMinSize(0, 0)
                 .add("growx, wmin 0", fading(Val.of("Welcome to Genies"), 22, TEXT, clock, fit, aside))
-                .add("growx, wmin 0", fading(Val.of("A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
-                        + "where it can browse the web, run programs and make files, without ever touching yours."), 14, SUBTEXT, clock, fit, aside))
-                .add("growx, wmin 0", fading(foundKey, 14, SUBTEXT, clock, fit, aside)))
-            .add(BESIDE, box().withMinSize(0, 0).withHeightExactly(room).isVisibleIf(fit.viewAs(Boolean.class, Fit::wide)));
+                .add("growx, wmin 0",
+                    fading(
+                        Val.of(
+                            "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
+                            + "where it can browse the web, run programs and make files, without ever touching yours."
+                        ),
+                        14,
+                        SUBTEXT,
+                        clock,
+                        fit,
+                        aside
+                    )
+                )
+                .add("growx, wmin 0", fading(foundKey, 14, SUBTEXT, clock, fit, aside))
+            )
+            .add(BESIDE,
+                box().withMinSize(0, 0)
+                .withHeightExactly(room)
+                .isVisibleIf(fit.viewAs(Boolean.class, Fit::wide))
+            );
     }
 
     /// How many pixels the welcome's picture is right of the middle of a welcome `width` pixels
@@ -437,16 +633,36 @@ final class SettingsPage {
     /// Lines of `text`, `size` units large in a welcome no wider than its reference width, that
     /// fade in with the welcome's words, wrapped to their width: centred below the picture, or
     /// left-aligned beside it once it has moved aside.
-    private static UIForAnySwing<?, ?> fading(Val<String> text, int size, Color colour, Val<Double> clock, Val<Fit> fit, Val<Double> aside) {
+    private static UIForAnySwing<?, ?> fading(
+        final Val<String> text,
+        final int size,
+        final Color colour,
+        final Val<Double> clock,
+        final Val<Fit> fit,
+        final Val<Double> aside
+    ) {
         return
             box().withMinSize(0, 0)
-            .withStyle(Viewable.of(Faded.class, text, clock, (words, at) -> Faded.of(words, at, fit.get(), aside.get())),
-                (faded, it) -> it.padding(2, 0, 2, 0).text(t -> t
-                    .content(StyledString.of(f -> f.family(FONT).size((int) Math.round(size * faded.fit().larger()))
-                                                   .color(ViewPartsUtil.withAlpha(colour, (int) Math.round(255 * faded.shown())))
-                                                   .horizontalAlignment(faded.fit().wide() ? UI.HorizontalAlignment.LEFT : UI.HorizontalAlignment.CENTER),
-                                             faded.words()))
-                    .placement(faded.fit().wide() ? UI.Placement.TOP_LEFT : UI.Placement.TOP).wrapLines(true).autoPreferredHeight(true)));
+            .withStyle(
+                Viewable.of(Faded.class, text, clock, (words, at) -> Faded.of(words, at, fit.get(), aside.get())),
+                (faded, it) ->
+                    it.padding(2, 0, 2, 0)
+                    .text(t ->
+                        t.content(
+                            StyledString.of(
+                                f ->
+                                    f.family(FONT)
+                                    .size((int) Math.round(size * faded.fit().larger()))
+                                    .color(ViewPartsUtil.withAlpha(colour, (int) Math.round(255 * faded.shown())))
+                                    .horizontalAlignment(faded.fit().wide() ? UI.HorizontalAlignment.LEFT : UI.HorizontalAlignment.CENTER),
+                                faded.words()
+                            )
+                        )
+                        .placement(faded.fit().wide() ? UI.Placement.TOP_LEFT : UI.Placement.TOP)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    )
+            );
     }
 
     /// How the welcome fits its width: whether its words stand beside its picture, and how many
@@ -460,8 +676,8 @@ final class SettingsPage {
         /// it to have moved most of the way aside, however late the welcome grew wide.
         static Faded of(String words, double at, Fit fit, double aside) {
             double shown = fit.wide()
-                    ? Math.min((at - WORDS_BESIDE_FROM) / WORDS_BESIDE_TAKE, 2 * aside - 1)
-                    : (at - WORDS_FROM) / WORDS_TAKE;
+                ? Math.min((at - WORDS_BESIDE_FROM) / WORDS_BESIDE_TAKE, 2 * aside - 1)
+                : (at - WORDS_FROM) / WORDS_TAKE;
             return new Faded(words, Math.max(0, Math.min(1, shown)), fit);
         }
     }
@@ -469,8 +685,15 @@ final class SettingsPage {
     /// Plays the welcome from its start, for as long as it is shown. Played again while it plays,
     /// it starts over on the same loop. Its picture moves aside, or back to the middle, as the
     /// welcome grows wide or narrow, at the same pace whenever it does.
-    private static void play(Var<Double> clock, Var<WelcomeScene.Play> scene, Val<Fit> fit, Var<Double> aside,
-                             Val<Boolean> welcome, AtomicLong began, AtomicBoolean playing) {
+    private static void play(
+        final Var<Double> clock,
+        final Var<WelcomeScene.Play> scene,
+        final Val<Fit> fit,
+        final Var<Double> aside,
+        final Val<Boolean> welcome,
+        final AtomicLong began,
+        final AtomicBoolean playing
+    ) {
         began.set(System.nanoTime());
         clock.set(0.0);
         aside.set(0.0);
@@ -480,7 +703,11 @@ final class SettingsPage {
             @Override public void run(AnimationStatus status) {
                 double now = (System.nanoTime() - began.get()) / 1e9;
                 double step = Math.max(0, now - clock.get()) / ASIDE_TAKES;
-                aside.set(fit.get().wide() && now >= ASIDE_FROM ? Math.min(1, aside.get() + step) : Math.max(0, aside.get() - step));
+                aside.set(
+                    fit.get().wide() && now >= ASIDE_FROM
+                        ? Math.min(1, aside.get() + step)
+                        : Math.max(0, aside.get() - step)
+                );
                 clock.set(now);
             }
             @Override public void finish(AnimationStatus status) { playing.set(false); }
@@ -494,11 +721,13 @@ final class SettingsPage {
             .withStyle(done, (part, it) -> {
                 int length = it.componentWidth();
                 int thickness = it.componentHeight();
-                return it.backgroundColor(RAISED).borderRadius(3)
-                         .painter(UI.Layer.CONTENT, g -> {
-                             g.setColor(FLAME);
-                             g.fill(new RoundRectangle2D.Float(0, 0, (float) (length * Math.max(0, Math.min(1, part))), thickness, thickness, thickness));
-                         });
+                return
+                    it.backgroundColor(RAISED).borderRadius(3)
+                    .painter(UI.Layer.CONTENT, g -> {
+                        g.setColor(FLAME);
+                        float filled = (float) (length * Math.max(0, Math.min(1, part)));
+                        g.fill(new RoundRectangle2D.Float(0, 0, filled, thickness, thickness, thickness));
+                    });
             });
     }
 }

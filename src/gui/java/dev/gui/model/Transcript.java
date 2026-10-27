@@ -56,22 +56,38 @@ public record Transcript(Tuple<Entry> entries) {
         return switch (event) {
             case PiEvent.Said said -> {
                 Transcript thought = doneThinking();
-                yield thought.answering()
-                        .map(answer -> thought.replace(answer.withText(answer.text() + said.text())))
-                        .orElseGet(() -> thought.add(answer(said.text())));
+                yield
+                    thought.answering()
+                    .map(answer -> thought.replace(answer.withText(answer.text() + said.text())))
+                    .orElseGet(() -> thought.add(answer(said.text())));
             }
-            case PiEvent.Thinking thinking -> thinking()
-                    .map(thought -> replace(thought.withText(thought.text() + thinking.more())))
-                    // A start with nothing in it yet shows nothing: many models only say they
-                    // think, and some say so in the middle of an answer.
-                    .orElseGet(() -> thinking.more().isEmpty() ? this
-                               : add(Entry.of(Entry.Kind.THINKING, thinking.more()).withState(Entry.State.WRITING)));
-            case PiEvent.ToolStarted tool -> doneThinking().withoutEmptyAnswers().beforeTools().add(Entry.of(Entry.Kind.TOOL, tool.summary())
-                    .withTitle(tool.tool()).withRef(tool.call()).withState(Entry.State.WRITING));
-            case PiEvent.ToolFinished tool -> toolCall(tool.call())
-                    .map(call -> replace(call.withDetail(tool.output())
-                            .withState(tool.failed() ? Entry.State.FAILED : Entry.State.DONE)))
-                    .orElse(this);
+            case PiEvent.Thinking thinking ->
+                thinking()
+                .map(thought -> replace(thought.withText(thought.text() + thinking.more())))
+                // A start with nothing in it yet shows nothing: many models only say they
+                // think, and some say so in the middle of an answer.
+                .orElseGet(() ->
+                    thinking.more().isEmpty()
+                        ? this
+                        : add(Entry.of(Entry.Kind.THINKING, thinking.more()).withState(Entry.State.WRITING))
+                );
+            case PiEvent.ToolStarted tool ->
+                doneThinking()
+                .withoutEmptyAnswers()
+                .beforeTools()
+                .add(
+                    Entry.of(Entry.Kind.TOOL, tool.summary())
+                    .withTitle(tool.tool())
+                    .withRef(tool.call())
+                    .withState(Entry.State.WRITING)
+                );
+            case PiEvent.ToolFinished tool ->
+                toolCall(tool.call())
+                .map(call -> replace(
+                    call.withDetail(tool.output())
+                    .withState(tool.failed() ? Entry.State.FAILED : Entry.State.DONE)
+                ))
+                .orElse(this);
             case PiEvent.Answered answered -> answered(answered);
             case PiEvent.Retrying retry -> {
                 // The failed answer before a retry said why already.
@@ -89,7 +105,8 @@ public record Transcript(Tuple<Entry> entries) {
     /// Everything still being written is done: the genie stopped, or its sandbox went away.
     public Transcript settled() {
         return new Transcript(doneThinking().withoutEmptyAnswers().entries.map(entry ->
-                entry.isWriting() ? entry.withState(Entry.State.DONE) : entry));
+            entry.isWriting() ? entry.withState(Entry.State.DONE) : entry
+        ));
     }
 
     public boolean isEmpty() { return entries.isEmpty(); }
@@ -127,9 +144,14 @@ public record Transcript(Tuple<Entry> entries) {
         Transcript said = shared == 0 ? empty() : new Transcript(entries.slice(0, mine.get(shared)));
         for (int i = shared == 0 ? 0 : theirs.get(shared); i < history.lines().size(); i++) {
             PiEvent.History.Line line = history.lines().get(i);
-            said = line.failed() ? said.failed(line.text(), line.model())
-                 : said.add(Entry.of(line.fromUser() ? Entry.Kind.YOU : Entry.Kind.GENIE, line.text())
-                                 .withRef(line.id()).withBeforeTools(line.usedTools()).withModel(line.model()));
+            said = line.failed()
+                ? said.failed(line.text(), line.model())
+                : said.add(
+                    Entry.of(line.fromUser() ? Entry.Kind.YOU : Entry.Kind.GENIE, line.text())
+                    .withRef(line.id())
+                    .withBeforeTools(line.usedTools())
+                    .withModel(line.model())
+                );
         }
         return said;
     }
@@ -144,8 +166,13 @@ public record Transcript(Tuple<Entry> entries) {
     /// Whether the chat already shows the conversation pi sent, question for question. It then
     /// shows more than pi sends, such as the tools used and the files handed over, and is kept.
     private boolean asksTheSame(PiEvent.History history) {
-        return questions().equals(history.lines().stream().filter(PiEvent.History.Line::fromUser)
-                .map(PiEvent.History.Line::text).map(String::strip).toList());
+        return questions().equals(
+            history.lines().stream()
+            .filter(PiEvent.History.Line::fromUser)
+            .map(PiEvent.History.Line::text)
+            .map(String::strip)
+            .toList()
+        );
     }
 
     /// pi's ids for the user's questions, which the chat learns after they were sent, so that
@@ -160,14 +187,22 @@ public record Transcript(Tuple<Entry> entries) {
     }
 
     private Transcript answered(PiEvent.Answered answered) {
-        Transcript result = doneThinking().answering()
-                .map(answer -> answered.text().isEmpty() ? doneThinking()
-                             : doneThinking().replace(answer.withText(answered.text()).withModel(answered.model())))
-                .orElseGet(() -> answered.text().isEmpty() ? doneThinking()
-                               : doneThinking().add(Entry.of(Entry.Kind.GENIE, answered.text()).withModel(answered.model())));
+        Transcript result =
+            doneThinking().answering()
+            .map(answer ->
+                answered.text().isEmpty()
+                    ? doneThinking()
+                    : doneThinking().replace(answer.withText(answered.text()).withModel(answered.model()))
+            )
+            .orElseGet(() ->
+                answered.text().isEmpty()
+                    ? doneThinking()
+                    : doneThinking().add(Entry.of(Entry.Kind.GENIE, answered.text()).withModel(answered.model()))
+            );
         result = result.withoutEmptyAnswers();
         result = new Transcript(result.entries.map(entry ->
-                entry.kind() == Entry.Kind.GENIE && entry.isWriting() ? entry.withState(Entry.State.DONE) : entry));
+            entry.kind() == Entry.Kind.GENIE && entry.isWriting() ? entry.withState(Entry.State.DONE) : entry
+        ));
         return answered.failed().isEmpty() ? result : result.failed(answered.failed(), answered.model());
     }
 
@@ -178,8 +213,8 @@ public record Transcript(Tuple<Entry> entries) {
     private Transcript failed(String error, String model) {
         String stripped = error.strip().toLowerCase(Locale.ROOT);
         return stripped.endsWith("aborted") || stripped.endsWith("aborted.")
-               ? notice("Stopped before the answer was done.")
-               : problem(explained(error, model));
+            ? notice("Stopped before the answer was done.")
+            : problem(explained(error, model));
     }
 
     /// Why the model could not answer, said plainly. `error` is what pi got: oillamp's answer
@@ -190,8 +225,9 @@ public record Transcript(Tuple<Entry> entries) {
         String raw = error.strip();
         Matcher unreachable = UNREACHABLE.matcher(raw);
         if (unreachable.matches())
-            return "oillamp could not reach the model service at " + unreachable.group(1) + " (" + unreachable.group(2).strip()
-                   + "), so the genie got no answer. The service, or this computer's way to it, is down; the genie is fine.";
+            return
+                "oillamp could not reach the model service at " + unreachable.group(1) + " (" + unreachable.group(2).strip()
+                + "), so the genie got no answer. The service, or this computer's way to it, is down; the genie is fine.";
         if (raw.equals("Connection error."))
             return "The connection to the model service broke off before an answer came, so the genie got none. The genie is fine.";
         Matcher status = STATUS.matcher(raw);
@@ -201,11 +237,12 @@ public record Transcript(Tuple<Entry> entries) {
             String said = status.group(2).strip();
             Matcher message = MESSAGE.matcher(said);
             if (message.find()) said = message.group(1).replace("\\\"", "\"").replace("\\\\", "\\");
-            String who = code == 401 || code == 403 ? "The model service refused the key"
-                       : code == 429 ? "The model service takes no more requests for now, or the key's credit ran out"
-                       : code >= 500 ? "The model service had trouble of its own"
-                       : model.isBlank() ? "The model service refused the request"
-                       : model.strip() + " refused the request";
+            String who =
+                code == 401 || code == 403 ? "The model service refused the key"
+                : code == 429 ? "The model service takes no more requests for now, or the key's credit ran out"
+                : code >= 500 ? "The model service had trouble of its own"
+                : model.isBlank() ? "The model service refused the request"
+                : model.strip() + " refused the request";
             // oillamp says plainly already what it refused.
             told = said.startsWith("oillamp:") ? said : who + " (" + code + "): " + said;
         }
@@ -249,10 +286,14 @@ public record Transcript(Tuple<Entry> entries) {
     /// The genie stopped thinking, because it began to answer or to use a tool. Thoughts it did
     /// not share leave nothing behind.
     private Transcript doneThinking() {
-        return thinking().map(thought -> thought.text().isBlank()
-                        ? new Transcript(entries.removeAt(entries.size() - 1))
-                        : replace(thought.withState(Entry.State.DONE)))
-                .orElse(this);
+        return
+            thinking()
+            .map(thought ->
+                thought.text().isBlank()
+                    ? new Transcript(entries.removeAt(entries.size() - 1))
+                    : replace(thought.withState(Entry.State.DONE))
+            )
+            .orElse(this);
     }
 
     private Optional<Entry> toolCall(String ref) {

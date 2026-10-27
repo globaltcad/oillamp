@@ -80,13 +80,13 @@ final class ChatRows {
     ///                    asked differently
     /// @param showLeaf    shows the conversation in the chat up to the entry of that id
     ChatRows(
-        Look look,
-        Val<Genie> genie,
-        Consumer<String> saveHandout,
-        Val<Double> pulse,
-        Consumer<Entry> askInstead,
-        Val<Boolean> waits,
-        Consumer<String> showLeaf
+        final Look look,
+        final Val<Genie> genie,
+        final Consumer<String> saveHandout,
+        final Val<Double> pulse,
+        final Consumer<Entry> askInstead,
+        final Val<Boolean> waits,
+        final Consumer<String> showLeaf
     ) {
         this.look = look;
         this.genie = genie;
@@ -104,7 +104,8 @@ final class ChatRows {
             panel("fill, ins 0", "[grow, center]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
             .add("growx, wmin 0, wmax " + COLUMN, body(entry))
-            .get(JPanel.class)));
+            .get(JPanel.class)
+        ));
     }
 
     private UIForAnySwing<?, ?> body(Var<Entry> entry) {
@@ -163,12 +164,14 @@ final class ChatRows {
     /// not switch then.
     private UIForAnySwing<?, ?> versions(Var<Entry> entry) {
         Val<Conversation.Versions> versions = Viewable.of(Conversation.Versions.class, genie, entry, (it, question) ->
-                it.conversations().current()
-                  .map(conversation -> conversation.versionsOf(question.ref()))
-                  .orElse(Conversation.Versions.NONE));
+            it.conversations().current()
+            .map(conversation -> conversation.versionsOf(question.ref()))
+            .orElse(Conversation.Versions.NONE)
+        );
         Val<Boolean> movable = genie.viewAs(Boolean.class, it ->
-                it.phase() != Genie.Phase.WAKING
-                && (it.phase() != Genie.Phase.WORKING || it.conversations().aside().isPresent()));
+            it.phase() != Genie.Phase.WAKING &&
+            (it.phase() != Genie.Phase.WORKING || it.conversations().aside().isPresent())
+        );
         Val<Boolean> hasEarlier = Viewable.of(Boolean.class, movable, versions, (on, it) -> on && it.at() > 0);
         Val<Boolean> hasLater = Viewable.of(Boolean.class, movable, versions, (on, it) -> on && it.at() < it.leaves().size() - 1);
         return
@@ -177,14 +180,17 @@ final class ChatRows {
             .add(
                 button("‹").group(Skin.ICON_BUTTON).isEnabledIf(hasEarlier)
                 .withTooltip("Previous conversation version")
-                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() - 1))))
+                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() - 1)))
+            )
             .add(
                 label(versions.viewAsString(it -> (it.at() + 1) + " / " + it.leaves().size()))
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))))
+                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT)))
+            )
             .add(
                 button("›").group(Skin.ICON_BUTTON).isEnabledIf(hasLater)
                 .withTooltip("Next conversation version")
-                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() + 1))));
+                .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() + 1)))
+            );
     }
 
     // ─── what the genie answered ───────────────────────────────────────────────────────────
@@ -198,21 +204,24 @@ final class ChatRows {
         Val<Boolean> copyable = entry.viewAs(Boolean.class, it -> !it.isWriting());
         Val<String> writtenBy = entry.viewAsString(Entry::writtenBy);
         UUID id = entry.get().id();
-        var entryMarkdown = entry
-                            .viewAsString(Entry::text)
-                            .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
+        var entryMarkdown =
+            entry.viewAsString(Entry::text)
+            .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
         return
             panel("fill, ins 10 0 10 0, gap 12, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(it -> it.backgroundColor(TRANSPARENT))
-            .add("top", picture(it -> answers(it, id) ? GenieSvgUtil.poseOf(it) : GenieSvgUtil.poseBeside(entry.get()),
-                                it -> answers(it, id)))
+            .add("top",
+                picture(
+                    it -> answers(it, id) ? GenieSvgUtil.poseOf(it) : GenieSvgUtil.poseBeside(entry.get()),
+                    it -> answers(it, id)
+                )
+            )
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 4, hidemode 3", "[grow]")
                 .add("growx, wmin 0",
                     box().withMinSize(0, 0)
                     // Restarts on every change: each new piece fades in from its arrival.
-                    .withStyle(entryMarkdown, FADE,
-                        (it, animation, style) -> style
+                    .withStyle(entryMarkdown, FADE, (it, animation, style) -> style
                         .padding(3, 0, 3, 0)
                         .text(t -> t
                             .content(MarkdownStylingUtil.of(it, animation.progress()))
@@ -238,7 +247,9 @@ final class ChatRows {
                     button("⧉  Copy").group(Skin.ICON_BUTTON).isVisibleIf(copyable)
                     .withTooltip("Copy the answer, as the genie wrote it")
                     .withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT)))
-                    .onClick(_ -> copy(entry.get().text()))));
+                    .onClick(_ -> copy(entry.get().text()))
+                )
+            );
     }
 
     // ─── what the genie thinks ─────────────────────────────────────────────────────────────
@@ -252,18 +263,30 @@ final class ChatRows {
             strip(
                 picture(_ -> GenieSvgUtil.Pose.THINKING, _ -> entry.get().isWriting()),
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
-                .add(label(entry.viewAsString(it -> it.isWriting() ? "✦ thinking" : "✦ thought")).withStyle(it -> it
-                    .componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS))))
+                .add(
+                    label(entry.viewAsString(it -> it.isWriting() ? "✦ thinking" : "✦ thought"))
+                    .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS)))
+                )
                 .add("growx, wmin 0, h 4!", progress(writing))
-                .add(label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸"))
-                    .withStyle(it -> it.componentFont(f -> f.size(12).color(SUBTEXT)))),
+                .add(
+                    label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸"))
+                    .withStyle(it -> it.componentFont(f -> f.size(12).color(SUBTEXT)))
+                ),
                 box().withMinSize(0, 0).isVisibleIf(expanded)
                 .withStyle(entry.viewAsString(Entry::text), (thoughts, it) -> it
                     .padding(6, 2, 2, 2)
                     .borderAt(UI.Edge.TOP, 1, BORDER)
-                    .text(t -> t.content(StyledString.of(f -> f.family(FONT).size(12).posture(0.14f).color(SUBTEXT), thoughts))
-                                .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
-            .withTooltip(entry.viewAsString(it -> it.expanded() ? "Click to fold the thoughts away" : "Click to see what the genie thinks"))
+                    .text(t -> t
+                        .content(StyledString.of(f -> f.family(FONT).size(12).posture(0.14f).color(SUBTEXT), thoughts))
+                        .placement(UI.Placement.TOP_LEFT)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    )
+                )
+            )
+            .withTooltip(entry.viewAsString(it ->
+                it.expanded() ? "Click to fold the thoughts away" : "Click to see what the genie thinks"
+            ))
             .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
 
@@ -282,18 +305,29 @@ final class ChatRows {
                     strip(
                         picture(GenieSvgUtil::poseOf, _ -> true),
                         box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
-                        .add("wmin 0", label(waiting.viewAsString(it -> "✦ " + it.what())).withStyle(it -> it
-                            .componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS))))
+                        .add("wmin 0",
+                            label(waiting.viewAsString(it -> "✦ " + it.what()))
+                            .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).weight(2f).color(BRASS)))
+                        )
                         .add("growx, wmin 60, h 4!", progress(Val.of(true)))
                         // As wide as "59:59", so the bar keeps its length while the digits change.
-                        .add("w 40!", label(waiting.viewAsString(Genie.Waiting::time))
-                             .withHorizontalAlignment(UI.HorizontalAlignment.RIGHT)
-                             .isVisibleIf(waiting.viewAs(Boolean.class, it -> !it.time().isEmpty()))
-                             .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(SUBTEXT)))),
-                        box().isVisibleIf(Val.of(false)))
-                    .withTooltip(waiting.viewAsString(it -> it.time().isEmpty() ? it.what()
-                            : it.what() + ". The genie does one thing at a time, so your message waits until this job is done."))))
-            .get(JPanel.class)));
+                        .add("w 40!",
+                            label(waiting.viewAsString(Genie.Waiting::time))
+                            .withHorizontalAlignment(UI.HorizontalAlignment.RIGHT)
+                            .isVisibleIf(waiting.viewAs(Boolean.class, it -> !it.time().isEmpty()))
+                            .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(SUBTEXT)))
+                        ),
+                        box().isVisibleIf(Val.of(false))
+                    )
+                    .withTooltip(waiting.viewAsString(it ->
+                        it.time().isEmpty()
+                            ? it.what()
+                            : it.what() + ". The genie does one thing at a time, so your message waits until this job is done."
+                    ))
+                )
+            )
+            .get(JPanel.class)
+        ));
     }
 
     /// The genie in the pose `pose` gives it. Thinking and working move with the pulse while
@@ -305,8 +339,9 @@ final class ChatRows {
             int frame = moves.test(it) ? GenieSvgUtil.frameAt(shown, progress) : shown.frames - 1;
             return GenieSvgUtil.genie(GenieSvgUtil.appearanceOf(it.id()), shown, frame);
         });
-        return box().withPrefSize(GENIE_SIZE, GENIE_SIZE).withMinSize(GENIE_SIZE, GENIE_SIZE)
-                .withStyle(picture, (icon, it) -> it.image(img -> img.image(icon).fitMode(UI.FitComponent.MIN_DIM)));
+        return
+            box().withPrefSize(GENIE_SIZE, GENIE_SIZE).withMinSize(GENIE_SIZE, GENIE_SIZE)
+            .withStyle(picture, (icon, it) -> it.image(img -> img.image(icon).fitMode(UI.FitComponent.MIN_DIM)));
     }
 
     /// Whether the answer with id `answer` is the one `genie` writes now: the last of its answers
@@ -314,8 +349,13 @@ final class ChatRows {
     /// beside it thinks and works; while a thought is written, the genie beside the thought does.
     private static boolean answers(Genie genie, UUID answer) {
         Tuple<Entry> entries = genie.transcript().entries();
-        if (genie.conversations().aside().isPresent() || entries.isEmpty() || !entries.last().isWriting()
-                || entries.last().kind() == Entry.Kind.THINKING) return false;
+        if (
+            genie.conversations().aside().isPresent() ||
+            entries.isEmpty() ||
+            !entries.last().isWriting() ||
+            entries.last().kind() == Entry.Kind.THINKING
+        )
+            return false;
         for (int i = entries.size() - 1; i >= 0; i--) {
             Entry it = entries.get(i);
             if (it.kind() == Entry.Kind.YOU) return false;
@@ -333,17 +373,18 @@ final class ChatRows {
                 int thickness = it.componentHeight();
                 int glowLength = Math.max(1, length / 3);
                 int at = (int) Math.round((length + glowLength) * glow.at()) - glowLength;
-                return it.backgroundColor(RAISED).borderRadius(2)
-                         .painter(UI.Layer.CONTENT, g -> {
-                             // Only the part of the glow on the track: the gradient repeats, and
-                             // painted further it would start a second glow behind the first.
-                             int from = Math.max(0, at);
-                             int to = Math.min(length, at + glowLength);
-                             if (!glow.moving() || to <= from) return;
-                             g.setPaint(new GradientPaint(at, 0, TRANSPARENT, at + glowLength / 2f, 0, FLAME, true));
-                             // Round at its ends, as the track is, where it enters and leaves.
-                             g.fill(new RoundRectangle2D.Float(from, 0, to - from, thickness, thickness, thickness));
-                         });
+                return
+                    it.backgroundColor(RAISED).borderRadius(2)
+                    .painter(UI.Layer.CONTENT, g -> {
+                        // Only the part of the glow on the track: the gradient repeats, and
+                        // painted further it would start a second glow behind the first.
+                        int from = Math.max(0, at);
+                        int to = Math.min(length, at + glowLength);
+                        if (!glow.moving() || to <= from) return;
+                        g.setPaint(new GradientPaint(at, 0, TRANSPARENT, at + glowLength / 2f, 0, FLAME, true));
+                        // Round at its ends, as the track is, where it enters and leaves.
+                        g.fill(new RoundRectangle2D.Float(from, 0, to - from, thickness, thickness, thickness));
+                    });
             });
     }
 
@@ -363,7 +404,8 @@ final class ChatRows {
                 panel("fill, wrap 1, ins 5 10 5 10, gap 6, hidemode 3", "[grow]")
                 .withStyle(it -> it.backgroundColor(SMOKE).borderRadius(8).margin(2, 0, 2, 0))
                 .add("growx, wmin 0", line)
-                .add("growx, wmin 0", below));
+                .add("growx, wmin 0", below)
+            );
     }
 
     // ─── a tool the genie used ─────────────────────────────────────────────────────────────
@@ -377,28 +419,47 @@ final class ChatRows {
             strip(
                 box(),
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][][]")
-                .add(label("⚙ " + entry.get().title()).withStyle(it -> it
-                    .componentFont(f -> f.family(MONO).size(12).weight(2f).color(BRASS))))
-                .add("growx, wmin 0", label(entry.viewAsString(Entry::text)).withStyle(it -> it
-                    .componentFont(f -> f.family(MONO).size(12).color(SUBTEXT))))
-                .add(label(entry.viewAsString(it -> switch (it.state()) {
+                .add(
+                    label("⚙ " + entry.get().title())
+                    .withStyle(it -> it.componentFont(f -> f.family(MONO).size(12).weight(2f).color(BRASS)))
+                )
+                .add("growx, wmin 0",
+                    label(entry.viewAsString(Entry::text))
+                    .withStyle(it -> it.componentFont(f -> f.family(MONO).size(12).color(SUBTEXT)))
+                )
+                .add(
+                    label(entry.viewAsString(it -> switch (it.state()) {
                         case WRITING -> "running…";
                         case FAILED -> "✗ failed";
                         case DONE -> "✓";
                     }))
                     .withStyle(entry.viewAs(Entry.State.class, Entry::state), (state, it) -> it
-                        .componentFont(f -> f.family(FONT).size(12)
-                            .color(state == Entry.State.FAILED ? TROUBLE : state == Entry.State.WRITING ? FLAME : CONTENT))))
-                .add(label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸")).isVisibleIf(hasDetail)
-                    .withStyle(it -> it.componentFont(f -> f.size(12).color(SUBTEXT)))),
+                        .componentFont(f -> f
+                            .family(FONT)
+                            .size(12)
+                            .color(state == Entry.State.FAILED ? TROUBLE : state == Entry.State.WRITING ? FLAME : CONTENT)
+                        )
+                    )
+                )
+                .add(
+                    label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸")).isVisibleIf(hasDetail)
+                    .withStyle(it -> it.componentFont(f -> f.size(12).color(SUBTEXT)))
+                ),
                 box().withMinSize(0, 0).isVisibleIf(expanded)
                 .withStyle(entry.viewAsString(Entry::detail), (detail, it) -> it
                     .padding(6, 2, 2, 2)
                     .borderAt(UI.Edge.TOP, 1, BORDER)
-                    .text(t -> t.content(StyledString.of(f -> f.family(MONO).size(12).color(SUBTEXT), detail))
-                                .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))))
-            .withTooltip(entry.viewAsString(it -> it.detail().isBlank() ? it.title() + ": " + it.text()
-                                                                        : "Click to see what it printed"))
+                    .text(t -> t
+                        .content(StyledString.of(f -> f.family(MONO).size(12).color(SUBTEXT), detail))
+                        .placement(UI.Placement.TOP_LEFT)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    )
+                )
+            )
+            .withTooltip(entry.viewAsString(it ->
+                it.detail().isBlank() ? it.title() + ": " + it.text() : "Click to see what it printed"
+            ))
             .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
 
@@ -415,12 +476,18 @@ final class ChatRows {
                 .add(label("🗎").withStyle(it -> it.componentFont(f -> f.size(22).color(FLAME))))
                 .add("growx, wmin 0",
                     box("fill, wrap 1, ins 0, gap 0")
-                    .add("growx, wmin 0", label(entry.get().title()).withStyle(it -> it
-                        .componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT))))
-                    .add("growx, wmin 0", label(entry.get().text()).group(Skin.META)))
-                .add(handed
-                     ? button("⤓  Save…").group(Skin.QUIET_BUTTON).onClick(_ -> saveHandout.accept(entry.get().title()))
-                     : box()));
+                    .add("growx, wmin 0",
+                        label(entry.get().title())
+                        .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT)))
+                    )
+                    .add("growx, wmin 0", label(entry.get().text()).group(Skin.META))
+                )
+                .add(
+                    handed
+                        ? button("⤓  Save…").group(Skin.QUIET_BUTTON).onClick(_ -> saveHandout.accept(entry.get().title()))
+                        : box()
+                )
+            );
     }
 
     // ─── what the app says ─────────────────────────────────────────────────────────────────
@@ -440,9 +507,17 @@ final class ChatRows {
                     .border(failed ? 1 : 0, TROUBLE)
                     .borderRadius(8)
                     .padding(6, 10, 6, 10)
-                    .text(t -> t.content(StyledString.of(f -> f.family(FONT).size(12)
-                                    .posture(failed ? 0f : 0.14f).color(failed ? TROUBLE : SUBTEXT), text))
-                                .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true))));
+                    .text(t -> t
+                        .content(StyledString.of(
+                            f -> f.family(FONT).size(12).posture(failed ? 0f : 0.14f).color(failed ? TROUBLE : SUBTEXT),
+                            text
+                        ))
+                        .placement(UI.Placement.TOP_LEFT)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    )
+                )
+            );
     }
 
     // ─── small helpers ─────────────────────────────────────────────────────────────────────

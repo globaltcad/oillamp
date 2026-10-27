@@ -29,9 +29,19 @@ import sprouts.Tuple;
 /// @param cron      the expression of a custom one, as typed
 /// @param endsOn    the last day a repeating job runs on; empty for never
 /// @param month     the month the calendar shows
-public record JobDraft(Optional<String> replaces, String prompt, boolean repeats, LocalDate day, String time,
-                       Repeat repeat, String minute, Tuple<DayOfWeek> days, String cron,
-                       Optional<LocalDate> endsOn, YearMonth month) {
+public record JobDraft(
+    Optional<String> replaces,
+    String prompt,
+    boolean repeats,
+    LocalDate day,
+    String time,
+    Repeat repeat,
+    String minute,
+    Tuple<DayOfWeek> days,
+    String cron,
+    Optional<LocalDate> endsOn,
+    YearMonth month
+) {
 
     /// The ways a job can repeat, as the page offers them.
     public enum Repeat {
@@ -49,11 +59,22 @@ public record JobDraft(Optional<String> replaces, String prompt, boolean repeats
 
     /// A new job: once, at the next full hour but one, or tomorrow at nine late in the evening.
     public static JobDraft fresh(LocalDateTime now) {
-        LocalDateTime at = now.getHour() >= 22 ? now.toLocalDate().plusDays(1).atTime(9, 0)
-                         : now.withMinute(0).withSecond(0).withNano(0).plusHours(2);
-        return new JobDraft(Optional.empty(), "", false, at.toLocalDate(), Recurrence.clock(at.toLocalTime()),
-                            Repeat.DAILY, "0", Tuple.of(DayOfWeek.class, now.getDayOfWeek()), "0 9 * * 1-5",
-                            Optional.empty(), YearMonth.from(at));
+        LocalDateTime at = now.getHour() >= 22
+            ? now.toLocalDate().plusDays(1).atTime(9, 0)
+            : now.withMinute(0).withSecond(0).withNano(0).plusHours(2);
+        return new JobDraft(
+            Optional.empty(),
+            "",
+            false,
+            at.toLocalDate(),
+            Recurrence.clock(at.toLocalTime()),
+            Repeat.DAILY,
+            "0",
+            Tuple.of(DayOfWeek.class, now.getDayOfWeek()),
+            "0 9 * * 1-5",
+            Optional.empty(),
+            YearMonth.from(at)
+        );
     }
 
     /// Job `job`, to be changed.
@@ -137,8 +158,10 @@ public record JobDraft(Optional<String> replaces, String prompt, boolean repeats
     public Optional<String> problem(LocalDateTime now) {
         if (prompt.isBlank()) return Optional.of("Write what the genie should do.");
         if (prompt.strip().length() > MOST_PROMPT)
-            return Optional.of("A task can be at most " + String.format("%,d", MOST_PROMPT) + " characters; this one has "
-                               + String.format("%,d", prompt.strip().length()) + ".");
+            return Optional.of(
+                "A task can be at most " + String.format("%,d", MOST_PROMPT) + " characters; this one has "
+                + String.format("%,d", prompt.strip().length()) + "."
+            );
         return timingProblem(now);
     }
 
@@ -152,8 +175,10 @@ public record JobDraft(Optional<String> replaces, String prompt, boolean repeats
         Optional<String> problem = switch (repeat) {
             case HOURLY -> minuteOfHour().isEmpty() ? Optional.of("The minute past the hour is a number from 0 to 59.") : Optional.empty();
             case DAILY, WEEKDAYS -> clock().isEmpty() ? Optional.of(TIME_HINT) : Optional.empty();
-            case WEEKLY -> days.isEmpty() ? Optional.of("Pick at least one day.")
-                         : clock().isEmpty() ? Optional.of(TIME_HINT) : Optional.empty();
+            case WEEKLY ->
+                days.isEmpty() ? Optional.of("Pick at least one day.")
+                : clock().isEmpty() ? Optional.of(TIME_HINT)
+                : Optional.empty();
             case CUSTOM -> cron.isBlank() ? Optional.of("Write a cron expression, such as 0 9 * * 1-5.") : Optional.empty();
         };
         if (problem.isPresent()) return problem;
@@ -170,17 +195,22 @@ public record JobDraft(Optional<String> replaces, String prompt, boolean repeats
         LocalDate today = now.toLocalDate();
         if (!repeats) {
             LocalDateTime at = once().orElseThrow();
-            return "Once, " + DateWordingUtil.dayInSentence(at.toLocalDate(), today) + " at " + Recurrence.clock(at.toLocalTime())
-                 + " — " + DateWordingUtil.fromNow(Duration.between(now, at)) + ".";
+            return
+                "Once, " + DateWordingUtil.dayInSentence(at.toLocalDate(), today) + " at " + Recurrence.clock(at.toLocalTime())
+                + " — " + DateWordingUtil.fromNow(Duration.between(now, at)) + ".";
         }
         Recurrence recurrence = recurrence().orElseThrow();
-        String first = recurrence.nextAfter(now)
-                .filter(next -> ends().isEmpty() || next.isBefore(ends().get()))
-                .map(next -> ", first " + DateWordingUtil.dayInSentence(next.toLocalDate(), today) + " at " + Recurrence.clock(next.toLocalTime()))
-                .orElse(recurrence instanceof Recurrence.Custom ? "" : ", but not before its last day");
+        String first =
+            recurrence.nextAfter(now)
+            .filter(next -> ends().isEmpty() || next.isBefore(ends().get()))
+            .map(next ->
+                ", first " + DateWordingUtil.dayInSentence(next.toLocalDate(), today) + " at " + Recurrence.clock(next.toLocalTime())
+            )
+            .orElse(recurrence instanceof Recurrence.Custom ? "" : ", but not before its last day");
         String last = endsOn.map(day -> ", until " + DateWordingUtil.dayInSentence(day, today).replaceFirst("^on ", "")).orElse("");
-        return recurrence.describe() + first + last + "."
-             + (recurrence instanceof Recurrence.Custom ? " oillamp reads the expression when you save the job." : "");
+        return
+            recurrence.describe() + first + last + "."
+            + (recurrence instanceof Recurrence.Custom ? " oillamp reads the expression when you save the job." : "");
     }
 
     private Optional<Integer> minuteOfHour() {

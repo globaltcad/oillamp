@@ -37,8 +37,13 @@ public interface Genies {
     /// simulated machine, and Genies is as if started from `environment`, by variable.
     ///
     /// @throws IOException when the genies or the settings could not be put on the shelf
-    static Genies open(Path directory, Tuple<Genie> genies, Settings settings, LampLauncher launcher,
-                       Function<String, Optional<String>> environment) throws IOException {
+    static Genies open(
+        final Path directory,
+        final Tuple<Genie> genies,
+        final Settings settings,
+        final LampLauncher launcher,
+        final Function<String, Optional<String>> environment
+    ) throws IOException {
         Shelf shelf = new Shelf(directory);
         shelf.keep(genies);
         shelf.keep(settings);

@@ -37,24 +37,26 @@ final class WakePicture {
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
         this.visible = visible;
-        return UI.box().withMinSize(0, 0).withPrefSize(320, 220)
-                .onView(Viewable.cast(cue), _ -> follow())
-                .onView(Viewable.cast(visible), _ -> follow())
-                .onShown(_ -> follow())
-                .withStyle(scene, (frame, it) -> {
-                    int width = UI.scale(it.componentWidth());
-                    int height = UI.scale(it.componentHeight());
-                    return it.backgroundColor(Palette.TRANSPARENT).painter(UI.Layer.CONTENT, g -> {
-                        g.scale(1 / UI.scale(), 1 / UI.scale());
-                        if (frame.phase() == Genie.Phase.BROKEN) {
-                            swingtree.style.SvgIcon.of(LampSvgUtil.lamp(Genie.Phase.BROKEN))
-                                    .withIconSize(100, 100).paintIcon(null, g, (width - UI.scale(100)) / 2, height - UI.scale(100));
-                        } else {
-                            WelcomeScene.light(g, width, height, 0, frame.play(), frame.moment());
-                            WelcomeScene.paint(g, width, height, frame.play(), frame.moment());
-                        }
-                    });
+        return
+            UI.box().withMinSize(0, 0).withPrefSize(320, 220)
+            .onView(Viewable.cast(cue), _ -> follow())
+            .onView(Viewable.cast(visible), _ -> follow())
+            .onShown(_ -> follow())
+            .withStyle(scene, (frame, it) -> {
+                int width = UI.scale(it.componentWidth());
+                int height = UI.scale(it.componentHeight());
+                return it.backgroundColor(Palette.TRANSPARENT).painter(UI.Layer.CONTENT, g -> {
+                    g.scale(1 / UI.scale(), 1 / UI.scale());
+                    if (frame.phase() == Genie.Phase.BROKEN) {
+                        swingtree.style.SvgIcon.of(LampSvgUtil.lamp(Genie.Phase.BROKEN))
+                        .withIconSize(100, 100)
+                        .paintIcon(null, g, (width - UI.scale(100)) / 2, height - UI.scale(100));
+                    } else {
+                        WelcomeScene.light(g, width, height, 0, frame.play(), frame.moment());
+                        WelcomeScene.paint(g, width, height, frame.play(), frame.moment());
+                    }
                 });
+            });
     }
 
     private void follow() {

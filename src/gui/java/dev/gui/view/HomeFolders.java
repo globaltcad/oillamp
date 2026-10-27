@@ -74,10 +74,14 @@ final class HomeFolders {
     private static final int TREE_WIDTH = 420;
     private static final int LINKING_WIDTH = 300;
     private static final int TREE_HEIGHT = 250;
-    private static final FlowCell TREE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).fill(true)
-            .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(7));
-    private static final FlowCell LINKING = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP)
-            .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5));
+    private static final FlowCell TREE = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP).fill(true)
+        .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(7)
+    );
+    private static final FlowCell LINKING = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP)
+        .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5)
+    );
 
     /// What the last link said: where it is, or why there is none.
     private record Outcome(String words, boolean trouble) {
@@ -148,10 +152,12 @@ final class HomeFolders {
 
     /// What the tile says on top: what a home is here, and what a link to it does.
     Val<String> says() {
-        return genie.viewAsString(it -> it.home().read() && it.home().where().isEmpty()
+        return genie.viewAsString(it ->
+            it.home().read() && it.home().where().isEmpty()
                 ? it.name() + " has no home yet. It gets one as it first wakes."
                 : it.name() + "'s home is a folder on this computer. Link one of its folders into yours, to find what "
-                  + it.name() + " made in your file manager. A link is no copy: a change on either side is one on both.");
+                  + it.name() + " made in your file manager. A link is no copy: a change on either side is one on both."
+        );
     }
 
     UIForAnySwing<?, ?> view() {
@@ -226,17 +232,19 @@ final class HomeFolders {
                     })
                     .onMouseExit(_ -> pointed.set(-1))
                     .withStyle(pointed, (row, it) -> it
-                        .backgroundColor(TRANSPARENT).componentFont(f -> f.family(FONT).size(13).color(TEXT))
-                            .painter(UI.Layer.BACKGROUND, g -> {
-                                JTree tree = shown[0];
-                                Rectangle bounds = row < 0 || tree == null ? null : tree.getRowBounds(row);
-                                if (bounds == null) return;
-                                // SwingTree scales a painter's units to pixels; the tree's rows are in pixels.
-                                g.scale(1 / UI.scale(), 1 / UI.scale());
-                                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                                g.setColor(ViewPartsUtil.withAlpha(BORDER, 170));
-                                g.fillRoundRect(0, bounds.y, tree.getWidth(), bounds.height, UI.scale(8), UI.scale(8));
-                            }))
+                        .backgroundColor(TRANSPARENT)
+                        .componentFont(f -> f.family(FONT).size(13).color(TEXT))
+                        .painter(UI.Layer.BACKGROUND, g -> {
+                            JTree tree = shown[0];
+                            Rectangle bounds = row < 0 || tree == null ? null : tree.getRowBounds(row);
+                            if (bounds == null) return;
+                            // SwingTree scales a painter's units to pixels; the tree's rows are in pixels.
+                            g.scale(1 / UI.scale(), 1 / UI.scale());
+                            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                            g.setColor(ViewPartsUtil.withAlpha(BORDER, 170));
+                            g.fillRoundRect(0, bounds.y, tree.getWidth(), bounds.height, UI.scale(8), UI.scale(8));
+                        })
+                    )
                 )
             );
     }
@@ -309,8 +317,11 @@ final class HomeFolders {
     // ─── linking ───────────────────────────────────────────────────────────────────────────
 
     private UIForAnySwing<?, ?> linking() {
-        Val<String> where = Viewable.of(String.class, home, chosen, (it, folder) -> it.where()
-                .map(at -> folder.stream().reduce(at, Path::resolve, (a, _) -> a).toString()).orElse(""));
+        Val<String> where = Viewable.of(String.class, home, chosen, (it, folder) ->
+            it.where()
+            .map(at -> folder.stream().reduce(at, Path::resolve, (a, _) -> a).toString())
+            .orElse("")
+        );
         Val<String> documentsName = Val.of(String.valueOf(app.documents().getFileName()));
         Val<Boolean> nameable = Viewable.of(Boolean.class, linkable, linkName, (can, name) -> can && !name.isBlank());
         Val<String> said = outcome.viewAsString(Outcome::words);
@@ -322,33 +333,55 @@ final class HomeFolders {
                 textField(where).group(Skin.INPUT)
                 .isEditableIf(false)
                 .withTooltip(where)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).border(1, TRANSPARENT).padding(4, 0, 4, 0)
-                    .componentFont(f -> f.family(MONO).size(12).color(SUBTEXT))))
-            .add(ViewPartsUtil.link("Open in your file manager")
-                 .isEnabledIf(linkable)
-                 .onClick(_ -> app.showInFileManager(selected.get(), chosen.get())))
+                .withStyle(it -> it
+                    .backgroundColor(TRANSPARENT)
+                    .border(1, TRANSPARENT)
+                    .padding(4, 0, 4, 0)
+                    .componentFont(f -> f.family(MONO).size(12).color(SUBTEXT))
+                )
+            )
+            .add(
+                ViewPartsUtil.link("Open in your file manager")
+                .isEnabledIf(linkable)
+                .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
+            )
             .add("growx, wmin 0, gaptop 6", label("THE LINK'S NAME").group(Skin.SECTION))
             .add("growx, wmin 0",
                 textField(linkName).group(Skin.INPUT)
                 .isEnabledIf(linkable)
-                .withStyle(it -> it.padding(8, 10, 8, 10)))
+                .withStyle(it -> it.padding(8, 10, 8, 10))
+            )
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 8)
                 .withStyle(it -> it.backgroundColor(TRANSPARENT).margin(-8, -8, 0, -8))
-                .add(button(documentsName.viewAsString(it -> "Link into " + it)).group(Skin.FLAME_BUTTON)
-                     .isEnabledIf(nameable)
-                     .withTooltip(app.documents().toString())
-                     .withStyle(it -> it.padding(9, 16, 9, 16))
-                     .onClick(_ -> link(app.documents())))
-                .add(button("Link into…").group(Skin.QUIET_BUTTON)
-                     .isEnabledIf(nameable)
-                     .withStyle(it -> it.padding(9, 16, 9, 16))
-                     .onClick(it -> chooseWhere(it.getComponent()).ifPresent(this::link))))
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(said, CONTENT, outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble())))
+                .add(
+                    button(documentsName.viewAsString(it -> "Link into " + it)).group(Skin.FLAME_BUTTON)
+                    .isEnabledIf(nameable)
+                    .withTooltip(app.documents().toString())
+                    .withStyle(it -> it.padding(9, 16, 9, 16))
+                    .onClick(_ -> link(app.documents()))
+                )
+                .add(
+                    button("Link into…").group(Skin.QUIET_BUTTON)
+                    .isEnabledIf(nameable)
+                    .withStyle(it -> it.padding(9, 16, 9, 16))
+                    .onClick(it -> chooseWhere(it.getComponent()).ifPresent(this::link))
+                )
+            )
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(said, CONTENT, outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
+            )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(said, TROUBLE, outcome.viewAs(Boolean.class, Outcome::trouble)))
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(genie.viewAsString(it -> "Or drag a folder from the tree into "
-                    + "your file manager. Deleting " + it.name() + " leaves its links behind, leading nowhere."),
-                    SUBTEXT, Val.of(true)));
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(
+                    genie.viewAsString(it ->
+                        "Or drag a folder from the tree into your file manager. "
+                        + "Deleting " + it.name() + " leaves its links behind, leading nowhere."
+                    ),
+                    SUBTEXT,
+                    Val.of(true)
+                )
+            );
     }
 
     /// Asks the user which of their folders to put the link into.
@@ -357,7 +390,8 @@ final class HomeFolders {
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         chooser.setDialogTitle("Where to put the link \"" + linkName.get().strip() + "\"");
         return chooser.showDialog(button, "Link here") == JFileChooser.APPROVE_OPTION
-                ? Optional.of(chooser.getSelectedFile().toPath()) : Optional.empty();
+            ? Optional.of(chooser.getSelectedFile().toPath())
+            : Optional.empty();
     }
 
     private void link(Path into) {

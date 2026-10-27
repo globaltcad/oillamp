@@ -30,8 +30,15 @@ import sprouts.Tuple;
 /// @param busy      whether a save is on its way to the lamp
 /// @param problem   why the last reading or save failed, in the lamp's words; empty when it did not
 /// @param requestsForPermission the requests the genie's lamp asks the user to allow, oldest first
-public record HostAccess(boolean read, boolean lamp, PermissionRules saved, PermissionRules draft, boolean busy, String problem,
-                         Tuple<RequestForPermission> requestsForPermission) {
+public record HostAccess(
+    boolean read,
+    boolean lamp,
+    PermissionRules saved,
+    PermissionRules draft,
+    boolean busy,
+    String problem,
+    Tuple<RequestForPermission> requestsForPermission
+) {
 
     public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, "",
                                                            Tuple.of(RequestForPermission.class));
