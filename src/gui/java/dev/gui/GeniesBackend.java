@@ -345,7 +345,8 @@ public final class GeniesBackend implements Genies {
 
     /// Each lamp found lit that Genies does not know yet joins the list, after Genies' own, and
     /// Genies joins its session. Only the lamps the user removed are left out, and Genies' own
-    /// lamps, lit or not. Off Swing's event thread. When it cannot be found out, as without
+    /// lamps on the shelf. A genie asleep in the list whose lamp someone lit since, with
+    /// `oillamp at`, is joined. Off Swing's event thread. When it cannot be found out, as without
     /// podman, nothing changes: Genies says so when a genie wakes, and this is asked again.
     @Override public void lookForLamps() {
         Thread.ofVirtual().name("look for lamps").start(() -> {
@@ -354,6 +355,8 @@ public final class GeniesBackend implements Genies {
                 SwingUtilities.invokeLater(() -> {
                     for (Path lamp : lit) {
                         Path found = lamp.toAbsolutePath().normalize();
+                        Optional<Genie> asleep = listedAt(found).filter(it -> it.phase() == Genie.Phase.ASLEEP);
+                        if (asleep.isPresent()) rejoin(asleep.get().id());
                         if (known(found) || removedLamps.contains(found)) continue;
                         take(found, false);
                     }
@@ -386,7 +389,12 @@ public final class GeniesBackend implements Genies {
     /// while its lamp went on running.
     private boolean known(Path lamp) {
         if (lamp.startsWith(shelf.root().toAbsolutePath().normalize())) return true;
-        return state.get().genies().stream().anyMatch(it -> lampOf(it.id()).toAbsolutePath().normalize().equals(lamp));
+        return listedAt(lamp).isPresent();
+    }
+
+    /// The genie in the list whose lamp is `lamp`, an absolute and normal path.
+    private Optional<Genie> listedAt(Path lamp) {
+        return state.get().genies().stream().filter(it -> lampOf(it.id()).toAbsolutePath().normalize().equals(lamp)).findFirst();
     }
 
     /// Takes the lamp in `directory` in as a genie, and reads what a sleeping genie shows; joins
