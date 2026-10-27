@@ -211,7 +211,9 @@ final class ActionsPage {
                     case ASLEEP -> it.name() + " is in the lamp. Waking it starts its sandbox, with its home as it left it.";
                     case WAKING -> it.name() + " is waking…";
                     case BROKEN -> it.name() + " did not wake. Its home is kept, so it can try again.";
-                    default -> "End " + it.name() + "'s sandbox. Its home and this conversation are kept.";
+                    default -> it.fromElsewhere()
+                        ? "End " + it.name() + "'s sandbox, for whoever lit it with `oillamp at` too. Its home and this conversation are kept."
+                        : "End " + it.name() + "'s sandbox. Its home and this conversation are kept.";
                 }),
                 big(button(phase.viewAsString(it -> switch (it) {
                     case ASLEEP -> "Wake";
@@ -230,11 +232,16 @@ final class ActionsPage {
         return tile(SignSvgUtil.FOLDER, TEXT, Val.of("Folders"), folders.says(), folders.view());
     }
 
+    /// A lamp from elsewhere is not Genies' to delete, so it is only removed from Genies.
     private UIForAnySwing<?, ?> deleting() {
-        return tile(SignSvgUtil.DELETE, TROUBLE, Val.of("Delete"),
-                genie.viewAsString(it -> "Delete " + it.name() + " for good: its home, everything it made and your "
-                        + "conversations with it. You are asked first."),
-                big(button(genie.viewAsString(it -> "Delete " + it.name() + "…")).group(Skin.QUIET_BUTTON))
+        return tile(SignSvgUtil.DELETE, TROUBLE, genie.viewAsString(it -> it.fromElsewhere() ? "Remove" : "Delete"),
+                genie.viewAsString(it -> it.fromElsewhere()
+                        ? "Remove " + it.name() + " from Genies. Its lamp was made elsewhere, with `oillamp at`, and stays "
+                          + "where it is, as it is, running if it runs. You are asked first."
+                        : "Delete " + it.name() + " for good: its home, everything it made and your "
+                          + "conversations with it. You are asked first."),
+                big(button(genie.viewAsString(it -> it.fromElsewhere() ? "Remove from Genies…" : "Delete " + it.name() + "…"))
+                    .group(Skin.QUIET_BUTTON))
                 .withStyle(it -> it.border(1, TROUBLE).componentFont(f -> f.color(TROUBLE)))
                 .onClick(_ -> delete.accept(selected())));
     }

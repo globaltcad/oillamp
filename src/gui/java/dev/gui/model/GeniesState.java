@@ -229,7 +229,23 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
 
     /// Adds a genie and shows its chat.
     public GeniesState add(Genie genie) {
-        return withGenies(genies.add(genie)).withSelected(genie.id()).withPage(Page.CHAT);
+        return withListed(genie).withSelected(genie.id()).withPage(Page.CHAT);
+    }
+
+    /// With `genie` in the list, but what the window shows unchanged: a lamp Genies found lit
+    /// elsewhere, which the user did not ask for at that moment. The first genie selects itself,
+    /// so that the window does not stay on the welcome.
+    public GeniesState found(Genie genie) {
+        return genies.isEmpty() ? add(genie) : withListed(genie);
+    }
+
+    /// With `genie` in the list: Genies' own genies first, in the order they were made, then the
+    /// lamps from elsewhere, in the order they were found.
+    private GeniesState withListed(Genie genie) {
+        if (genie.fromElsewhere()) return withGenies(genies.add(genie));
+        int firstFromElsewhere = 0;
+        while (firstFromElsewhere < genies.size() && !genies.get(firstFromElsewhere).fromElsewhere()) firstFromElsewhere++;
+        return withGenies(genies.addAt(firstFromElsewhere, genie));
     }
 
     /// Removes a genie. The chat then shows the one before it; after the last, the settings
