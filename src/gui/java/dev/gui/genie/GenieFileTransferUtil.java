@@ -25,7 +25,9 @@ final class GenieFileTransferUtil {
     private GenieFileTransferUtil() {}
 
     static final String MAKE_DIRECTORIES = "mkdir -p \"$HOME/outbox\" \"$HOME/inbox\"";
-    static final String LIST = "find \"$HOME/outbox\" -maxdepth 1 -type f -printf '%s\\t%f\\n'";
+    /// Nothing, without an outbox, as in a lamp someone made with `oillamp at`, which Genies
+    /// joined but never woke.
+    static final String LIST = "[ -d \"$HOME/outbox\" ] || exit 0; find \"$HOME/outbox\" -maxdepth 1 -type f -printf '%s\\t%f\\n'";
     static final String READ = "cat -- \"$HOME/outbox/$1\"";
     static final String WRITE = "mkdir -p \"$HOME/inbox\" && cat > \"$HOME/inbox/$1\"";
 

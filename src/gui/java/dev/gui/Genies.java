@@ -61,7 +61,8 @@ public interface Genies {
     /// Stops what the genie is doing.
     void stop(UUID genie);
 
-    /// Deletes the genie and its lamp, for good. The window has asked the user already.
+    /// Deletes the genie and its lamp, for good. The window has asked the user already. A genie
+    /// whose lamp is from elsewhere only leaves Genies: its lamp stays as it is, running if it runs.
     void delete(UUID genie);
 
     /// Goes to a conversation of the genie's, and within it to the entry `leaf`, waking the
@@ -80,6 +81,18 @@ public interface Genies {
     /// Asks `text` instead of the selected genie's question `id`; the old question stays in the
     /// conversation as a branch of its own.
     void askInstead(String id, String text);
+
+    /// Looks for lamps someone lit elsewhere, with `oillamp at`, and takes in each Genies does
+    /// not know yet, after its own genies, joining its session. The user's selection stays.
+    /// Genies does this by itself, now and then; this looks now. Off Swing's event thread.
+    void lookForLamps();
+
+    /// Takes in the lamp in `directory`, which the user picked, lit or not, and shows it: one
+    /// someone made elsewhere with `oillamp at`. Removing it from Genies later leaves it as it is.
+    ///
+    /// @throws IOException when there is no lamp in `directory`, or it is one of Genies' own; the
+    ///                     message says so, to the user
+    void addLamp(Path directory) throws IOException;
 
     /// Into the genie's inbox.
     void giveFile(UUID genie, Path file);
