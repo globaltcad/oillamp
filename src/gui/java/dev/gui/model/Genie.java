@@ -33,11 +33,24 @@ import sprouts.Tuple;
 /// @param elsewhere its lamp's directory, when Genies did not make it: a lamp someone lit with
 ///                  `oillamp at`, which Genies found running or was given. Nothing for a lamp on
 ///                  Genies' own shelf
-public record Genie(UUID id, String name, Phase phase, String activity, Transcript transcript,
-                    String draft, int tokens, Tuple<Handout> handouts, boolean desktopShown, String showing,
-                    Conversations conversations, Schedule schedule, History history, HostAccess hostAccess,
-                    Home home, Optional<Path> elsewhere)
-        implements HasId<UUID> {
+public record Genie(
+    UUID id,
+    String name,
+    Phase phase,
+    String activity,
+    Transcript transcript,
+    String draft,
+    int tokens,
+    Tuple<Handout> handouts,
+    boolean desktopShown,
+    String showing,
+    Conversations conversations,
+    Schedule schedule,
+    History history,
+    HostAccess hostAccess,
+    Home home,
+    Optional<Path> elsewhere
+) implements HasId<UUID> {
 
     public enum Phase {
         /// Its lamp is not running. Its home and its conversation are kept on disk.
@@ -59,9 +72,24 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     }
 
     public static Genie asleep(UUID id, String name) {
-        return new Genie(id, name, Phase.ASLEEP, "asleep", Transcript.empty(), "", 0,
-                         Tuple.of(Handout.class), false, "", Conversations.NONE, Schedule.unread(ZoneId.systemDefault()),
-                         History.UNREAD, HostAccess.UNREAD, Home.UNREAD, Optional.empty());
+        return new Genie(
+            id,
+            name,
+            Phase.ASLEEP,
+            "asleep",
+            Transcript.empty(),
+            "",
+            0,
+            Tuple.of(Handout.class),
+            false,
+            "",
+            Conversations.NONE,
+            Schedule.unread(ZoneId.systemDefault()),
+            History.UNREAD,
+            HostAccess.UNREAD,
+            Home.UNREAD,
+            Optional.empty()
+        );
     }
 
     public Genie withName(String name)             { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
@@ -110,8 +138,12 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
 
     /// What was put aside is on disk by now, and is read from there when the chat goes back.
     public Genie asleep() {
-        return withPhase(Phase.ASLEEP).withActivity("asleep").withConversations(conversations.withAside(Optional.empty()))
-                .withTranscript(transcript.settled()).withDesktopShown(false);
+        return
+            withPhase(Phase.ASLEEP)
+            .withActivity("asleep")
+            .withConversations(conversations.withAside(Optional.empty()))
+            .withTranscript(transcript.settled())
+            .withDesktopShown(false);
     }
 
     /// The genie asks the user to look at its desktop, where it shows `what`: the desktop opens
@@ -121,9 +153,12 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     }
 
     public Genie broken(String why) {
-        return withPhase(Phase.BROKEN).withActivity(why).withDesktopShown(false)
-                .withConversations(conversations.withAside(Optional.empty()))
-                .withTranscript(transcript.settled().problem(why));
+        return
+            withPhase(Phase.BROKEN)
+            .withActivity(why)
+            .withDesktopShown(false)
+            .withConversations(conversations.withAside(Optional.empty()))
+            .withTranscript(transcript.settled().problem(why));
     }
 
     // ─── what it is busy with ──────────────────────────────────────────────────────────────
@@ -153,8 +188,10 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     public Waiting waitingOn(Instant now) {
         return schedule.running().map(job -> {
             long seconds = Math.max(0, Duration.between(job.since(), now).toSeconds());
-            return new Waiting(name + " is doing a scheduled job first: " + job.title(),
-                               String.format("%d:%02d", seconds / 60, seconds % 60));
+            return new Waiting(
+                name + " is doing a scheduled job first: " + job.title(),
+                String.format("%d:%02d", seconds / 60, seconds % 60)
+            );
         }).orElse(new Waiting(name + " is thinking", ""));
     }
 
@@ -163,18 +200,22 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     /// While the genie answers in another conversation than the chat shows, nothing is sent:
     /// the question would wait for that answer, and then go somewhere the user no longer looks.
     public boolean canSend() {
-        return phase.isAwake() &&
-                !draft.isBlank() &&
-                conversations.aside().isEmpty() &&
-                !conversations.overview();
+        return
+            phase.isAwake() &&
+            !draft.isBlank() &&
+            conversations.aside().isEmpty() &&
+            !conversations.overview();
     }
 
     /// The draft becomes the user's next message, and the genie is working on it. Whoever calls
     /// this sends the draft, as it was before, to the genie's harness.
     public Genie send() {
         if (!canSend()) return this;
-        return withTranscript(transcript.you(draft.strip())).withDraft("")
-                .withPhase(Phase.WORKING).withActivity("thinking");
+        return
+            withTranscript(transcript.you(draft.strip()))
+            .withDraft("")
+            .withPhase(Phase.WORKING)
+            .withActivity("thinking");
     }
 
     /// Whether the user may ask one of their questions differently now: while the genie waits,
@@ -188,8 +229,10 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     /// calls this tells the genie's harness.
     public Genie askInstead(String id, String text) {
         if (phase != Phase.READY || text.isBlank()) return this;
-        return withTranscript(transcript.askedInstead(id, text.strip()))
-                .withPhase(Phase.WORKING).withActivity("thinking");
+        return
+            withTranscript(transcript.askedInstead(id, text.strip()))
+            .withPhase(Phase.WORKING)
+            .withActivity("thinking");
     }
 
     /// What the genie's run for the chat did. While the chat shows another conversation, it goes
@@ -197,10 +240,17 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     public Genie hear(PiEvent event) {
         Optional<Conversations.Aside> aside = conversations.aside();
         if (aside.isEmpty()) return heard(event);
-        Genie there = withTranscript(aside.get().transcript())
-                .withConversations(conversations.withHere(aside.get().here())).heard(event);
-        return there.withTranscript(transcript).withConversations(there.conversations().withHere(conversations.here())
-                .withAside(Optional.of(new Conversations.Aside(there.conversations().here(), there.transcript()))));
+        Genie there =
+            withTranscript(aside.get().transcript())
+            .withConversations(conversations.withHere(aside.get().here()))
+            .heard(event);
+        return
+            there.withTranscript(transcript)
+            .withConversations(
+                there.conversations()
+                .withHere(conversations.here())
+                .withAside(Optional.of(new Conversations.Aside(there.conversations().here(), there.transcript())))
+            );
     }
 
     /// The chat shows the conversation in `file`, from its start to where `history` ends.
@@ -215,15 +265,18 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     public Genie shows(String file, PiEvent.History history) {
         Optional<Conversations.Aside> aside = conversations.aside();
         if (aside.isPresent() && aside.get().here().file().equals(file))
-            return withTranscript(aside.get().transcript())
-                    .withConversations(conversations.withHere(aside.get().here()).withAside(Optional.empty()));
+            return
+                withTranscript(aside.get().transcript())
+                .withConversations(conversations.withHere(aside.get().here()).withAside(Optional.empty()));
         // Another branch of the conversation it answers in: the chat stays on the answer.
         if (phase == Phase.WORKING && aside.isEmpty() && file.equals(conversations.here().file())) return this;
         Genie leaving = phase == Phase.WORKING && aside.isEmpty()
-                ? withConversations(conversations.withAside(Optional.of(new Conversations.Aside(conversations.here(), transcript))))
-                : this;
-        return leaving.heard(new PiEvent.Opened(Conversations.HOME + file)).heard(history)
-                .withConversations(leaving.conversations().withHere(new Conversations.Here(file, history.leaf())));
+            ? withConversations(conversations.withAside(Optional.of(new Conversations.Aside(conversations.here(), transcript))))
+            : this;
+        return
+            leaving.heard(new PiEvent.Opened(Conversations.HOME + file))
+            .heard(history)
+            .withConversations(leaving.conversations().withHere(new Conversations.Here(file, history.leaf())));
     }
 
     /// The chat shows the conversation in `file` as it stood when the genie began to answer
@@ -234,8 +287,10 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     /// @param history what is on disk of it, up to the question
     public Genie answering(String file, PiEvent.History history, String question) {
         Genie shown = shows(file, history);
-        return shown.withTranscript(shown.transcript().you(question.strip()))
-                .withPhase(Phase.WORKING).withActivity("thinking");
+        return
+            shown.withTranscript(shown.transcript().you(question.strip()))
+            .withPhase(Phase.WORKING)
+            .withActivity("thinking");
     }
 
     /// The run for the chat ended in the conversation in `file`, standing at `history`'s end.
@@ -254,14 +309,17 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
             case PiEvent.Said _            -> heard.withActivity("writing");
             case PiEvent.Thinking _        -> heard.withActivity("thinking");
             case PiEvent.Settled _         -> phase.isAwake() ? heard.withPhase(Phase.READY).withActivity("ready") : heard;
-            case PiEvent.History history   -> heard.withConversations(conversations.withHere(
-                    new Conversations.Here(conversations.here().file(), history.leaf())));
-            case PiEvent.Opened opened     -> heard.withConversations(conversations.withHere(
-                    new Conversations.Here(Conversations.inHome(opened.file()), conversations.here().leaf())));
+            case PiEvent.History history   -> heard.withConversations(
+                conversations.withHere(new Conversations.Here(conversations.here().file(), history.leaf()))
+            );
+            case PiEvent.Opened opened     -> heard.withConversations(
+                conversations.withHere(new Conversations.Here(Conversations.inHome(opened.file()), conversations.here().leaf()))
+            );
             // A question pi could not take is not being worked on, and nothing else will say so.
-            case PiEvent.Refused refused when phase == Phase.WORKING
-                    && (refused.command().equals("prompt") || refused.command().equals("send_user_message"))
-                                           -> heard.withPhase(Phase.READY).withActivity("ready");
+            case PiEvent.Refused refused when
+                phase == Phase.WORKING &&
+                (refused.command().equals("prompt") || refused.command().equals("send_user_message"))
+                -> heard.withPhase(Phase.READY).withActivity("ready");
             default                        -> heard;
         };
     }
@@ -269,8 +327,9 @@ public record Genie(UUID id, String name, Phase phase, String activity, Transcri
     /// What pi sent after an answer: the chat learns pi's ids for the questions in it, and the
     /// genie where it now is. Unlike [#hear], the chat is not replaced.
     public Genie learn(PiEvent.History history) {
-        return withTranscript(transcript.learn(history)).withConversations(conversations.withHere(
-                new Conversations.Here(conversations.here().file(), history.leaf())));
+        return
+            withTranscript(transcript.learn(history))
+            .withConversations(conversations.withHere(new Conversations.Here(conversations.here().file(), history.leaf())));
     }
 
     /// What is in the outbox now. A file that was not there before is announced in the chat;

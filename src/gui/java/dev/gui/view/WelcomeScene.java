@@ -110,8 +110,16 @@ final class WelcomeScene {
             double lampY = height - 56.0 / 64 * lampSize;
             double wickX = lampX + LampSvgUtil.WICK_X / 64 * lampSize;
             double wickY = lampY + LampSvgUtil.WICK_Y / 64 * lampSize;
-            return new Stage(pixel, lampSize, lampX, lampY, wickX, wickY,
-                             (int) Math.round(wickX - 12.5 * pixel), (int) Math.round(wickY - 18 * pixel));
+            return new Stage(
+                pixel,
+                lampSize,
+                lampX,
+                lampY,
+                wickX,
+                wickY,
+                (int) Math.round(wickX - 12.5 * pixel),
+                (int) Math.round(wickY - 18 * pixel)
+            );
         }
 
         /// The middle of the genie, where its light comes from.
@@ -124,8 +132,12 @@ final class WelcomeScene {
     private record Hues(Color ember, Color flame, Color hot, Color brightest) {
 
         /// The lamp's own flame, in amber.
-        static final Hues AMBER = new Hues(new Color(0xf0, 0x8a, 0x30), new Color(0xf0, 0xa9, 0x40),
-                                           new Color(0xff, 0xd1, 0x66), new Color(0xff, 0xf1, 0xc2));
+        static final Hues AMBER = new Hues(
+            new Color(0xf0, 0x8a, 0x30),
+            new Color(0xf0, 0xa9, 0x40),
+            new Color(0xff, 0xd1, 0x66),
+            new Color(0xff, 0xf1, 0xc2)
+        );
 
         /// A flame in a genie's colour: darker at its edge, lighter at its heart.
         static Hues of(GenieSvgUtil.Appearance genie) {
@@ -135,8 +147,12 @@ final class WelcomeScene {
 
         /// From these colours to `other`'s, `progress` of the way.
         Hues toward(Hues other, double progress) {
-            return new Hues(mix(ember, other.ember, progress), mix(flame, other.flame, progress),
-                            mix(hot, other.hot, progress), mix(brightest, other.brightest, progress));
+            return new Hues(
+                mix(ember, other.ember, progress),
+                mix(flame, other.flame, progress),
+                mix(hot, other.hot, progress),
+                mix(brightest, other.brightest, progress)
+            );
         }
 
         /// One of the four by its number, from the edge, 0, to the heart, 3.
@@ -163,9 +179,10 @@ final class WelcomeScene {
     /// in one of three shapes at a time, so that it flickers. Numbers are the flame's colours, from
     /// its edge, 0, to its heart, 3.
     private static final List<List<String>> TAIL = List.of(
-            List.of(".........BB221......", "..........12321.....", "...........121......"),
-            List.of(".........BB122......", "..........2321......", "............2......."),
-            List.of(".........BB212......", "...........13210....", "...........12......."));
+        List.of(".........BB221......", "..........12321.....", "...........121......"),
+        List.of(".........BB122......", "..........2321......", "............2......."),
+        List.of(".........BB212......", "...........13210....", "...........12.......")
+    );
 
     /// The sparks of the burst: where each flies, how fast, how long it lives, its colour, from
     /// the flame's edge, 0, to its heart, 3, and whether it is half a pixel.
@@ -273,8 +290,11 @@ final class WelcomeScene {
         return GLOWS.computeIfAbsent(new Glow(colour, peak, middle), _ -> {
             BufferedImage glow = new BufferedImage(GLOW, GLOW, BufferedImage.TYPE_INT_ARGB_PRE);
             Graphics2D on = glow.createGraphics();
-            on.setPaint(new RadialGradientPaint(GLOW / 2f, GLOW / 2f, GLOW / 2f, new float[] { 0f, 0.3f, 1f },
-                    new Color[] { alpha(colour, peak), alpha(colour, middle), alpha(colour, 0) }));
+            on.setPaint(new RadialGradientPaint(
+                GLOW / 2f, GLOW / 2f, GLOW / 2f,
+                new float[] { 0f, 0.3f, 1f },
+                new Color[] { alpha(colour, peak), alpha(colour, middle), alpha(colour, 0) }
+            ));
             on.fillRect(0, 0, GLOW, GLOW);
             on.dispose();
             return glow;
@@ -309,8 +329,11 @@ final class WelcomeScene {
     private static double size(Stage stage, double time) {
         double formed = ease(clamp((time - FORMING) / (FORMED - FORMING)));
         // The genie shines as a flame twice the lamp's would.
-        double genie = 12 * stage.pixel() * (1 + 0.05 * Math.sin(17 * time) + 0.03 * Math.sin(31 * time + 0.7)
-                                             + 0.06 * (chance((long) (time * 8), 0, 0) - 0.5));
+        double flicker =
+            0.05 * Math.sin(17 * time)
+            + 0.03 * Math.sin(31 * time + 0.7)
+            + 0.06 * (chance((long) (time * 8), 0, 0) - 0.5);
+        double genie = 12 * stage.pixel() * (1 + flicker);
         double flame = flameTall(stage.pixel(), time);
         return flame + (genie - flame) * formed;
     }
@@ -319,11 +342,12 @@ final class WelcomeScene {
     /// steady, growing as it turns to pixels, drawn in, and then bursting.
     private static double flameTall(int pixel, double time) {
         if (time < LIT) return 0;
-        double size = time < BURNING ? 0.12 + 0.88 * smooth(clamp((time - LIT) / (BURNING - LIT)))
-                    : time < PIXELATING ? 1
-                    : time < GATHERING ? 1 + 0.7 * ease(clamp((time - PIXELATING) / (GATHERING - PIXELATING)))
-                    : time < BURST ? 1.7 - 0.3 * ease(clamp((time - GATHERING) / (BURST - GATHERING)))
-                    : 1.4 + 3.0 * ease(clamp((time - BURST) / 0.35));
+        double size =
+            time < BURNING ? 0.12 + 0.88 * smooth(clamp((time - LIT) / (BURNING - LIT)))
+            : time < PIXELATING ? 1
+            : time < GATHERING ? 1 + 0.7 * ease(clamp((time - PIXELATING) / (GATHERING - PIXELATING)))
+            : time < BURST ? 1.7 - 0.3 * ease(clamp((time - GATHERING) / (BURST - GATHERING)))
+            : 1.4 + 3.0 * ease(clamp((time - BURST) / 0.35));
         double flicker = 1 + (time < PIXELATING ? 0.06 : 0.12) * Math.sin(17 * time) + 0.05 * Math.sin(31 * time + 0.7);
         return 6 * pixel * size * flicker;
     }
@@ -357,8 +381,15 @@ final class WelcomeScene {
     /// dark where no flame burns, and shining in the flame's colour where its light falls, on
     /// top and towards the wick, as strong as `light`. The flame is `tinted` of the way from
     /// amber to the colour of `genie`.
-    private static void lamp(Graphics2D g, Stage stage, GenieSvgUtil.Appearance genie, double tinted, double light, boolean smoking,
-                             double shown) {
+    private static void lamp(
+        final Graphics2D g,
+        final Stage stage,
+        final GenieSvgUtil.Appearance genie,
+        final double tinted,
+        final double light,
+        final boolean smoking,
+        final double shown
+    ) {
         int size = stage.lampSize();
         double lit = clamp(light);
         int x = (int) Math.round(stage.lampX());
@@ -384,8 +415,12 @@ final class WelcomeScene {
                 on.setComposite(AlphaComposite.SrcIn);
                 double wickX = LampSvgUtil.WICK_X / 64 * size;
                 double wickY = LampSvgUtil.WICK_Y / 64 * size;
-                on.setPaint(new RadialGradientPaint(new Point2D.Double(wickX, wickY), (float) (0.6 * size), new float[] { 0f, 0.45f, 1f },
-                        new Color[] { alpha(hues.hot(), 0.38), alpha(hues.flame(), 0.12), alpha(hues.flame(), 0) }));
+                on.setPaint(new RadialGradientPaint(
+                    new Point2D.Double(wickX, wickY),
+                    (float) (0.6 * size),
+                    new float[] { 0f, 0.45f, 1f },
+                    new Color[] { alpha(hues.hot(), 0.38), alpha(hues.flame(), 0.12), alpha(hues.flame(), 0) }
+                ));
                 on.fillRect(0, 0, size, size);
                 on.dispose();
                 return shine;
@@ -400,7 +435,9 @@ final class WelcomeScene {
             Graphics2D on = drawn.createGraphics();
             // The icon's size is in units, which it scales to pixels itself; the picture's is in pixels.
             int units = UI.unscale(it.size());
-            SvgIcon.of(it.smoking() ? LampSvgUtil.lamp(Genie.Phase.ASLEEP) : LampSvgUtil.cold()).withIconSize(units, units).paintIcon(null, on, 0, 0);
+            SvgIcon.of(it.smoking() ? LampSvgUtil.lamp(Genie.Phase.ASLEEP) : LampSvgUtil.cold())
+            .withIconSize(units, units)
+            .paintIcon(null, on, 0, 0);
             if (it.dark()) {
                 on.setComposite(AlphaComposite.SrcAtop);
                 on.setColor(alpha(Color.BLACK, 0.45));
@@ -423,13 +460,16 @@ final class WelcomeScene {
         double x = stage.wickX();
         double y = stage.wickY();
         List<Path2D> layers = List.of(
-                drop(x + sway, y, wide, tall),
-                drop(x + sway * 0.7, y - tall * 0.04, wide * 0.7, tall * 0.74),
-                drop(x + sway * 0.4, y - tall * 0.08, wide * 0.42, tall * 0.48));
+            drop(x + sway, y, wide, tall),
+            drop(x + sway * 0.7, y - tall * 0.04, wide * 0.7, tall * 0.74),
+            drop(x + sway * 0.4, y - tall * 0.08, wide * 0.42, tall * 0.48)
+        );
         List<Color> colours = List.of(hues.ember(), hues.flame(), time < BURST ? hues.hot() : hues.brightest());
         Composite before = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive((float) (1 - clamp((time - FORMING) / (FORMED - 0.1 - FORMING)))));
-        int cell = time < PIXELATING ? 1 : (int) Math.round(1 + (pixel - 1) * ease(clamp((time - PIXELATING) / (PIXELATED - PIXELATING))));
+        int cell = time < PIXELATING
+            ? 1
+            : (int) Math.round(1 + (pixel - 1) * ease(clamp((time - PIXELATING) / (PIXELATED - PIXELATING))));
         // The pixels at its edge come and go, about ten times a second.
         long flickers = (long) (time * 10);
         if (cell < 2) {
@@ -483,9 +523,12 @@ final class WelcomeScene {
             double x = stage.wickX() + Math.cos(spark.angle()) * flown;
             double y = stage.wickY() - 4 * pixel + Math.sin(spark.angle()) * flown - 2 * pixel * since * since;
             g.setColor(alpha(hues.get(spark.hue()), 1 - since / spark.life()));
-            g.fillRect(stage.pipX() + (int) Math.round((x - stage.pipX()) / step) * step,
-                       stage.pipY() + (int) Math.round((y - stage.pipY()) / step) * step,
-                       spark.small() ? step : pixel, spark.small() ? step : pixel);
+            g.fillRect(
+                stage.pipX() + (int) Math.round((x - stage.pipX()) / step) * step,
+                stage.pipY() + (int) Math.round((y - stage.pipY()) / step) * step,
+                spark.small() ? step : pixel,
+                spark.small() ? step : pixel
+            );
         }
     }
 
@@ -609,8 +652,12 @@ final class WelcomeScene {
     }
 
     private static List<Act> acts() {
-        List<Act> kinds = List.of(new Act(GenieSvgUtil.Pose.THINKING, 3.6), new Act(GenieSvgUtil.Pose.WORKING, 2.4),
-                                  new Act(GenieSvgUtil.Pose.AWAKE, 2.2), new Act(GenieSvgUtil.Pose.WAVING, 2.0));
+        List<Act> kinds = List.of(
+            new Act(GenieSvgUtil.Pose.THINKING, 3.6),
+            new Act(GenieSvgUtil.Pose.WORKING, 2.4),
+            new Act(GenieSvgUtil.Pose.AWAKE, 2.2),
+            new Act(GenieSvgUtil.Pose.WAVING, 2.0)
+        );
         List<Act> acts = new ArrayList<>(List.of(new Act(GenieSvgUtil.Pose.WAVING, 2.8), new Act(GenieSvgUtil.Pose.AWAKE, 1.8)));
         Random chance = new Random(7);
         while (acts.size() < 24) {
@@ -624,9 +671,13 @@ final class WelcomeScene {
         Random chance = new Random(11);
         List<Spark> sparks = new ArrayList<>();
         for (int spark = 0; spark < 40; spark++)
-            sparks.add(new Spark(-Math.PI * (0.05 + 0.9 * chance.nextDouble()) + (chance.nextDouble() < 0.2 ? Math.PI * 0.15 : 0),
-                                 8 + 12 * chance.nextDouble(), 0.8 + 0.9 * chance.nextDouble(),
-                                 chance.nextInt(4), chance.nextDouble() < 0.3));
+            sparks.add(new Spark(
+                -Math.PI * (0.05 + 0.9 * chance.nextDouble()) + (chance.nextDouble() < 0.2 ? Math.PI * 0.15 : 0),
+                8 + 12 * chance.nextDouble(),
+                0.8 + 0.9 * chance.nextDouble(),
+                chance.nextInt(4),
+                chance.nextDouble() < 0.3
+            ));
         return List.copyOf(sparks);
     }
 
@@ -662,8 +713,10 @@ final class WelcomeScene {
     /// `from`, turning into `to` as `progress` goes from 0 to 1.
     private static Color mix(Color from, Color to, double progress) {
         double part = clamp(progress);
-        return new Color((int) Math.round(from.getRed() + (to.getRed() - from.getRed()) * part),
-                         (int) Math.round(from.getGreen() + (to.getGreen() - from.getGreen()) * part),
-                         (int) Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * part));
+        return new Color(
+            (int) Math.round(from.getRed() + (to.getRed() - from.getRed()) * part),
+            (int) Math.round(from.getGreen() + (to.getGreen() - from.getGreen()) * part),
+            (int) Math.round(from.getBlue() + (to.getBlue() - from.getBlue()) * part)
+        );
     }
 }

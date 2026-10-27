@@ -64,16 +64,28 @@ final class MarkdownStylingUtil {
             default -> run.block() == MarkdownParsingUtil.Block.QUOTE ? SUBTEXT : TEXT;
         };
         int size = switch (run.block()) { case H1 -> 20; case H2 -> 17; case H3 -> 15; default -> BODY; };
-        boolean heading = run.block() == MarkdownParsingUtil.Block.H1 || run.block() == MarkdownParsingUtil.Block.H2 || run.block() == MarkdownParsingUtil.Block.H3;
-        boolean bold = heading || run.inline() == MarkdownParsingUtil.Inline.BOLD || run.inline() == MarkdownParsingUtil.Inline.BOLD_ITALIC;
-        boolean italic = run.inline() == MarkdownParsingUtil.Inline.ITALIC || run.inline() == MarkdownParsingUtil.Inline.BOLD_ITALIC
-                      || (run.block() == MarkdownParsingUtil.Block.QUOTE && run.inline() != MarkdownParsingUtil.Inline.MARKER);
+        boolean heading =
+            run.block() == MarkdownParsingUtil.Block.H1 ||
+            run.block() == MarkdownParsingUtil.Block.H2 ||
+            run.block() == MarkdownParsingUtil.Block.H3;
+        boolean bold =
+            heading ||
+            run.inline() == MarkdownParsingUtil.Inline.BOLD ||
+            run.inline() == MarkdownParsingUtil.Inline.BOLD_ITALIC;
+        boolean italic =
+            run.inline() == MarkdownParsingUtil.Inline.ITALIC ||
+            run.inline() == MarkdownParsingUtil.Inline.BOLD_ITALIC ||
+            (run.block() == MarkdownParsingUtil.Block.QUOTE && run.inline() != MarkdownParsingUtil.Inline.MARKER);
         boolean code = run.inline() == MarkdownParsingUtil.Inline.CODE;
         boolean even = code || run.block() == MarkdownParsingUtil.Block.TABLE;
         Color shown = faded(colour, alpha);
         return f -> {
-            FontConf set = f.family(even ? MONO : FONT).size(even ? size - 1 : size).color(shown)
-                            .weight(bold ? 2 : 1).posture(italic ? 0.2f : 0f);
+            FontConf set =
+                f.family(even ? MONO : FONT)
+                .size(even ? size - 1 : size)
+                .color(shown)
+                .weight(bold ? 2 : 1)
+                .posture(italic ? 0.2f : 0f);
             if (code) set = set.backgroundColor(faded(run.block() == MarkdownParsingUtil.Block.CODE ? SMOKE : RAISED, alpha));
             if (run.inline() == MarkdownParsingUtil.Inline.STRIKE) set = set.strikeThrough(true);
             if (run.inline() == MarkdownParsingUtil.Inline.LINK) set = set.underlined(true);
@@ -82,7 +94,8 @@ final class MarkdownStylingUtil {
     }
 
     private static Color faded(Color colour, double alpha) {
-        return alpha >= 1 ? colour
-             : new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), (int) Math.round(colour.getAlpha() * alpha));
+        return alpha >= 1
+            ? colour
+            : new Color(colour.getRed(), colour.getGreen(), colour.getBlue(), (int) Math.round(colour.getAlpha() * alpha));
     }
 }

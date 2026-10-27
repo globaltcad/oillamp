@@ -21,9 +21,18 @@ import sprouts.HasId;
 ///              it was doing, rather than answering
 /// @param model for an answer, or a failed one, the model that wrote it, as the service names it,
 ///              such as `azure/gpt-6.1-sol`; otherwise, or when not known, nothing
-public record Entry(UUID id, Kind kind, String title, String text, String detail, String ref, State state,
-                    boolean expanded, boolean beforeTools, String model)
-        implements HasId<UUID> {
+public record Entry(
+    UUID id,
+    Kind kind,
+    String title,
+    String text,
+    String detail,
+    String ref,
+    State state,
+    boolean expanded,
+    boolean beforeTools,
+    String model
+) implements HasId<UUID> {
 
     public enum Kind { YOU, GENIE, THINKING, TOOL, FILE, NOTICE }
 
