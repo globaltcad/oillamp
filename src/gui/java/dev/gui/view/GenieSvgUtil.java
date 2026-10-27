@@ -81,8 +81,9 @@ final class GenieSvgUtil {
     /// Each looks right on Genies' dark plum and next to its amber, and none is that amber, so a
     /// genie never looks like a button.
     static final List<Color> COLOURS = List.of(
-            new Color(0x6f, 0xc8, 0xf0), new Color(0x7e, 0xe0, 0xa8), new Color(0xb9, 0xa2, 0xf5), new Color(0xf5, 0x9a, 0xbf),
-            new Color(0x4f, 0xd1, 0xc5), new Color(0xf2, 0xdc, 0x6b), new Color(0xff, 0x8a, 0x7a), new Color(0xd9, 0xdd, 0xe8));
+        new Color(0x6f, 0xc8, 0xf0), new Color(0x7e, 0xe0, 0xa8), new Color(0xb9, 0xa2, 0xf5), new Color(0xf5, 0x9a, 0xbf),
+        new Color(0x4f, 0xd1, 0xc5), new Color(0xf2, 0xdc, 0x6b), new Color(0xff, 0x8a, 0x7a), new Color(0xd9, 0xdd, 0xe8)
+    );
 
     private static final List<Accessory> HATS = List.of(Accessory.TURBAN, Accessory.FEZ, Accessory.TOPKNOT, Accessory.FLAME);
 
@@ -109,9 +110,10 @@ final class GenieSvgUtil {
             case READY -> Pose.AWAKE;
             case BROKEN -> Pose.DIZZY;
             case WORKING -> {
-                boolean toolRuns = !genie.transcript().isEmpty()
-                        && genie.transcript().entries().last().kind() == Entry.Kind.TOOL
-                        && genie.transcript().entries().last().isWriting();
+                boolean toolRuns =
+                    !genie.transcript().isEmpty() &&
+                    genie.transcript().entries().last().kind() == Entry.Kind.TOOL &&
+                    genie.transcript().entries().last().isWriting();
                 yield toolRuns ? Pose.WORKING : Pose.THINKING;
             }
         };
@@ -152,9 +154,10 @@ final class GenieSvgUtil {
         char[][] pixels = pixels(appearance, pose, frame);
         Map<Character, Color> paint = colours(appearance);
         int size = BODY.length;
-        StringBuilder svg = new StringBuilder()
-                .append("<svg xmlns='http://www.w3.org/2000/svg' width='").append(size).append("' height='").append(size)
-                .append("' viewBox='0 0 ").append(size).append(' ').append(size).append("' shape-rendering='crispEdges'>");
+        StringBuilder svg =
+            new StringBuilder()
+            .append("<svg xmlns='http://www.w3.org/2000/svg' width='").append(size).append("' height='").append(size)
+            .append("' viewBox='0 0 ").append(size).append(' ').append(size).append("' shape-rendering='crispEdges'>");
         appendPath(svg, pixels, '.', appearance.colour());
         for (Map.Entry<Character, Color> colour : paint.entrySet())
             appendPath(svg, pixels, colour.getKey(), colour.getValue());
@@ -216,12 +219,16 @@ final class GenieSvgUtil {
                 if (letter == '.' ? row[x] == '.' : row[x] != letter) { x++; continue; }
                 int start = x;
                 while (x < row.length && (letter == '.' ? row[x] != '.' : row[x] == letter)) x++;
-                path.append('M').append(start).append(' ').append(y).append('h').append(x - start).append("v1h-").append(x - start).append('z');
+                path
+                .append('M').append(start).append(' ').append(y)
+                .append('h').append(x - start)
+                .append("v1h-").append(x - start)
+                .append('z');
             }
         }
         if (path.isEmpty()) return;
-        svg.append("<path fill='").append(String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue()))
-           .append("' d='").append(path).append("'/>");
+        String hex = String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue());
+        svg.append("<path fill='").append(hex).append("' d='").append(path).append("'/>");
     }
 
     /// A small drawing laid over the genie: its rows of letters, and where its top left pixel
@@ -258,69 +265,95 @@ final class GenieSvgUtil {
     private static List<Sprite> pose(Pose pose, int frame) {
         Sprite arms = new Sprite(2, 11, "B..............B");
         return switch (pose) {
-            case AWAKE -> List.of(arms,
-                    new Sprite(5, 7, "EE......EE", "EE......EE"));
+            case AWAKE -> List.of(
+                arms,
+                new Sprite(5, 7, "EE......EE", "EE......EE")
+            );
             case ASLEEP -> List.of(
-                    new Sprite(5, 8, "EE......EE"),
-                    new Sprite(16, 0, "ZZZZ", "..Z.", ".Z..", "ZZZZ"));
-            case THINKING -> List.of(arms,
-                    new Sprite(6, 6, "EE......EE", "EE......EE"),
-                    switch (frame) {
-                        case 0 -> new Sprite(17, 4, "Z");
-                        case 1 -> new Sprite(17, 2, ".Z", "..", "Z.");
-                        default -> new Sprite(17, 0, ".ZZ", ".ZZ", ".Z.", "...", "Z..");
-                    });
+                new Sprite(5, 8, "EE......EE"),
+                new Sprite(16, 0, "ZZZZ", "..Z.", ".Z..", "ZZZZ")
+            );
+            case THINKING -> List.of(
+                arms,
+                new Sprite(6, 6, "EE......EE", "EE......EE"),
+                switch (frame) {
+                    case 0 -> new Sprite(17, 4, "Z");
+                    case 1 -> new Sprite(17, 2, ".Z", "..", "Z.");
+                    default -> new Sprite(17, 0, ".ZZ", ".ZZ", ".Z.", "...", "Z..");
+                }
+            );
             case WORKING -> List.of(
-                    new Sprite(5, 8, "EE......EE", "EE......EE"),
-                    frame == 0 ? new Sprite(2, 10, "BB..............", "...............B")
-                               : new Sprite(2, 10, "..............BB", "B..............."),
-                    frame == 0 ? new Sprite(0, 1, ".Y.", "YYY", ".Y.")
-                               : new Sprite(17, 1, ".Y.", "YYY", ".Y."));
+                new Sprite(5, 8, "EE......EE", "EE......EE"),
+                frame == 0
+                    ? new Sprite(2, 10, "BB..............", "...............B")
+                    : new Sprite(2, 10, "..............BB", "B..............."),
+                frame == 0
+                    ? new Sprite(0, 1, ".Y.", "YYY", ".Y.")
+                    : new Sprite(17, 1, ".Y.", "YYY", ".Y.")
+            );
             case WAVING -> List.of(
-                    new Sprite(5, 7, "EE......EE", "EE......EE"),
-                    new Sprite(2, 11, "B"),
-                    frame == 0 ? new Sprite(17, 8, "..B", ".B.", "B..")
-                               : new Sprite(17, 8, "B", "B", "B"));
-            case DIZZY -> List.of(arms,
-                    new Sprite(4, 6, "E.E......E.E", ".E........E.", "E.E......E.E"),
-                    new Sprite(0, 2, ".Y................", "YYY..............Y", ".Y..............YYY", ".................Y."));
+                new Sprite(5, 7, "EE......EE", "EE......EE"),
+                new Sprite(2, 11, "B"),
+                frame == 0
+                    ? new Sprite(17, 8, "..B", ".B.", "B..")
+                    : new Sprite(17, 8, "B", "B", "B")
+            );
+            case DIZZY -> List.of(
+                arms,
+                new Sprite(4, 6, "E.E......E.E", ".E........E.", "E.E......E.E"),
+                new Sprite(0, 2, ".Y................", "YYY..............Y", ".Y..............YYY", ".................Y.")
+            );
         };
     }
 
     /// The drawing of `accessory`, made to fit the body and every pose.
     private static Sprite sprite(Accessory accessory) {
         return switch (accessory) {
-            case TURBAN -> new Sprite(3, 0,
-                    "......CC.w....",
-                    "....CcCCCw....",
-                    "..CCCcCCCCcC..",
-                    ".CcCCGRRGCCcC.",
-                    ".CCcCCGGCCcCC.",
-                    "..cccccccccc..");
-            case FEZ -> new Sprite(7, 1,
-                    ".RRRR..",
-                    ".RRRRG.",
-                    "RRRRRRG",
-                    "rrrrrr.");
-            case TOPKNOT -> new Sprite(8, 0,
-                    ".hH.",
-                    "hhH.",
-                    ".hh.",
-                    ".GG.");
-            case FLAME -> new Sprite(8, 0,
-                    ".F..",
-                    ".FF.",
-                    "FfF.",
-                    "FffF");
-            case EARRING -> new Sprite(1, 6,
-                    "B................B",
-                    "BB..............BB",
-                    ".................G");
-            case CUFFS -> new Sprite(3, 11,
-                    "G............G");
-            case VEST -> new Sprite(5, 11,
-                    "RR......RR",
-                    ".RG....GR.");
+            case TURBAN -> new Sprite(
+                3, 0,
+                "......CC.w....",
+                "....CcCCCw....",
+                "..CCCcCCCCcC..",
+                ".CcCCGRRGCCcC.",
+                ".CCcCCGGCCcCC.",
+                "..cccccccccc.."
+            );
+            case FEZ -> new Sprite(
+                7, 1,
+                ".RRRR..",
+                ".RRRRG.",
+                "RRRRRRG",
+                "rrrrrr."
+            );
+            case TOPKNOT -> new Sprite(
+                8, 0,
+                ".hH.",
+                "hhH.",
+                ".hh.",
+                ".GG."
+            );
+            case FLAME -> new Sprite(
+                8, 0,
+                ".F..",
+                ".FF.",
+                "FfF.",
+                "FffF"
+            );
+            case EARRING -> new Sprite(
+                1, 6,
+                "B................B",
+                "BB..............BB",
+                ".................G"
+            );
+            case CUFFS -> new Sprite(
+                3, 11,
+                "G............G"
+            );
+            case VEST -> new Sprite(
+                5, 11,
+                "RR......RR",
+                ".RG....GR."
+            );
         };
     }
 }

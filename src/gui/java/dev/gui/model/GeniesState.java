@@ -34,10 +34,23 @@ import sprouts.Tuple;
 /// @param advanced whether the settings show the advanced way to a model: Eden AI, a server
 ///                 elsewhere, or any model server on this computer. Otherwise they show the simple
 ///                 way, Ollama set up by Genies
-public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings, Page page,
-                          Optional<String> environmentKey, Fold genieList, boolean narrow,
-                          ModelLookUp lookUp, DesktopZoom zoom, Split split, Area area, Instant now, Tuple<Trouble> troubles,
-                          OllamaSetup ollama, boolean advanced) {
+public record GeniesState(
+    Tuple<Genie> genies,
+    UUID selected,
+    Settings settings,
+    Page page,
+    Optional<String> environmentKey,
+    Fold genieList,
+    boolean narrow,
+    ModelLookUp lookUp,
+    DesktopZoom zoom,
+    Split split,
+    Area area,
+    Instant now,
+    Tuple<Trouble> troubles,
+    OllamaSetup ollama,
+    boolean advanced
+) {
 
     /// A width and a height, in the window's own units.
     public record Area(int width, int height) {}
@@ -76,10 +89,23 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// Without genies, the window starts with the settings, which welcome the user then. The
     /// settings show the advanced way at first when that is what the genies use.
     public static GeniesState of(Tuple<Genie> genies, Settings settings, Optional<String> environmentKey) {
-        return new GeniesState(genies, genies.isEmpty() ? NONE : genies.first().id(), settings,
-                               genies.isEmpty() ? Page.SETTINGS : Page.CHAT, environmentKey, new Fold(true, Fold.CLOSED.height()), false,
-                               ModelLookUp.NOT_YET, DesktopZoom.FIT, Split.PICKED, new Area(1030, 760), Instant.now(), Tuple.of(Trouble.class),
-                               OllamaSetup.NOT_YET, !settings.usesOllama());
+        return new GeniesState(
+            genies,
+            genies.isEmpty() ? NONE : genies.first().id(),
+            settings,
+            genies.isEmpty() ? Page.SETTINGS : Page.CHAT,
+            environmentKey,
+            new Fold(true, Fold.CLOSED.height()),
+            false,
+            ModelLookUp.NOT_YET,
+            DesktopZoom.FIT,
+            Split.PICKED,
+            new Area(1030, 760),
+            Instant.now(),
+            Tuple.of(Trouble.class),
+            OllamaSetup.NOT_YET,
+            !settings.usesOllama()
+        );
     }
 
     public GeniesState withGenies(Tuple<Genie> genies) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced); }
@@ -133,8 +159,8 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// per pixel.
     public GeniesState withArea(int width, int height) {
         Area rounded = new Area(width / 10 * 10, height / 10 * 10);
-        return rounded.equals(area) ? this : new GeniesState(genies, selected, settings, page, environmentKey,
-                                                            genieList, narrow, lookUp, zoom, split, rounded, now, troubles, ollama, advanced);
+        if (rounded.equals(area)) return this;
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, rounded, now, troubles, ollama, advanced);
     }
 
     /// Below this width of the conversation's area, the header's buttons do not fit with their
@@ -254,8 +280,10 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
         int index = indexOf(id);
         if (index < 0) return this;
         Tuple<Genie> rest = genies.removeAt(index);
-        UUID next = !selected.equals(id) ? selected
-                  : rest.isEmpty() ? NONE : rest.get(Math.max(0, index - 1)).id();
+        UUID next =
+            !selected.equals(id) ? selected
+            : rest.isEmpty() ? NONE
+            : rest.get(Math.max(0, index - 1)).id();
         return withGenies(rest).withSelected(next).withPage(rest.isEmpty() ? Page.SETTINGS : page);
     }
 
@@ -279,9 +307,11 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// now, and which only when they next wake. Nothing when every genie sleeps.
     public Optional<String> noteForAwakeGenies() {
         if (!genies.any(genie -> genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) return Optional.empty();
-        return Optional.of("Genies that are awake answer with a new model from their next message on. "
-                         + "A new place, address or key reaches them when they next wake, and so does "
-                         + "everything for a genie that kept running while Genies was closed.");
+        return Optional.of(
+            "Genies that are awake answer with a new model from their next message on. "
+            + "A new place, address or key reaches them when they next wake, and so does "
+            + "everything for a genie that kept running while Genies was closed."
+        );
     }
 
     /// The settings are asking the service they name for its models.
@@ -294,15 +324,16 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// the settings name, and no model was chosen there yet, the first one is.
     public GeniesState modelsFound(Settings.Place place, String service, Tuple<String> found) {
         Tuple<String> models = found.sort(String.CASE_INSENSITIVE_ORDER);
-        String note = models.isEmpty()
-                        ? (place == Settings.Place.EDEN_AI ? "Eden AI offers no models in the EU just now."
-                           : "The model server offers no models yet; pull one first, such as `ollama pull qwen2.5:7b`.")
-                    : place == Settings.Place.EDEN_AI ? "Eden AI offers " + models.size() + " models in the EU."
-                    : models.size() == 1 ? "The model server offers one model."
-                    : "The model server offers " + models.size() + " models.";
+        String note =
+            models.isEmpty() && place == Settings.Place.EDEN_AI ? "Eden AI offers no models in the EU just now."
+            : models.isEmpty() ? "The model server offers no models yet; pull one first, such as `ollama pull qwen2.5:7b`."
+            : place == Settings.Place.EDEN_AI ? "Eden AI offers " + models.size() + " models in the EU."
+            : models.size() == 1 ? "The model server offers one model."
+            : "The model server offers " + models.size() + " models.";
         ModelLookUp answer = new ModelLookUp(place, service, models, note);
         Settings chosen = answer.isFor(settings) && settings.model().isBlank() && !models.isEmpty()
-                ? settings.withModel(models.first()) : settings;
+            ? settings.withModel(models.first())
+            : settings;
         return withSettings(chosen).withLookUp(answer);
     }
 
@@ -314,9 +345,12 @@ public record GeniesState(Tuple<Genie> genies, UUID selected, Settings settings,
     /// Ollama is set up with the model `model`, as Ollama names it, and the genies use it from
     /// now on, as Genies prepared it for them.
     public GeniesState usingOllama(String model) {
-        return withSettings(settings.withPlace(Settings.Place.THIS_MACHINE)
-                                    .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, OllamaSetup.PREFIX + model)))
-              .withOllama(ollama.at(OllamaSetup.Step.IDLE, 0, ""));
+        return
+            withSettings(
+                settings.withPlace(Settings.Place.THIS_MACHINE)
+                .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, OllamaSetup.PREFIX + model))
+            )
+            .withOllama(ollama.at(OllamaSetup.Step.IDLE, 0, ""));
     }
 
     /// Why genies cannot reach their model with the current settings, or nothing.

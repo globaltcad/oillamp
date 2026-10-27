@@ -39,10 +39,22 @@ import sprouts.Tuple;
 /// @param maxGrowthGb how far the history may grow beyond its first moment, in GB, as the lamp's
 ///                 file says; empty before it was read, and while the genie has no lamp yet
 /// @param pruned   what oillamp last deleted to keep the history within that size; empty until it did
-public record History(boolean read, long reading, Tuple<Moment> all, Tuple<Branch> branches, String line,
-                      String picked, boolean earlier, String busy, String note, String problem,
-                      Optional<Plan> plan, Optional<Autosave> autosave, Optional<Double> maxGrowthGb,
-                      Optional<Pruned> pruned) {
+public record History(
+    boolean read,
+    long reading,
+    Tuple<Moment> all,
+    Tuple<Branch> branches,
+    String line,
+    String picked,
+    boolean earlier,
+    String busy,
+    String note,
+    String problem,
+    Optional<Plan> plan,
+    Optional<Autosave> autosave,
+    Optional<Double> maxGrowthGb,
+    Optional<Pruned> pruned
+) {
 
     /// When oillamp saves the genie's home by itself, as `[autosave]` in its lamp's `oillamp.toml`
     /// says. A save by hand and the save before going back happen whatever these say. The lamp
@@ -86,9 +98,17 @@ public record History(boolean read, long reading, Tuple<Moment> all, Tuple<Branc
     /// @param conversation for [Kind#RAN], pi's id for the run's conversation; empty when it had none
     /// @param branches     the branches it is on, by name in alphabetical order: the one it was
     ///                     saved on, and every branch started there or later
-    public record Moment(String id, Instant at, Kind kind, String message, String run, String job,
-                         Optional<Schedule.Outcome> outcome, String conversation, Tuple<String> branches)
-            implements HasId<String> {
+    public record Moment(
+        String id,
+        Instant at,
+        Kind kind,
+        String message,
+        String run,
+        String job,
+        Optional<Schedule.Outcome> outcome,
+        String conversation,
+        Tuple<String> branches
+    ) implements HasId<String> {
 
         /// For [Kind#RAN], the genie's last words in the run; empty otherwise, or when it said nothing.
         public String said() {
@@ -186,8 +206,10 @@ public record History(boolean read, long reading, Tuple<Moment> all, Tuple<Branc
     /// The longest name a branch can have.
     public static final int LONGEST_BRANCH_NAME = 64;
 
-    public static final History UNREAD = new History(false, 0, Tuple.of(Moment.class), Tuple.of(Branch.class), "", "",
-            false, "", "", "", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    public static final History UNREAD = new History(
+        false, 0, Tuple.of(Moment.class), Tuple.of(Branch.class), "", "",
+        false, "", "", "", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
+    );
 
     public History withPicked(String picked)    { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withEarlier(boolean earlier) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
@@ -207,8 +229,9 @@ public record History(boolean read, long reading, Tuple<Moment> all, Tuple<Branc
     /// it gave may no longer hold, and the user is asked again.
     public History readAs(long reading, Tuple<Branch> branches, Tuple<Moment> all) {
         if (read && reading <= this.reading) return this;
-        History fresh = new History(true, reading, all, branches, "", "", earlier, busy, note, problem, Optional.empty(),
-                                    autosave, maxGrowthGb, pruned);
+        History fresh = new History(
+            true, reading, all, branches, "", "", earlier, busy, note, problem, Optional.empty(), autosave, maxGrowthGb, pruned
+        );
         boolean lineThere = branches.any(it -> it.name().equals(line) && !it.lampIsOn());
         History shown = lineThere ? fresh.withLine(line) : fresh;
         boolean pickedThere = shown.onLine(shown.shownLine()).any(it -> it.id().equals(picked));
@@ -312,13 +335,15 @@ public record History(boolean read, long reading, Tuple<Moment> all, Tuple<Branc
             case SAVED -> moment.message().isBlank() ? "Saved by hand" : Schedule.firstLine(moment.message(), 90);
             case BEFORE_RUN -> "Before it went to work";
             case RAN -> !moment.job().isEmpty()
-                    ? schedule.job(moment.job()).map(job -> "Did the job: " + job.title()).orElse("Did a scheduled job")
-                    : conversations.find(moment.conversation()).map(it -> "Answered: " + it.title()).orElse("Answered a question");
+                ? schedule.job(moment.job()).map(job -> "Did the job: " + job.title()).orElse("Did a scheduled job")
+                : conversations.find(moment.conversation()).map(it -> "Answered: " + it.title()).orElse("Answered a question");
             case BEFORE_GOING_BACK -> "Before going back";
-            case WENT_BACK -> undid(moment).flatMap(this::wentBackTo)
-                              .map(it -> "Undid going back to how it was " + when(it.at(), schedule.zone(), now))
-                              .or(() -> wentBackTo(moment).map(it -> "Went back to how it was " + when(it.at(), schedule.zone(), now)))
-                              .orElse("Went back to an earlier moment");
+            case WENT_BACK ->
+                undid(moment)
+                .flatMap(this::wentBackTo)
+                .map(it -> "Undid going back to how it was " + when(it.at(), schedule.zone(), now))
+                .or(() -> wentBackTo(moment).map(it -> "Went back to how it was " + when(it.at(), schedule.zone(), now)))
+                .orElse("Went back to an earlier moment");
             case BEFORE_SWITCHING -> "Before it moved to another branch";
         };
     }

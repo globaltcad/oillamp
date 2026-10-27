@@ -30,9 +30,14 @@ public interface LampLighter {
     /// @param events   receives every event of the lamp's session, from any thread, including
     ///                 the progress of the agent's runs
     /// @throws IOException when the lamp did not start; the message says why, for the user
-    Lit light(Path directory, String name, Settings settings, String key, Consumer<String> progress,
-              Consumer<LampEvent> events)
-            throws IOException, InterruptedException;
+    Lit light(
+        final Path directory,
+        final String name,
+        final Settings settings,
+        final String key,
+        final Consumer<String> progress,
+        final Consumer<LampEvent> events
+    ) throws IOException, InterruptedException;
 
     /// Starts a lamp someone made elsewhere, with `oillamp at`, as its own configuration has it:
     /// with the settings' model service and key, which the engine keeps to itself, but without
@@ -40,8 +45,13 @@ public interface LampLighter {
     /// agent's home, changing how it answers wherever it is lit next.
     ///
     /// The default lights it as [#light] does, for a lighter that makes no difference.
-    default Lit lightAsItIs(Path directory, Settings settings, String key, Consumer<String> progress,
-                            Consumer<LampEvent> events) throws IOException, InterruptedException {
+    default Lit lightAsItIs(
+        final Path directory,
+        final Settings settings,
+        final String key,
+        final Consumer<String> progress,
+        final Consumer<LampEvent> events
+    ) throws IOException, InterruptedException {
         Path name = directory.getFileName();
         return light(directory, name == null ? directory.toString() : name.toString(), settings, key, progress, events);
     }

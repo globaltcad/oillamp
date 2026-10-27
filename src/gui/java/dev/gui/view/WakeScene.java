@@ -47,9 +47,11 @@ record WakeScene(UUID id, Genie.Phase phase, double seconds, double released) {
             return caught < EMERGING ? caught : 3.6 + (seconds % 0.9);
         }
         if (phase.isAwake())
-            return released < 0 ? WelcomeScene.FORMED + 1 + seconds
-                    : EMERGING + Math.min(1, (seconds - released) / TAKE) * (WelcomeScene.FORMED + 1 - EMERGING)
-                            + Math.max(0, seconds - released - TAKE);
+            return released < 0
+                ? WelcomeScene.FORMED + 1 + seconds
+                : EMERGING
+                  + Math.min(1, (seconds - released) / TAKE) * (WelcomeScene.FORMED + 1 - EMERGING)
+                  + Math.max(0, seconds - released - TAKE);
         return 1;
     }
 

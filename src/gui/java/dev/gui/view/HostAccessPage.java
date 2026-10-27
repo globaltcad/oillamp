@@ -61,8 +61,10 @@ final class HostAccessPage {
     private static FlowCell span(int narrow, int large, int wide, UI.VerticalAlignment align) {
         return AUTO_SPAN(it -> {
             int span = it.parentSize().widthOrElse(0) >= UI.scale(THREE_FROM) ? wide : large;
-            return it.align(align).verySmall(narrow).small(narrow).medium(narrow)
-                     .large(span).veryLarge(span).oversize(span);
+            return
+                it.align(align)
+                .verySmall(narrow).small(narrow).medium(narrow)
+                .large(span).veryLarge(span).oversize(span);
         });
     }
 
@@ -106,11 +108,18 @@ final class HostAccessPage {
                 .add(SWITCH, onOrOff())
                 .add(BESIDE_THE_SWITCH, experimental())
                 .add(FOLDERS, text("FOLDERS IT MAY READ", mayRead, "One per line, such as ~/Documents."))
-                .add(FOLDERS, text("FOLDERS IT MAY READ AND CHANGE", mayChange,
-                        "It may write files there, and copy what it made there."))
-                .add(OWN_WORDS, text("ANYTHING ELSE, IN YOUR OWN WORDS", words,
-                        "Say what must not happen, such as \"never open my tax returns\"."))
-                .add(WHOLE, saving()));
+                .add(FOLDERS,
+                    text("FOLDERS IT MAY READ AND CHANGE", mayChange, "It may write files there, and copy what it made there.")
+                )
+                .add(OWN_WORDS,
+                    text(
+                        "ANYTHING ELSE, IN YOUR OWN WORDS",
+                        words,
+                        "Say what must not happen, such as \"never open my tax returns\"."
+                    )
+                )
+                .add(WHOLE, saving())
+            );
     }
 
     private static boolean asleep(Genie genie) {
@@ -132,9 +141,11 @@ final class HostAccessPage {
 
     private UIForAnySwing<?, ?> top() {
         Val<String> lockedBecause = genie.viewAsString(HostAccessPage::locked);
-        Val<String> says = genie.viewAsString(it -> it.hostAccess().saved().on()
+        Val<String> says = genie.viewAsString(it ->
+            it.hostAccess().saved().on()
                 ? it.name() + " may ask to reach this computer. A model judges each request against these rules before anything happens."
-                : it.name() + " cannot reach this computer.");
+                : it.name() + " cannot reach this computer."
+        );
         Val<String> problem = hostAccess.viewAsString(HostAccess::problem);
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
@@ -147,7 +158,8 @@ final class HostAccessPage {
                 .isVisibleIf(lockedBecause.viewAs(Boolean.class, it -> !it.isEmpty()))
                 .withStyle(it -> it.backgroundColor(YOURS).borderRadius(12).borderAt(UI.Edge.LEFT, 3, BRASS))
                 .add("top, gaptop 2", label("").withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, BRASS))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(lockedBecause, TEXT, Val.of(true))))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(lockedBecause, TEXT, Val.of(true)))
+            )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
     }
 
@@ -166,9 +178,16 @@ final class HostAccessPage {
             panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
             .withStyle(it -> it.backgroundColor(TROUBLE_WASH).borderRadius(12))
             .add("top", label("⚠").withStyle(it -> it.componentFont(f -> f.family(FONT).size(14).color(TROUBLE))))
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(Val.of("Experimental. Never turn this on on a computer with "
-                    + "sensitive data. The model that judges reads these rules with every request, and nothing else."),
-                    TEXT, Val.of(true)));
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(
+                    Val.of(
+                        "Experimental. Never turn this on on a computer with sensitive data. "
+                        + "The model that judges reads these rules with every request, and nothing else."
+                    ),
+                    TEXT,
+                    Val.of(true)
+                )
+            );
     }
 
     // ─── saving ────────────────────────────────────────────────────────────────────────────
@@ -181,15 +200,25 @@ final class HostAccessPage {
         return
             box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
             .add("growx, wmin 0", ViewPartsUtil.wrapped(warning, BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
-            .add("skip 0", button("Undo changes").group(Skin.QUIET_BUTTON)
-                 .isEnabledIf(canSave)
-                 .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved()))))
-            .add(button(busy.viewAsString(it -> it ? "Saving…" : "Save")).group(Skin.FLAME_BUTTON)
-                 .isEnabledIf(canSave)
-                 .withTooltip("Write these rules into the genie's lamp")
-                 .withStyle(canSave, (can, it) -> can ? it : it.backgroundColor(RAISED).foregroundColor(SUBTEXT)
-                     .componentFont(f -> f.color(SUBTEXT)).cursor(UI.Cursor.DEFAULT))
-                 .onClick(_ -> app.saveHostAccess(selected())));
+            .add("skip 0",
+                button("Undo changes").group(Skin.QUIET_BUTTON)
+                .isEnabledIf(canSave)
+                .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved())))
+            )
+            .add(
+                button(busy.viewAsString(it -> it ? "Saving…" : "Save")).group(Skin.FLAME_BUTTON)
+                .isEnabledIf(canSave)
+                .withTooltip("Write these rules into the genie's lamp")
+                .withStyle(canSave, (can, it) ->
+                    can
+                        ? it
+                        : it.backgroundColor(RAISED)
+                          .foregroundColor(SUBTEXT)
+                          .componentFont(f -> f.color(SUBTEXT))
+                          .cursor(UI.Cursor.DEFAULT)
+                )
+                .onClick(_ -> app.saveHostAccess(selected()))
+            );
     }
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────
@@ -198,8 +227,9 @@ final class HostAccessPage {
 
     /// A section's heading, dimmed while nothing under it can be changed.
     private UIForAnySwing<?, ?> section(String words) {
-        return label(words).group(Skin.SECTION)
-                .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT))));
+        return
+            label(words).group(Skin.SECTION)
+            .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT))));
     }
 
     /// One of the three texts: a heading, the text, as tall as the other two so they line up
@@ -212,14 +242,23 @@ final class HostAccessPage {
             .add("growx, wmin 0, h " + TEXT_HEIGHT + "!",
                 scrollPane().withEmptyBorder(0)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
-                .withStyle(changeable, (can, it) -> it.backgroundColor(can ? RAISED : SMOKE)
-                    .border(1, can ? BORDER : SMOKE).borderRadius(12))
+                .withStyle(changeable, (can, it) -> it
+                    .backgroundColor(can ? RAISED : SMOKE)
+                    .border(1, can ? BORDER : SMOKE)
+                    .borderRadius(12)
+                )
                 .add(
                     textArea(text).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
                     .isEnabledIf(changeable)
-                    .withStyle(changeable, (can, it) -> it.backgroundColor(TRANSPARENT).border(0, TRANSPARENT)
-                        .padding(10, 12, 10, 12).cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
-                        .componentFont(f -> f.family(FONT).size(14).color(can ? TEXT : ViewPartsUtil.dim(SUBTEXT))))))
+                    .withStyle(changeable, (can, it) -> it
+                        .backgroundColor(TRANSPARENT)
+                        .border(0, TRANSPARENT)
+                        .padding(10, 12, 10, 12)
+                        .cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
+                        .componentFont(f -> f.family(FONT).size(14).color(can ? TEXT : ViewPartsUtil.dim(SUBTEXT)))
+                    )
+                )
+            )
             .add("growx, wmin 0", ViewPartsUtil.note(note, Val.of(true)));
     }
 }
