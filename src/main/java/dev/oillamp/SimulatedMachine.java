@@ -79,6 +79,9 @@ final class SimulatedMachine implements Machine {
     /// which binds sockets and copies bytes and has no pure part that could be tested otherwise.
     private final Map<String, ServerSocketChannel> listening = new ConcurrentHashMap<>();
     private volatile boolean containerRunning;
+    /// The containers running on the simulated machine, by name, with their labels, as `podman ps`
+    /// lists them. Shared with every other machine of the same simulation; see [Builder].
+    private final Map<String, Map<String, String>> containers;
     /// The exit code of a simulated container that exited on its own and has not been removed.
     private volatile Optional<Integer> containerExitedWith = Optional.empty();
 
@@ -106,6 +109,7 @@ final class SimulatedMachine implements Machine {
         this.interactive = builder.interactive;
         this.agent = builder.agent;
         this.modelsOffered = builder.modelsOffered;
+        this.containers = builder.containers;
     }
 
     /// A clock that stands still, unless a scenario asked for one that moves.
@@ -164,8 +168,11 @@ final class SimulatedMachine implements Machine {
         for (Map.Entry<String, Outcome> scripted : scriptedCommands.entrySet())
             if (commandLine.startsWith(scripted.getKey())) return scripted.getValue();
         if (commandLine.startsWith("podman run ")) return startSimulatedSandbox(command);
-        if (commandLine.startsWith("podman stop ") || commandLine.startsWith("podman rm "))
+        if (commandLine.startsWith("podman stop ") || commandLine.startsWith("podman rm ")) {
+            command.argv().forEach(containers::remove);
             return stopSimulatedSandbox();
+        }
+        if (commandLine.startsWith("podman ps")) return listSimulatedSandboxes(command);
         if (commandLine.startsWith("podman container inspect")) return inspectSimulatedSandbox(command);
         // Absence is a non-zero exit. The simulated container exists from `podman run` until
         // `podman stop` or `podman rm`, so a scenario can tell whether one was left behind.
@@ -222,6 +229,8 @@ final class SimulatedMachine implements Machine {
         }
         containerRunning = true;
         containerExitedWith = Optional.empty();
+        Optional<String> name = argumentAfter(command, "--name");
+        name.ifPresent(it -> containers.put(it, labels(command)));
         sandboxDiesAfter.ifPresent(delay -> Thread.ofVirtual().name("simulated-sandbox-death").start(() -> {
             try {
                 Thread.sleep(delay);
@@ -229,11 +238,50 @@ final class SimulatedMachine implements Machine {
                 return;
             }
             if (!containerRunning) return;
+            name.ifPresent(containers::remove);
             closeListeningSockets();
             containerExitedWith = Optional.of(70);
             containerRunning = false;
         }));
         return new Outcome.Finished(0, "simulated-container-id\n", "", Duration.ofMillis(120));
+    }
+
+    /// The value after `option` on the command line, such as the name after `--name`.
+    private static Optional<String> argumentAfter(Command command, String option) {
+        Tuple<String> argv = command.argv();
+        for (int i = 0; i < argv.size() - 1; i++)
+            if (argv.get(i).equals(option)) return Optional.of(argv.get(i + 1));
+        return Optional.empty();
+    }
+
+    /// The labels `podman run` gives the container: each `--label key=value`.
+    private static Map<String, String> labels(Command command) {
+        Map<String, String> labels = new TreeMap<>();
+        Tuple<String> argv = command.argv();
+        for (int i = 0; i < argv.size() - 1; i++) {
+            if (!argv.get(i).equals("--label")) continue;
+            String label = argv.get(i + 1);
+            int equals = label.indexOf('=');
+            if (equals > 0) labels.put(label.substring(0, equals), label.substring(equals + 1));
+        }
+        return Map.copyOf(labels);
+    }
+
+    /// `podman ps --filter label=<key> --format json`: the running containers that have the label,
+    /// as podman 5 writes them, with their names as a list.
+    private Outcome listSimulatedSandboxes(Command command) {
+        Optional<String> wanted = argumentAfter(command, "--filter")
+                .filter(it -> it.startsWith("label=")).map(it -> it.substring("label=".length()));
+        com.fasterxml.jackson.databind.node.ArrayNode listing = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+        new TreeMap<>(containers).forEach((name, labels) -> {
+            if (wanted.isPresent() && !labels.containsKey(wanted.get())) return;
+            var container = listing.addObject();
+            container.putArray("Names").add(name);
+            container.put("State", "running");
+            var labelled = container.putObject("Labels");
+            labels.forEach(labelled::put);
+        });
+        return new Outcome.Finished(0, listing.toString() + "\n", "", Duration.ofMillis(20));
     }
 
     /// `$XDG_RUNTIME_DIR/oillamp/<agentId>/sockets`: the short path the host connects on.
@@ -960,6 +1008,10 @@ final class SimulatedMachine implements Machine {
     static final class Builder {
 
         private String operatingSystemName = "Linux";
+        /// The containers running on the simulated machine, by name, with their labels. Shared
+        /// by every machine this builds, as one podman is by every process on a real machine: a
+        /// session starts its sandbox on one, and `oillamp list` finds it on another.
+        private final Map<String, Map<String, String>> containers = new ConcurrentHashMap<>();
         private final Map<String, String> systemFiles = new TreeMap<>();
         private final Map<String, String> environment = new TreeMap<>();
         private final Map<String, Outcome> scriptedCommands = new LinkedHashMap<>();

@@ -275,8 +275,10 @@ class TheSessionCommandsSpec extends Specification {
 
         then:
             outcome.status() == LampExitStatus.SUCCESS
-            outcome.events().find { it instanceof LampEvent.Answer }
-                   .text().contains('no oillamp sandboxes are running')
+            outcome.events().find { it instanceof LampEvent.Sandboxes }.sandboxes().isEmpty()
+
+        and: 'the command line says so in words'
+            outcome.console().contains('no oillamp sandboxes are running on this host')
     }
 
     def 'Oillamp\'s `stop` command cleans up after a supervisor that was killed without tidying up'() {

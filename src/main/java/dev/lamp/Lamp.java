@@ -389,6 +389,26 @@ public final class Lamp implements AutoCloseable {
         return InternalModelListUtil.of(service, Optional.empty());
     }
 
+    /// The sandboxes running on this machine, whoever started them: this application, another
+    /// one, or a person with `oillamp at`. What `oillamp list` answers. Each names its lamp's
+    /// directory, so an application can find lamps it did not make, and [LampDirectory#join]
+    /// them.
+    ///
+    /// Asked of podman, by the labels oillamp gives each sandbox, not of a list oillamp keeps:
+    /// such a list could be wrong, and would be after a session was killed. A lamp whose sandbox
+    /// does not run is not among them; nothing on this machine knows of it but its directory.
+    ///
+    /// @throws LampFailedException when podman could not be asked; the problem says why
+    /// @throws IOException         when the engine's process could not be started at all
+    public static List<LampSandbox> running() throws IOException, InterruptedException, LampFailedException {
+        return running(Lamp::sameJava);
+    }
+
+    /// The sandboxes running on the machine the engine `launcher` starts runs on. See [#running()].
+    public static List<LampSandbox> running(LampLauncher launcher) throws IOException, InterruptedException, LampFailedException {
+        return List.copyOf(answer(runToEnd(launcher, List.of(), "list"), LampEvent.Sandboxes.class).sandboxes().toList());
+    }
+
     /// The lamp directory.
     public Path directory() { return directory; }
 

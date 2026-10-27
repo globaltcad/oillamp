@@ -30,7 +30,6 @@ final class CommandExecutionUtil {
     private static final Duration ASK_PATIENCE = Duration.ofDays(1);
 
     /// One oillamp container, as `podman ps` describes it.
-    private record RunningSandbox(String name, String state, String lamp) {}
 
 
     private CommandExecutionUtil() {}
@@ -724,8 +723,8 @@ final class CommandExecutionUtil {
         Machine.Outcome outcome = listRunningSandboxes(machine);
         if (!outcome.succeeded()) return Optional.empty();
         return runningSandboxesIn(outcome.output()).stream()
-                .filter(sandbox -> sandbox.lamp().equals(root.toString()))
-                .map(RunningSandbox::name).findFirst();
+                .filter(sandbox -> sandbox.lamp().equals(root))
+                .map(LampSandbox::container).findFirst();
     }
 
     /// Every container with an `oillamp.agent-id` label that podman is running.
@@ -739,9 +738,10 @@ final class CommandExecutionUtil {
     }
 
     /// Reads the output of [#listRunningSandboxes]. Output that is not the expected JSON counts
-    /// as no containers at all, rather than as a failure.
-    private static Tuple<RunningSandbox> runningSandboxesIn(String json) {
-        Tuple<RunningSandbox> found = Tuple.of(RunningSandbox.class);
+    /// as no containers at all, rather than as a failure, and so does a container without the
+    /// `oillamp.lamp` label, which says which lamp it belongs to.
+    private static Tuple<LampSandbox> runningSandboxesIn(String json) {
+        Tuple<LampSandbox> found = Tuple.of(LampSandbox.class);
         com.fasterxml.jackson.databind.JsonNode listing =
                 JsonUtil.parse(json).orElse(com.fasterxml.jackson.databind.node.NullNode.getInstance());
         if (!listing.isArray()) return found;
@@ -749,8 +749,9 @@ final class CommandExecutionUtil {
             // podman 4 and 5 give the names as a list; older versions as one string.
             com.fasterxml.jackson.databind.JsonNode names = container.path("Names");
             String name = names.isArray() && !names.isEmpty() ? names.get(0).asText() : names.asText("");
-            found = found.add(new RunningSandbox(name, JsonUtil.text(container, "State"),
-                    container.path("Labels").path("oillamp.lamp").asText("")));
+            String lamp = container.path("Labels").path("oillamp.lamp").asText("");
+            if (lamp.isBlank()) continue;
+            found = found.add(new LampSandbox(name, JsonUtil.text(container, "State"), Path.of(lamp)));
         }
         return found;
     }
@@ -820,14 +821,7 @@ final class CommandExecutionUtil {
                     "podman ps", outcome.exitCode(), outcome.errorOutput().strip())));
             return LampExitStatus.ERROR;
         }
-        Tuple<RunningSandbox> running = runningSandboxesIn(outcome.output());
-        StringBuilder rows = new StringBuilder(pad("CONTAINER", 22) + pad("STATE", 22) + "LAMP");
-        for (RunningSandbox sandbox : running)
-            rows.append('\n').append(pad(sandbox.name(), 22)).append(pad(sandbox.state(), 22))
-                .append(sandbox.lamp());
-        context.sink().accept(new LampEvent.Answer(running.isEmpty()
-                ? "no oillamp sandboxes are running on this host"
-                : rows.toString()));
+        context.sink().accept(new LampEvent.Sandboxes(runningSandboxesIn(outcome.output())));
         return LampExitStatus.SUCCESS;
     }
 

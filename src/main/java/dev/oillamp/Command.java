@@ -548,7 +548,7 @@ sealed interface Command {
                 .put("stop",       ValueSet.of("--embedded"))
                 .put("status",     ValueSet.of("--embedded"))
                 .put("follow",     ValueSet.of("--embedded"))
-                .put("list",       ValueSet.of(String.class))
+                .put("list",       ValueSet.of("--embedded"))
                 .put("completion", ValueSet.of(String.class))
                 .put("version",    ValueSet.of(String.class))
                 .put("help",       ValueSet.of(String.class))

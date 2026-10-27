@@ -204,6 +204,7 @@ final class ConsoleRenderer {
             case LampEvent.Output output ->
                     { if (verbose) printLine(area(output.sourceTag()) + dim(output.line())); }
             case LampEvent.Answer answer -> printLine(answer.text());
+            case LampEvent.Sandboxes sandboxes -> printLine(describeSandboxes(sandboxes.sandboxes()));
             // The state machine already says the things worth saying out loud, as Ok and Info;
             // the state changes themselves are the log's account of how it got there.
             case LampEvent.SessionStateChanged changed ->
@@ -509,6 +510,15 @@ final class ConsoleRenderer {
                .append(branch.newest().map(newest -> newest.shortId() + "  " + when(newest.at()) + "  " + newest.kind().label())
                                       .orElse("(no snapshot yet)"));
         return out.append("\n\n* the branch the lamp is on; every save goes to it").toString();
+    }
+
+    /// The sandboxes `oillamp list` lists, one per line, or that there are none.
+    private static String describeSandboxes(Tuple<LampSandbox> sandboxes) {
+        if (sandboxes.isEmpty()) return "no oillamp sandboxes are running on this host";
+        StringBuilder out = new StringBuilder(String.format("%-22s%-22s%s", "CONTAINER", "STATE", "LAMP"));
+        for (LampSandbox sandbox : sandboxes)
+            out.append('\n').append(String.format("%-22s%-22s%s", sandbox.container(), sandbox.state(), sandbox.lamp()));
+        return out.toString();
     }
 
     private static String snapshots(int count) {

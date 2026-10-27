@@ -6,6 +6,7 @@ import dev.lamp.LampStartupPhase
 import dev.lamp.LampSave
 import dev.lamp.LampBranch
 import dev.lamp.LampSaveOnBranches
+import dev.lamp.LampSandbox
 import dev.lamp.LampSaveKind
 import dev.lamp.LampJob
 import dev.lamp.LampProblem
@@ -95,6 +96,7 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.StepSkipped(STEP, 'already there'),
             new LampEvent.Output('sway', '[sway] 00:00:01 ✓ ünïcödé'),
             new LampEvent.Answer('multi\nline\nanswer'),
+            new LampEvent.Sandboxes(Tuple.of(LampSandbox, new LampSandbox('oillamp-k3v7x2ab', 'running', Path.of('/home/me/lamps/north')))),
             new LampEvent.SessionStateChanged(new LampSessionStatus('running', 'up', Duration.ofMinutes(2), 1)),
             new LampEvent.SessionOpened('20260928-120000', Tuple.of(String, 'ssh', '-T', 'lamp-k3v7x2ab'),
                                         Path.of('/run/user/1000/oillamp/k3v7x2ab/sockets/infra/vnc.sock'), 1920, 1080),

@@ -52,6 +52,9 @@ public sealed interface LampEvent {
     /// an answer is always shown.
     record Answer(String text)                          implements LampEvent {}
 
+    /// The sandboxes podman is running for lamps on this machine. What `oillamp list` answers.
+    record Sandboxes(Tuple<LampSandbox> sandboxes)      implements LampEvent {}
+
     record SessionStateChanged(LampSessionStatus status) implements LampEvent {}
 
     /// The session is running, and this is how to run a command in its sandbox.

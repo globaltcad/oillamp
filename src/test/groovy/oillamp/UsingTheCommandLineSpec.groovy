@@ -101,7 +101,7 @@ class UsingTheCommandLineSpec extends Specification {
             'history LAMP restore a1 -m note'  | '--message only goes with `oillamp history <dir> save`' | 'oillamp history <dir> save'
             'stop LAMP --message=note'         | "`oillamp stop` does not take --message" | 'oillamp stop <dir>'
             'shell LAMP --embedded'            | "`oillamp shell` does not take --embedded" | 'oillamp shell <dir>'
-            'list --embedded'                  | "`oillamp list` does not take --embedded"  | 'oillamp list'
+            'list --yes'                       | "`oillamp list` does not take --yes"       | 'oillamp list'
             'stop LAMP --init'                 | "`oillamp stop` does not take --init"    | 'oillamp stop <dir>'
             'status LAMP --no-viewer'          | "`oillamp status` does not take --no-viewer" | 'oillamp status <dir>'
             'status LAMP --no-windows'         | "`oillamp status` does not take --no-windows" | 'oillamp status <dir>'
