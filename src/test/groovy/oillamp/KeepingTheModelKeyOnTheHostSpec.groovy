@@ -274,6 +274,9 @@ class KeepingTheModelKeyOnTheHostSpec extends Specification {
             settings.contains("OILLAMP_MODEL_EU_ONLY='${euOnly}'")
             guide.contains(local ? 'it is not Eden AI' : 'Only models served in the EU are offered')
 
+        and: 'either way, the guide says why a long answer stops, and what the human can do about it'
+            guide.contains('at most 8192 tokens long') && guide.contains('EDENAI_MAX_TOKENS')
+
         where:
             local || euOnly
             false || '1'

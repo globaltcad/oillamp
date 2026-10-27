@@ -252,7 +252,15 @@ final class AgentGuideUtil {
                 out.append("- `opencode` reads its Eden AI settings from the file `OPENCODE_CONFIG` names.\n")
                .append("  Its list of Eden AI models is the one the EU endpoint offered when this\n")
                .append("  sandbox's image was built.\n");
-            out.append('\n');
+            out.append('\n')
+               .append("Each answer of the model is at most 8192 tokens long, thinking included: Eden AI\n")
+               .append("does not say how long a model's answers may be, so both harnesses ask for that\n")
+               .append("much. `pi` asks for more when the human set `EDENAI_MAX_TOKENS` on their machine\n")
+               .append("before starting the session (`echo $EDENAI_MAX_TOKENS` here says); `opencode`\n")
+               .append("does not. A longer answer, such as a large file written in one go, is cut off:\n")
+               .append("write large files in parts. If answers keep being cut off, tell the human about\n")
+               .append("`EDENAI_MAX_TOKENS`. Some models refuse a value above their own limit, then every\n")
+               .append("request fails with 400, and the error names that limit; tell them that too.\n\n");
         }
 
         config.llmForward().ifPresent(forward -> out

@@ -485,6 +485,24 @@ rule, and you see the refusal in your terminal.
 Edit, check with `oillamp config <dir> check`, and restart the session to apply. An optional
 `~/.config/oillamp/config.toml` sets defaults for all your lamps.
 
+### Answers cut off ✂️
+
+A model's answer is at most **8192 tokens** long, thinking included. That is a limit on each
+answer, not on the conversation, which may grow as long as the model's context allows. Eden AI
+does not say how long each model's answers may be, so pi's Eden AI extension and opencode both ask
+for that much. A longer answer stops in the middle, often while the agent writes a large file.
+
+For pi, ask for more when you start the session. oillamp passes the variable into the sandbox:
+
+```sh
+EDENAI_MAX_TOKENS=32000 oillamp at ~/lamps/first
+```
+
+⚠️ It applies to every model of the session, and some models do not lower a value above their own
+limit, but refuse it: then **every** request fails with 400, and the error names the limit, such
+as "max_completion_tokens is limited to 16384". Start the session again with that value or below.
+32000 is accepted by many models. opencode stays at 8192 whatever the variable says.
+
 ---
 
 ## 🛡️ What it protects, and what it doesn't
