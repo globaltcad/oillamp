@@ -63,6 +63,12 @@ final class FileStats {
         return new FileStats(known(written), began - SETTLED.toNanos());
     }
 
+    /// The stats the last save [wrote][#written], for a save that only compares, and stores and
+    /// remembers nothing.
+    static FileStats toCompare(byte[] written) {
+        return new FileStats(known(written), Long.MIN_VALUE);
+    }
+
     /// The blob the file at `path` was stored as, while its stat is `stat` as it was then.
     Optional<String> blob(String path, Stat stat) {
         Known known = before.get(path);

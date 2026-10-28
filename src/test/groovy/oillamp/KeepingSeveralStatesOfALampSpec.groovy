@@ -17,7 +17,9 @@ import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
 import java.time.Instant
@@ -507,6 +509,36 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
         and: 'nothing changed'
             Files.readString(home(lamp).resolve('workspace/plan.md')) == 'four, not saved\n'
             newestOf(lamp, 'main').id() == third.id()
+    }
+
+    def 'Oillamp\'s `reset` without --yes says what would be lost on a history it may only read'() {
+        reportInfo """
+            Without `--yes`, `oillamp history <dir> reset <snapshot>` only compares the lamp with
+            the newest snapshot, to say whether changes would be thrown away. It stores nothing,
+            so it needs nothing but to read the lamp's history, `.oillamp/history`. Let's consider
+            a person who keeps that history read-only, say on a backup they only look at: the
+            question what a reset would lose is answered all the same.
+        """
+        given: 'two snapshots on main, a change that was never saved, and a history that cannot be written'
+            var lamp = aLampThatHasRun()
+            write(home(lamp), 'workspace/plan.md', 'one\n')
+            var first = saved(host.oillamp.run('history', lamp.toString(), 'save'))
+            write(home(lamp), 'workspace/plan.md', 'two\n')
+            assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
+            write(home(lamp), 'workspace/plan.md', 'three, not saved\n')
+            var writable = readOnly(lamp.resolve('.oillamp/history'))
+
+        when:
+            var outcome = host.oillamp.run('history', lamp.toString(), 'reset', first.shortId())
+
+        then: 'it says what would be lost, as it does on a history it may write'
+            outcome.status() == LampExitStatus.USAGE
+            var planned = outcome.events().find { it instanceof LampEvent.ResetPlanned }
+            planned.snapshots() == 1
+            planned.unsaved()
+
+        cleanup:
+            writable?.call()
     }
 
     def 'Oillamp\'s `reset --yes` takes the later snapshots off the branch and throws away unsaved changes'() {
@@ -1195,6 +1227,16 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     /** A lamp that exists and has run one session, with the file a new lamp gets. */
+    /** Takes the write permission from `directory` and everything in it; the closure returned gives it back. */
+    private static Closure readOnly(Path directory) {
+        Map<Path, Set<PosixFilePermission>> was = [:]
+        Files.walk(directory).withCloseable { it.toList() }.findAll { !Files.isSymbolicLink(it) }.each { path ->
+            was[path] = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS)
+            Files.setPosixFilePermissions(path, was[path] - [PosixFilePermission.OWNER_WRITE, PosixFilePermission.GROUP_WRITE, PosixFilePermission.OTHERS_WRITE])
+        }
+        return { was.each { path, permissions -> Files.setPosixFilePermissions(path, permissions) } }
+    }
+
     private Path aLampThatHasRun() {
         var lamp = host.lampPath()
         assert host.oillamp.run('at', lamp.toString()).succeeded()

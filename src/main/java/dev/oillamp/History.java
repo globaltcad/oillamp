@@ -614,7 +614,7 @@ final class History {
         Tuple<GitObjectUtil.Entry> top = Tuple.of(GitObjectUtil.Entry.class);
         Path agent = layout.agentDir();
         String agentName = fileName(agent);
-        tally.stats = readFileStats();
+        tally.stats = readFileStats(tally.write);
         if (Files.isDirectory(agent, LinkOption.NOFOLLOW_LINKS))
             top = top.add(new GitObjectUtil.Entry(agentName, GitObjectUtil.EntryMode.DIRECTORY,
                     storeDirectory(agent, agentName, tally)));
@@ -704,23 +704,30 @@ final class History {
         return blob;
     }
 
-    /// What the last save found of each file, for a save that begins now. When it began is read
-    /// from the clock of the filesystem the history is on, which is where the files' times come
-    /// from: a file is made in it, and removed again. None, when the last save left none that
-    /// can be read.
-    private FileStats readFileStats() throws IOException {
-        Path marker = Files.createTempFile(repository.resolve("objects"), "began-", ".tmp");
+    /// What the last save found of each file, for a save that begins now. None, when the last
+    /// save left none that can be read.
+    ///
+    /// When a save that stores began is read from the clock of the filesystem the history is on,
+    /// which is where the files' times come from: a file is made in it, and removed again. It is
+    /// named as a write in progress, which a prune sweeps away should oillamp be killed before it
+    /// is removed. A save that only compares stores nothing, remembers nothing, and so writes
+    /// nothing at all, which a history it can only read allows.
+    ///
+    /// @param write whether the save stores what it finds
+    private FileStats readFileStats(boolean write) throws IOException {
+        byte[] written;
+        try {
+            written = Files.readAllBytes(repository.resolve(FILE_STATS));
+        } catch (IOException missingOrUnreadable) {
+            written = new byte[0];
+        }
+        if (!write) return FileStats.toCompare(written);
+        Path marker = Files.createTempFile(repository.resolve("objects"), "incoming-", ".tmp");
         long began;
         try {
             began = Files.getLastModifiedTime(marker).to(TimeUnit.NANOSECONDS);
         } finally {
             Files.deleteIfExists(marker);
-        }
-        byte[] written;
-        try {
-            written = Files.readAllBytes(repository.resolve(FILE_STATS));
-        } catch (IOException missingOrUnreadable) {
-            return FileStats.none();
         }
         return FileStats.of(written, began);
     }

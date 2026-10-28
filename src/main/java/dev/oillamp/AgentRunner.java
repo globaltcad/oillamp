@@ -81,6 +81,10 @@ final class AgentRunner {
     /// The questions answered since the lamp was last saved, oldest first, while their chat is
     /// not yet quiet. Only the worker touches them, and [#stop] once the worker has ended.
     private final List<Answered> unsavedQuestions = new ArrayList<>();
+    /// When the chat may be saved: quiet long enough after its last question, or after a save of
+    /// it that failed, so that a history that cannot be written is not tried every second. Only
+    /// the worker touches it.
+    private Instant chatQuietFrom = Instant.MIN;
     private volatile Optional<Thread> worker = Optional.empty();
     /// Why the schedule could not be read the last time it was looked at, so that the same reason
     /// is reported once, not every half minute. Used only by the thread that watches the schedule.
@@ -96,7 +100,7 @@ final class AgentRunner {
                            CompletableFuture<LampEvent.RunFinished> done) {}
 
     /// A question's run that ended, and the conversation it answered in, until its chat is saved.
-    private record Answered(LampRun run, Optional<String> conversation, Instant ended) {}
+    private record Answered(LampRun run, Optional<String> conversation) {}
 
     /// @param instructions what the agent is told in addition to pi's own instructions, for the
     ///                     whole session; empty to leave pi's instructions as they are
@@ -394,12 +398,15 @@ final class AgentRunner {
         Optional<String> base = Optional.empty();
         // A question is saved with the rest of its chat, unless each one is saved by itself.
         boolean savedByItself = pending.job().isPresent() || autosave.savesEachQuestion();
+        // Whether the history now holds what the questions before this run changed.
+        boolean heldTheChat = false;
         if (savedByItself && autosave.beforeRun()) {
             Result<History.Saving> before = history.save(LampSaveKind.BEFORE_RUN, "before " + run.id(), Optional.of(session),
                     trailers, false, started);
             if (before instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
                 saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
                 base = saving.latest().map(LampSave::id);
+                heldTheChat = true;
             } else {
                 context.sinkAcceptProblems(before.problems().map(ProblemCatalogUtil::asWarning));
             }
@@ -436,13 +443,15 @@ final class AgentRunner {
         String message = run.id() + " (" + run.job().map(job -> "job " + job).orElse("asked") + ") " + outcome
                 + (said.isEmpty() ? "" : "\n\n" + said);
         Optional<LampSave> snapshot = Optional.empty();
-        if (!savedByItself) unsavedQuestions.add(new Answered(run, conversation, ended));
-        // The snapshots of a job's run hold what the chat before it changed too.
-        else if (autosave.beforeRun() || autosave.afterRun()) unsavedQuestions.clear();
+        if (!savedByItself) {
+            unsavedQuestions.add(new Answered(run, conversation));
+            chatQuietFrom = ended.plus(Duration.ofMinutes(autosave.chatQuietMinutes()));
+        }
         if (savedByItself && autosave.afterRun()) {
             Result<History.Saving> saved = history.save(LampSaveKind.RUN, message, Optional.of(session), after, true, ended);
             if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
                 snapshot = saving.made();
+                heldTheChat |= snapshot.isPresent();
                 if (!saving.skipped().isEmpty())
                     context.sink().accept(new LampEvent.Warning(
                             ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped())));
@@ -450,6 +459,9 @@ final class AgentRunner {
                 context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
             }
         }
+        // A snapshot of a job's run holds what the chat before it changed too. One that failed
+        // does not, and the chat waits for its own save.
+        if (heldTheChat) unsavedQuestions.clear();
         return new LampEvent.RunFinished(run, answer.outcome(), answer.text().strip(),
                 snapshot, Duration.between(started, ended), conversation);
         } finally {
@@ -474,12 +486,10 @@ final class AgentRunner {
     /// question was answered. On the worker, between runs, so that no run changes the lamp
     /// while it is saved, and a question asked meanwhile waits for the save.
     private void saveChatIfQuiet() {
-        if (unsavedQuestions.isEmpty()) return;
-        Instant quietFrom = unsavedQuestions.getLast().ended().plus(Duration.ofMinutes(autosave.chatQuietMinutes()));
-        if (machine.now().isBefore(quietFrom)) return;
+        if (unsavedQuestions.isEmpty() || machine.now().isBefore(chatQuietFrom)) return;
         savingChat = true;
         try {
-            if (!stopping) saveChat();
+            if (!stopping && !saveChat()) chatQuietFrom = machine.now().plus(Duration.ofMinutes(autosave.chatQuietMinutes()));
         } finally {
             savingChat = false;
         }
@@ -487,13 +497,15 @@ final class AgentRunner {
 
     /// Saves the questions answered since the last save in one snapshot, which names the last of
     /// them as its run, so that run numbers stay unique beyond this session. Made even when
-    /// nothing changed, for that reason, as a run's last snapshot is.
-    private void saveChat() {
-        if (unsavedQuestions.isEmpty()) return;
+    /// nothing changed, for that reason, as a run's last snapshot is. When the save fails, the
+    /// questions wait for the next.
+    ///
+    /// @return false when the save failed
+    private boolean saveChat() {
+        if (unsavedQuestions.isEmpty()) return true;
         Answered first = unsavedQuestions.getFirst();
         Answered last = unsavedQuestions.getLast();
         boolean one = unsavedQuestions.size() == 1;
-        unsavedQuestions.clear();
         Association<String, String> trailers = Association.between(String.class, String.class)
                 .put(GitObjectUtil.RUN_TRAILER, last.run().id())
                 .put(GitObjectUtil.AUTHOR_TRAILER, "user");
@@ -503,12 +515,14 @@ final class AgentRunner {
         Result<History.Saving> saved = new History(layout, historyPolicy, context.sink())
                 .save(LampSaveKind.CHAT, message, Optional.of(session), trailers, true, machine.now());
         if (saved instanceof Result.Ok<History.Saving>(History.Saving saving, var _)) {
+            unsavedQuestions.clear();
             saving.made().ifPresent(made -> context.sink().accept(new LampEvent.Saved(made, saving.files())));
             if (!saving.skipped().isEmpty())
                 context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.filesNotSaved(layout.root(), saving.skipped())));
-        } else {
-            context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
+            return true;
         }
+        context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
+        return false;
     }
 
     /// Records that a job's run began. A job that runs once is then done, and comes off the schedule.

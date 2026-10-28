@@ -18,7 +18,9 @@ import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
@@ -627,6 +629,49 @@ class WakingTheAgentSpec extends Specification {
                     .find { it instanceof LampEvent.History }.snapshots().first()
             newest.id() == saved.id()
             newest.conversation() == finished.last().conversation()
+    }
+
+    def 'Oillamp still saves a chat when the saves of a job\'s run after it fail'() {
+        reportInfo """
+            Let's consider a person who asks the agent a question, and a job that comes due a
+            moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`. The
+            job's run is saved just before and as it ends, and those snapshots hold what the
+            question changed too, so the chat need not be saved again. But only if they were
+            made: in the rare case that the lamp's history, `.oillamp/history`, cannot be written
+            while the job runs, here because it is read-only, both saves fail, and the chat must
+            still be saved later, at the latest as the session ends.
+
+            The session runs on a clock sixty times faster than it should, so the job, due a
+            minute after it is added, runs a second later.
+        """
+        given: 'a lamp saved once by hand, and a session whose agent answers everything'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            assert host.oillamp.run('history', lamp.toString(), 'save', '-m', 'to begin with').succeeded()
+            anAgent { prompt -> 'Done.' }
+            host.machine { it.clockRunsFaster(60) }
+            startASession(lamp)
+
+        when: 'a person asks a question, and a job runs while the history cannot be written'
+            assert host.oillamp.run('ask', lamp.toString(), 'Make a plan').succeeded()
+            var writable = readOnly(lamp.resolve('.oillamp/history'))
+            assert host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Tidy up').succeeded()
+            var job = waitFor(LampEvent.RunFinished) { it.run().job().isPresent() }
+
+        then: 'the job\'s run made no snapshot'
+            job.snapshot().isEmpty()
+
+        when: 'the history can be written again, and the session ends'
+            writable()
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+
+        then: 'the question is saved in a chat snapshot of its own'
+            var snapshots = host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots()
+            snapshots.any { it.kind() == LampSaveKind.CHAT && it.run() == Optional.of('run-1') }
+
+        cleanup:
+            writable?.call()
     }
 
     def 'A question asked just before the session ends is saved as it ends'() {
@@ -1656,6 +1701,16 @@ class WakingTheAgentSpec extends Specification {
     }
 
     private static Path home(Path lamp) { Lamp.agentHome(lamp).orElseThrow() }
+
+    /** Takes the write permission from `directory` and everything in it; the closure returned gives it back. */
+    private static Closure readOnly(Path directory) {
+        Map<Path, Set<PosixFilePermission>> was = [:]
+        Files.walk(directory).withCloseable { it.toList() }.findAll { !Files.isSymbolicLink(it) }.each { path ->
+            was[path] = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS)
+            Files.setPosixFilePermissions(path, was[path] - [PosixFilePermission.OWNER_WRITE, PosixFilePermission.GROUP_WRITE, PosixFilePermission.OTHERS_WRITE])
+        }
+        return { was.each { path, permissions -> Files.setPosixFilePermissions(path, permissions) } }
+    }
 
     private void startASession(Path lamp, String... options) {
         host.machine { it.windowsStayOpenFor(Duration.ofSeconds(90)) }
