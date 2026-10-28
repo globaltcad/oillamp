@@ -808,6 +808,10 @@ final class HistoryPage {
                 }).orElse(SUBTEXT));
                 g.fill(new Ellipse2D.Double(x - 4.5, NODE_Y - 4.5, 9, 9));
             }
+            case CHATTED -> {
+                g.setColor(CONTENT);
+                g.fill(new Ellipse2D.Double(x - 4.5, NODE_Y - 4.5, 9, 9));
+            }
             case BEFORE_GOING_BACK, WENT_BACK, BEFORE_SWITCHING -> {
                 g.setColor(BRASS);
                 g.fill(new Ellipse2D.Double(x - 4.5, NODE_Y - 4.5, 9, 9));

@@ -147,6 +147,7 @@ final class LampApiConversionUtil {
                 case RUNNING, IDLE -> History.Kind.SAVED;
                 case BEFORE_RUN -> History.Kind.BEFORE_RUN;
                 case RUN -> History.Kind.RAN;
+                case CHAT -> History.Kind.CHATTED;
                 case BEFORE_RESTORE -> History.Kind.BEFORE_GOING_BACK;
                 case BEFORE_SWITCH -> History.Kind.BEFORE_SWITCHING;
                 case RESTORE -> History.Kind.WENT_BACK;
