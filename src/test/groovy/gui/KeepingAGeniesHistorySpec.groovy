@@ -26,8 +26,8 @@ import java.util.concurrent.TimeUnit
 /**
  *  A genie's history, read from its page, saved to by hand, and gone back to.
  *
- *  <p>oillamp saves a genie's home in its lamp around its answers, and whenever the user saves
- *  by hand. Each save is a moment the genie can go back to: its files, and its conversations
+ *  <p>oillamp saves a genie's home in its lamp once a chat with it is over, and whenever the
+ *  user saves by hand. Each save is a moment the genie can go back to: its files, and its conversations
  *  with them, become what they were then. Here the app is driven as its window drives it,
  *  through {@link dev.gui.Genies}; its lamps are oillamp's real engine, in this JVM, on a
  *  simulated machine whose clock the scenario moves, with a stand-in pi.
@@ -66,12 +66,13 @@ class KeepingAGeniesHistorySpec extends Specification {
         done.await(3, TimeUnit.MINUTES)
     }
 
-    def 'Answering a question is a moment of the history, and a save by hand adds one'() {
+    def 'A chat is a moment of the history once it is over, and a save by hand adds one'() {
         reportInfo """
             The history page lists the moments oillamp saved the genie's home at, newest first,
-            in words: it went to work on a question, it answered it (titled by the conversation,
-            with what it said last). Unless the lamp says otherwise, oillamp does not save as the
-            genie wakes or sleeps, only around its answers. The user can save by hand too, awake
+            in words. A chat is saved once it is over: when no question was asked for ten minutes,
+            or when the genie goes to sleep before that, titled by its conversation. Saving reads
+            the genie's whole home, so oillamp does not do it around every answer, and unless the
+            lamp says otherwise, not as the genie wakes or sleeps either. The user can save by hand too, awake
             or asleep, with a few words to remember the moment by; the new moment is picked, so
             it stands out. When
             nothing changed since the newest moment, oillamp saves nothing, and the page says so
@@ -92,15 +93,15 @@ class KeepingAGeniesHistorySpec extends Specification {
         when: 'the user opens its history'
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
 
-        then: 'the moments are there, newest first: before the answer and the answer, and none for waking or sleeping'
+        then: 'the chat is the one moment, and there is none for waking or sleeping'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().read() }
-            app.state().get().find(jafar).orElseThrow().history().moments()*.kind() == [History.Kind.RAN, History.Kind.BEFORE_RUN]
+            app.state().get().find(jafar).orElseThrow().history().moments()*.kind() == [History.Kind.CHATTED]
 
-        and: 'the answer is titled by its conversation, with what the genie said'
-            var answered = app.state().get().find(jafar).orElseThrow().history().moments().first()
+        and: 'it is titled by its conversation'
+            var chatted = app.state().get().find(jafar).orElseThrow().history().moments().first()
             var now = LocalDateTime.ofInstant(NOW, BERLIN)
-            app.state().get().find(jafar).orElseThrow().history().title(answered, app.state().get().find(jafar).orElseThrow(), now) == 'Answered: Plot the sales figures'
-            answered.detail() == 'You said: Plot the sales figures'
+            app.state().get().find(jafar).orElseThrow().history().title(chatted, app.state().get().find(jafar).orElseThrow(), now) == 'Talked: Plot the sales figures'
+            chatted.detail() == 'Saved once the chat had gone quiet'
 
         when: 'the user saves with nothing changed'
             SwingUtilities.invokeAndWait { app.save(jafar, 'before the big refactor') }
@@ -108,7 +109,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'nothing is saved, the newest moment is picked, and the page says why'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() && !app.state().get().find(jafar).orElseThrow().history().note().isEmpty() }
             app.state().get().find(jafar).orElseThrow().history().picked() == app.state().get().find(jafar).orElseThrow().history().moments().first().id()
-            app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.RAN
+            app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.CHATTED
             app.state().get().find(jafar).orElseThrow().transcript().entries().last().text() == app.state().get().find(jafar).orElseThrow().history().note()
 
         when: 'a file changes in the genie\'s home, and the user saves again'
@@ -135,12 +136,12 @@ class KeepingAGeniesHistorySpec extends Specification {
             awake genie sleeps while it goes back, and wakes again after. Before going back,
             oillamp saves the home as it is, if that changed since the newest moment, so nothing
             is lost: the history then offers to undo, which goes back to the moment that was the
-            newest. Undoing is itself a going back, which the history titles "Undid going back
-            to how it was …"; it ends
-            the offer, since both ways are in the history. So does an answer or a save
-            afterwards, since undoing would then lose them.
+            newest. A chat not yet saved is saved as the sandbox stops, so going back loses no
+            answer either. Undoing is itself a going back, which the history titles "Undid going
+            back to how it was …"; it ends the offer, since both ways are in the history. So does
+            a chat or a save afterwards, once it is saved.
         """
-        given: 'an awake genie, its history open, that answered once, then got a file, then answered again'
+        given: 'an awake genie, its history open, that answered once and slept, then woke, got a file, and answered again'
             var questionsAsked = { app.state().get().find(jafar).orElseThrow().conversations().all().first().steps().count { it.asked() } }
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
@@ -150,17 +151,21 @@ class KeepingAGeniesHistorySpec extends Specification {
                 app.send()
             }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 1 }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
             sandbox.machine { it.clockAt(NOW.plus(Duration.ofMinutes(20))) }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'refactor the parser')
             SwingUtilities.invokeAndWait {
                 app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Now refactor it') } }
                 app.send()
             }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && questionsAsked() == 2 }
-            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().count { it.kind() == History.Kind.RAN } == 2 }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().count { it.kind() == History.Kind.CHATTED } == 1 }
 
-        when: 'the user goes back to just after the first answer'
-            var afterTheFirstAnswer = app.state().get().find(jafar).orElseThrow().history().moments().findAll { it.kind() == History.Kind.RAN }.last()
+        when: 'the user goes back to just after the first chat'
+            var afterTheFirstAnswer = app.state().get().find(jafar).orElseThrow().history().moments().find { it.kind() == History.Kind.CHATTED }
             SwingUtilities.invokeAndWait { app.goBack(jafar, afterTheFirstAnswer.id()) }
 
         then: 'the genie is awake again, and its home is as it was then'
@@ -192,15 +197,16 @@ class KeepingAGeniesHistorySpec extends Specification {
             app.state().get().find(jafar).orElseThrow().history().undid(undone).get().id() == wentBack.id()
             app.state().get().find(jafar).orElseThrow().history().undo().isEmpty()
 
-        when: 'the genie answers again'
+        when: 'the genie answers again, and sleeps'
             SwingUtilities.invokeAndWait {
                 app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Thanks') } }
                 app.send()
             }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && questionsAsked() == 3 }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
 
         then: 'there is nothing to undo any more'
-            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.RAN }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.CHATTED }
             app.state().get().find(jafar).orElseThrow().history().undo().isEmpty()
     }
 
@@ -373,7 +379,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             of its own to the left of main's, the line of the branch Jafar lives on, with the
             lamp's "now" node at its top.
         """
-        given: 'Jafar answered once, with rust-rewrite started at the moment it saved, and is awake'
+        given: 'Jafar answered once and slept, with rust-rewrite started at the moment that saved, and is awake again'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait {
@@ -381,8 +387,12 @@ class KeepingAGeniesHistorySpec extends Specification {
                 app.send()
             }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 1 }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
-            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().any { it.kind() == History.Kind.RAN } }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().any { it.kind() == History.Kind.CHATTED } }
             SwingUtilities.invokeAndWait { app.startBranch(jafar, 'rust-rewrite', '') }
             waitUntil { app.state().get().find(jafar).orElseThrow().history().branches().size() == 2 }
 
@@ -433,17 +443,18 @@ class KeepingAGeniesHistorySpec extends Specification {
 
     def 'Reset to here… shows what `LampDirectory.wouldReset` says would be lost, and only "Reset main" takes the later moments off the branch'() {
         reportInfo """
-            Let's consider Jafar, asleep, that answered twice, and whose home has a file no moment
-            holds yet. The user clicks the first answer's card, then "Reset to here…". Genies calls
+            Let's consider Jafar, asleep, that answered in two chats, each saved as it slept after
+            it, and whose home has a file no moment holds yet. The user clicks the first chat's
+            card, then "Reset to here…". Genies calls
             `LampDirectory.wouldReset(snapshot)`, which changes nothing, and the page shows what
-            it said: the moment of the second answer would leave main, and the unsaved file would
+            it said: the moment of the second chat would leave main, and the unsaved file would
             be lost. A reset keeps no copy, unlike going back, so the page shows this in a banner,
             with "Cancel", "Go back instead" and "Reset main". Cancel removes the banner and changes
             nothing. Clicking "Reset to here…" again and then "Reset main" calls
-            `LampDirectory.reset(snapshot)`: the branch ends at the first answer, the file is
+            `LampDirectory.reset(snapshot)`: the branch ends at the first chat, the file is
             gone, and no moment says it went back, so there is nothing to undo.
         """
-        given: 'Jafar answered twice, sleeps, and has a file no moment holds'
+        given: 'Jafar answered in two chats, sleeps, and has a file no moment holds'
             var questionsAsked = { app.state().get().find(jafar).orElseThrow().conversations().all().first().steps().count { it.asked() } }
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
@@ -452,6 +463,10 @@ class KeepingAGeniesHistorySpec extends Specification {
                 app.send()
             }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 1 }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait {
                 app.state().update { it.select(jafar).update(jafar) { genie -> genie.withDraft('Now refactor it') } }
                 app.send()
@@ -460,12 +475,12 @@ class KeepingAGeniesHistorySpec extends Specification {
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
-            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().count { it.kind() == History.Kind.RAN } == 2 }
-            var firstAnswer = app.state().get().find(jafar).orElseThrow().history().moments().findAll { it.kind() == History.Kind.RAN }.last()
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().count { it.kind() == History.Kind.CHATTED } == 2 }
+            var firstAnswer = app.state().get().find(jafar).orElseThrow().history().moments().findAll { it.kind() == History.Kind.CHATTED }.last()
             var unsaved = Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('notes.md')
             Files.writeString(unsaved, 'not saved yet')
 
-        when: 'the user clicks Reset to here… on the first answer'
+        when: 'the user clicks Reset to here… on the first chat'
             SwingUtilities.invokeAndWait { app.planReset(jafar, firstAnswer.id()) }
 
         then: 'the page says what the lamp said would be lost, and nothing changed yet'
@@ -488,7 +503,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().history().plan().isPresent() }
             SwingUtilities.invokeAndWait { app.reset(jafar, firstAnswer.id()) }
 
-        then: 'main ends at the first answer, the unsaved file is gone, and there is nothing to undo'
+        then: 'main ends at the first chat, the unsaved file is gone, and there is nothing to undo'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().id() == firstAnswer.id() && app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() }
             !Files.exists(unsaved)
             app.state().get().find(jafar).orElseThrow().history().plan().isEmpty()
