@@ -92,10 +92,12 @@ public record History(
     ///                     line naming the run, then a blank line and the genie's last words; for
     ///                     [Kind#WENT_BACK], `back to ` and the first eight characters of the id of
     ///                     the moment it went back to
-    /// @param run          the run, such as `run-12`, for [Kind#BEFORE_RUN] and [Kind#RAN]; empty otherwise
+    /// @param run          the run, such as `run-12`, for [Kind#BEFORE_RUN] and [Kind#RAN], or
+    ///                     the last question's for [Kind#CHATTED]; empty otherwise
     /// @param job          for [Kind#RAN] of a job's run, the job, such as `job-3`; empty otherwise
     /// @param outcome      how the run ended, for [Kind#RAN]
-    /// @param conversation for [Kind#RAN], pi's id for the run's conversation; empty when it had none
+    /// @param conversation for [Kind#RAN] and [Kind#CHATTED], pi's id for the run's conversation;
+    ///                     empty when it had none
     /// @param branches     the branches it is on, by name in alphabetical order: the one it was
     ///                     saved on, and every branch started there or later
     public record Moment(
@@ -124,6 +126,7 @@ public record History(
                 case SLEPT -> "Saved after its sandbox stopped";
                 case SAVED -> message.isBlank() ? "" : "Saved by hand";
                 case BEFORE_RUN -> "Saved as it began on a question or a job";
+                case CHATTED -> "Saved once the chat had gone quiet";
                 case RAN -> switch (outcome.orElse(Schedule.Outcome.FAILED)) {
                     case FINISHED -> said;
                     case STOPPED -> "Stopped. " + said;
@@ -150,6 +153,9 @@ public record History(
         BEFORE_RUN,
         /// oillamp saved as a run ended: an answer to the user, or a job's run.
         RAN,
+        /// oillamp saved the user's questions together, once their chat had gone quiet, or as
+        /// the sandbox stopped.
+        CHATTED,
         /// oillamp saved just before going back, so that going back can be undone.
         BEFORE_GOING_BACK,
         /// The genie went back to an earlier moment.
@@ -337,6 +343,7 @@ public record History(
             case RAN -> !moment.job().isEmpty()
                 ? schedule.job(moment.job()).map(job -> "Did the job: " + job.title()).orElse("Did a scheduled job")
                 : conversations.find(moment.conversation()).map(it -> "Answered: " + it.title()).orElse("Answered a question");
+            case CHATTED -> conversations.find(moment.conversation()).map(it -> "Talked: " + it.title()).orElse("Talked with you");
             case BEFORE_GOING_BACK -> "Before going back";
             case WENT_BACK ->
                 undid(moment)
