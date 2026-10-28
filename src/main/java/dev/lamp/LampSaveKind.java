@@ -22,7 +22,11 @@ public enum LampSaveKind {
     /// the agent then did are two separate snapshots.
     BEFORE_RUN("save before a run"),
     /// oillamp saved as a run ended. The message holds the agent's last words.
-    RUN("run");
+    RUN("run"),
+    /// oillamp saved the questions someone asked, together, once no run had begun for
+    /// `autosave.chat_quiet_minutes`, or as the session ended before that. Its run is the last
+    /// of them.
+    CHAT("chat save");
 
     private final String label;
 

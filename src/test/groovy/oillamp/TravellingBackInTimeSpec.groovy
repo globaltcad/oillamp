@@ -760,7 +760,7 @@ class TravellingBackInTimeSpec extends Specification {
             `run-3`.
         """
         given: 'a lamp saved before any run'
-            var lamp = aLampThatHasRun()
+            var lamp = aLampThatHasRun('[autosave]\nchat_quiet_minutes = 0\n')
             write(home(lamp), 'workspace/plan.md', '# the plan\n')
             var saved = host.oillamp.run('history', lamp.toString(), 'save').events().find { it instanceof LampEvent.Saved }.snapshot()
             host.machine { it.agent { String prompt -> 'Done.' } }

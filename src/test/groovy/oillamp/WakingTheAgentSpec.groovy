@@ -582,6 +582,77 @@ class WakingTheAgentSpec extends Specification {
             prompts == ['How are you?']
     }
 
+    def 'A person\'s questions are saved together, once the chat has been quiet for ten minutes'() {
+        reportInfo """
+            Saving a lamp reads its whole agent directory, which takes a while when that is large.
+            A job's run is saved just before and as it ends, but a chat would wait for that twice
+            with every question. So the questions someone asks are saved together instead, once
+            no run has begun for `autosave.chat_quiet_minutes`, ten unless the lamp says otherwise.
+            That snapshot is a `chat save`, named after the last question's run, so the run
+            numbers in the history stay unique.
+
+            The session runs on a clock sixty times faster than it should, so ten quiet minutes
+            pass in ten seconds, and two questions asked one after the other fall into one chat.
+        """
+        given: 'an agent that writes down every question, on a clock that runs a minute a second'
+            var lamp = aLampThatHasRun('')
+            anAgent { prompt ->
+                Files.writeString(home(lamp).resolve('workspace/' + prompt + '.md'), prompt)
+                'Noted.'
+            }
+            host.machine { it.clockRunsFaster(60) }
+            startASession(lamp)
+
+        when: 'a person asks two questions'
+            assert host.oillamp.run('ask', lamp.toString(), 'first').succeeded()
+            assert host.oillamp.run('ask', lamp.toString(), 'second').succeeded()
+            var finished = reported.findAll { it instanceof LampEvent.RunFinished }
+
+        then: 'neither run was saved by itself'
+            finished*.run()*.id() == ['run-1', 'run-2']
+            finished*.snapshot().every { it.isEmpty() }
+            !reported.any { it instanceof LampEvent.Saved }
+
+        when: 'the chat stays quiet'
+            var saved = waitFor(LampEvent.Saved).snapshot()
+
+        then: 'both questions are saved in one snapshot, named after the last'
+            saved.kind() == LampSaveKind.CHAT
+            saved.run() == Optional.of('run-2')
+            saved.message() == 'run-1 to run-2 (asked)'
+            reported.count { it instanceof LampEvent.Saved } == 1
+
+        and: 'it is the newest snapshot, with the chat\'s conversation'
+            var newest = host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots().first()
+            newest.id() == saved.id()
+            newest.conversation() == finished.last().conversation()
+    }
+
+    def 'A question asked just before the session ends is saved as it ends'() {
+        reportInfo """
+            A chat that has not been quiet long enough when the session ends is over all the
+            same, so it is saved then, with the sandbox still there, whether or not
+            `autosave.shutdown` is on.
+        """
+        given:
+            var lamp = aLampThatHasRun('')
+            anAgent { prompt -> 'Fine.' }
+            startASession(lamp)
+
+        when: 'a person asks a question, and stops the session at once'
+            assert host.oillamp.run('ask', lamp.toString(), 'How are you?').succeeded()
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+
+        then: 'the question is the newest snapshot'
+            var newest = host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots().first()
+            newest.kind() == LampSaveKind.CHAT
+            newest.run() == Optional.of('run-1')
+            newest.message() == 'run-1 (asked)'
+    }
+
     def 'Asking a busy agent waits its turn'() {
         reportInfo """
             The agent works on one thing at a time. A second question, or a job that comes due,
@@ -625,6 +696,9 @@ class WakingTheAgentSpec extends Specification {
                 [schedule]
                 max_run_minutes = 1
 
+                [autosave]
+                chat_quiet_minutes = 0
+
                 [timeouts]
                 container_ready_seconds  = 3600
                 terminal_connect_seconds = 3600
@@ -660,7 +734,7 @@ class WakingTheAgentSpec extends Specification {
             agent to stop, saves the run, and only then stops the sandbox.
         """
         given:
-            var lamp = aLampThatHasRun('')
+            var lamp = aLampThatHasRun('[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt ->
                 Files.writeString(home(lamp).resolve('workspace/partial.txt'), 'some of it\n')
                 Thread.sleep(60_000)
@@ -998,7 +1072,7 @@ class WakingTheAgentSpec extends Specification {
             the host, which the agent cannot see or change.
         """
         given:
-            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt ->
                 Files.writeString(home(lamp).resolve('workspace/answer.txt'), '42\n')
                 'The answer is in answer.txt.'
@@ -1053,7 +1127,7 @@ class WakingTheAgentSpec extends Specification {
             value, with the snapshot that recorded the run.
         """
         given:
-            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt -> 'Hello from the sandbox.' }
             var lamps = Lamp.at(lamp).launchedBy(host.launcher)
 
@@ -1122,7 +1196,7 @@ class WakingTheAgentSpec extends Specification {
             two.
         """
         given: 'a session whose agent keeps working on "slow" until it is let go, on a lamp that saves runs only as they end'
-            var lamp = aLampThatHasRun('[autosave]\nbefore_run = false\n')
+            var lamp = aLampThatHasRun('[autosave]\nbefore_run = false\nchat_quiet_minutes = 0\n')
             var release = new CountDownLatch(1)
             anAgent { prompt ->
                 if (prompt == 'slow') release.await()

@@ -258,6 +258,23 @@ of. An application can still turn them off.
 `schedule.max_agent_runs_per_day` counts only the runs of the session in progress, because the
 history is where earlier ones are counted. *(added on 2026-10-20)*
 
+### A chat is saved once it is quiet, not around every question
+
+A job's run is saved just before and as it ends. The questions a person asks are saved together
+instead, in one `chat` snapshot, once no run has begun for `autosave.chat_quiet_minutes` (10), or
+as the session ends, whatever `autosave.shutdown` says. The snapshot names the last question's run
+in `Oillamp-Run`, so run numbers stay unique beyond the session. 0 saves around each question, as
+before.
+
+*Why:* a save reads the whole agent directory. On a lamp of 36 GB that took close to a minute, and
+a chat waited for it twice with every question, with no word of why. The history is for going back
+between sessions and around the work the agent does alone; a person in a chat sees what happens,
+and a quiet chat is the moment worth keeping.
+
+*Given up:* a single question can no longer be undone by itself, only the chat it was part of; the
+agent's look back at its earlier runs, and the next job's prompt, name only jobs' runs, since only
+those have `run` snapshots. *(added on 2026-10-28)*
+
 ### The history is a git repository that oillamp writes itself
 
 The history is a bare git repository in `.oillamp/history/`, never mounted into the container.
@@ -469,8 +486,9 @@ that matters whatever the delay needs `max_delay_minutes = 0`, or an application
 Each run is a new pi conversation. Its prompt carries what the agent needs from before: its own
 notes in `~/workspace/NOTES.md`, which files the last three runs changed, and what the last run
 said at its end. `AGENTS.md` tells the agent to keep the notes short and current. The lamp is saved
-just before and just after every run, the run's snapshot always, with the agent's last message in
-its commit message, unless `autosave.before_run` or `autosave.after_run` is off.
+just before and just after every job's run, the run's snapshot always, with the agent's last message
+in its commit message, unless `autosave.before_run` or `autosave.after_run` is off. Questions are
+saved together once their chat is quiet (see "A chat is saved once it is quiet").
 
 *Why:* a conversation that goes on across runs grows without end, costs more with every run, and
 fills with detail that no longer matters. Notes the agent rewrites stay small, and they are in its

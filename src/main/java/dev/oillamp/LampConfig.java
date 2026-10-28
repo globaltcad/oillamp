@@ -238,7 +238,22 @@ record LampConfig(
     ///                  the run changed are separate snapshots
     /// @param afterRun  as a run ends. The next job's prompt tells the agent what its last runs
     ///                  said and changed from these snapshots, so without them it is told nothing
-    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun) {}
+    /// @param chatQuietMinutes how long a chat must have been quiet before it is saved, once for
+    ///                  all its questions. `beforeRun` and `afterRun` then apply to jobs' runs
+    ///                  only. 0 saves around each question as around a job's run
+    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {
+        /// The longest a chat can be left unsaved: a day.
+        static final int MOST_QUIET_MINUTES = 24 * 60;
+
+        public Autosave {
+            if (chatQuietMinutes < 0 || chatQuietMinutes > MOST_QUIET_MINUTES)
+                throw new IllegalArgumentException("autosave.chat_quiet_minutes must be between 0 and " + MOST_QUIET_MINUTES);
+        }
+
+        /// Whether a question's run is saved by itself, as a job's is, rather than with the rest
+        /// of its chat once it is quiet.
+        boolean savesEachQuestion() { return chatQuietMinutes == 0; }
+    }
 
     public Optional<Forward> forwardNamed(String name) {
         for (Forward forward : forwards)

@@ -169,6 +169,10 @@ final class GeneratedFileTextUtil {
             shutdown   = false   # as a session ends, after the sandbox has stopped
             before_run = true    # just before a run wakes the agent
             after_run  = true    # as a run ends, with the agent's last message
+            # Your questions are saved together instead, once the chat has been quiet this long,
+            # and as the session ends; before_run and after_run then apply to jobs. 0 saves around
+            # each question too.
+            chat_quiet_minutes = 10
 
             # Let the agent reach this machine - read a document, edit a file, open a page, run a
             # command if you let it - always through oillamp, which asks a model about every

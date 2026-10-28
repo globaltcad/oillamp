@@ -444,12 +444,14 @@ final class ConfigLoadingUtil {
     }
 
     private static LampConfig.Autosave readAutosave(ConfigSection s, LampConfig.Autosave fallback) {
-        s.allowOnly("startup", "shutdown", "before_run", "after_run");
+        s.allowOnly("startup", "shutdown", "before_run", "after_run", "chat_quiet_minutes");
         return new LampConfig.Autosave(
                 s.bool("startup", fallback.startup()),
                 s.bool("shutdown", fallback.shutdown()),
                 s.bool("before_run", fallback.beforeRun()),
-                s.bool("after_run", fallback.afterRun()));
+                s.bool("after_run", fallback.afterRun()),
+                bounded(s, "chat_quiet_minutes", fallback.chatQuietMinutes(), 0, LampConfig.Autosave.MOST_QUIET_MINUTES,
+                        "a number of minutes from 0 to 1440, 0 to save around each question"));
     }
 
     private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {

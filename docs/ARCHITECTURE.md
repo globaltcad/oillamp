@@ -441,8 +441,9 @@ Oillamp-Session: 20260929-181200
 | `before-restore` | `oillamp history <dir> restore`, just before it changes anything |
 | `restore` | `oillamp history <dir> restore`, recording which snapshot it went back to |
 | `before-switch` | `oillamp history <dir> switch`, on the branch it leaves, just before it changes anything, if anything changed |
-| `before-run` | `AgentRunner`, just before the agent is woken, if anything changed since the last snapshot. For a job's run that is always so, because the job was just marked as run in the schedule |
-| `run` | `AgentRunner`, as a run ends, always, even when nothing changed: its message holds the agent's last message |
+| `before-run` | `AgentRunner`, just before the agent is woken for a job, if anything changed since the last snapshot, which is always so, because the job was just marked as run in the schedule. Before a question too, with `autosave.chat_quiet_minutes = 0` |
+| `run` | `AgentRunner`, as a job's run ends, always, even when nothing changed: its message holds the agent's last message. As a question's run ends too, with `autosave.chat_quiet_minutes = 0` |
+| `chat` | `AgentRunner`, for the questions answered since the last snapshot, together: on the `oillamp-runs` thread once no run has begun for `autosave.chat_quiet_minutes`, or as the session ends. Always, even when nothing changed, so that its `Oillamp-Run`, the last question's, is counted |
 
 A run's snapshots carry more trailers: `Oillamp-Run` (`run-12`; what the next run's number is
 counted from, see "Runs and the schedule"), and on the `run` snapshot
@@ -1079,8 +1080,8 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
 **A run**, on the `oillamp-runs` thread, one at a time:
 
 1. A job's `last_run` is set to now (a `once` job is removed instead), so it is not due again.
-2. `before-run` save, if anything changed and `autosave.before_run` is on. Off, the run's
-   `Oillamp-Base` is the newest snapshot there is.
+2. `before-run` save, for a job's run, if anything changed and `autosave.before_run` is on. Off, and
+   for a question, the run's `Oillamp-Base` is the newest snapshot there is.
 3. The prompt. For a job's run, `WakePromptUtil` writes it: why the agent was woken (and,
    for its own job, that it wrote the task itself), the task, `NOTES.md` (cut at
    `schedule.notes_max_kb`), the last three runs on the current branch with the files each changed (diffing the `run`
@@ -1089,7 +1090,11 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
    record of runs is kept, rather than that this is the first. A question someone asked is sent as they wrote it, because it is what a
    chat shows as their message.
 4. `Harness.run`, for at most `schedule.max_run_minutes`.
-5. `run` save, always while `autosave.after_run` is on, with the answer (cut at 16 KB) and the trailers above.
+5. `run` save, for a job's run, always while `autosave.after_run` is on, with the answer (cut at
+   16 KB) and the trailers above. A question's run is not saved by itself, unless
+   `autosave.chat_quiet_minutes` is 0: it waits for the `chat` save, which the thread makes once
+   no run has begun for that many minutes, or `AgentRunner.stop` as the session ends. A job's run
+   in between saves what the questions changed in its own snapshots.
 6. `RunFinished` is reported, with the conversation it happened in, and handed to `oillamp ask`
    if it asked and waits.
 
@@ -1856,6 +1861,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `autosave.shutdown` | false | save the lamp as a session ends, after the sandbox has stopped | yes |
 | `autosave.before_run` | true | save the lamp just before a run wakes the agent | yes |
 | `autosave.after_run` | true | save the lamp as a run ends; the next job's prompt reads the runs from these | yes |
+| `autosave.chat_quiet_minutes` | 10 | save the questions asked together, once no run began for this long, and as the session ends; `before_run` and `after_run` then apply to jobs' runs. 0 saves around each question too (0–1440) | yes |
 | `history.max_growth_gb` | 2 | how far the history may grow beyond its first snapshot, in GB, on all branches together; 0 never deletes a snapshot (0–10000) | yes |
 
 `oillamp config <dir> check` validates, `show-effective` prints a summary of the merged result,

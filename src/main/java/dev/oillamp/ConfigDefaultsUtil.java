@@ -38,7 +38,7 @@ final class ConfigDefaultsUtil {
             new LampConfig.Schedule(false, 10, 15, 14, 48, 30, 8, 30),
             new LampConfig.HostAccess(false, "", "",
                     Tuple.of(String.class), 65536, LampConfig.HostAccess.Commands.OFF, true, false),
-             new LampConfig.Autosave(false, false, true, true),
+             new LampConfig.Autosave(false, false, true, true, 10),
              new LampConfig.History(2));
     }
 }

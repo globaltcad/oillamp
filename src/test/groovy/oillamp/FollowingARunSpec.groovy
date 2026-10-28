@@ -45,6 +45,8 @@ class FollowingARunSpec extends Specification {
         host = new ScenarioHost(tmp)
         host.machine { it.reallyRuns('ssh-keygen') }
         lamp = host.lampPath()
+        // Each question is saved as its run ends, as a job's run is, so that its end carries its snapshot.
+        host.givenConfig(lamp, 'schema_version = 1\n[autosave]\nchat_quiet_minutes = 0\n')
         assert host.oillamp.run('at', lamp.toString()).succeeded()
         host.machine { it.agent { String prompt ->
             prompts << prompt

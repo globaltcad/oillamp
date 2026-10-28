@@ -1383,7 +1383,7 @@ final class CommandExecutionUtil {
 
         LampConfig.Autosave wanted = new LampConfig.Autosave(asked.startup().orElse(now.startup()),
                 asked.shutdown().orElse(now.shutdown()), asked.beforeRun().orElse(now.beforeRun()),
-                asked.afterRun().orElse(now.afterRun()));
+                asked.afterRun().orElse(now.afterRun()), now.chatQuietMinutes());
         java.util.SequencedMap<String, String> values = new java.util.LinkedHashMap<>();
         asked.startup().ifPresent(on -> values.put("startup", on.toString()));
         asked.shutdown().ifPresent(on -> values.put("shutdown", on.toString()));

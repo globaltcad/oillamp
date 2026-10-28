@@ -346,7 +346,7 @@ class KeepingHistoryWithinADiskBudgetSpec extends Specification {
         '''
         given: 'the agent in the middle of a run that started at the first snapshot'
             def lampPath = host.lampPath()
-            host.givenConfig(lampPath, 'schema_version = 1\n[history]\nmax_growth_gb = 0.00003\n')
+            host.givenConfig(lampPath, 'schema_version = 1\n[history]\nmax_growth_gb = 0.00003\n[autosave]\nchat_quiet_minutes = 0\n')
             assert host.oillamp.run('at', lampPath.toString()).succeeded()
             def directory = Lamp.at(lampPath).launchedBy(host.launcher)
             def file = Lamp.agentHome(lampPath).orElseThrow().resolve('workspace/data.bin')

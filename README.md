@@ -263,10 +263,12 @@ INSTRUCTIONS="$(cat ~/notes/about-the-project.md)" oillamp at ~/lamps/first --in
 The session writes the text to `~/.pi/agent/APPEND_SYSTEM.md` in the sandbox, which pi adds to its
 system prompt in every conversation. A session started without it leaves that file as it is.
 
-Every run is saved just before and just after, so `oillamp history <dir>` reads as a log of what the
-agent did, and `oillamp history <dir> restore` undoes any run.
-`oillamp history <dir> autosave before-run off after-run off` switches that off; the agent's next
-prompt then says nothing about its earlier runs:
+Every job's run is saved just before and just after, so `oillamp history <dir>` reads as a log of
+what the agent did, and `oillamp history <dir> restore` undoes any run. The questions you ask are
+saved together instead, once you have asked nothing for ten minutes (`chat_quiet_minutes` under
+`[autosave]`; 0 saves around each question too), and as the session ends.
+`oillamp history <dir> autosave before-run off after-run off` switches the saves around runs off;
+the agent's next prompt then says nothing about its earlier runs:
 
 ```
 SNAPSHOT  SAVED (UTC)          KIND                          MESSAGE

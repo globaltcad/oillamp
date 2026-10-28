@@ -798,7 +798,7 @@ class KeepingSeveralStatesOfALampSpec extends Specification {
             run must be `run-3`.
         """
         given: 'a lamp saved before any run, with the branch other started there'
-            var lamp = aLampThatHasRun()
+            var lamp = aLampThatHasRun('[autosave]\nchat_quiet_minutes = 0\n')
             assert host.oillamp.run('history', lamp.toString(), 'save').succeeded()
             assert host.oillamp.run('history', lamp.toString(), 'branch', 'other').succeeded()
             anAgent { prompt -> 'Done.' }
