@@ -986,11 +986,11 @@ public final class GeniesView extends JPanel {
      *  then the switch nests, into Chat and Manage, and the pages Manage gathers come as a row of
      *  their own under the header, while the user is on one of them:
      *
-     *      wide        [💬 Chat | 📅 Schedule 3 | 🕘 History | 🏠 Access | ⚡ Actions]
-     *      narrower    [💬 | 📅 3 | 🕘 | 🏠 | ⚡]
+     *      wide        [💬 Chat | ⚡ Actions | 📅 Schedule 3 | 🕘 History | 🏠 Access]
+     *      narrower    [💬 | ⚡ | 📅 3 | 🕘 | 🏠]
      *      narrow      [💬 | ⫶]               on the chat
      *                  [💬 | ⫶]               on any other of its pages, lit on Manage
-     *                  [📅 Schedule 3 | 🕘 History | 🏠 Access | ⚡ Actions]
+     *                  [⚡ Actions | 📅 Schedule 3 | 🕘 History | 🏠 Access]
      *
      *  Which of these shows is the state's, [GeniesState#roomForPages] and [GeniesState#pagesBelow];
      *  each is made once, and shown or hidden.
@@ -1004,18 +1004,18 @@ public final class GeniesView extends JPanel {
             .add(
                 switchOfPages().isVisibleIf(roomForPages)
                 .add(part(GeniesState.Page.CHAT, wide))
+                .add(part(GeniesState.Page.ACTIONS, wide))
                 .add(part(GeniesState.Page.SCHEDULE, wide))
                 .add(part(GeniesState.Page.HISTORY, wide))
                 .add(part(GeniesState.Page.HOST_ACCESS, wide))
-                .add(part(GeniesState.Page.ACTIONS, wide))
             )
             .add(
                 switchOfPages().isVisibleIf(roomForPages.viewAs(Boolean.class, it -> !it))
                 .add(part(GeniesState.Page.CHAT, wide))
                 .add(
                     half(Val.of(""), SignSvgUtil.MANAGE, managing)
-                    .withTooltip("Manage: the genie's schedule, history, host access and actions")
-                    .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.SCHEDULE))
+                    .withTooltip("Manage: the genie's actions, schedule, history and host access")
+                    .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.ACTIONS))
                 )
             );
     }
@@ -1028,10 +1028,10 @@ public final class GeniesView extends JPanel {
             switchOfPages()
             .withLayout("fillx, ins 2, gap 2", "[grow, sg, fill][grow, sg, fill][grow, sg, fill][grow, sg, fill]")
             .isVisibleIf(state.viewAs(Boolean.class, GeniesState::pagesBelow))
+            .add(part(GeniesState.Page.ACTIONS, words))
             .add(part(GeniesState.Page.SCHEDULE, words))
             .add(part(GeniesState.Page.HISTORY, words))
-            .add(part(GeniesState.Page.HOST_ACCESS, words))
-            .add(part(GeniesState.Page.ACTIONS, words));
+            .add(part(GeniesState.Page.HOST_ACCESS, words));
     }
 
     /// The well a switch between pages stands in, whose lit part stands out of it.

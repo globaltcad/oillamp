@@ -78,12 +78,12 @@ public record GeniesState(
     /// The selected genie's chat, its schedule, its history, its host access or what can be done
     /// with it, or the settings every genie shares.
     public enum Page {
-        CHAT, SCHEDULE, HISTORY, HOST_ACCESS, ACTIONS, SETTINGS;
+        CHAT, ACTIONS, SCHEDULE, HISTORY, HOST_ACCESS, SETTINGS;
 
         /// Whether this is one of a genie's pages beside its chat, which a narrow header gathers
         /// behind its Manage button.
         public boolean managing() {
-            return this == SCHEDULE || this == HISTORY || this == HOST_ACCESS || this == ACTIONS;
+            return this == ACTIONS || this == SCHEDULE || this == HISTORY || this == HOST_ACCESS;
         }
     }
 
