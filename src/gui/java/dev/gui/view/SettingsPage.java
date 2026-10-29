@@ -250,7 +250,7 @@ final class SettingsPage {
                         // SwingTree scales a painter's units to pixels; the welcome paints in pixels.
                         g.scale(1 / UI.scale(), 1 / UI.scale());
                         g.translate(shown.getX() + asideBy(shown.getWidth(), aside.get()), shown.getY());
-                        WelcomeScene.light(g, shown.getWidth(), UI.scale(PICTURE_HEIGHT), UI.scale(cut.get()), scene.get(), at);
+                        WelcomeScene.light(g, p, shown.getWidth(), UI.scale(PICTURE_HEIGHT), UI.scale(cut.get()), scene.get(), at);
                     });
                 })
                 .add(CARD, welcome(state, clock, scene, cut, fit, aside, welcomeBox, welcome))
@@ -610,7 +610,7 @@ final class SettingsPage {
                     // SwingTree scales a painter's units to pixels; the welcome paints in pixels.
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     g.translate(asideBy(width, aside.get()), -UI.scale(cut.get()));
-                    WelcomeScene.paint(g, width, UI.scale(PICTURE_HEIGHT), scene.get(), at);
+                    WelcomeScene.paint(g, p, width, UI.scale(PICTURE_HEIGHT), scene.get(), at);
                 });
             })
             // The genie, once it has taken form, and its lamp can be clicked: it vanishes in a

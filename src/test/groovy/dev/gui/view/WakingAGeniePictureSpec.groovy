@@ -1,6 +1,7 @@
 package dev.gui.view
 
 import dev.gui.model.Genie
+import dev.gui.model.Palette
 import spock.lang.Specification
 import spock.lang.Narrative
 import spock.lang.Subject
@@ -194,7 +195,7 @@ class WakingAGeniePictureSpec extends Specification {
             var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
             var graphics = picture.createGraphics()
         when: 'Juniper becomes ready and its formed greeting is painted'
-            WelcomeScene.paint(graphics, 320, 220, formed.play(), formed.moment())
+            WelcomeScene.paint(graphics, Palette.DARK, 320, 220, formed.play(), formed.moment())
             graphics.dispose()
         then: 'the progress report preserved the presentation and Juniper’s body colour appears in the picture'
             reported == waiting
