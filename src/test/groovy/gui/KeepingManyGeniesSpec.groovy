@@ -122,7 +122,7 @@ class KeepingManyGeniesSpec extends Specification {
     def 'The header makes room in steps: first its buttons drop their words, then its pages nest'() {
         reportInfo """
             The header above a conversation holds the genie's name, the switch between its
-            pages (chat, schedule, history, host access, actions) and buttons such as Desktop and
+            pages (chat, actions, schedule, history, host access) and buttons such as Desktop and
             Sleep. Each button has a sign beside its words. With the list of genies open, a window
             that is not narrow yet can still leave the header too little room for the words, and
             the last button would be cut off. So the buttons show only their signs whenever the
@@ -150,8 +150,8 @@ class KeepingManyGeniesSpec extends Specification {
 
     def 'In a narrow header, the pages beside the chat come as a row under it, while one of them is shown'() {
         reportInfo """
-            Narrow, the header shows two parts: Chat, and Manage for the schedule, the history,
-            the host access and the actions. On the chat, the header is one row and the
+            Narrow, the header shows two parts: Chat, and Manage for the actions, the schedule,
+            the history and the host access. On the chat, the header is one row and the
             conversation has all the room. On any of the others, Manage is lit and those four pages
             stand in a row under the header, with their words while that row has room for them.
             A roomy header has them all in its own row, and needs no second one.
@@ -163,7 +163,7 @@ class KeepingManyGeniesSpec extends Specification {
             !shown.withArea(480, 700).pagesBelow()
 
         and: 'on any page Manage gathers, a second row'
-            [GeniesState.Page.SCHEDULE, GeniesState.Page.HISTORY, GeniesState.Page.HOST_ACCESS, GeniesState.Page.ACTIONS]
+            [GeniesState.Page.ACTIONS, GeniesState.Page.SCHEDULE, GeniesState.Page.HISTORY, GeniesState.Page.HOST_ACCESS]
                 .every { shown.withPage(it).withArea(480, 700).pagesBelow() && it.managing() }
             !GeniesState.Page.CHAT.managing()
             !GeniesState.Page.SETTINGS.managing()
