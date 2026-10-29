@@ -14,6 +14,7 @@ import dev.gui.Genies;
 import dev.gui.model.Fonts;
 import dev.gui.model.GeniesState;
 import dev.gui.model.OllamaSetup;
+import dev.gui.model.Palette;
 import dev.gui.model.Settings;
 
 import sprouts.From;
@@ -162,6 +163,7 @@ final class SettingsPage {
     private static final double CARD_BESIDE_AT = 9.8;
 
     static UIForAnySwing<?, ?> of(Var<GeniesState> state, Genies app, Val<Boolean> visible) {
+        Val<Theme> theme = Theme.of(state);
         Var<Settings> settings = state.zoomTo(GeniesState::settings, GeniesState::withSettings);
         // Lenses all the way down: settings → Eden AI → its key, and so on. Each field
         // edits one value of the one GeniesState, and nothing else.
@@ -259,25 +261,26 @@ final class SettingsPage {
                             .add("growx, wmin 0", label(welcome.viewAsString(it -> it ? "Your genies' model" : "Settings")).group(Skin.EMPTY_TITLE))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     advanced.viewAsString(it -> it
                                         ? "Where your genies' model runs, and how they reach it."
                                         : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."
                                     ),
-                                    DARK.SUBTEXT(),
+                                    Palette::SUBTEXT,
                                     Val.of(true)
                                 )
                             )
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, DARK.SUBTEXT(), anyAwake))
+                            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, awakeNote, Palette::SUBTEXT, anyAwake))
                         )
                         .add(
                             box("ins 0, hidemode 3")
                             .add(
-                                ViewPartsUtil.link("Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
+                                ViewPartsUtil.link(theme, "Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
                                 .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
                                 .onClick(_ -> advanced.set(From.VIEW, true))
                             )
                             .add(
-                                ViewPartsUtil.link("‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
+                                ViewPartsUtil.link(theme, "‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
                                 .onClick(_ -> advanced.set(From.VIEW, false))
                             )
                         )
@@ -291,17 +294,18 @@ final class SettingsPage {
                         .add(LABEL, label("This computer"))
                         .add(FIELD,
                             ViewPartsUtil.wrapped(
+                                theme,
                                 ollama.viewAsString(it ->
                                     it.step() == OllamaSetup.Step.LOOKING
                                         ? "Genies is looking what this computer has…"
                                         : it.found().hardware().words()
                                 ),
-                                DARK.TEXT(),
+                                Palette::TEXT,
                                 Val.of(true)
                             )
                         )
                         .add(LABEL, label("Ollama"))
-                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::words), DARK.TEXT(), Val.of(true)))
+                        .add(FIELD, ViewPartsUtil.wrapped(theme, ollama.viewAsString(OllamaSetup::words), Palette::TEXT, Val.of(true)))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -315,13 +319,15 @@ final class SettingsPage {
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     ollama.viewAsString(it -> it.found().hardware().words(it.wanted())),
-                                    DARK.TEXT(),
+                                    Palette::TEXT,
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())
                                 )
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
+                                    theme,
                                     "Genies suggests the best model this computer runs well. Any other "
                                     + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.",
                                     Val.of(true)
@@ -357,26 +363,29 @@ final class SettingsPage {
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     ollama.viewAsString(OllamaSetup::says),
-                                    DARK.SUBTEXT(),
+                                    Palette::SUBTEXT,
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())
                                 )
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     ollama.viewAsString(OllamaSetup::says),
-                                    DARK.TROUBLE(),
+                                    Palette::TROUBLE,
                                     ollama.viewAs(Boolean.class, it -> it.step() == OllamaSetup.Step.FAILED)
                                 )
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     settings.viewAsString(it -> "Until then, your genies use " + switch (it.place()) {
                                         case EDEN_AI -> "Eden AI.";
                                         case ELSEWHERE -> "the model server at " + it.elsewhere().address().strip() + ".";
                                         case THIS_MACHINE -> "the model server at " + it.local().address().strip() + ".";
                                     }),
-                                    DARK.SUBTEXT(),
+                                    Palette::SUBTEXT,
                                     state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())
                                 )
                             )
@@ -391,10 +400,11 @@ final class SettingsPage {
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6")
                             .add("wmin 0", radioButton("at Eden AI", Settings.Place.EDEN_AI, place))
-                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note("In the EU, with your Eden AI key.", Val.of(true)))
+                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note(theme, "In the EU, with your Eden AI key.", Val.of(true)))
                             .add("wmin 0", radioButton("on a server elsewhere", Settings.Place.ELSEWHERE, place))
                             .add("growx, wmin 0, gapleft 24",
                                 ViewPartsUtil.note(
+                                    theme,
                                     "A model server of your own on another machine, "
                                     + "such as Ollama behind a proxy that asks for a key.",
                                     Val.of(true)
@@ -402,7 +412,7 @@ final class SettingsPage {
                             )
                             .add("wmin 0", radioButton("on this computer", Settings.Place.THIS_MACHINE, place))
                             .add("growx, wmin 0, gapleft 24",
-                                ViewPartsUtil.note("A model server such as Ollama, LM Studio or llama.cpp.", Val.of(true))
+                                ViewPartsUtil.note(theme, "A model server such as Ollama, LM Studio or llama.cpp.", Val.of(true))
                             )
                         )
                     )
@@ -424,6 +434,7 @@ final class SettingsPage {
                             .add("wmin 0", radioButton("Use " + Settings.KEY_VARIABLE, Settings.KeySource.ENVIRONMENT, source))
                             .add("growx, wmin 0, gapleft 24",
                                 ViewPartsUtil.note(
+                                    theme,
                                     found ? "Found where Genies was started." : "Not set where Genies was started.",
                                     Val.of(true)
                                 )
@@ -433,7 +444,7 @@ final class SettingsPage {
                                 passwordField(edenKey).group(Skin.INPUT)
                                 .isEnabledIf(source.viewAs(Boolean.class, it -> it == Settings.KeySource.ENTERED))
                             )
-                            .add("growx, wmin 0", ViewPartsUtil.note(KEY_STAYS_HERE, Val.of(true)))
+                            .add("growx, wmin 0", ViewPartsUtil.note(theme, KEY_STAYS_HERE, Val.of(true)))
                         )
 
                         // ── a model server elsewhere ──
@@ -443,6 +454,7 @@ final class SettingsPage {
                             .add("growx, wmin 0", textField(remoteAddress).group(Skin.INPUT))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
+                                    theme,
                                     "Where the server's OpenAI-style API is, such as "
                                     + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
                                     Val.of(true)
@@ -454,7 +466,7 @@ final class SettingsPage {
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isElsewhere)
                             .add("growx, wmin 0", passwordField(remoteKey).group(Skin.INPUT))
                             .add("growx, wmin 0",
-                                ViewPartsUtil.note("Leave it empty if the server asks for none. " + KEY_STAYS_HERE, Val.of(true))
+                                ViewPartsUtil.note(theme, "Leave it empty if the server asks for none. " + KEY_STAYS_HERE, Val.of(true))
                             )
                         )
 
@@ -465,6 +477,7 @@ final class SettingsPage {
                             .add("growx, wmin 0", textField(localAddress).group(Skin.INPUT))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
+                                    theme,
                                     "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
                                     + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.",
                                     Val.of(true)
@@ -487,8 +500,9 @@ final class SettingsPage {
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
+                                    theme,
                                     lookUpNote,
-                                    DARK.SUBTEXT(),
+                                    Palette::SUBTEXT,
                                     lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())
                                 )
                             )
@@ -499,7 +513,7 @@ final class SettingsPage {
                         label("Changes take effect when a genie wakes.").group(Skin.META)
                         .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
                     )
-                    .add(WHOLE, ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), hasProblem))
+                    .add(WHOLE, ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, hasProblem))
                     .add(WHOLE, label("✓  Your genies can reach their model.").group(Skin.FINE).isVisibleIf(fine))
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")

@@ -6,6 +6,7 @@ import java.awt.EventQueue;
 import java.awt.event.InputEvent;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.swing.JButton;
@@ -17,8 +18,8 @@ import javax.swing.JTextArea;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
-import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
+import dev.gui.model.Palette;
 
 import sprouts.Val;
 import sprouts.Viewable;
@@ -30,7 +31,6 @@ import swingtree.UIForLabel;
 import swingtree.components.JBox;
 import swingtree.style.StyledString;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// Small pieces the views share.
@@ -48,15 +48,15 @@ final class ViewPartsUtil {
     }
 
     /// A few lines of small print, wrapped to the width they are given.
-    static UIForAnySwing<?, ?> note(String text, Val<Boolean> shown) {
+    static UIForAnySwing<?, ?> note(Val<Theme> theme, String text, Val<Boolean> shown) {
         return
             box().withMinSize(0, 0).isVisibleIf(shown)
             // Some padding, on purpose: text painted by the style engine sets its component's
             // height when it is painted, and a component of no height is never painted.
-            .withStyle(it ->
+            .withStyle(theme, (now, it) ->
                 it.padding(2, 0, 2, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT()), text))
+                    t.content(StyledString.of(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT()), text))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -65,14 +65,15 @@ final class ViewPartsUtil {
     }
 
     /// Text that changes, such as a problem, wrapped to the width it is given rather than cut
-    /// short: the end of a message is often the part that says what to do.
-    static UIForAnySwing<?, ?> wrapped(Val<String> text, Color colour, Val<Boolean> shown) {
+    /// short: the end of a message is often the part that says what to do. In the `colour` of
+    /// the theme's palette.
+    static UIForAnySwing<?, ?> wrapped(Val<Theme> theme, Val<String> text, Function<Palette, Color> colour, Val<Boolean> shown) {
         return
             box().withMinSize(0, 0).isVisibleIf(shown)
-            .withStyle(text, (words, it) ->
+            .withStyle(Themed.of(text, theme), (words, it) ->
                 it.padding(2, 0, 2, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(colour), words))
+                    t.content(StyledString.of(f -> f.family(words.fonts().FONT()).size(12).color(colour.apply(words.palette())), words.item()))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -123,14 +124,15 @@ final class ViewPartsUtil {
             .withStyle(colour, (c, it) -> it.backgroundColor(c).borderRadius(size));
     }
 
-    /// Text painted by the style engine, wrapped to the width it gets.
-    static UIForBox<JBox> words(String text, int size, float weight, Color colour) {
+    /// Text painted by the style engine, wrapped to the width it gets, in the `colour` of the
+    /// theme's palette.
+    static UIForBox<JBox> words(Val<Theme> theme, String text, int size, float weight, Function<Palette, Color> colour) {
         return
             box().withMinSize(0, 0)
-            .withStyle(it ->
+            .withStyle(theme, (now, it) ->
                 it.padding(1, 0, 1, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(size).weight(weight).color(colour), text))
+                    t.content(StyledString.of(f -> f.family(now.fonts().FONT()).size(size).weight(weight).color(colour.apply(now.palette())), text))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -139,55 +141,61 @@ final class ViewPartsUtil {
     }
 
     /// A few words on a small rounded patch, such as "added by Rex".
-    static UIForLabel<JLabel> tag(Val<String> text) {
+    static UIForLabel<JLabel> tag(Val<Theme> theme, Val<String> text) {
         return
             label(text)
-            .withStyle(it -> it
-                .backgroundColor(DARK.RAISED())
+            .withStyle(theme, (now, it) -> it
+                .backgroundColor(now.palette().RAISED())
                 .borderRadius(8)
                 .padding(2, 8, 2, 8)
-                .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT()))
+                .componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT()))
             );
     }
 
     /// A button that reads as a link, in brass.
-    static UIForButton<JButton> link(String text) {
+    static UIForButton<JButton> link(Val<Theme> theme, String text) {
         return
             button(text).group(Skin.ICON_BUTTON)
-            .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.BRASS())));
+            .withStyle(theme, (now, it) -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().BRASS())));
     }
 
     /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
     /// chosen part is lit; both are greyed while it cannot be changed.
-    static UIForAnySwing<?, ?> yesOrNo(Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
+    static UIForAnySwing<?, ?> yesOrNo(Val<Theme> theme, Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
         return
             box("ins 2, gap 2")
-            .withStyle(changeable, (can, it) -> it.backgroundColor(DARK.SMOKE()).border(1, can ? DARK.BORDER() : DARK.SMOKE()).borderRadius(11))
-            .add(part("No", yes.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
-            .add(part("Yes", yes, changeable, () -> choose.accept(true)));
+            .withStyle(Themed.of(changeable, theme), (can, it) -> {
+                Palette p = can.palette();
+                return it.backgroundColor(p.SMOKE()).border(1, can.item() ? p.BORDER() : p.SMOKE()).borderRadius(11);
+            })
+            .add(part(theme, "No", yes.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
+            .add(part(theme, "Yes", yes, changeable, () -> choose.accept(true)));
     }
 
     /// How a part of a switch looks: whether it is chosen, and whether it can be changed.
     private record Part(boolean chosen, boolean changeable) {}
 
     /// One part of a switch: lit while chosen, and greyed, chosen or not, while it cannot be changed.
-    private static UIForButton<JButton> part(String text, Val<Boolean> chosen, Val<Boolean> changeable, Runnable choose) {
+    private static UIForButton<JButton> part(Val<Theme> theme, String text, Val<Boolean> chosen, Val<Boolean> changeable, Runnable choose) {
         Val<Part> looks = Viewable.of(Part.class, chosen, changeable, Part::new);
         return
             button(text).group(Skin.ICON_BUTTON)
             .isEnabledIf(changeable)
-            .withStyle(looks, (part, it) -> it
-                .borderRadius(9)
-                .padding(4, 12, 4, 12)
-                .backgroundColor(!part.chosen() ? DARK.TRANSPARENT() : part.changeable() ? DARK.RAISED() : DARK.CARD())
-                .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
-                .componentFont(f -> f
-                    .family(Fonts.DEFAULT.FONT())
-                    .size(12)
-                    .weight(part.chosen() ? 2f : 1f)
-                    .color(part.changeable() ? (part.chosen() ? DARK.TEXT() : DARK.SUBTEXT()) : dim(DARK.SUBTEXT()))
-                )
-            )
+            .withStyle(Themed.of(looks, theme), (themed, it) -> {
+                Part part = themed.item();
+                Palette p = themed.palette();
+                return it
+                    .borderRadius(9)
+                    .padding(4, 12, 4, 12)
+                    .backgroundColor(!part.chosen() ? p.TRANSPARENT() : part.changeable() ? p.RAISED() : p.CARD())
+                    .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
+                    .componentFont(f -> f
+                        .family(themed.fonts().FONT())
+                        .size(12)
+                        .weight(part.chosen() ? 2f : 1f)
+                        .color(part.changeable() ? (part.chosen() ? p.TEXT() : p.SUBTEXT()) : dim(p.SUBTEXT()))
+                    );
+            })
             .onClick(_ -> choose.run());
     }
 
