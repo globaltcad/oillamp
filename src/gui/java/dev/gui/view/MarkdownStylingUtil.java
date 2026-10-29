@@ -1,5 +1,6 @@
 package dev.gui.view;
 
+import dev.gui.model.Fonts;
 import java.awt.Color;
 
 import sprouts.Tuple;
@@ -7,7 +8,7 @@ import swingtree.api.Configurator;
 import swingtree.style.FontConf;
 import swingtree.style.StyledString;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 
 /// Markdown runs, set in the lamp's colours, as the styled text SwingTree paints.
 ///
@@ -57,11 +58,11 @@ final class MarkdownStylingUtil {
 
     private static Configurator<FontConf> look(MarkdownParsingUtil.Run run, double alpha) {
         Color colour = switch (run.inline()) {
-            case CODE -> run.block() == MarkdownParsingUtil.Block.CODE ? TEXT : CODE_TEXT;
-            case LINK -> FLAME;
-            case STRIKE -> SUBTEXT;
-            case MARKER -> run.block() == MarkdownParsingUtil.Block.RULE || run.block() == MarkdownParsingUtil.Block.TABLE ? BORDER : BRASS;
-            default -> run.block() == MarkdownParsingUtil.Block.QUOTE ? SUBTEXT : TEXT;
+            case CODE -> run.block() == MarkdownParsingUtil.Block.CODE ? DARK.TEXT() : DARK.CODE_TEXT();
+            case LINK -> DARK.FLAME();
+            case STRIKE -> DARK.SUBTEXT();
+            case MARKER -> run.block() == MarkdownParsingUtil.Block.RULE || run.block() == MarkdownParsingUtil.Block.TABLE ? DARK.BORDER() : DARK.BRASS();
+            default -> run.block() == MarkdownParsingUtil.Block.QUOTE ? DARK.SUBTEXT() : DARK.TEXT();
         };
         int size = switch (run.block()) { case H1 -> 20; case H2 -> 17; case H3 -> 15; default -> BODY; };
         boolean heading =
@@ -81,12 +82,12 @@ final class MarkdownStylingUtil {
         Color shown = faded(colour, alpha);
         return f -> {
             FontConf set =
-                f.family(even ? MONO : FONT)
+                f.family(even ? Fonts.DEFAULT.MONO() : Fonts.DEFAULT.FONT())
                 .size(even ? size - 1 : size)
                 .color(shown)
                 .weight(bold ? 2 : 1)
                 .posture(italic ? 0.2f : 0f);
-            if (code) set = set.backgroundColor(faded(run.block() == MarkdownParsingUtil.Block.CODE ? SMOKE : RAISED, alpha));
+            if (code) set = set.backgroundColor(faded(run.block() == MarkdownParsingUtil.Block.CODE ? DARK.SMOKE() : DARK.RAISED(), alpha));
             if (run.inline() == MarkdownParsingUtil.Inline.STRIKE) set = set.strikeThrough(true);
             if (run.inline() == MarkdownParsingUtil.Inline.LINK) set = set.underlined(true);
             return set;

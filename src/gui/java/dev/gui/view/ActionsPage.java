@@ -10,6 +10,7 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 import dev.gui.Genies;
+import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 
@@ -23,7 +24,7 @@ import swingtree.UIForButton;
 import swingtree.input.Keyboard;
 import swingtree.layout.FlowCell;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// What can be done with a genie as a whole: renaming it, starting a new conversation with it,
@@ -109,7 +110,7 @@ final class ActionsPage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).padding(20, 4, 28, 4))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(20, 4, 28, 4))
                 .add(WHOLE, top())
                 .add(TILE, renaming())
                 .add(TILE, startingAfresh())
@@ -130,7 +131,7 @@ final class ActionsPage {
                         "What can be done with " + it.name()
                         + " as a whole. A right-click on its card in your list offers the same."
                     ),
-                    SUBTEXT,
+                    DARK.SUBTEXT(),
                     Val.of(true)
                 )
             );
@@ -142,7 +143,7 @@ final class ActionsPage {
         Val<Boolean> keepable = newName.viewAs(Boolean.class, it -> !it.isBlank());
         return tile(
             SignSvgUtil.RENAME,
-            TEXT,
+            DARK.TEXT(),
             Val.of("Name"),
             renaming.viewAsString(on ->
                 on ? "Enter keeps the new name, Escape the one it had." : "What it is called in your list and above its chat."
@@ -156,12 +157,12 @@ final class ActionsPage {
                 .withStyle(renaming, (on, it) ->
                     on
                         ? it.padding(8, 10, 8, 10)
-                        : it.backgroundColor(TRANSPARENT)
-                          .border(1, TRANSPARENT)
+                        : it.backgroundColor(DARK.TRANSPARENT())
+                          .border(1, DARK.TRANSPARENT())
                           .padding(8, 0, 8, 0)
                           .cursor(UI.Cursor.DEFAULT)
                 )
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(15).weight(2f).color(TEXT)))
+                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(15).weight(2f).color(DARK.TEXT())))
                 .peek(it -> nameField = Optional.of(it))
                 .onEnter(_ -> keepName())
                 .onPressed(Keyboard.Key.ESCAPE, _ -> stopRenaming())
@@ -217,7 +218,7 @@ final class ActionsPage {
         Val<Boolean> idle = phase.viewAs(Boolean.class, it -> it != Genie.Phase.WORKING && it != Genie.Phase.WAKING);
         return tile(
             SignSvgUtil.NEW,
-            TEXT,
+            DARK.TEXT(),
             Val.of("New conversation"),
             genie.viewAsString(it ->
                 "Start afresh with " + it.name() + ", waking it first if it sleeps. "
@@ -232,7 +233,7 @@ final class ActionsPage {
     private UIForAnySwing<?, ?> saving() {
         return tile(
             SignSvgUtil.HISTORY,
-            TEXT,
+            DARK.TEXT(),
             Val.of("Save now"),
             genie.viewAsString(it -> "Save " + it.name() + "'s home as it is now: a moment in its history to go back to."),
             big(button("Save now…").group(Skin.QUIET_BUTTON))
@@ -245,7 +246,7 @@ final class ActionsPage {
     private UIForAnySwing<?, ?> sleepingOrWaking() {
         return tile(
             phase.viewAs(Boolean.class, Genie.Phase::isAwake),
-            TEXT,
+            DARK.TEXT(),
             phase.viewAsString(it -> it.isAwake() ? "Sleep" : "Wake"),
             genie.viewAsString(it -> switch (it.phase()) {
                 case ASLEEP -> it.name() + " is in the lamp. Waking it starts its sandbox, with its home as it left it.";
@@ -271,14 +272,14 @@ final class ActionsPage {
     }
 
     private UIForAnySwing<?, ?> folders() {
-        return tile(SignSvgUtil.FOLDER, TEXT, Val.of("Folders"), folders.says(), folders.view());
+        return tile(SignSvgUtil.FOLDER, DARK.TEXT(), Val.of("Folders"), folders.says(), folders.view());
     }
 
     /// A lamp from elsewhere is not Genies' to delete, so it is only removed from Genies.
     private UIForAnySwing<?, ?> deleting() {
         return tile(
             SignSvgUtil.DELETE,
-            TROUBLE,
+            DARK.TROUBLE(),
             genie.viewAsString(it -> it.fromElsewhere() ? "Remove" : "Delete"),
             genie.viewAsString(it ->
                 it.fromElsewhere()
@@ -291,7 +292,7 @@ final class ActionsPage {
                 button(genie.viewAsString(it -> it.fromElsewhere() ? "Remove from Genies…" : "Delete " + it.name() + "…"))
                 .group(Skin.QUIET_BUTTON)
             )
-            .withStyle(it -> it.border(1, TROUBLE).componentFont(f -> f.color(TROUBLE)))
+            .withStyle(it -> it.border(1, DARK.TROUBLE()).componentFont(f -> f.color(DARK.TROUBLE())))
             .onClick(_ -> delete.accept(selected()))
         );
     }
@@ -341,9 +342,9 @@ final class ActionsPage {
             .add("cell 0 0, top, gaptop 2", sign)
             .add("cell 1 0, growx, wmin 0",
                 label(title)
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(14).weight(2f).color(TEXT)))
+                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).weight(2f).color(DARK.TEXT())))
             )
-            .add("cell 1 1, growx, wmin 0", ViewPartsUtil.wrapped(says, SUBTEXT, Val.of(true)))
+            .add("cell 1 1, growx, wmin 0", ViewPartsUtil.wrapped(says, DARK.SUBTEXT(), Val.of(true)))
             // A button keeps its own width; anything else, such as the name's field, takes the row.
             .add(doing instanceof UIForButton<?> ? "cell 1 2, gaptop 6" : "cell 1 2, growx, wmin 0, gaptop 6", doing);
     }

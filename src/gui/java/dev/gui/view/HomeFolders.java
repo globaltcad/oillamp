@@ -29,6 +29,7 @@ import javax.swing.tree.TreePath;
 import org.jspecify.annotations.Nullable;
 
 import dev.gui.Genies;
+import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.Home;
@@ -42,7 +43,7 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.layout.FlowCell;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// A genie's home on its Actions page: where it is on this computer, and its folders as a tree,
@@ -178,7 +179,7 @@ final class HomeFolders {
             .peek(it -> it.addComponentListener(relayout))
             // The grid's gaps are at its edges too; outside the tile's own edges, they line up
             // with the words above.
-            .withStyle(it -> it.backgroundColor(TRANSPARENT).margin(-14))
+            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).margin(-14))
             .add(TREE, tree())
             .add(LINKING, linking());
     }
@@ -192,17 +193,17 @@ final class HomeFolders {
             .withMinSize(0, TREE_HEIGHT).withPrefSize(TREE_WIDTH, TREE_HEIGHT)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
             .withVerticalScrollIncrement(16)
-            .withStyle(it -> it.backgroundColor(RAISED).border(1, BORDER).borderRadius(12).padding(6))
+            .withStyle(it -> it.backgroundColor(DARK.RAISED()).border(1, DARK.BORDER()).borderRadius(12).padding(6))
             .add(
                 // In a panel of its own: on its own, a tree asks its scroll pane for room for
                 // twenty rows, however many it has.
-                panel("fill, ins 0").withStyle(it -> it.backgroundColor(TRANSPARENT))
+                panel("fill, ins 0").withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .add("grow, wmin 0",
                     UI.tree(root, conf -> conf
                         .nodesOf(Home.Folder.class, it -> it
                             .children(Home.Folder::folders)
                             .text(Home.Folder::name)
-                            .icon(_ -> SignSvgUtil.sign(SignSvgUtil.FOLDER, BRASS))
+                            .icon(_ -> SignSvgUtil.sign(SignSvgUtil.FOLDER, DARK.BRASS()))
                         )
                         .leafWhenEmpty(true)
                     )
@@ -232,8 +233,8 @@ final class HomeFolders {
                     })
                     .onMouseExit(_ -> pointed.set(-1))
                     .withStyle(pointed, (row, it) -> it
-                        .backgroundColor(TRANSPARENT)
-                        .componentFont(f -> f.family(FONT).size(13).color(TEXT))
+                        .backgroundColor(DARK.TRANSPARENT())
+                        .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(13).color(DARK.TEXT()))
                         .painter(UI.Layer.BACKGROUND, g -> {
                             JTree tree = shown[0];
                             Rectangle bounds = row < 0 || tree == null ? null : tree.getRowBounds(row);
@@ -241,7 +242,7 @@ final class HomeFolders {
                             // SwingTree scales a painter's units to pixels; the tree's rows are in pixels.
                             g.scale(1 / UI.scale(), 1 / UI.scale());
                             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                            g.setColor(ViewPartsUtil.withAlpha(BORDER, 170));
+                            g.setColor(ViewPartsUtil.withAlpha(DARK.BORDER(), 170));
                             g.fillRoundRect(0, bounds.y, tree.getWidth(), bounds.height, UI.scale(8), UI.scale(8));
                         })
                     )
@@ -334,10 +335,10 @@ final class HomeFolders {
                 .isEditableIf(false)
                 .withTooltip(where)
                 .withStyle(it -> it
-                    .backgroundColor(TRANSPARENT)
-                    .border(1, TRANSPARENT)
+                    .backgroundColor(DARK.TRANSPARENT())
+                    .border(1, DARK.TRANSPARENT())
                     .padding(4, 0, 4, 0)
-                    .componentFont(f -> f.family(MONO).size(12).color(SUBTEXT))
+                    .componentFont(f -> f.family(Fonts.DEFAULT.MONO()).size(12).color(DARK.SUBTEXT()))
                 )
             )
             .add(
@@ -353,7 +354,7 @@ final class HomeFolders {
             )
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 8)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).margin(-8, -8, 0, -8))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).margin(-8, -8, 0, -8))
                 .add(
                     button(documentsName.viewAsString(it -> "Link into " + it)).group(Skin.FLAME_BUTTON)
                     .isEnabledIf(nameable)
@@ -369,16 +370,16 @@ final class HomeFolders {
                 )
             )
             .add("growx, wmin 0",
-                ViewPartsUtil.wrapped(said, CONTENT, outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
+                ViewPartsUtil.wrapped(said, DARK.CONTENT(), outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(said, TROUBLE, outcome.viewAs(Boolean.class, Outcome::trouble)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(said, DARK.TROUBLE(), outcome.viewAs(Boolean.class, Outcome::trouble)))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     genie.viewAsString(it ->
                         "Or drag a folder from the tree into your file manager. "
                         + "Deleting " + it.name() + " leaves its links behind, leading nowhere."
                     ),
-                    SUBTEXT,
+                    DARK.SUBTEXT(),
                     Val.of(true)
                 )
             );
