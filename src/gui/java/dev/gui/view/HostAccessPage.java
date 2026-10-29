@@ -7,6 +7,7 @@ import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.HostAccess;
+import dev.gui.model.Palette;
 
 import sprouts.From;
 import sprouts.Val;
@@ -70,6 +71,8 @@ final class HostAccessPage {
     }
 
     private final Var<GeniesState> state;
+    /// The colours and the fonts of the state.
+    private final Val<Theme> theme;
     private final Genies app;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
@@ -84,6 +87,7 @@ final class HostAccessPage {
 
     HostAccessPage(Var<GeniesState> state, Genies app) {
         this.state = state;
+        theme = Theme.of(state);
         this.app = app;
         genie      = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         hostAccess = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
@@ -151,7 +155,7 @@ final class HostAccessPage {
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
             .add(label("Host access").group(Skin.EMPTY_TITLE))
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(says, DARK.SUBTEXT(), Val.of(true)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
             // As loud as the banner of a request for permission: the user should not have to
             // find out by typing that nothing they type is kept.
             .add("growx, wmin 0",
@@ -159,9 +163,9 @@ final class HostAccessPage {
                 .isVisibleIf(lockedBecause.viewAs(Boolean.class, it -> !it.isEmpty()))
                 .withStyle(it -> it.backgroundColor(DARK.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, DARK.BRASS()))
                 .add("top, gaptop 2", label("").withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, DARK.BRASS()))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(lockedBecause, DARK.TEXT(), Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true)))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), problem.viewAs(Boolean.class, it -> !it.isEmpty())));
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
     }
 
     // ─── the switch, and what it switches ──────────────────────────────────────────────────
@@ -171,7 +175,7 @@ final class HostAccessPage {
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
             .add("growx, wmin 0", section("MAY IT REACH THIS COMPUTER?"))
-            .add(ViewPartsUtil.yesOrNo(on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
+            .add(ViewPartsUtil.yesOrNo(theme, on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
     }
 
     private UIForAnySwing<?, ?> experimental() {
@@ -181,11 +185,12 @@ final class HostAccessPage {
             .add("top", label("⚠").withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(DARK.TROUBLE()))))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
+                    theme,
                     Val.of(
                         "Experimental. Never turn this on on a computer with sensitive data. "
                         + "The model that judges reads these rules with every request, and nothing else."
                     ),
-                    DARK.TEXT(),
+                    Palette::TEXT,
                     Val.of(true)
                 )
             );
@@ -200,7 +205,7 @@ final class HostAccessPage {
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
         return
             box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(warning, DARK.BRASS(), warning.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, warning, Palette::BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("skip 0",
                 button("Undo changes").group(Skin.QUIET_BUTTON)
                 .isEnabledIf(canSave)
@@ -260,6 +265,6 @@ final class HostAccessPage {
                     )
                 )
             )
-            .add("growx, wmin 0", ViewPartsUtil.note(note, Val.of(true)));
+            .add("growx, wmin 0", ViewPartsUtil.note(theme, note, Val.of(true)));
     }
 }
