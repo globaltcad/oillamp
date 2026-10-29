@@ -2,6 +2,7 @@ package dev.gui.view;
 
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelListener;
 
 import javax.swing.BoundedRangeModel;
 import javax.swing.JScrollPane;
@@ -40,7 +41,15 @@ final class FollowTheEnd {
         // Added after the look-and-feel's wheel listener, so it runs after that has moved the
         // scroll bar. A touchpad turns the wheel by fractions, so only the precise rotation says
         // which way.
-        pane.addMouseWheelListener(event -> userScrolled(event.getPreciseWheelRotation() < 0));
+        MouseWheelListener wheel = event -> userScrolled(event.getPreciseWheelRotation() < 0);
+        pane.addMouseWheelListener(wheel);
+        // A look-and-feel set up anew, as when the palette changes, gives the pane a new UI
+        // delegate, which adds its wheel listener again, after this one. So this one goes after
+        // it once more; otherwise it would see each scroll before it happens, and set it back.
+        pane.addPropertyChangeListener("UI", _ -> {
+            pane.removeMouseWheelListener(wheel);
+            pane.addMouseWheelListener(wheel);
+        });
         pane.getVerticalScrollBar().addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent event) {
                 dragging = true;
