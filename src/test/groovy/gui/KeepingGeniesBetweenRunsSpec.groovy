@@ -92,8 +92,8 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
             Light. The window is painted in the light palette at once, and nothing else waits for
             Done: Genies writes the choice to `look.json` on its shelf as soon as the palette in
             its state changes. So `Shelf.palette()` reads the light palette back the next time
-            Genies starts. A shelf without `look.json`, as on the very first start, reads the
-            dark palette, the lamp at night that Genies always had.
+            Genies starts. A shelf without `look.json`, as on the very first start, reads no
+            palette at all: the user has not picked one yet, so Genies follows the desktop.
         """
         given:
             var genie = Genie.named('Genie 1')
@@ -102,14 +102,14 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
             var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, progress, events -> throw new IOException('no lamps here') } as LampLighter,
                                  new OllamaKeeper(tmp.resolve('ollama')))
 
-        expect: 'a shelf without look.json reads the dark palette'
-            new Shelf(tmp).palette() == Palette.DARK
+        expect: 'a shelf without look.json reads no palette'
+            new Shelf(tmp).palette() == Optional.empty()
 
         when: 'the palette in the state becomes the light one, as the Appearance switch makes it'
             state.update(From.VIEW, { it.withPalette(Palette.LIGHT) })
 
         then:
-            new Shelf(tmp).palette() == Palette.LIGHT
+            new Shelf(tmp).palette() == Optional.of(Palette.LIGHT)
             Files.readString(tmp.resolve('look.json')).contains('"LIGHT"')
             app != null
     }

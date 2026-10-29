@@ -22,6 +22,7 @@ import dev.gui.genie.GenieRunner;
 import dev.gui.genie.LampLighter;
 import dev.gui.genie.OllamaKeeper;
 import dev.gui.genie.Shelf;
+import dev.gui.genie.SystemLook;
 import dev.gui.model.Conversation;
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
@@ -169,7 +170,15 @@ public final class GeniesBackend implements Genies {
     ///
     /// @param lighter     lights the genies' lamps
     /// @param environment the environment Genies was started from, by variable
-    static GeniesBackend open(Shelf shelf, ErrorLog errors, LampLighter lighter, Function<String, Optional<String>> environment) {
+    /// @param desktop     whether the desktop is dark or light, for the palette until the user
+    ///                    picks one
+    static GeniesBackend open(
+        final Shelf shelf,
+        final ErrorLog errors,
+        final LampLighter lighter,
+        final Function<String, Optional<String>> environment,
+        final SystemLook desktop
+    ) {
         Optional<String> environmentKey = environment.apply(Settings.KEY_VARIABLE).filter(key -> !key.isBlank());
         OllamaKeeper ollama = new OllamaKeeper(shelf.ollama());
         // The first time, the genies' model is where this computer has one: Ollama, if it is
@@ -178,7 +187,10 @@ public final class GeniesBackend implements Genies {
         Settings settings = shelf.hasSettings() ? shelf.settings()
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
-        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(shelf.palette())),
+        // The palette the user picked; before they ever did, the one that fits the desktop, so
+        // that Genies comes light on a light desktop; and the lamp at night when nothing says.
+        Palette palette = shelf.palette().or(desktop::palette).orElse(Palette.DARK);
+        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(palette)),
                                 shelf, lighter, ollama, GenieHomeUtil.documents(environment));
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
