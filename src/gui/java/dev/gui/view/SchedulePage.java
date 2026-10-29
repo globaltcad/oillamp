@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,7 +29,6 @@ import javax.swing.JPopupMenu;
 
 import dev.gui.Genies;
 import dev.gui.model.DateWordingUtil;
-import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.JobDraft;
@@ -56,7 +56,6 @@ import swingtree.input.Keyboard;
 import swingtree.layout.FlowCell;
 import swingtree.style.StyledString;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// A genie's schedule: when its jobs wake it, drawn as a timeline of the week around now, the
@@ -106,8 +105,9 @@ final class SchedulePage {
     private static final int NODE_Y = 15;
 
     private final Var<GeniesState> state;
-    /// The colours and the fonts of the state.
+    /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
+    private final Val<Palette> palette;
     private final Genies app;
     private final Look look;
 
@@ -130,6 +130,7 @@ final class SchedulePage {
     SchedulePage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
         theme = Theme.of(state);
+        palette = Theme.paletteOf(state);
         this.app = app;
         this.look = look;
         genie    = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
@@ -163,7 +164,7 @@ final class SchedulePage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(20, 22, 28, 22))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(20, 22, 28, 22))
                 .add(WHOLE, top())
                 .add(WIDE_SIDE, timelineColumn())
                 .add(NARROW_SIDE, jobsColumn())
@@ -176,15 +177,15 @@ final class SchedulePage {
     /// Whether the schedule runs, as a coloured dot and a sentence.
     private record Status(Color colour, String words) {}
 
-    private static Status status(Genie genie) {
+    private static Status status(Genie genie, Palette p) {
         Schedule schedule = genie.schedule();
         if (schedule.paused())
-            return new Status(DARK.BRASS(), "Paused. No job runs until you resume the schedule.");
+            return new Status(p.BRASS(), "Paused. No job runs until you resume the schedule.");
         return switch (genie.phase()) {
-            case READY, WORKING -> new Status(DARK.CONTENT(), "On. Jobs wake " + genie.name() + " at their times, one after the other.");
-            case WAKING -> new Status(DARK.BRASS(), genie.name() + " is waking. Jobs run once it is awake.");
+            case READY, WORKING -> new Status(p.CONTENT(), "On. Jobs wake " + genie.name() + " at their times, one after the other.");
+            case WAKING -> new Status(p.BRASS(), genie.name() + " is waking. Jobs run once it is awake.");
             case ASLEEP, BROKEN -> new Status(
-                DARK.SUBTEXT(),
+                p.SUBTEXT(),
                 genie.name() + " is asleep. Jobs run only while it is awake; "
                 + "one whose time came meanwhile runs as soon as it wakes."
             );
@@ -192,7 +193,7 @@ final class SchedulePage {
     }
 
     private UIForAnySwing<?, ?> top() {
-        Val<Status> status = genie.viewAs(Status.class, SchedulePage::status);
+        Val<Status> status = Viewable.of(Status.class, genie, palette, SchedulePage::status);
         Val<Boolean> paused = schedule.viewAs(Boolean.class, Schedule::paused);
         Val<Boolean> asleep = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN);
         Val<String> problem = schedule.viewAsString(it -> it.draft().isPresent() ? "" : it.problem());
@@ -200,7 +201,7 @@ final class SchedulePage {
             panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 10)
             .isVisibleIf(overview)
             .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add(SAYING,
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3", "[grow]")
                 .add(label("Schedule").group(Skin.EMPTY_TITLE))
@@ -216,7 +217,11 @@ final class SchedulePage {
                 panel(wide.viewAs(Layout.class, isWide ->
                     Layout.flow(isWide ? UI.HorizontalAlignment.RIGHT : UI.HorizontalAlignment.LEFT, 8, 4)
                 ))
-                .withStyle(wide, (isWide, it) -> it.backgroundColor(DARK.TRANSPARENT()).padding(isWide ? 4 : 0, 0, 0, 0))
+                .withStyle(Themed.of(wide, theme), (themed, it) -> {
+                    var isWide = themed.item();
+                    Palette p = themed.palette();
+                    return it.backgroundColor(p.TRANSPARENT()).padding(isWide ? 4 : 0, 0, 0, 0);
+                })
                 .add(
                     button("✦  Wake").group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
                     .withTooltip("Jobs run only while the genie is awake")
@@ -259,7 +264,7 @@ final class SchedulePage {
                             : "Show " + more + " earlier " + (more == 1 ? "run" : "runs")
                     ))
                     .group(Skin.ICON_BUTTON).isVisibleIf(canFold)
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.BRASS())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().BRASS())))
                     .onClick(_ -> schedule.update(From.VIEW, s -> s.withEarlier(!s.earlier())))
                 )
             )
@@ -275,17 +280,17 @@ final class SchedulePage {
                 panel("fill, wrap 1, ins 0, gap 0", "[grow]")
                 .withMinSize(0, 0)
                 // One rail down the whole week; each moment puts its node on it.
-                .withStyle(it ->
-                    it.backgroundColor(DARK.TRANSPARENT())
-                    .painter(UI.Layer.BACKGROUND, Painter.of(it.componentHeight(), rail(it.componentHeight())))
+                .withStyle(palette, (p, it) ->
+                    it.backgroundColor(p.TRANSPARENT())
+                    .painter(UI.Layer.BACKGROUND, Painter.of(List.of(it.componentHeight(), p), rail(p, it.componentHeight())))
                 )
                 .addAll("growx, wmin 0", days, day -> UI.of(UI.use(look, () -> dayView(day).get(JPanel.class))))
             );
     }
 
-    private static Painter rail(int height) {
+    private static Painter rail(Palette p, int height) {
         return g -> {
-            g.setColor(DARK.BORDER());
+            g.setColor(p.BORDER());
             g.fillRect(CLOCK + RAIL / 2 - 1, 10, 2, Math.max(0, height - 20));
         };
     }
@@ -295,11 +300,11 @@ final class SchedulePage {
         boolean near = day.label().equals("Today") || day.label().equals("Tomorrow") || day.label().equals("Yesterday");
         var view =
             panel("fill, wrap 1, ins 0, gap 0", "[grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0",
                 panel("fill, ins 12 0 4 0, gap 0", "[" + CLOCK + "!][" + RAIL + "!][grow]")
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
-                .add("skip 1, center", ViewPartsUtil.dot(Val.of(day.date().equals(today) ? DARK.FLAME() : DARK.SUBTEXT()), 5))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+                .add("skip 1, center", ViewPartsUtil.dot(palette.viewAs(Color.class, p -> day.date().equals(today) ? p.FLAME() : p.SUBTEXT()), 5))
                 .add("growx, wmin 0, gapleft 8",
                     ViewPartsUtil.words(
                         theme,
@@ -318,22 +323,22 @@ final class SchedulePage {
         boolean now = moment.kind() == Timeline.Kind.NOW || moment.kind() == Timeline.Kind.WORKING;
         return
             panel("fill, ins 2 0 2 0, gap 0", "[" + CLOCK + "!][" + RAIL + "!][grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top, gaptop 7, right",
                 label(moment.clock()).group(Skin.CLOCK)
-                .withStyle(it ->
+                .withStyle(palette, (p, it) ->
                     now
-                        ? it.componentFont(f -> f.color(DARK.FLAME()).weight(2f))
+                        ? it.componentFont(f -> f.color(p.FLAME()).weight(2f))
                         : moment.emphasis() == Timeline.Emphasis.FADED
-                            ? it.componentFont(f -> f.color(ViewPartsUtil.dim(DARK.SUBTEXT())))
+                            ? it.componentFont(f -> f.color(ViewPartsUtil.dim(p.SUBTEXT())))
                             : it
                 )
             )
             .add("top, growy, w " + RAIL + "!",
                 box().withPrefSize(RAIL, 28)
-                .withStyle(it ->
-                    it.backgroundColor(DARK.TRANSPARENT())
-                    .painter(UI.Layer.BACKGROUND, Painter.of(moment.kind().name() + moment.outcome() + moment.emphasis(), node(moment)))
+                .withStyle(palette, (p, it) ->
+                    it.backgroundColor(p.TRANSPARENT())
+                    .painter(UI.Layer.BACKGROUND, Painter.of(List.of(moment.kind(), moment.outcome(), moment.emphasis(), p), node(p, moment)))
                 )
             )
             .add("growx, wmin 0", moment.kind() == Timeline.Kind.NOW ? nowLine() : card(moment));
@@ -341,7 +346,7 @@ final class SchedulePage {
 
     /// The node on the rail: hollow for what is still to come, filled for what ran, in the
     /// colour of how it ended, and the flame for now.
-    private static Painter node(Timeline.Moment moment) {
+    private static Painter node(Palette p, Timeline.Moment moment) {
         return g -> {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             double x = RAIL / 2.0;
@@ -349,31 +354,31 @@ final class SchedulePage {
             boolean picked = moment.emphasis() == Timeline.Emphasis.PICKED;
             switch (moment.kind()) {
                 case NOW, WORKING -> {
-                    g.setColor(new Color(DARK.FLAME().getRed(), DARK.FLAME().getGreen(), DARK.FLAME().getBlue(), 60));
+                    g.setColor(ViewPartsUtil.withAlpha(p.FLAME(), 60));
                     g.fill(new Ellipse2D.Double(x - 9, NODE_Y - 9, 18, 18));
-                    g.setColor(DARK.FLAME());
+                    g.setColor(p.FLAME());
                     g.fill(new Ellipse2D.Double(x - 5, NODE_Y - 5, 10, 10));
                 }
                 case RAN -> {
                     Color colour = moment.outcome().map(outcome -> switch (outcome) {
-                        case FINISHED -> DARK.CONTENT();
-                        case FAILED, TIMED_OUT -> DARK.TROUBLE();
-                        case STOPPED -> DARK.SUBTEXT();
-                    }).orElse(DARK.SUBTEXT());
-                    g.setColor(DARK.NIGHT());
+                        case FINISHED -> p.CONTENT();
+                        case FAILED, TIMED_OUT -> p.TROUBLE();
+                        case STOPPED -> p.SUBTEXT();
+                    }).orElse(p.SUBTEXT());
+                    g.setColor(p.NIGHT());
                     g.fill(new Ellipse2D.Double(x - 7, NODE_Y - 7, 14, 14));
                     g.setColor(faded ? ViewPartsUtil.dim(colour) : colour);
                     g.fill(new Ellipse2D.Double(x - 4.5, NODE_Y - 4.5, 9, 9));
                 }
                 case DUE -> {
-                    g.setColor(DARK.NIGHT());
+                    g.setColor(p.NIGHT());
                     g.fill(new Ellipse2D.Double(x - 7, NODE_Y - 7, 14, 14));
-                    g.setColor(faded ? ViewPartsUtil.dim(DARK.BRASS()) : DARK.BRASS());
+                    g.setColor(faded ? ViewPartsUtil.dim(p.BRASS()) : p.BRASS());
                     g.fill(new Ellipse2D.Double(x - 5, NODE_Y - 5, 10, 10));
                 }
                 case PLANNED, REPEATING -> {
-                    Color colour = picked ? DARK.FLAME() : faded ? ViewPartsUtil.dim(DARK.BRASS()) : DARK.BRASS();
-                    g.setColor(DARK.NIGHT());
+                    Color colour = picked ? p.FLAME() : faded ? ViewPartsUtil.dim(p.BRASS()) : p.BRASS();
+                    g.setColor(p.NIGHT());
                     g.fill(new Ellipse2D.Double(x - 7, NODE_Y - 7, 14, 14));
                     g.setColor(colour);
                     g.setStroke(new BasicStroke(picked ? 2.4f : 1.8f));
@@ -387,14 +392,14 @@ final class SchedulePage {
     }
 
     /// Now, while no job runs: the flame's line across the week.
-    private static UIForBox<JBox> nowLine() {
+    private UIForBox<JBox> nowLine() {
         return
             box().withPrefSize(10, 28).withMinSize(0, 28)
-            .withStyle(it ->
-                it.backgroundColor(DARK.TRANSPARENT())
-                .painter(UI.Layer.BACKGROUND, Painter.of(it.componentWidth(), g -> {
+            .withStyle(palette, (p, it) ->
+                it.backgroundColor(p.TRANSPARENT())
+                .painter(UI.Layer.BACKGROUND, Painter.of(List.of(it.componentWidth(), p), g -> {
                     int width = it.componentWidth();
-                    g.setPaint(new GradientPaint(0, 0, DARK.FLAME(), Math.max(1, width), 0, DARK.TRANSPARENT()));
+                    g.setPaint(new GradientPaint(0, 0, p.FLAME(), Math.max(1, width), 0, p.TRANSPARENT()));
                     g.fillRect(0, NODE_Y - 1, width, 2);
                 }))
             );
@@ -425,17 +430,21 @@ final class SchedulePage {
                     ? ""
                     : picked ? "Click again to see every job" : "Click to bring this job's times forward"
             )
-            .withTransitionalStyle(hovered, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> it
-                .backgroundColor(
-                    working
-                        ? DARK.YOURS()
-                        : picked
-                            ? ViewPartsUtil.withAlpha(DARK.FLAME(), 26 + (int) (20 * status.progress()))
-                            : ViewPartsUtil.withAlpha(DARK.RAISED(), (int) (200 * status.progress()))
-                )
-                .borderRadius(10)
-                .borderAt(UI.Edge.LEFT, 2, picked || working ? DARK.FLAME() : DARK.TRANSPARENT())
-            )
+            // A transitional style follows no item: it reads the palette as it is gathered, which
+            // it is anew whenever the palette changes, as every style the style sheet reaches.
+            .withTransitionalStyle(hovered, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> {
+                Palette p = palette.get();
+                return it
+                    .backgroundColor(
+                        working
+                            ? p.YOURS()
+                            : picked
+                                ? ViewPartsUtil.withAlpha(p.FLAME(), 26 + (int) (20 * status.progress()))
+                                : ViewPartsUtil.withAlpha(p.RAISED(), (int) (200 * status.progress()))
+                    )
+                    .borderRadius(10)
+                    .borderAt(UI.Edge.LEFT, 2, picked || working ? p.FLAME() : p.TRANSPARENT());
+            })
             .onMouseEnter(_ -> hovered.set(true))
             .onMouseExit(_ -> hovered.set(false))
             .onMouseClick(_ -> {
@@ -461,7 +470,7 @@ final class SchedulePage {
                 )
                 .add(
                     button("Stop").group(Skin.QUIET_BUTTON).isVisibleIf(working)
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, DARK.TEXT())))
+                    .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, p.TEXT())))
                     .withTooltip("Stop this run; what the genie did so far is kept, and saved")
                     .onClick(_ -> app.stopRun(selected(), moment.run()))
                 )
@@ -506,7 +515,7 @@ final class SchedulePage {
             )
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 0, gap 10", "[grow]")
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .addAll("growx, wmin 0", jobs, (Var<Schedule.Job> job) -> UI.of(UI.use(look, () -> tile(job).get(JPanel.class))))
             );
     }
@@ -523,7 +532,11 @@ final class SchedulePage {
             panel("fill, wrap 1, gap 6, hidemode 3", "[grow]").group(Skin.TILE)
             .withMinSize(0, 0)
             .withCursor(UI.Cursor.HAND)
-            .withStyle(picked, (isPicked, it) -> isPicked ? it.border(1, DARK.FLAME()).borderAt(UI.Edge.LEFT, 3, DARK.FLAME()) : it)
+            .withStyle(Themed.of(picked, theme), (themed, it) -> {
+                var isPicked = themed.item();
+                Palette p = themed.palette();
+                return isPicked ? it.border(1, p.FLAME()).borderAt(UI.Edge.LEFT, 3, p.FLAME()) : it;
+            })
             .onMouseClick(it -> {
                 if (it.clickCount() == 2) schedule.update(From.VIEW, s -> s.change(id, state.get().localNow()));
                 else schedule.update(From.VIEW, s -> s.pick(id));
@@ -532,11 +545,11 @@ final class SchedulePage {
                 box("fill, ins 0, gap 10", "[][grow][]")
                 .add("top, gaptop 1", onOff(on, () -> app.switchJob(selected(), id, !job.get().enabled())))
                 .add("growx, wmin 0",
-                    words(Viewable.of(Words.class, when, on, (text, isOn) -> new Words(text, isOn ? DARK.TEXT() : DARK.SUBTEXT())), 13, 2f)
+                    words(Viewable.of(Words.class, when, on, Words::new), 13, 2f)
                 )
                 .add("top",
                     button("").group(Skin.ICON_BUTTON).withTooltip("Change, switch off or remove this job")
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, DARK.SUBTEXT())))
+                    .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, p.SUBTEXT())))
                     .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> menu(id)))
                     .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> menu(id)))
                 )
@@ -586,7 +599,8 @@ final class SchedulePage {
             menu.add(ViewPartsUtil.item(job.enabled() ? "Switch off" : "Switch on", true, () -> app.switchJob(selected(), id, !job.enabled())));
             menu.addSeparator();
             JMenuItem remove = ViewPartsUtil.item("Remove…", true, () -> confirmRemove(job));
-            remove.setForeground(DARK.TROUBLE());
+            // The menu is built as it opens, in the palette of that moment.
+            remove.setForeground(palette.get().TROUBLE());
             menu.add(remove);
         });
         return menu;
@@ -652,14 +666,16 @@ final class SchedulePage {
                     ))
                     .group(Skin.FLAME_BUTTON).isEnabledIf(canSave)
                     .withTooltip(blocked.viewAsString(it -> it.isEmpty() ? "Ctrl and Return save too" : it))
-                    .withStyle(canSave, (can, it) ->
-                        can
+                    .withStyle(Themed.of(canSave, theme), (themed, it) -> {
+                        var can = themed.item();
+                        Palette p = themed.palette();
+                        return can
                             ? it
-                            : it.backgroundColor(DARK.RAISED())
-                              .foregroundColor(DARK.SUBTEXT())
-                              .componentFont(f -> f.color(DARK.SUBTEXT()))
-                              .cursor(UI.Cursor.DEFAULT)
-                    )
+                            : it.backgroundColor(p.RAISED())
+                              .foregroundColor(p.SUBTEXT())
+                              .componentFont(f -> f.color(p.SUBTEXT()))
+                              .cursor(UI.Cursor.DEFAULT);
+                    })
                     .onClick(_ -> app.saveJob(selected()))
                 )
             );
@@ -675,14 +691,14 @@ final class SchedulePage {
             .add("grow, push, wmin 0, hmin 220",
                 scrollPane().withEmptyBorder(0).withMinSize(0, 220).withPrefSize(520, 380)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
-                .withStyle(it -> it.backgroundColor(DARK.RAISED()).border(1, DARK.BORDER()).borderRadius(12))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.RAISED()).border(1, p.BORDER()).borderRadius(12))
                 .add(
                     textArea(prompt).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
-                    .withStyle(it -> it
-                        .backgroundColor(DARK.TRANSPARENT())
-                        .border(0, DARK.TRANSPARENT())
+                    .withStyle(theme, (now, it) -> it
+                        .backgroundColor(now.palette().TRANSPARENT())
+                        .border(0, now.palette().TRANSPARENT())
                         .padding(10, 12, 10, 12)
-                        .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(DARK.TEXT()))
+                        .componentFont(f -> f.family(now.fonts().FONT()).size(14).color(now.palette().TEXT()))
                     )
                     .onKeyPress(it -> {
                         KeyEvent key = it.getEvent();
@@ -706,7 +722,11 @@ final class SchedulePage {
                 )
                 .add("top",
                     label(length.viewAsString(it -> String.format("%,d / %,d", it, JobDraft.MOST_PROMPT))).group(Skin.META)
-                    .withStyle(length, (count, it) -> count > JobDraft.MOST_PROMPT ? it.componentFont(f -> f.color(DARK.TROUBLE())) : it)
+                    .withStyle(Themed.of(length, theme), (themed, it) -> {
+                        var count = themed.item();
+                        Palette p = themed.palette();
+                        return count > JobDraft.MOST_PROMPT ? it.componentFont(f -> f.color(p.TROUBLE())) : it;
+                    })
                 )
             );
     }
@@ -736,7 +756,7 @@ final class SchedulePage {
             // ── once: quick picks, then a day and a time ──
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 6, 6).isVisibleIf(once)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add(quickPick("In an hour", now ->
                     now.plusHours(1).withSecond(0).withNano(0).withMinute((now.getMinute() / 5) * 5)
                 ))
@@ -750,7 +770,7 @@ final class SchedulePage {
             // ── again and again: how often ──
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 6, 6).isVisibleIf(repeats)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add(chip(JobDraft.Repeat.HOURLY))
                 .add(chip(JobDraft.Repeat.DAILY))
                 .add(chip(JobDraft.Repeat.WEEKDAYS))
@@ -780,7 +800,7 @@ final class SchedulePage {
                 ))
                 .add("growx, wmin 0",
                     textField(cron).group(Skin.INPUT)
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.MONO()).size(13).color(DARK.TEXT())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(13).color(now.palette().TEXT())))
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
@@ -799,10 +819,11 @@ final class SchedulePage {
                 .add(label("At"))
                 .add("growx",
                     textField(time).group(Skin.INPUT).withTooltip("Such as 09:00, or 9.30")
-                    .withStyle(
-                        draft.viewAs(Boolean.class, it -> it.clock().isPresent()),
-                        (readable, it) -> readable ? it : it.border(1, DARK.TROUBLE())
-                    )
+                    .withStyle(Themed.of(draft.viewAs(Boolean.class, it -> it.clock().isPresent()), theme), (themed, it) -> {
+                        var readable = themed.item();
+                        Palette p = themed.palette();
+                        return readable ? it : it.border(1, p.TROUBLE());
+                    })
                 )
                 .add("growx, wmin 0",
                     box("ins 0, gap 4")
@@ -839,7 +860,7 @@ final class SchedulePage {
 
             .add("growx, wmin 0",
                 panel("ins 0, gap 0, hidemode 3", "[grow]").isVisibleIf(calendarShown)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add("growx, wmin 0", state.viewAs(Month.class, SchedulePage::month), month ->
                     UI.of(UI.use(look, () -> calendar(month).get(JPanel.class)))
                 )
@@ -848,7 +869,7 @@ final class SchedulePage {
             // ── what it comes to ──
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 10 12 10 12, gap 4, hidemode 3", "[grow]")
-                .withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(12))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).border(1, p.BORDER()).borderRadius(12))
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, summary, Palette::TEXT, summary.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, timing, Palette::TROUBLE, timing.viewAs(Boolean.class, it -> !it.isEmpty())))
             );
@@ -871,7 +892,7 @@ final class SchedulePage {
         String title = month.month().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.month().getYear();
         var grid =
             panel("wrap 7, ins 10 10 8 10, gap 3 3", "[34!][34!][34!][34!][34!][34!][34!]")
-            .withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(12))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).border(1, p.BORDER()).borderRadius(12))
             .add("span 7, growx",
                 box("fill, ins 0 2 4 0, gap 2", "[grow][][]")
                 .add("growx, wmin 0", ViewPartsUtil.words(theme, title, 13, 2f, Palette::TEXT))
@@ -907,11 +928,11 @@ final class SchedulePage {
             button(String.valueOf(day.getDayOfMonth())).group(Skin.DAY)
             .isEnabledIf(!past)
             .withTooltip(DateWordingUtil.day(day, month.today()))
-            .withStyle(it -> it
-                .backgroundColor(picked ? DARK.FLAME() : inStretch ? DARK.YOURS() : DARK.TRANSPARENT())
-                .border(1, today && !picked ? DARK.BRASS() : DARK.TRANSPARENT())
+            .withStyle(palette, (p, it) -> it
+                .backgroundColor(picked ? p.FLAME() : inStretch ? p.YOURS() : p.TRANSPARENT())
+                .border(1, today && !picked ? p.BRASS() : p.TRANSPARENT())
                 .componentFont(f -> f
-                    .color(picked ? DARK.ON_FLAME() : past ? ViewPartsUtil.dim(DARK.SUBTEXT()) : DARK.TEXT())
+                    .color(picked ? p.ON_FLAME() : past ? ViewPartsUtil.dim(p.SUBTEXT()) : p.TEXT())
                     .weight(picked || today ? 2f : 1f)
                 )
             )
@@ -926,12 +947,15 @@ final class SchedulePage {
             row = row.add("w 36!, h 36!",
                 button(day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2)).group(Skin.DAY)
                 .withTooltip(day.getDisplayName(TextStyle.FULL, Locale.ENGLISH))
-                .withStyle(on, (isOn, it) -> it
-                    .borderRadius(18)
-                    .backgroundColor(isOn ? DARK.FLAME() : DARK.TRANSPARENT())
-                    .border(1, isOn ? DARK.FLAME() : DARK.BORDER())
-                    .componentFont(f -> f.color(isOn ? DARK.ON_FLAME() : DARK.TEXT()).weight(isOn ? 2f : 1f))
-                )
+                .withStyle(Themed.of(on, theme), (themed, it) -> {
+                    var isOn = themed.item();
+                    Palette p = themed.palette();
+                    return it
+                        .borderRadius(18)
+                        .backgroundColor(isOn ? p.FLAME() : p.TRANSPARENT())
+                        .border(1, isOn ? p.FLAME() : p.BORDER())
+                        .componentFont(f -> f.color(isOn ? p.ON_FLAME() : p.TEXT()).weight(isOn ? 2f : 1f));
+                })
                 .onClick(_ -> draft.update(From.VIEW, d -> d.toggle(day)))
             );
         }
@@ -943,12 +967,14 @@ final class SchedulePage {
     private UUID selected() { return state.get().selected(); }
 
     /// A choice among several, as a rounded chip that is lit while chosen.
-    private static UIForButton<JButton> chip(String text, Val<Boolean> chosen, Runnable choose) {
+    private UIForButton<JButton> chip(String text, Val<Boolean> chosen, Runnable choose) {
         return
             button(text).group(Skin.CHIP)
-            .withStyle(chosen, (on, it) ->
-                on ? it.backgroundColor(DARK.YOURS()).border(1, DARK.FLAME()).componentFont(f -> f.color(DARK.TEXT()).weight(2f)) : it
-            )
+            .withStyle(Themed.of(chosen, theme), (themed, it) -> {
+                var on = themed.item();
+                Palette p = themed.palette();
+                return on ? it.backgroundColor(p.YOURS()).border(1, p.FLAME()).componentFont(f -> f.color(p.TEXT()).weight(2f)) : it;
+            })
             .onClick(_ -> choose.run());
     }
 
@@ -975,44 +1001,49 @@ final class SchedulePage {
     }
 
     /// A switch, drawn as a small track with a knob that slides across as it turns on.
-    private static UIForBox<JBox> onOff(Val<Boolean> on, Runnable flip) {
+    private UIForBox<JBox> onOff(Val<Boolean> on, Runnable flip) {
         return
             box().withPrefSize(34, 20).withMinSize(34, 20).withMaxSize(34, 20)
             .withCursor(UI.Cursor.HAND)
             .withTooltip(on.viewAsString(it ->
                 it ? "On: click to switch it off, keeping it on the schedule" : "Off: click to switch it on"
             ))
-            .withTransitionalStyle(on, LifeTime.of(0.18, TimeUnit.SECONDS), (status, it) -> it
-                .backgroundColor(DARK.TRANSPARENT())
-                .painter(UI.Layer.BACKGROUND, Painter.of(status.progress(), g -> {
-                    double progress = status.progress();
-                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g.setColor(mix(DARK.RAISED(), DARK.FLAME(), progress));
-                    g.fill(new RoundRectangle2D.Double(0, 1, 34, 18, 18, 18));
-                    g.setColor(mix(DARK.BORDER(), DARK.FLAME(), progress));
-                    g.draw(new RoundRectangle2D.Double(0.5, 1.5, 33, 17, 17, 17));
-                    g.setColor(mix(DARK.SUBTEXT(), DARK.ON_FLAME(), progress));
-                    g.fill(new Ellipse2D.Double(3 + 14 * progress, 4, 12, 12));
-                }))
-            )
+            // Read as the style is gathered, as on a card of the timeline.
+            .withTransitionalStyle(on, LifeTime.of(0.18, TimeUnit.SECONDS), (status, it) -> {
+                Palette p = palette.get();
+                return it
+                    .backgroundColor(p.TRANSPARENT())
+                    .painter(UI.Layer.BACKGROUND, Painter.of(List.of(status.progress(), p), g -> {
+                        double progress = status.progress();
+                        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g.setColor(mix(p.RAISED(), p.FLAME(), progress));
+                        g.fill(new RoundRectangle2D.Double(0, 1, 34, 18, 18, 18));
+                        g.setColor(mix(p.BORDER(), p.FLAME(), progress));
+                        g.draw(new RoundRectangle2D.Double(0.5, 1.5, 33, 17, 17, 17));
+                        g.setColor(mix(p.SUBTEXT(), p.ON_FLAME(), progress));
+                        g.fill(new Ellipse2D.Double(3 + 14 * progress, 4, 12, 12));
+                    }));
+            })
             .onMouseClick(_ -> flip.run());
     }
 
-    /// Words in a colour, for text whose colour changes with it.
-    private record Words(String text, Color colour) {}
+    /// Words, in the text's colour while `on`, and the subtext's otherwise.
+    private record Words(String text, boolean on) {}
 
-    private static UIForBox<JBox> words(Val<Words> words, int size, float weight) {
+    private UIForBox<JBox> words(Val<Words> words, int size, float weight) {
         return
             box().withMinSize(0, 0)
-            .withStyle(words, (shown, it) ->
-                it.padding(1, 0, 1, 0)
+            .withStyle(Themed.of(words, theme), (themed, it) -> {
+                var shown = themed.item();
+                Palette p = themed.palette();
+                return it.padding(1, 0, 1, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(size).weight(weight).color(shown.colour()), shown.text()))
+                    t.content(StyledString.of(f -> f.family(themed.fonts().FONT()).size(size).weight(weight).color(shown.on() ? p.TEXT() : p.SUBTEXT()), shown.text()))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
-                )
-            );
+                );
+            });
     }
 
     private static String shortened(String text, int most) {
