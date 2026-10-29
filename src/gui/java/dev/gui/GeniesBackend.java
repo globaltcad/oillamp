@@ -29,6 +29,7 @@ import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.Home;
 import dev.gui.model.OllamaSetup;
+import dev.gui.model.Palette;
 import dev.gui.model.Settings;
 import dev.lamp.LampExitStatus;
 import dev.lamp.Lamp;
@@ -71,6 +72,8 @@ public final class GeniesBackend implements Genies {
     /// Each genie's id and name. Kept as a field: when it changes, the genies are put on the
     /// shelf, and a view nobody holds would be forgotten.
     private final Val<Tuple<String>> names;
+    /// The window's palette. Kept as a field for the same reason: another one is kept on the shelf.
+    private final Val<Palette> palette;
     /// The page on show. Kept as a field for the same reason: leaving the settings keeps them.
     private final Val<GeniesState.Page> page;
     /// The place the settings on show name, or nothing while they are not on show. Kept as a
@@ -115,6 +118,9 @@ public final class GeniesBackend implements Genies {
         this.names = state.viewAs(Tuple.classTyped(String.class),
                 it -> it.genies().mapTo(String.class, genie -> genie.id() + " " + genie.name()));
         Viewable.cast(names).onChange(From.ALL, _ -> keepGenies());
+        // The palette is kept as soon as the user picks another.
+        this.palette = state.viewAs(Palette.class, GeniesState::palette);
+        Viewable.cast(palette).onChange(From.ALL, _ -> keepPalette());
         // The settings are kept however the user leaves them: with Done, or by clicking a genie.
         this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
         // Shown, they look again whether Ollama is there, and what it has.
@@ -172,7 +178,7 @@ public final class GeniesBackend implements Genies {
         Settings settings = shelf.hasSettings() ? shelf.settings()
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
-        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey)),
+        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(shelf.palette())),
                                 shelf, lighter, ollama, GenieHomeUtil.documents(environment));
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
@@ -690,6 +696,14 @@ public final class GeniesBackend implements Genies {
             shelf.keep(state.get().settings());
         } catch (IOException failed) {
             report(new IOException("could not keep the settings in " + shelf.root(), failed));
+        }
+    }
+
+    private void keepPalette() {
+        try {
+            shelf.keep(state.get().palette());
+        } catch (IOException failed) {
+            report(new IOException("could not keep the palette in " + shelf.root(), failed));
         }
     }
 

@@ -164,6 +164,11 @@ final class SettingsPage {
     static UIForAnySwing<?, ?> of(Var<GeniesState> state, Genies app, Val<Boolean> visible) {
         Val<Theme> theme = Theme.of(state);
         Val<Palette> palette = Theme.paletteOf(state);
+        // The window in the light palette, or the dark one.
+        Var<Boolean> light = state.zoomTo(
+            it -> !it.palette().isDark(),
+            (it, on) -> it.withPalette(on ? Palette.LIGHT : Palette.DARK)
+        );
         Var<Settings> settings = state.zoomTo(GeniesState::settings, GeniesState::withSettings);
         // Lenses all the way down: settings → Eden AI → its key, and so on. Each field
         // edits one value of the one GeniesState, and nothing else.
@@ -215,6 +220,10 @@ final class SettingsPage {
         // its room beside the words, from 0 to 1.
         Var<Fit> fit = Var.of(new Fit(false, 1));
         Var<Double> aside = Var.of(0.0);
+        // Without genies, the cards come after the welcome has had its moment.
+        Val<Boolean> cardsShown = Viewable.of(Boolean.class, welcome, clock, (first, at) ->
+            !first || at >= (fit.get().wide() ? CARD_BESIDE_AT : CARD_AT)
+        );
         AtomicLong began = new AtomicLong();
         AtomicBoolean playing = new AtomicBoolean();
         if (welcome.get()) play(clock, scene, fit, aside, welcome, began, playing);
@@ -250,12 +259,7 @@ final class SettingsPage {
                     .withMinSize(0, 0).withPrefSize(CARD_REFERENCE, 0)
                     // Split where the grid puts the halves side by side: past its reference width.
                     .onResize(it -> split.set(it.getComponent().getWidth() > UI.scale(CARD_REFERENCE)))
-                    // Without genies, the card comes after the welcome has had its moment.
-                    .isVisibleIf(
-                        Viewable.of(Boolean.class, welcome, clock, (first, at) ->
-                            !first || at >= (fit.get().wide() ? CARD_BESIDE_AT : CARD_AT)
-                        )
-                    )
+                    .isVisibleIf(cardsShown)
                     .add(WHOLE,
                         box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
                         .add(
@@ -534,6 +538,28 @@ final class SettingsPage {
                             ))
                             .onClick(_ -> app.newGenie())
                         )
+                    )
+                )
+                // How the window looks, which takes effect at once, and is kept as it changes.
+                .add(CARD,
+                    panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 12).group(Skin.CARD)
+                    .withMinSize(0, 0).withPrefSize(CARD_REFERENCE, 0)
+                    .isVisibleIf(cardsShown)
+                    .add(WHOLE,
+                        box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
+                        .add(
+                            box("fill, wrap 1, ins 0, gap 12")
+                            .add("growx, wmin 0", label("Appearance").group(Skin.EMPTY_TITLE))
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.wrapped(
+                                    theme,
+                                    Val.of("The lamp at night, or by day."),
+                                    Palette::SUBTEXT,
+                                    Val.of(true)
+                                )
+                            )
+                        )
+                        .add(ViewPartsUtil.eitherOr(theme, "Dark", "Light", light, Val.of(true), light::set))
                     )
                 )
             );
