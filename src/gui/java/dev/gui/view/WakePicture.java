@@ -11,6 +11,7 @@ import swingtree.animation.Animation;
 import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
 
+import javax.swing.SwingUtilities;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -45,9 +46,13 @@ final class WakePicture {
         this.visible = visible;
         return
             UI.box().withMinSize(0, 0).withPrefSize(320, 220)
-            .onView(Viewable.cast(cue), _ -> follow())
-            .onView(Viewable.cast(visible), _ -> follow())
-            .onShown(_ -> follow())
+            // Followed once the change that called is done: the scene decides whether the picture
+            // is shown, so changing it in the middle of a change, such as the picture being shown
+            // or hidden, has the components that are still to hear of that change apply its
+            // outdated value after this one, and show the chat and the picture at odds with it.
+            .onView(Viewable.cast(cue), _ -> followLater())
+            .onView(Viewable.cast(visible), _ -> followLater())
+            .onShown(_ -> followLater())
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             // The scene in the palette, so that it is painted anew when either changes.
             .withStyle(Viewable.of(Painted.class, scene, palette, Painted::new), (painted, it) -> {
@@ -67,6 +72,10 @@ final class WakePicture {
                     }
                 });
             });
+    }
+
+    private void followLater() {
+        SwingUtilities.invokeLater(this::follow);
     }
 
     private void follow() {
