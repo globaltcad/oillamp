@@ -7,11 +7,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import javax.swing.JComponent;
 
 import dev.gui.Genies;
-import dev.gui.model.Fonts;
 import dev.gui.model.GeniesState;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
@@ -33,7 +33,6 @@ import swingtree.layout.LayoutConstraint;
 import swingtree.layout.MigAddConstraint;
 import swingtree.style.StyledString;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// The settings: where the genies' model runs, and how they reach it.
@@ -164,6 +163,7 @@ final class SettingsPage {
 
     static UIForAnySwing<?, ?> of(Var<GeniesState> state, Genies app, Val<Boolean> visible) {
         Val<Theme> theme = Theme.of(state);
+        Val<Palette> palette = Theme.paletteOf(state);
         Var<Settings> settings = state.zoomTo(GeniesState::settings, GeniesState::withSettings);
         // Lenses all the way down: settings → Eden AI → its key, and so on. Each field
         // edits one value of the one GeniesState, and nothing else.
@@ -231,8 +231,10 @@ final class SettingsPage {
                 .withMinSize(0, 0).withPrefSize(PAGE_REFERENCE, 0)
                 // The welcome's light, on the whole page behind it, so that only the window's
                 // edges cut it off.
-                .withStyle(clock, (at, it) ->
-                    it.backgroundColor(DARK.TRANSPARENT()).padding(0, 16, 0, 16)
+                .withStyle(Themed.of(clock, theme), (themed, it) -> {
+                    var at = themed.item();
+                    Palette p = themed.palette();
+                    return it.backgroundColor(p.TRANSPARENT()).padding(0, 16, 0, 16)
                     .painter(UI.Layer.BACKGROUND, g -> {
                         JComponent shown = welcomeBox.get();
                         if (shown == null || !shown.isVisible()) return;
@@ -240,8 +242,8 @@ final class SettingsPage {
                         g.scale(1 / UI.scale(), 1 / UI.scale());
                         g.translate(shown.getX() + asideBy(shown.getWidth(), aside.get()), shown.getY());
                         WelcomeScene.light(g, shown.getWidth(), UI.scale(PICTURE_HEIGHT), UI.scale(cut.get()), scene.get(), at);
-                    })
-                )
+                    });
+                })
                 .add(CARD, welcome(state, clock, scene, cut, fit, aside, welcomeBox, welcome))
                 .add(CARD,
                     panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 12).group(Skin.CARD)
@@ -354,7 +356,7 @@ final class SettingsPage {
                             )
                             .add("growx, wmin 0",
                                 box("fill, ins 0, gap 10", "[grow][]").isVisibleIf(busy)
-                                .add("growx, wmin 60, h 6!", progress(ollama.viewAs(Double.class, OllamaSetup::progress)))
+                                .add("growx, wmin 60, h 6!", progress(theme, ollama.viewAs(Double.class, OllamaSetup::progress)))
                                 .add(
                                     button("Stop").group(Skin.QUIET_BUTTON)
                                     .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
@@ -422,7 +424,7 @@ final class SettingsPage {
                     .add(WHOLE,
                         box()
                         .isVisibleIf(Viewable.of(Boolean.class, advanced, split, (shown, beside) -> shown && !beside))
-                        .withStyle(it -> it.borderAt(UI.Edge.TOP, 1, DARK.BORDER()))
+                        .withStyle(palette, (p, it) -> it.borderAt(UI.Edge.TOP, 1, p.BORDER()))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -550,6 +552,7 @@ final class SettingsPage {
         final AtomicReference<JComponent> welcomeBox,
         final Val<Boolean> welcome
     ) {
+        Val<Theme> theme = Theme.of(state);
         Val<String> foundKey = state.viewAsString(it ->
             it.environmentKey().isPresent() && it.settings().place() == Settings.Place.EDEN_AI
                 ? "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
@@ -573,9 +576,11 @@ final class SettingsPage {
                 ));
             })
             // Painted whole, its cut top above the welcome, and as far aside as it has moved.
-            .withStyle(clock, (at, it) -> {
+            .withStyle(Themed.of(clock, theme), (themed, it) -> {
+                var at = themed.item();
+                Palette p = themed.palette();
                 int width = UI.scale(it.componentWidth());
-                return it.backgroundColor(DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
+                return it.backgroundColor(p.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
                     // SwingTree scales a painter's units to pixels; the welcome paints in pixels.
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     g.translate(asideBy(width, aside.get()), -UI.scale(cut.get()));
@@ -615,21 +620,22 @@ final class SettingsPage {
             )
             .add(WORDS,
                 box("wrap 1, ins 0, gap 12", "[grow, fill]").withMinSize(0, 0)
-                .add("growx, wmin 0", fading(Val.of("Welcome to Genies"), 22, DARK.TEXT(), clock, fit, aside))
+                .add("growx, wmin 0", fading(theme, Val.of("Welcome to Genies"), 22, Palette::TEXT, clock, fit, aside))
                 .add("growx, wmin 0",
                     fading(
+                        theme,
                         Val.of(
                             "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
                             + "where it can browse the web, run programs and make files, without ever touching yours."
                         ),
                         14,
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         clock,
                         fit,
                         aside
                     )
                 )
-                .add("growx, wmin 0", fading(foundKey, 14, DARK.SUBTEXT(), clock, fit, aside))
+                .add("growx, wmin 0", fading(theme, foundKey, 14, Palette::SUBTEXT, clock, fit, aside))
             )
             .add(BESIDE,
                 box().withMinSize(0, 0)
@@ -649,26 +655,27 @@ final class SettingsPage {
     /// fade in with the welcome's words, wrapped to their width: centred below the picture, or
     /// left-aligned beside it once it has moved aside.
     private static UIForAnySwing<?, ?> fading(
+        final Val<Theme> theme,
         final Val<String> text,
         final int size,
-        final Color colour,
+        final Function<Palette, Color> colour,
         final Val<Double> clock,
         final Val<Fit> fit,
         final Val<Double> aside
     ) {
         return
             box().withMinSize(0, 0)
-            .withStyle(
-                Viewable.of(Faded.class, text, clock, (words, at) -> Faded.of(words, at, fit.get(), aside.get())),
-                (faded, it) ->
-                    it.padding(2, 0, 2, 0)
+            .withStyle(Themed.of(Viewable.of(Faded.class, text, clock, (words, at) -> Faded.of(words, at, fit.get(), aside.get())), theme), (themed, it) -> {
+                var faded = themed.item();
+                Palette p = themed.palette();
+                return it.padding(2, 0, 2, 0)
                     .text(t ->
                         t.content(
                             StyledString.of(
                                 f ->
-                                    f.family(Fonts.DEFAULT.FONT())
+                                    f.family(themed.fonts().FONT())
                                     .size((int) Math.round(size * faded.fit().larger()))
-                                    .color(ViewPartsUtil.withAlpha(colour, (int) Math.round(255 * faded.shown())))
+                                    .color(ViewPartsUtil.withAlpha(colour.apply(p), (int) Math.round(255 * faded.shown())))
                                     .horizontalAlignment(faded.fit().wide() ? UI.HorizontalAlignment.LEFT : UI.HorizontalAlignment.CENTER),
                                 faded.words()
                             )
@@ -676,8 +683,8 @@ final class SettingsPage {
                         .placement(faded.fit().wide() ? UI.Placement.TOP_LEFT : UI.Placement.TOP)
                         .wrapLines(true)
                         .autoPreferredHeight(true)
-                    )
-            );
+                    );
+            });
     }
 
     /// How the welcome fits its width: whether its words stand beside its picture, and how many
@@ -730,16 +737,18 @@ final class SettingsPage {
     }
 
     /// A bar that fills from the left as `done` goes from 0 to 1.
-    private static UIForAnySwing<?, ?> progress(Val<Double> done) {
+    private static UIForAnySwing<?, ?> progress(Val<Theme> theme, Val<Double> done) {
         return
             box().withMinSize(0, 6)
-            .withStyle(done, (part, it) -> {
+            .withStyle(Themed.of(done, theme), (themed, it) -> {
+                var part = themed.item();
+                Palette p = themed.palette();
                 int length = it.componentWidth();
                 int thickness = it.componentHeight();
                 return
-                    it.backgroundColor(DARK.RAISED()).borderRadius(3)
+                    it.backgroundColor(p.RAISED()).borderRadius(3)
                     .painter(UI.Layer.CONTENT, g -> {
-                        g.setColor(DARK.FLAME());
+                        g.setColor(p.FLAME());
                         float filled = (float) (length * Math.max(0, Math.min(1, part)));
                         g.fill(new RoundRectangle2D.Float(0, 0, filled, thickness, thickness, thickness));
                     });
