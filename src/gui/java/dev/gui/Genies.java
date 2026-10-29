@@ -9,6 +9,7 @@ import java.util.function.Function;
 import dev.gui.desktop.Desktop;
 import dev.gui.genie.LampLighterImpl;
 import dev.gui.genie.Shelf;
+import dev.gui.genie.SystemLook;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
@@ -28,13 +29,15 @@ public interface Genies {
     /// joined again, and Ollama looked for. What goes wrong from then on, which `errors` is told,
     /// is in its state too. [Main] gives it its window.
     static Genies open(Shelf shelf, ErrorLog errors) {
-        return GeniesBackend.open(shelf, errors, new LampLighterImpl(), name -> Optional.ofNullable(System.getenv(name)));
+        Function<String, Optional<String>> environment = name -> Optional.ofNullable(System.getenv(name));
+        return GeniesBackend.open(shelf, errors, new LampLighterImpl(), environment, SystemLook.ofThisComputer(environment));
     }
 
     /// The app as [#open(Shelf, ErrorLog)] opens it, from the shelf in `directory` as if Genies had
     /// left `genies` and `settings` on it when it last closed, its errors logged there too. The
     /// genies' lamps are started by `launcher`, such as oillamp's engine in this JVM on a
-    /// simulated machine, and Genies is as if started from `environment`, by variable.
+    /// simulated machine, and Genies is as if started from `environment`, by variable. Whether
+    /// the desktop is dark, it learns from that environment alone, not from this computer.
     ///
     /// @throws IOException when the genies or the settings could not be put on the shelf
     static Genies open(
@@ -47,7 +50,7 @@ public interface Genies {
         Shelf shelf = new Shelf(directory);
         shelf.keep(genies);
         shelf.keep(settings);
-        return GeniesBackend.open(shelf, new ErrorLog(shelf.errorLog()), new LampLighterImpl(launcher), environment);
+        return GeniesBackend.open(shelf, new ErrorLog(shelf.errorLog()), new LampLighterImpl(launcher), environment, SystemLook.ofEnvironment(environment));
     }
 
     /// Everything the window shows. The window changes it through lenses, such as a draft, the

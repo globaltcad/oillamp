@@ -28,7 +28,8 @@ import sprouts.Tuple;
 ///   did not make, but found lit elsewhere or was given;
 /// - `removed-lamps.json`: the lamps from elsewhere the user removed, not to be taken in again;
 /// - `settings.json`: the model settings, readable by this user only, because it can hold a key;
-/// - `look.json`: how the window looks: its palette, dark or light;
+/// - `look.json`: how the window looks: the palette the user picked, dark or light; until they
+///   pick one, there is none, and the window follows the desktop ([SystemLook]);
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
 /// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it.
 ///
@@ -107,9 +108,13 @@ public final class Shelf {
         write("removed-lamps.json", file);
     }
 
-    /// The palette the window was last in, or the dark one, the first time.
-    public Palette palette() {
-        return read("look.json").path("palette").asText().equals("LIGHT") ? Palette.LIGHT : Palette.DARK;
+    /// The palette the user last picked, or none, before they ever did.
+    public Optional<Palette> palette() {
+        return switch (read("look.json").path("palette").asText()) {
+            case "LIGHT" -> Optional.of(Palette.LIGHT);
+            case "DARK" -> Optional.of(Palette.DARK);
+            default -> Optional.empty();
+        };
     }
 
     public void keep(Palette palette) throws IOException {
