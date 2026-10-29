@@ -1377,7 +1377,7 @@ public final class GeniesView extends JPanel {
                     .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
                 )
                 .add("growx, wmin 0",
-                    label(genie.viewAsString(it -> switch (it.phase()) {
+                    html(genie.viewAsString(it -> switch (it.phase()) {
                         case READY, WORKING -> "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.";
                         case WAKING -> "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.";
                         case ASLEEP -> "Wake it to talk. It keeps its own desktop, safely away from yours.";
