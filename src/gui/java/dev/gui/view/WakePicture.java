@@ -56,11 +56,13 @@ final class WakePicture {
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             // The scene in the palette, so that it is painted anew when either changes.
             .withStyle(Viewable.of(Painted.class, scene, palette, Painted::new), (painted, it) -> {
-                WakeScene frame = painted.scene();
                 Palette p = painted.palette();
                 int width = UI.scale(it.componentWidth());
                 int height = UI.scale(it.componentHeight());
                 return it.painter(UI.Layer.CONTENT, g -> {
+                    // The scene follows the genie a moment later; until then, it is painted as
+                    // it will be, so that another genie's picture never shows for a moment.
+                    WakeScene frame = painted.scene().follows(genie.get());
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     if (frame.phase() == Genie.Phase.BROKEN) {
                         swingtree.style.SvgIcon.of(LampSvgUtil.lamp(Genie.Phase.BROKEN))
