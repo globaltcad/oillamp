@@ -4,13 +4,13 @@ import java.awt.Color;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import javax.swing.JButton;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
 import dev.gui.Genies;
-import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.Palette;
@@ -25,7 +25,6 @@ import swingtree.UIForButton;
 import swingtree.input.Keyboard;
 import swingtree.layout.FlowCell;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// What can be done with a genie as a whole: renaming it, starting a new conversation with it,
@@ -65,8 +64,9 @@ final class ActionsPage {
     );
 
     private final Var<GeniesState> state;
-    /// The colours and the fonts of the state.
+    /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
+    private final Val<Palette> palette;
     private final Genies app;
     private final Runnable saveNow;
     private final Consumer<UUID> delete;
@@ -89,6 +89,7 @@ final class ActionsPage {
     ActionsPage(Var<GeniesState> state, Genies app, Runnable saveNow, Consumer<UUID> delete) {
         this.state = state;
         theme = Theme.of(state);
+        palette = Theme.paletteOf(state);
         this.app = app;
         this.saveNow = saveNow;
         this.delete = delete;
@@ -114,7 +115,7 @@ final class ActionsPage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(20, 4, 28, 4))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(20, 4, 28, 4))
                 .add(WHOLE, top())
                 .add(TILE, renaming())
                 .add(TILE, startingAfresh())
@@ -148,7 +149,7 @@ final class ActionsPage {
         Val<Boolean> keepable = newName.viewAs(Boolean.class, it -> !it.isBlank());
         return tile(
             SignSvgUtil.RENAME,
-            DARK.TEXT(),
+            Palette::TEXT,
             Val.of("Name"),
             renaming.viewAsString(on ->
                 on ? "Enter keeps the new name, Escape the one it had." : "What it is called in your list and above its chat."
@@ -159,15 +160,15 @@ final class ActionsPage {
                 .isEditableIf(renaming)
                 .isFocusableIf(renaming)
                 // Not renaming, it reads as the name; renaming, as a field to type in.
-                .withStyle(renaming, (on, it) ->
-                    on
+                .withStyle(Themed.of(renaming, theme), (on, it) ->
+                    on.item()
                         ? it.padding(8, 10, 8, 10)
-                        : it.backgroundColor(DARK.TRANSPARENT())
-                          .border(1, DARK.TRANSPARENT())
+                        : it.backgroundColor(on.palette().TRANSPARENT())
+                          .border(1, on.palette().TRANSPARENT())
                           .padding(8, 0, 8, 0)
                           .cursor(UI.Cursor.DEFAULT)
                 )
-                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(15).weight(2f).color(DARK.TEXT())))
+                .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(15).weight(2f).color(now.palette().TEXT())))
                 .peek(it -> nameField = Optional.of(it))
                 .onEnter(_ -> keepName())
                 .onPressed(Keyboard.Key.ESCAPE, _ -> stopRenaming())
@@ -223,7 +224,7 @@ final class ActionsPage {
         Val<Boolean> idle = phase.viewAs(Boolean.class, it -> it != Genie.Phase.WORKING && it != Genie.Phase.WAKING);
         return tile(
             SignSvgUtil.NEW,
-            DARK.TEXT(),
+            Palette::TEXT,
             Val.of("New conversation"),
             genie.viewAsString(it ->
                 "Start afresh with " + it.name() + ", waking it first if it sleeps. "
@@ -238,7 +239,7 @@ final class ActionsPage {
     private UIForAnySwing<?, ?> saving() {
         return tile(
             SignSvgUtil.HISTORY,
-            DARK.TEXT(),
+            Palette::TEXT,
             Val.of("Save now"),
             genie.viewAsString(it -> "Save " + it.name() + "'s home as it is now: a moment in its history to go back to."),
             big(button("Save now…").group(Skin.QUIET_BUTTON))
@@ -251,7 +252,7 @@ final class ActionsPage {
     private UIForAnySwing<?, ?> sleepingOrWaking() {
         return tile(
             phase.viewAs(Boolean.class, Genie.Phase::isAwake),
-            DARK.TEXT(),
+            Palette::TEXT,
             phase.viewAsString(it -> it.isAwake() ? "Sleep" : "Wake"),
             genie.viewAsString(it -> switch (it.phase()) {
                 case ASLEEP -> it.name() + " is in the lamp. Waking it starts its sandbox, with its home as it left it.";
@@ -277,14 +278,14 @@ final class ActionsPage {
     }
 
     private UIForAnySwing<?, ?> folders() {
-        return tile(SignSvgUtil.FOLDER, DARK.TEXT(), Val.of("Folders"), folders.says(), folders.view());
+        return tile(SignSvgUtil.FOLDER, Palette::TEXT, Val.of("Folders"), folders.says(), folders.view());
     }
 
     /// A lamp from elsewhere is not Genies' to delete, so it is only removed from Genies.
     private UIForAnySwing<?, ?> deleting() {
         return tile(
             SignSvgUtil.DELETE,
-            DARK.TROUBLE(),
+            Palette::TROUBLE,
             genie.viewAsString(it -> it.fromElsewhere() ? "Remove" : "Delete"),
             genie.viewAsString(it ->
                 it.fromElsewhere()
@@ -297,7 +298,7 @@ final class ActionsPage {
                 button(genie.viewAsString(it -> it.fromElsewhere() ? "Remove from Genies…" : "Delete " + it.name() + "…"))
                 .group(Skin.QUIET_BUTTON)
             )
-            .withStyle(it -> it.border(1, DARK.TROUBLE()).componentFont(f -> f.color(DARK.TROUBLE())))
+            .withStyle(palette, (p, it) -> it.border(1, p.TROUBLE()).componentFont(f -> f.color(p.TROUBLE())))
             .onClick(_ -> delete.accept(selected()))
         );
     }
@@ -309,14 +310,14 @@ final class ActionsPage {
     /// A tile whose sign is that of sleep while `asleepSign` holds, and of waking otherwise.
     private UIForAnySwing<?, ?> tile(
         final Val<Boolean> asleepSign,
-        final Color colour,
+        final Function<Palette, Color> colour,
         final Val<String> title,
         final Val<String> says,
         final UIForAnySwing<?, ?> doing
     ) {
         return tile(
-            label("").withStyle(asleepSign, (sleep, it) ->
-                it.icon(SignSvgUtil.sign(sleep ? SignSvgUtil.SLEEP : SignSvgUtil.WAKE, colour))
+            label("").withStyle(Themed.of(asleepSign, theme), (sleep, it) ->
+                it.icon(SignSvgUtil.sign(sleep.item() ? SignSvgUtil.SLEEP : SignSvgUtil.WAKE, colour.apply(sleep.palette())))
             ),
             title,
             says,
@@ -326,12 +327,12 @@ final class ActionsPage {
 
     private UIForAnySwing<?, ?> tile(
         final String sign,
-        final Color colour,
+        final Function<Palette, Color> colour,
         final Val<String> title,
         final Val<String> says,
         final UIForAnySwing<?, ?> doing
     ) {
-        return tile(label("").withStyle(it -> it.icon(SignSvgUtil.sign(sign, colour))), title, says, doing);
+        return tile(label("").withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(sign, colour.apply(p)))), title, says, doing);
     }
 
     /// One action: its sign beside its title, a sentence on what it does, and its button, or
@@ -347,7 +348,7 @@ final class ActionsPage {
             .add("cell 0 0, top, gaptop 2", sign)
             .add("cell 1 0, growx, wmin 0",
                 label(title)
-                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).weight(2f).color(DARK.TEXT())))
+                .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(14).weight(2f).color(now.palette().TEXT())))
             )
             .add("cell 1 1, growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
             // A button keeps its own width; anything else, such as the name's field, takes the row.
