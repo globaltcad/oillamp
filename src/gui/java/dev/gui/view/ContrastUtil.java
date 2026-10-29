@@ -50,6 +50,23 @@ final class ContrastUtil {
         return new Color(shade.getRed(), shade.getGreen(), shade.getBlue(), (int) Math.round(strongest * lack));
     }
 
+    /// A fine rim for a surface of `fill`, such as a bubble or a sheet, lying on `ground`: the
+    /// [#edge] of the fill, at most as opaque as `strongest`, but only on a light ground. On a
+    /// dark one, a light line around a surface reads as a frame, and the dark sets a surface
+    /// apart well enough by itself, with its shadow; on paper, a surface nearly as light as the
+    /// paper needs its edge drawn.
+    static Color rim(Color fill, Color ground, int strongest) {
+        return luminance(ground) > 0.18 ? edge(fill, ground, strongest) : new Color(0, 0, 0, 0);
+    }
+
+    /// A shadow under a surface of `fill` on `ground`, as dark as `strongest` where the surface
+    /// lacks all contrast with the ground, and lighter the less it lacks; none on a dark ground,
+    /// see [#rim].
+    static Color shadow(Color fill, Color ground, int strongest) {
+        int alpha = luminance(ground) > 0.18 ? (int) Math.round(strongest * lack(fill, ground)) : 0;
+        return new Color(INK.getRed(), INK.getGreen(), INK.getBlue(), alpha);
+    }
+
     /// `from`, turned `part` of the way into `to`.
     static Color mix(Color from, Color to, double part) {
         double p = Math.clamp(part, 0, 1);
