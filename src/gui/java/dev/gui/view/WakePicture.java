@@ -27,6 +27,9 @@ final class WakePicture {
     private Val<Boolean> visible = Val.of(false);
     private boolean playing;
 
+    /// A moment of the scene, and the palette it is painted in.
+    private record Painted(WakeScene scene, Palette palette) {}
+
     WakePicture(Val<Genie> genie, Val<Palette> palette) {
         this.genie = genie;
         this.palette = palette;
@@ -46,7 +49,10 @@ final class WakePicture {
             .onView(Viewable.cast(visible), _ -> follow())
             .onShown(_ -> follow())
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
-            .withStyle(scene, (frame, it) -> {
+            // The scene in the palette, so that it is painted anew when either changes.
+            .withStyle(Viewable.of(Painted.class, scene, palette, Painted::new), (painted, it) -> {
+                WakeScene frame = painted.scene();
+                Palette p = painted.palette();
                 int width = UI.scale(it.componentWidth());
                 int height = UI.scale(it.componentHeight());
                 return it.painter(UI.Layer.CONTENT, g -> {
@@ -56,8 +62,8 @@ final class WakePicture {
                         .withIconSize(100, 100)
                         .paintIcon(null, g, (width - UI.scale(100)) / 2, height - UI.scale(100));
                     } else {
-                        WelcomeScene.light(g, width, height, 0, frame.play(), frame.moment());
-                        WelcomeScene.paint(g, width, height, frame.play(), frame.moment());
+                        WelcomeScene.light(g, p, width, height, 0, frame.play(), frame.moment());
+                        WelcomeScene.paint(g, p, width, height, frame.play(), frame.moment());
                     }
                 });
             });
