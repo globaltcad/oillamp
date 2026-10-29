@@ -2,6 +2,7 @@ package dev.gui.view
 
 import dev.gui.model.Entry
 import dev.gui.model.Genie
+import dev.gui.model.Palette
 import dev.gui.model.Transcript
 import spock.lang.Specification
 import sprouts.Tuple
@@ -121,7 +122,7 @@ class DrawingAGenieSpec extends Specification {
             def play = new WelcomeScene.Play(genie, 0, genie, -1)
             def paintedAt = { WelcomeScene.Play shown, double clock ->
                 def picture = new BufferedImage(700, 300, BufferedImage.TYPE_INT_RGB)
-                WelcomeScene.paint(picture.createGraphics(), 700, 300, shown, clock)
+                WelcomeScene.paint(picture.createGraphics(), Palette.DARK, 700, 300, shown, clock)
                 def colours = [] as Set
                 for (int x = 0; x < 700; x += 2) for (int y = 0; y < 300; y += 2) colours << picture.getRGB(x, y)
                 colours
