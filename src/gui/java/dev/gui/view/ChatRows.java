@@ -37,7 +37,9 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.UIForPanel;
 import swingtree.animation.LifeTime;
+import swingtree.components.JBox;
 import swingtree.style.ComponentBackend;
+import swingtree.style.ComponentStyleDelegate;
 import swingtree.style.StyledString;
 
 import static swingtree.UI.*;
@@ -141,8 +143,16 @@ final class ChatRows {
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("align right, wmin 0, wmax " + YOURS_WIDTH,
                 box().withMinSize(0, 0)
+                // On paper, the bubble is hardly darker than the chat around it, so it gets a rim
+                // and a shadow, as much as it lacks.
                 .withStyle(theme, (now, it) -> it
                     .backgroundColor(now.palette().YOURS())
+                    .border(1, ContrastUtil.rim(now.palette().YOURS(), now.palette().NIGHT(), 64))
+                    .shadow("bubble", s -> s
+                        .color(ContrastUtil.shadow(now.palette().YOURS(), now.palette().NIGHT(), 34))
+                        .offset(0, 2)
+                        .blurRadius(8)
+                    )
                     .borderRadius(16)
                     .padding(9, 14, 9, 14)
                     .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
@@ -233,8 +243,7 @@ final class ChatRows {
                     .withStyle(entryMarkdown, FADE, (it, animation, style) -> {
                         Theme now = theme.get();
                         Palette p = now.palette();
-                        return style
-                            .padding(3, 0, 3, 0)
+                        return sheet(p, style)
                             .text(t -> t
                                 .content(MarkdownStylingUtil.of(now, it, animation.progress()))
                                 .placement(UI.Placement.TOP_LEFT)
@@ -359,6 +368,24 @@ final class ChatRows {
             // On the night of the chat, outlined there as much as it needs.
             .withStyle(Themed.of(picture, theme), (themed, it) ->
                 it.image(img -> img.image(themed.item().on(themed.palette().NIGHT())).fitMode(UI.FitComponent.MIN_DIM))
+            );
+    }
+
+    /// The ground under an answer in `p`. In the dark, none: the answer is text on the night,
+    /// lit by the lamp. By day, text on the bare page floats, with nothing to say where an answer
+    /// begins and ends; so there it is on a sheet of the cards' paper, with a rim and a shadow as
+    /// strong as the sheet lacks contrast with the chat around it.
+    private static ComponentStyleDelegate<JBox> sheet(Palette p, ComponentStyleDelegate<JBox> style) {
+        if (p.isDark()) return style.padding(3, 0, 3, 0);
+        return style
+            .backgroundColor(p.CARD())
+            .border(1, ContrastUtil.rim(p.CARD(), p.NIGHT(), 70))
+            .borderRadius(14)
+            .padding(10, 16, 10, 16)
+            .shadow("sheet", s -> s
+                .color(ContrastUtil.shadow(p.CARD(), p.NIGHT(), 26))
+                .offset(0, 2)
+                .blurRadius(10)
             );
     }
 
