@@ -162,14 +162,27 @@ final class ViewPartsUtil {
     /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
     /// chosen part is lit; both are greyed while it cannot be changed.
     static UIForAnySwing<?, ?> yesOrNo(Val<Theme> theme, Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
+        return eitherOr(theme, "No", "Yes", yes, changeable, choose);
+    }
+
+    /// A switch of two parts, `first` and `second`, such as No and Yes: `second` is chosen while
+    /// `chosen` holds, and choosing a part says whether it was the second.
+    static UIForAnySwing<?, ?> eitherOr(
+        final Val<Theme> theme,
+        final String first,
+        final String second,
+        final Val<Boolean> chosen,
+        final Val<Boolean> changeable,
+        final Consumer<Boolean> choose
+    ) {
         return
             box("ins 2, gap 2")
             .withStyle(Themed.of(changeable, theme), (can, it) -> {
                 Palette p = can.palette();
                 return it.backgroundColor(p.SMOKE()).border(1, can.item() ? p.BORDER() : p.SMOKE()).borderRadius(11);
             })
-            .add(part(theme, "No", yes.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
-            .add(part(theme, "Yes", yes, changeable, () -> choose.accept(true)));
+            .add(part(theme, first, chosen.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
+            .add(part(theme, second, chosen, changeable, () -> choose.accept(true)));
     }
 
     /// How a part of a switch looks: whether it is chosen, and whether it can be changed.
