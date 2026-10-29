@@ -23,8 +23,11 @@ import swingtree.style.StyleSheet;
 /// its style again, its own stylers included, and is painted in them.
 final class Look extends StyleSheet {
 
-    /// Laid over a button while the pointer is on it, and while it is pressed.
-    private static final Color HOVER = new Color(255, 255, 255, 18);
+    /// Laid over a button while the pointer is on it, and while it is pressed. In the dark, the
+    /// pointer lightens a button; in the light, it darkens it with the palette's ink. The flame
+    /// lightens and a press darkens in either.
+    private static final Color HOVER_IN_THE_DARK = new Color(255, 255, 255, 18);
+    private static final int HOVER_IN_THE_LIGHT = 14;
     private static final Color FLAME_HOVER = new Color(255, 255, 255, 40);
     private static final Color PRESSED = new Color(0, 0, 0, 40);
 
@@ -40,6 +43,7 @@ final class Look extends StyleSheet {
     protected void configure() {
         Palette p = theme.get().palette();
         Fonts fonts = theme.get().fonts();
+        Color hover = p.isDark() ? HOVER_IN_THE_DARK : ViewPartsUtil.withAlpha(p.TEXT(), HOVER_IN_THE_LIGHT);
         // The night behind everything, with the lamp's glow in the top corner.
         add(group(Skin.FRAME), it -> it
             .backgroundColor(p.NIGHT())
@@ -119,7 +123,8 @@ final class Look extends StyleSheet {
             .border(1, p.BORDER())
             .padding(22)
             .shadow("card", s -> s
-                .color(new Color(0, 0, 0, 120))
+                // Deep under a card in the dark, faint in the light.
+                .color(new Color(0, 0, 0, p.isDark() ? 120 : 36))
                 .offset(0, 4)
                 .blurRadius(18)
             )
@@ -153,7 +158,7 @@ final class Look extends StyleSheet {
             )
         );
         add(type(AbstractButton.class).group(Skin.QUIET_BUTTON), it ->
-            lit(HOVER, it
+            lit(hover, it
                 .backgroundColor(p.RAISED())
                 .foregroundColor(p.TEXT())
                 .borderRadius(10)
@@ -164,7 +169,7 @@ final class Look extends StyleSheet {
             )
         );
         add(type(AbstractButton.class).group(Skin.ICON_BUTTON), it ->
-            lit(HOVER, it
+            lit(hover, it
                 .backgroundColor(p.TRANSPARENT())
                 .foregroundColor(p.SUBTEXT())
                 .borderRadius(9)
@@ -190,7 +195,7 @@ final class Look extends StyleSheet {
         );
         // The schedule: choices as chips, the days of a calendar, jobs as tiles, and times.
         add(type(AbstractButton.class).group(Skin.CHIP), it ->
-            lit(HOVER, it
+            lit(hover, it
                 .backgroundColor(p.TRANSPARENT())
                 .foregroundColor(p.TEXT())
                 .borderRadius(999)
@@ -201,7 +206,7 @@ final class Look extends StyleSheet {
             )
         );
         add(type(AbstractButton.class).group(Skin.DAY), it ->
-            lit(HOVER, it
+            lit(hover, it
                 .backgroundColor(p.TRANSPARENT())
                 .borderRadius(9)
                 .border(1, p.TRANSPARENT())

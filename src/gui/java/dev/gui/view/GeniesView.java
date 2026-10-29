@@ -1527,7 +1527,7 @@ public final class GeniesView extends JPanel {
     // ─── small parts ───────────────────────────────────────────────────────────────────────
 
     /// Sets up the look before any window opens: the fonts of `state`, Genies' own unless the
-    /// desktop has them, then the dark look-and-feel in its colours. Those also reach what the
+    /// desktop has them, then the look-and-feel in its colours, dark or light as they are. Those also reach what the
     /// style sheet does not paint: dialogs, the tree of conversations, lists of choices, scroll
     /// bars.
     public static void setUpLook(GeniesState state) {
@@ -1546,7 +1546,7 @@ public final class GeniesView extends JPanel {
             Map.entry("@background", hex(p.CARD())),
             Map.entry("@foreground", hex(p.TEXT())),
             // Halfway between the subtext and the borders, so what cannot be used now steps back.
-            Map.entry("@disabledForeground", "#716769"),
+            Map.entry("@disabledForeground", hex(halfway(p.SUBTEXT(), p.BORDER()))),
             Map.entry("@accentColor", hex(p.FLAME())),
             Map.entry("@selectionBackground", hex(p.YOURS())),
             Map.entry("@selectionForeground", hex(p.TEXT())),
@@ -1599,7 +1599,16 @@ public final class GeniesView extends JPanel {
             Map.entry("RootPane.activeBorderColor", hex(p.BORDER())),
             Map.entry("RootPane.inactiveBorderColor", hex(p.BORDER()))
         ));
-        com.formdev.flatlaf.FlatDarkLaf.setup();
+        if (p.isDark()) com.formdev.flatlaf.FlatDarkLaf.setup();
+        else com.formdev.flatlaf.FlatLightLaf.setup();
+    }
+
+    private static Color halfway(Color one, Color other) {
+        return new Color(
+            (one.getRed() + other.getRed()) / 2,
+            (one.getGreen() + other.getGreen()) / 2,
+            (one.getBlue() + other.getBlue()) / 2
+        );
     }
 
     private static String hex(Color colour) {
