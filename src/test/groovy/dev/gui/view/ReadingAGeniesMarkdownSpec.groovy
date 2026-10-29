@@ -1,5 +1,7 @@
 package dev.gui.view
 
+import dev.gui.model.Fonts
+import dev.gui.model.Palette
 import spock.lang.Specification
 
 import static dev.gui.view.MarkdownParsingUtil.Block.*
@@ -120,8 +122,8 @@ class ReadingAGeniesMarkdownSpec extends Specification {
             MarkdownStylingUtil.step(1, 1) == 8
 
         and: 'a settled answer is one styled run per Markdown run'
-            MarkdownStylingUtil.of(MarkdownParsingUtil.parse('plain **bold**'), 1).size() == 2
-            MarkdownStylingUtil.of(MarkdownParsingUtil.parse('x' * 100), 0).size() == 8
+            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), MarkdownParsingUtil.parse('plain **bold**'), 1).size() == 2
+            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), MarkdownParsingUtil.parse('x' * 100), 0).size() == 8
     }
 
     private static String text(String markdown) {
