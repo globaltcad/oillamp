@@ -2,7 +2,6 @@ package dev.gui.view;
 
 import dev.gui.Genies;
 import dev.gui.model.*;
-import dev.gui.model.Fonts;
 import sprouts.*;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
@@ -63,7 +62,8 @@ public final class GeniesView extends JPanel {
 
     private final Var<GeniesState> state;
     private final Genies app;
-    private final Look look = new Look();
+    private final Val<Theme> theme;
+    private final Look look;
     private final DesktopScreen desktop = new DesktopScreen();
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
@@ -100,6 +100,14 @@ public final class GeniesView extends JPanel {
     public GeniesView(Genies app) {
         this.state = app.state();
         this.app = app;
+        theme = Theme.of(state);
+        look  = new Look(theme);
+        // What the style sheet does not paint follows the theme too: the look-and-feel is set up
+        // in it anew, and every window takes it.
+        Viewable.cast(theme).onChange(From.ALL, it -> it.currentValue().ifPresent(now -> {
+            lookAndFeelIn(now.palette(), now.fonts());
+            com.formdev.flatlaf.FlatLaf.updateUI();
+        }));
         genie        = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         draft        = genie.zoomTo(Genie::draft, Genie::withDraft);
         name         = genie.zoomTo(Genie::name, Genie::withName);
@@ -1487,75 +1495,80 @@ public final class GeniesView extends JPanel {
 
     // ─── small parts ───────────────────────────────────────────────────────────────────────
 
-    /// Sets up the look before any window opens: Genies' own fonts, bundled so it looks the
-    /// same on every desktop, then the dark look-and-feel in the lamp's colours. Those also
-    /// reach what the style sheet does not paint: dialogs, the tree of conversations, lists
-    /// of choices, scroll bars.
-    public static void setUpLook() {
-        com.formdev.flatlaf.FlatLaf.setPreferredFontFamily(Fonts.DEFAULT.FONT());
-        com.formdev.flatlaf.FlatLaf.setPreferredMonospacedFontFamily(Fonts.DEFAULT.MONO());
-        com.formdev.flatlaf.FlatLaf.setGlobalExtraDefaults(Map.ofEntries(
-            Map.entry("@background", hex(DARK.CARD())),
-            Map.entry("@foreground", hex(DARK.TEXT())),
-            // Halfway between the subtext and the borders, so what cannot be used now steps back.
-            Map.entry("@disabledForeground", "#716769"),
-            Map.entry("@accentColor", hex(DARK.FLAME())),
-            Map.entry("@selectionBackground", hex(DARK.YOURS())),
-            Map.entry("@selectionForeground", hex(DARK.TEXT())),
-            Map.entry("@selectionInactiveBackground", hex(DARK.YOURS())),
-            Map.entry("@selectionInactiveForeground", hex(DARK.TEXT())),
-            Map.entry("Component.borderColor", hex(DARK.BORDER())),
-            Map.entry("Component.focusColor", hex(DARK.FLAME())),
-            Map.entry("Component.focusedBorderColor", hex(DARK.BRASS())),
-            Map.entry("Component.arc", "10"),
-            Map.entry("Button.arc", "10"),
-            Map.entry("TextComponent.arc", "10"),
-            Map.entry("ComboBox.background", hex(DARK.RAISED())),
-            Map.entry("ComboBox.editableBackground", hex(DARK.RAISED())),
-            Map.entry("ComboBox.buttonBackground", hex(DARK.RAISED())),
-            Map.entry("ComboBox.buttonEditableBackground", hex(DARK.RAISED())),
-            Map.entry("ComboBox.popupBackground", hex(DARK.CARD())),
-            Map.entry("TextField.background", hex(DARK.RAISED())),
-            Map.entry("PasswordField.background", hex(DARK.RAISED())),
-            Map.entry("TextArea.background", hex(DARK.RAISED())),
-            Map.entry("Tree.selectionArc", "6"),
-            Map.entry("CheckBox.icon.selectedBackground", hex(DARK.FLAME())),
-            Map.entry("CheckBox.icon.selectedBorderColor", hex(DARK.FLAME())),
-            Map.entry("CheckBox.icon.checkmarkColor", hex(DARK.ON_FLAME())),
-            Map.entry("CheckBox.icon.focusedSelectedBackground", hex(DARK.FLAME())),
-            Map.entry("CheckBox.icon.hoverSelectedBackground", hex(DARK.FLAME())),
-            Map.entry("ScrollBar.width", "10"),
-            Map.entry("ScrollBar.showButtons", "false"),
-            Map.entry("ScrollBar.track", hex(DARK.NIGHT())),
-            Map.entry("ScrollBar.thumb", hex(DARK.BORDER())),
-            Map.entry("ScrollBar.hoverThumbColor", hex(DARK.SUBTEXT())),
-            Map.entry("ScrollBar.pressedThumbColor", hex(DARK.BRASS())),
-            Map.entry("ScrollBar.thumbArc", "999"),
-            Map.entry("ScrollBar.thumbInsets", "2,2,2,2"),
-            Map.entry("ToolTip.background", hex(DARK.RAISED())),
-            Map.entry("ToolTip.foreground", hex(DARK.TEXT())),
-            // The title bars Genies draws itself, of its window and its dialogs, in the sidebar's
-            // colour, a line under them as under the genie's header.
-            Map.entry("TitlePane.background", hex(DARK.SIDEBAR())),
-            Map.entry("TitlePane.inactiveBackground", hex(DARK.SIDEBAR())),
-            Map.entry("TitlePane.foreground", hex(DARK.TEXT())),
-            Map.entry("TitlePane.inactiveForeground", hex(DARK.SUBTEXT())),
-            Map.entry("TitlePane.embeddedForeground", hex(DARK.TEXT())),
-            Map.entry("TitlePane.borderColor", hex(DARK.BORDER())),
-            Map.entry("TitlePane.buttonHoverBackground", hex(DARK.RAISED())),
-            Map.entry("TitlePane.buttonPressedBackground", hex(DARK.BORDER())),
-            Map.entry("TitlePane.closeHoverBackground", hex(DARK.TROUBLE())),
-            Map.entry("TitlePane.closePressedBackground", hex(DARK.TROUBLE_WASH())),
-            Map.entry("MenuBar.background", hex(DARK.SIDEBAR())),
-            Map.entry("MenuBar.borderColor", hex(DARK.SIDEBAR())),
-            Map.entry("RootPane.activeBorderColor", hex(DARK.BORDER())),
-            Map.entry("RootPane.inactiveBorderColor", hex(DARK.BORDER()))
-        ));
-        com.formdev.flatlaf.FlatDarkLaf.setup();
+    /// Sets up the look before any window opens: the fonts of `state`, Genies' own unless the
+    /// desktop has them, then the dark look-and-feel in its colours. Those also reach what the
+    /// style sheet does not paint: dialogs, the tree of conversations, lists of choices, scroll
+    /// bars.
+    public static void setUpLook(GeniesState state) {
+        lookAndFeelIn(state.palette(), state.fonts());
         // On Linux the desktop draws title bars, unless asked not to; FlatLaf then draws them, and
         // the desktop still moves and resizes the window.
         JFrame.setDefaultLookAndFeelDecorated(true);
         JDialog.setDefaultLookAndFeelDecorated(true);
+    }
+
+    /// The look-and-feel in the colours `p` and the `fonts`, set up anew.
+    private static void lookAndFeelIn(Palette p, Fonts fonts) {
+        com.formdev.flatlaf.FlatLaf.setPreferredFontFamily(fonts.FONT());
+        com.formdev.flatlaf.FlatLaf.setPreferredMonospacedFontFamily(fonts.MONO());
+        com.formdev.flatlaf.FlatLaf.setGlobalExtraDefaults(Map.ofEntries(
+            Map.entry("@background", hex(p.CARD())),
+            Map.entry("@foreground", hex(p.TEXT())),
+            // Halfway between the subtext and the borders, so what cannot be used now steps back.
+            Map.entry("@disabledForeground", "#716769"),
+            Map.entry("@accentColor", hex(p.FLAME())),
+            Map.entry("@selectionBackground", hex(p.YOURS())),
+            Map.entry("@selectionForeground", hex(p.TEXT())),
+            Map.entry("@selectionInactiveBackground", hex(p.YOURS())),
+            Map.entry("@selectionInactiveForeground", hex(p.TEXT())),
+            Map.entry("Component.borderColor", hex(p.BORDER())),
+            Map.entry("Component.focusColor", hex(p.FLAME())),
+            Map.entry("Component.focusedBorderColor", hex(p.BRASS())),
+            Map.entry("Component.arc", "10"),
+            Map.entry("Button.arc", "10"),
+            Map.entry("TextComponent.arc", "10"),
+            Map.entry("ComboBox.background", hex(p.RAISED())),
+            Map.entry("ComboBox.editableBackground", hex(p.RAISED())),
+            Map.entry("ComboBox.buttonBackground", hex(p.RAISED())),
+            Map.entry("ComboBox.buttonEditableBackground", hex(p.RAISED())),
+            Map.entry("ComboBox.popupBackground", hex(p.CARD())),
+            Map.entry("TextField.background", hex(p.RAISED())),
+            Map.entry("PasswordField.background", hex(p.RAISED())),
+            Map.entry("TextArea.background", hex(p.RAISED())),
+            Map.entry("Tree.selectionArc", "6"),
+            Map.entry("CheckBox.icon.selectedBackground", hex(p.FLAME())),
+            Map.entry("CheckBox.icon.selectedBorderColor", hex(p.FLAME())),
+            Map.entry("CheckBox.icon.checkmarkColor", hex(p.ON_FLAME())),
+            Map.entry("CheckBox.icon.focusedSelectedBackground", hex(p.FLAME())),
+            Map.entry("CheckBox.icon.hoverSelectedBackground", hex(p.FLAME())),
+            Map.entry("ScrollBar.width", "10"),
+            Map.entry("ScrollBar.showButtons", "false"),
+            Map.entry("ScrollBar.track", hex(p.NIGHT())),
+            Map.entry("ScrollBar.thumb", hex(p.BORDER())),
+            Map.entry("ScrollBar.hoverThumbColor", hex(p.SUBTEXT())),
+            Map.entry("ScrollBar.pressedThumbColor", hex(p.BRASS())),
+            Map.entry("ScrollBar.thumbArc", "999"),
+            Map.entry("ScrollBar.thumbInsets", "2,2,2,2"),
+            Map.entry("ToolTip.background", hex(p.RAISED())),
+            Map.entry("ToolTip.foreground", hex(p.TEXT())),
+            // The title bars Genies draws itself, of its window and its dialogs, in the sidebar's
+            // colour, a line under them as under the genie's header.
+            Map.entry("TitlePane.background", hex(p.SIDEBAR())),
+            Map.entry("TitlePane.inactiveBackground", hex(p.SIDEBAR())),
+            Map.entry("TitlePane.foreground", hex(p.TEXT())),
+            Map.entry("TitlePane.inactiveForeground", hex(p.SUBTEXT())),
+            Map.entry("TitlePane.embeddedForeground", hex(p.TEXT())),
+            Map.entry("TitlePane.borderColor", hex(p.BORDER())),
+            Map.entry("TitlePane.buttonHoverBackground", hex(p.RAISED())),
+            Map.entry("TitlePane.buttonPressedBackground", hex(p.BORDER())),
+            Map.entry("TitlePane.closeHoverBackground", hex(p.TROUBLE())),
+            Map.entry("TitlePane.closePressedBackground", hex(p.TROUBLE_WASH())),
+            Map.entry("MenuBar.background", hex(p.SIDEBAR())),
+            Map.entry("MenuBar.borderColor", hex(p.SIDEBAR())),
+            Map.entry("RootPane.activeBorderColor", hex(p.BORDER())),
+            Map.entry("RootPane.inactiveBorderColor", hex(p.BORDER()))
+        ));
+        com.formdev.flatlaf.FlatDarkLaf.setup();
     }
 
     private static String hex(Color colour) {

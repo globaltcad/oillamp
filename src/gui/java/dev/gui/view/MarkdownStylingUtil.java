@@ -1,7 +1,8 @@
 package dev.gui.view;
 
-import dev.gui.model.Fonts;
 import java.awt.Color;
+
+import dev.gui.model.Fonts;
 
 import sprouts.Tuple;
 import swingtree.api.Configurator;
