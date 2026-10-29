@@ -1,6 +1,8 @@
 package dev.gui.view
 
 import dev.gui.desktop.Desktop
+import dev.gui.model.Palette
+import sprouts.Var
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -35,7 +37,7 @@ class TypingIntoAGeniesDesktopSpec extends Specification {
         // Short on purpose: a Unix socket path may not be longer than 107 bytes.
         socket = Files.createTempDirectory(Path.of('/tmp'), 'keys').resolve('vnc.sock')
         server = ServerSocketChannel.open(StandardProtocolFamily.UNIX).bind(UnixDomainSocketAddress.of(socket))
-        SwingUtilities.invokeAndWait { screen = new DesktopScreen() }
+        SwingUtilities.invokeAndWait { screen = new DesktopScreen(Var.of(Palette.DARK)) }
         SwingUtilities.invokeAndWait { screen.show(Optional.of(new Desktop(socket, 4, 2))) }
         var channel = server.accept()
         fromViewer = new DataInputStream(Channels.newInputStream(channel))

@@ -21,13 +21,15 @@ final class WakePicture {
     private record Cue(UUID id, Genie.Phase phase) {}
 
     private final Val<Genie> genie;
+    private final Val<Palette> palette;
     private final Val<Cue> cue;
     private final Var<WakeScene> scene;
     private Val<Boolean> visible = Val.of(false);
     private boolean playing;
 
-    WakePicture(Val<Genie> genie) {
+    WakePicture(Val<Genie> genie, Val<Palette> palette) {
         this.genie = genie;
+        this.palette = palette;
         cue = genie.viewAs(Cue.class, it -> new Cue(it.id(), it.phase()));
         scene = Var.of(WakeScene.of(genie.get()));
     }
@@ -43,10 +45,11 @@ final class WakePicture {
             .onView(Viewable.cast(cue), _ -> follow())
             .onView(Viewable.cast(visible), _ -> follow())
             .onShown(_ -> follow())
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .withStyle(scene, (frame, it) -> {
                 int width = UI.scale(it.componentWidth());
                 int height = UI.scale(it.componentHeight());
-                return it.backgroundColor(Palette.DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
+                return it.painter(UI.Layer.CONTENT, g -> {
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     if (frame.phase() == Genie.Phase.BROKEN) {
                         swingtree.style.SvgIcon.of(LampSvgUtil.lamp(Genie.Phase.BROKEN))

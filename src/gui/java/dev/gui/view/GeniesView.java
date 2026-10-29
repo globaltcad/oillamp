@@ -66,7 +66,7 @@ public final class GeniesView extends JPanel {
     private final Val<Theme> theme;
     private final Val<Palette> palette;
     private final Look look;
-    private final DesktopScreen desktop = new DesktopScreen();
+    private final DesktopScreen desktop;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
     private final Var<Genie> genie;
@@ -105,6 +105,7 @@ public final class GeniesView extends JPanel {
         theme   = Theme.of(state);
         palette = Theme.paletteOf(state);
         look    = new Look(theme);
+        desktop = new DesktopScreen(palette);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
         // in it anew, and every window takes it.
         Viewable.cast(theme).onChange(From.ALL, it -> it.currentValue().ifPresent(now -> {
@@ -160,7 +161,7 @@ public final class GeniesView extends JPanel {
         historyPage = new HistoryPage(state, app, look);
         hostAccessPage = new HostAccessPage(state, app);
         actionsPage = new ActionsPage(state, app, () -> historyPage.save(this), this::confirmDelete);
-        wakePicture = new WakePicture(genie);
+        wakePicture = new WakePicture(genie, palette);
 
         UI.use(look, () ->
             of(this).group(Skin.FRAME)
