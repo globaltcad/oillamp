@@ -33,12 +33,12 @@ final class Main {
         Shelf shelf = Shelf.standard(name -> Optional.ofNullable(System.getenv(name)));
         ErrorLog errors = new ErrorLog(shelf.errorLog());
         Thread.setDefaultUncaughtExceptionHandler(errors);
-        GeniesView.setUpLook();
         SwingUtilities.invokeLater(() -> open(shelf, errors));
     }
 
     private static void open(Shelf shelf, ErrorLog errors) {
         Genies app = Genies.open(shelf, errors);
+        GeniesView.setUpLook(app.state().get());
         // The window's title, which its title bar says too.
         Var<String> title = Var.of("Genies");
         JFrame frame = new JFrame(title.get());
