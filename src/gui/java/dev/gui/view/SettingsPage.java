@@ -2,6 +2,7 @@ package dev.gui.view;
 
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -620,26 +621,11 @@ final class SettingsPage {
             // The genie, once it has taken form, and its lamp can be clicked: it vanishes in a
             // poof, and another genie comes.
             .onMouseMove(it -> {
-                int width = it.getComponent().getWidth();
-                boolean onGenie =
-                    scene.get().formed(clock.get()) &&
-                    WelcomeScene.hits(
-                        width, UI.scale(PICTURE_HEIGHT),
-                        it.mouseX() - asideBy(width, aside.get()),
-                        it.mouseY() + UI.scale(cut.get())
-                    );
+                boolean onGenie = scene.get().formed(clock.get()) && onPicture(it.getEvent(), it.getComponent().getWidth(), cut, aside);
                 it.getComponent().setCursor(Cursor.getPredefinedCursor(onGenie ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
             })
             .onMouseClick(it -> {
-                int width = it.getComponent().getWidth();
-                if (
-                    scene.get().formed(clock.get()) &&
-                    WelcomeScene.hits(
-                        width, UI.scale(PICTURE_HEIGHT),
-                        it.mouseX() - asideBy(width, aside.get()),
-                        it.mouseY() + UI.scale(cut.get())
-                    )
-                )
+                if (scene.get().formed(clock.get()) && onPicture(it.getEvent(), it.getComponent().getWidth(), cut, aside))
                     scene.set(scene.get().poof(clock.get()));
             })
             // The room for the picture: above the words in a narrow welcome, beside them in a wide one.
@@ -672,6 +658,17 @@ final class SettingsPage {
                 .withHeightExactly(room)
                 .isVisibleIf(fit.viewAs(Boolean.class, Fit::wide))
             );
+    }
+
+    /// Whether `event` is on the genie or its lamp in a welcome `width` pixels wide. The event's
+    /// own position is in pixels, as the picture is painted in; SwingTree's `mouseX()` and
+    /// `mouseY()` are in units, which miss the genie by as much as the window is scaled.
+    private static boolean onPicture(MouseEvent event, int width, Val<Integer> cut, Val<Double> aside) {
+        return WelcomeScene.hits(
+            width, UI.scale(PICTURE_HEIGHT),
+            event.getX() - asideBy(width, aside.get()),
+            event.getY() + UI.scale(cut.get())
+        );
     }
 
     /// How many pixels the welcome's picture is right of the middle of a welcome `width` pixels
