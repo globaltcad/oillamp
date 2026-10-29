@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -133,24 +135,61 @@ final class GenieSvgUtil {
         return Math.min(pose.frames - 1, (int) (progress * pose.frames));
     }
 
-    /// Every genie handed out, by its appearance, pose and frame. The chat asks again on every
-    /// step of an animation, and SwingTree keeps a drawn icon only while its declaration is held
-    /// somewhere, so holding them here spares writing and drawing a genie again. There are eleven
-    /// for each genie, one for each frame of its poses.
+    /// Every genie handed out, by its appearance, pose, frame and outline. The chat asks again on
+    /// every step of an animation, and SwingTree keeps a drawn icon only while its declaration is
+    /// held somewhere, so holding them here spares writing and drawing a genie again. There are
+    /// eleven for each genie and outline, one for each frame of its poses, and an outline for
+    /// each ground the genie is shown on in each palette.
     private static final Map<List<Object>, IconDeclaration> GENIES = new ConcurrentHashMap<>();
 
     /// No genie: an empty picture of the same size, for where the genie is in its lamp.
     static final IconDeclaration NONE = IconDeclaration.ofSvg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'/>");
 
-    /// The genie that `appearance` describes, in `frame` of `pose`, twenty pixels square.
-    static IconDeclaration genie(Appearance appearance, Pose pose, int frame) {
-        return GENIES.computeIfAbsent(List.of(appearance, pose, frame), _ -> IconDeclaration.ofSvg(svg(appearance, pose, frame)));
+    /// A picture of a genie, before the ground it is shown on is known: its appearance, and the
+    /// frame of the pose it is in. No genie at all when `appearance` is empty.
+    record Picture(Optional<Appearance> appearance, Pose pose, int frame) {
+
+        /// No genie: for where the genie is in its lamp.
+        static final Picture NOBODY = new Picture(Optional.empty(), Pose.ASLEEP, 0);
+
+        /// The genie that `appearance` describes, in `frame` of `pose`.
+        static Picture of(Appearance appearance, Pose pose, int frame) {
+            return new Picture(Optional.of(appearance), pose, frame);
+        }
+
+        /// The picture on `ground`, as [GenieSvgUtil#genie] draws it there, or [#NONE].
+        IconDeclaration on(Color ground) {
+            return appearance.map(it -> genie(it, pose, frame, ground)).orElse(NONE);
+        }
+    }
+
+    /// The genie that `appearance` describes, in `frame` of `pose`, twenty pixels square, on
+    /// `ground`, the colour behind it: where its body hardly stands out from that, it gets an
+    /// outline, see [#outline].
+    static IconDeclaration genie(Appearance appearance, Pose pose, int frame, Color ground) {
+        Color outline = outline(appearance, ground);
+        return GENIES.computeIfAbsent(List.of(appearance, pose, frame, outline), _ -> IconDeclaration.ofSvg(svg(appearance, pose, frame, outline)));
+    }
+
+    /// The outline of a genie of `appearance` on `ground`: a deep shade of its body colour, as
+    /// strong as the body lacks contrast with the ground, and none where the body stands out by
+    /// itself, as every genie does on the dark palette's night. A light genie on light paper
+    /// gets a clear one, a darker genie a faint one.
+    static Color outline(Appearance appearance, Color ground) {
+        return ContrastUtil.edge(appearance.colour(), ground, 210);
+    }
+
+    /// The SVG text of the genie without an outline.
+    static String svg(Appearance appearance, Pose pose, int frame) {
+        return svg(appearance, pose, frame, new Color(0, 0, 0, 0));
     }
 
     /// The SVG text of the genie: one path for each colour, each pixel a square of one unit.
     /// Under them all lies the genie's whole shape in its body colour, so no thin gap shows
-    /// between two colours where the drawing is scaled and smoothed.
-    static String svg(Appearance appearance, Pose pose, int frame) {
+    /// between two colours where the drawing is scaled and smoothed; and under that, unless it
+    /// is transparent, `outline`, in each empty pixel beside the shape, above, below or to
+    /// either side, as pixel pictures are outlined.
+    static String svg(Appearance appearance, Pose pose, int frame, Color outline) {
         char[][] pixels = pixels(appearance, pose, frame);
         Map<Character, Color> paint = colours(appearance);
         int size = BODY.length;
@@ -158,10 +197,32 @@ final class GenieSvgUtil {
             new StringBuilder()
             .append("<svg xmlns='http://www.w3.org/2000/svg' width='").append(size).append("' height='").append(size)
             .append("' viewBox='0 0 ").append(size).append(' ').append(size).append("' shape-rendering='crispEdges'>");
+        if (outline.getAlpha() > 0) appendPath(svg, beside(pixels), 'o', outline);
         appendPath(svg, pixels, '.', appearance.colour());
         for (Map.Entry<Character, Color> colour : paint.entrySet())
             appendPath(svg, pixels, colour.getKey(), colour.getValue());
         return svg.append("</svg>").toString();
+    }
+
+    /// The empty pixels beside the shape of `pixels`, as `o`, and every other pixel as `.`.
+    private static char[][] beside(char[][] pixels) {
+        char[][] around = new char[pixels.length][];
+        for (int y = 0; y < pixels.length; y++) {
+            around[y] = new char[pixels[y].length];
+            for (int x = 0; x < pixels[y].length; x++) {
+                boolean next =
+                    pixels[y][x] == '.' && (
+                        filled(pixels, x - 1, y) || filled(pixels, x + 1, y) ||
+                        filled(pixels, x, y - 1) || filled(pixels, x, y + 1)
+                    );
+                around[y][x] = next ? 'o' : '.';
+            }
+        }
+        return around;
+    }
+
+    private static boolean filled(char[][] pixels, int x, int y) {
+        return y >= 0 && y < pixels.length && x >= 0 && x < pixels[y].length && pixels[y][x] != '.';
     }
 
     /// The genie's pixels, twenty rows of twenty letters, one for each pixel: `.` for none, and
@@ -228,7 +289,9 @@ final class GenieSvgUtil {
         }
         if (path.isEmpty()) return;
         String hex = String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue());
-        svg.append("<path fill='").append(hex).append("' d='").append(path).append("'/>");
+        svg.append("<path fill='").append(hex).append("' d='").append(path).append("'");
+        if (colour.getAlpha() < 255) svg.append(" fill-opacity='").append(String.format(Locale.ROOT, "%.3f", colour.getAlpha() / 255.0)).append("'");
+        svg.append("/>");
     }
 
     /// A small drawing laid over the genie: its rows of letters, and where its top left pixel
