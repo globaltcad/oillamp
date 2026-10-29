@@ -1,6 +1,7 @@
 package dev.gui.view;
 
 import dev.gui.model.Genie;
+import dev.gui.model.Palette;
 import sprouts.Val;
 import sprouts.Var;
 import sprouts.Viewable;
@@ -45,7 +46,7 @@ final class WakePicture {
             .withStyle(scene, (frame, it) -> {
                 int width = UI.scale(it.componentWidth());
                 int height = UI.scale(it.componentHeight());
-                return it.backgroundColor(Palette.TRANSPARENT).painter(UI.Layer.CONTENT, g -> {
+                return it.backgroundColor(Palette.DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     if (frame.phase() == Genie.Phase.BROKEN) {
                         swingtree.style.SvgIcon.of(LampSvgUtil.lamp(Genie.Phase.BROKEN))
