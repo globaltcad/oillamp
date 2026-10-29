@@ -26,6 +26,7 @@ import dev.gui.model.Conversation;
 import dev.gui.model.Entry;
 import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
+import dev.gui.model.Palette;
 
 import sprouts.From;
 import sprouts.Tuple;
@@ -40,7 +41,6 @@ import swingtree.api.IconDeclaration;
 import swingtree.style.ComponentBackend;
 import swingtree.style.StyledString;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// The rows of a conversation, one per [Entry], in a column no wider than reads well.
@@ -66,6 +66,9 @@ final class ChatRows {
     private static final int GENIE_SIZE = 30;
 
     private final Look look;
+    /// The colours and the fonts of the state, and the colours alone.
+    private final Val<Theme> theme;
+    private final Val<Palette> palette;
     private final Val<Genie> genie;
     private final Consumer<String> saveHandout;
     private final Val<Double> pulse;
@@ -73,6 +76,7 @@ final class ChatRows {
     private final Val<Boolean> waits;
     private final Consumer<String> showLeaf;
 
+    /// @param theme       the colours and the fonts of the state
     /// @param genie       the genie whose conversation this is
     /// @param saveHandout asks the user where to save the outbox file of that name
     /// @param pulse       loops from 0 to 1 while a genie works or wakes; drives the bars and the genie
@@ -82,6 +86,7 @@ final class ChatRows {
     /// @param showLeaf    shows the conversation in the chat up to the entry of that id
     ChatRows(
         final Look look,
+        final Val<Theme> theme,
         final Val<Genie> genie,
         final Consumer<String> saveHandout,
         final Val<Double> pulse,
@@ -90,6 +95,8 @@ final class ChatRows {
         final Consumer<String> showLeaf
     ) {
         this.look = look;
+        this.theme = theme;
+        this.palette = theme.viewAs(Palette.class, Theme::palette);
         this.genie = genie;
         this.saveHandout = saveHandout;
         this.pulse = pulse;
@@ -103,7 +110,7 @@ final class ChatRows {
     UIForAnySwing<?, ?> row(Var<Entry> entry) {
         return UI.of(UI.use(look, () ->
             panel("fill, ins 0", "[grow, center]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0, wmax " + COLUMN, body(entry))
             .get(JPanel.class)
         ));
@@ -129,19 +136,19 @@ final class ChatRows {
     private UIForAnySwing<?, ?> yours(Var<Entry> entry) {
         String text = entry.get().text();
         Val<Boolean> editable = Viewable.of(Boolean.class, waits, entry, (waiting, it) -> waiting && !it.ref().isEmpty());
-        var markdown = MarkdownStylingUtil.of(MarkdownParsingUtil.parse(text), 1);
+        var runs = MarkdownParsingUtil.parse(text);
         return
             panel("fill, wrap 1, ins 8 60 8 0, gap 2, hidemode 3", "[grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("align right, wmin 0, wmax " + YOURS_WIDTH,
                 box().withMinSize(0, 0)
-                .withStyle(it -> it
-                    .backgroundColor(DARK.YOURS())
+                .withStyle(theme, (now, it) -> it
+                    .backgroundColor(now.palette().YOURS())
                     .borderRadius(16)
                     .padding(9, 14, 9, 14)
-                    .prefWidth(Math.min(YOURS_WIDTH, widthOf(text) * 1.08 + 36))
+                    .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
                     .text(t -> t
-                        .content(markdown)
+                        .content(MarkdownStylingUtil.of(now, runs, 1))
                         .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
                     )
                 )
@@ -152,7 +159,7 @@ final class ChatRows {
                 .add(
                     button("✎  Edit").group(Skin.ICON_BUTTON).isVisibleIf(editable)
                     .withTooltip("Ask this differently. What followed is kept, as a branch in the genie's conversations.")
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT())))
                     .onClick(_ -> askInstead.accept(entry.get()))
                 )
             );
@@ -185,7 +192,7 @@ final class ChatRows {
             )
             .add(
                 label(versions.viewAsString(it -> (it.at() + 1) + " / " + it.leaves().size()))
-                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT())))
+                .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT())))
             )
             .add(
                 button("›").group(Skin.ICON_BUTTON).isEnabledIf(hasLater)
@@ -210,7 +217,7 @@ final class ChatRows {
             .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
         return
             panel("fill, ins 10 0 10 0, gap 12, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top",
                 picture(
                     it -> answers(it, id) ? GenieSvgUtil.poseOf(it) : GenieSvgUtil.poseBeside(entry.get()),
@@ -221,25 +228,30 @@ final class ChatRows {
                 box("fill, wrap 1, ins 0, gap 4, hidemode 3", "[grow]")
                 .add("growx, wmin 0",
                     box().withMinSize(0, 0)
-                    // Restarts on every change: each new piece fades in from its arrival.
-                    .withStyle(entryMarkdown, FADE, (it, animation, style) -> style
-                        .padding(3, 0, 3, 0)
-                        .text(t -> t
-                            .content(MarkdownStylingUtil.of(it, animation.progress()))
-                            .placement(UI.Placement.TOP_LEFT)
-                            .wrapLines(true)
-                            .autoPreferredHeight(true)
-                            .selection(s -> s
-                                .color(DARK.SELECTION())
-                                .border(1, DARK.SELECTION_EDGE())
-                                .unfocusedColor(DARK.SELECTION_ASIDE())
-                                .unfocusedBorderColor(DARK.TRANSPARENT())
-                                .mergeLines(true)
-                                .convexRadius(5)
-                                .concaveRadius(4)
-                            )
-                        )
-                    )
+                    // Restarts on every change: each new piece fades in from its arrival. The theme
+                    // is read as the style is gathered, which it is anew when the theme changes,
+                    // rather than followed, so that a new theme does not fade the answer in again.
+                    .withStyle(entryMarkdown, FADE, (it, animation, style) -> {
+                        Theme now = theme.get();
+                        Palette p = now.palette();
+                        return style
+                            .padding(3, 0, 3, 0)
+                            .text(t -> t
+                                .content(MarkdownStylingUtil.of(now, it, animation.progress()))
+                                .placement(UI.Placement.TOP_LEFT)
+                                .wrapLines(true)
+                                .autoPreferredHeight(true)
+                                .selection(s -> s
+                                    .color(p.SELECTION())
+                                    .border(1, p.SELECTION_EDGE())
+                                    .unfocusedColor(p.SELECTION_ASIDE())
+                                    .unfocusedBorderColor(p.TRANSPARENT())
+                                    .mergeLines(true)
+                                    .convexRadius(5)
+                                    .concaveRadius(4)
+                                )
+                            );
+                    })
                     // The user drags across the answer to select part of it, and copies it with Ctrl+C.
                     .withTextSelection()
                     .withTooltip(writtenBy)
@@ -247,7 +259,7 @@ final class ChatRows {
                 .add("left",
                     button("⧉  Copy").group(Skin.ICON_BUTTON).isVisibleIf(copyable)
                     .withTooltip("Copy the answer, as the genie wrote it")
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT())))
                     .onClick(_ -> copy(entry.get().text()))
                 )
             );
@@ -266,24 +278,27 @@ final class ChatRows {
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
                 .add(
                     label(entry.viewAsString(it -> it.isWriting() ? "✦ thinking" : "✦ thought"))
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).weight(2f).color(DARK.BRASS())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).weight(2f).color(now.palette().BRASS())))
                 )
                 .add("growx, wmin 0, h 4!", progress(writing))
                 .add(
                     label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸"))
-                    .withStyle(it -> it.componentFont(f -> f.size(12).color(DARK.SUBTEXT())))
+                    .withStyle(palette, (p, it) -> it.componentFont(f -> f.size(12).color(p.SUBTEXT())))
                 ),
                 box().withMinSize(0, 0).isVisibleIf(expanded)
-                .withStyle(entry.viewAsString(Entry::text), (thoughts, it) -> it
-                    .padding(6, 2, 2, 2)
-                    .borderAt(UI.Edge.TOP, 1, DARK.BORDER())
-                    .text(t -> t
-                        .content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(12).posture(0.14f).color(DARK.SUBTEXT()), thoughts))
-                        .placement(UI.Placement.TOP_LEFT)
-                        .wrapLines(true)
-                        .autoPreferredHeight(true)
-                    )
-                )
+                .withStyle(Themed.of(entry.viewAsString(Entry::text), theme), (themed, it) -> {
+                    var thoughts = themed.item();
+                    Palette p = themed.palette();
+                    return it
+                        .padding(6, 2, 2, 2)
+                        .borderAt(UI.Edge.TOP, 1, p.BORDER())
+                        .text(t -> t
+                            .content(StyledString.of(f -> f.family(themed.fonts().FONT()).size(12).posture(0.14f).color(p.SUBTEXT()), thoughts))
+                            .placement(UI.Placement.TOP_LEFT)
+                            .wrapLines(true)
+                            .autoPreferredHeight(true)
+                        );
+                })
             )
             .withTooltip(entry.viewAsString(it ->
                 it.expanded() ? "Click to fold the thoughts away" : "Click to see what the genie thinks"
@@ -298,7 +313,7 @@ final class ChatRows {
     UIForAnySwing<?, ?> waiting(Val<Genie.Waiting> waiting, Val<Boolean> shown) {
         return UI.of(UI.use(look, () ->
             panel("fill, ins 0", "[grow, center]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .isVisibleIf(shown)
             .add("growx, wmin 0, wmax " + COLUMN,
                 box("fill, ins 4 18 4 18", "[grow]")
@@ -308,7 +323,7 @@ final class ChatRows {
                         box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
                         .add("wmin 0",
                             label(waiting.viewAsString(it -> "✦ " + it.what()))
-                            .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).weight(2f).color(DARK.BRASS())))
+                            .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).weight(2f).color(now.palette().BRASS())))
                         )
                         .add("growx, wmin 60, h 4!", progress(Val.of(true)))
                         // As wide as "59:59", so the bar keeps its length while the digits change.
@@ -316,7 +331,7 @@ final class ChatRows {
                             label(waiting.viewAsString(Genie.Waiting::time))
                             .withHorizontalAlignment(UI.HorizontalAlignment.RIGHT)
                             .isVisibleIf(waiting.viewAs(Boolean.class, it -> !it.time().isEmpty()))
-                            .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.SUBTEXT())))
+                            .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().SUBTEXT())))
                         ),
                         box().isVisibleIf(Val.of(false))
                     )
@@ -369,20 +384,22 @@ final class ChatRows {
     private UIForAnySwing<?, ?> progress(Val<Boolean> moving) {
         return
             box().withMinSize(0, 4).isVisibleIf(moving)
-            .withStyle(Viewable.of(Glow.class, moving, pulse, Glow::new), (glow, it) -> {
+            .withStyle(Themed.of(Viewable.of(Glow.class, moving, pulse, Glow::new), theme), (themed, it) -> {
+                var glow = themed.item();
+                Palette p = themed.palette();
                 int length = it.componentWidth();
                 int thickness = it.componentHeight();
                 int glowLength = Math.max(1, length / 3);
                 int at = (int) Math.round((length + glowLength) * glow.at()) - glowLength;
                 return
-                    it.backgroundColor(DARK.RAISED()).borderRadius(2)
+                    it.backgroundColor(p.RAISED()).borderRadius(2)
                     .painter(UI.Layer.CONTENT, g -> {
                         // Only the part of the glow on the track: the gradient repeats, and
                         // painted further it would start a second glow behind the first.
                         int from = Math.max(0, at);
                         int to = Math.min(length, at + glowLength);
                         if (!glow.moving() || to <= from) return;
-                        g.setPaint(new GradientPaint(at, 0, DARK.TRANSPARENT(), at + glowLength / 2f, 0, DARK.FLAME(), true));
+                        g.setPaint(new GradientPaint(at, 0, p.TRANSPARENT(), at + glowLength / 2f, 0, p.FLAME(), true));
                         // Round at its ends, as the track is, where it enters and leaves.
                         g.fill(new RoundRectangle2D.Float(from, 0, to - from, thickness, thickness, thickness));
                     });
@@ -398,12 +415,12 @@ final class ChatRows {
     private UIForPanel<JPanel> strip(UIForAnySwing<?, ?> beside, UIForAnySwing<?, ?> line, UIForAnySwing<?, ?> below) {
         return
             panel("fill, ins 0, gap 8, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .withCursor(UI.Cursor.HAND)
             .add("top", beside)
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 5 10 5 10, gap 6, hidemode 3", "[grow]")
-                .withStyle(it -> it.backgroundColor(DARK.SMOKE()).borderRadius(8).margin(2, 0, 2, 0))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).borderRadius(8).margin(2, 0, 2, 0))
                 .add("growx, wmin 0", line)
                 .add("growx, wmin 0", below)
             );
@@ -422,11 +439,11 @@ final class ChatRows {
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][][]")
                 .add(
                     label("⚙ " + entry.get().title())
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.MONO()).size(12).weight(2f).color(DARK.BRASS())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).weight(2f).color(now.palette().BRASS())))
                 )
                 .add("growx, wmin 0",
                     label(entry.viewAsString(Entry::text))
-                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.MONO()).size(12).color(DARK.SUBTEXT())))
+                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).color(now.palette().SUBTEXT())))
                 )
                 .add(
                     label(entry.viewAsString(it -> switch (it.state()) {
@@ -434,29 +451,35 @@ final class ChatRows {
                         case FAILED -> "✗ failed";
                         case DONE -> "✓";
                     }))
-                    .withStyle(entry.viewAs(Entry.State.class, Entry::state), (state, it) -> it
-                        .componentFont(f -> f
-                            .family(Fonts.DEFAULT.FONT())
-                            .size(12)
-                            .color(state == Entry.State.FAILED ? DARK.TROUBLE() : state == Entry.State.WRITING ? DARK.FLAME() : DARK.CONTENT())
-                        )
-                    )
+                    .withStyle(Themed.of(entry.viewAs(Entry.State.class, Entry::state), theme), (themed, it) -> {
+                        var state = themed.item();
+                        Palette p = themed.palette();
+                        return it
+                            .componentFont(f -> f
+                                .family(themed.fonts().FONT())
+                                .size(12)
+                                .color(state == Entry.State.FAILED ? p.TROUBLE() : state == Entry.State.WRITING ? p.FLAME() : p.CONTENT())
+                            );
+                    })
                 )
                 .add(
                     label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸")).isVisibleIf(hasDetail)
-                    .withStyle(it -> it.componentFont(f -> f.size(12).color(DARK.SUBTEXT())))
+                    .withStyle(palette, (p, it) -> it.componentFont(f -> f.size(12).color(p.SUBTEXT())))
                 ),
                 box().withMinSize(0, 0).isVisibleIf(expanded)
-                .withStyle(entry.viewAsString(Entry::detail), (detail, it) -> it
-                    .padding(6, 2, 2, 2)
-                    .borderAt(UI.Edge.TOP, 1, DARK.BORDER())
-                    .text(t -> t
-                        .content(StyledString.of(f -> f.family(Fonts.DEFAULT.MONO()).size(12).color(DARK.SUBTEXT()), detail))
-                        .placement(UI.Placement.TOP_LEFT)
-                        .wrapLines(true)
-                        .autoPreferredHeight(true)
-                    )
-                )
+                .withStyle(Themed.of(entry.viewAsString(Entry::detail), theme), (themed, it) -> {
+                    var detail = themed.item();
+                    Palette p = themed.palette();
+                    return it
+                        .padding(6, 2, 2, 2)
+                        .borderAt(UI.Edge.TOP, 1, p.BORDER())
+                        .text(t -> t
+                            .content(StyledString.of(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), detail))
+                            .placement(UI.Placement.TOP_LEFT)
+                            .wrapLines(true)
+                            .autoPreferredHeight(true)
+                        );
+                })
             )
             .withTooltip(entry.viewAsString(it ->
                 it.detail().isBlank() ? it.title() + ": " + it.text() : "Click to see what it printed"
@@ -470,16 +493,16 @@ final class ChatRows {
         boolean handed = entry.get().text().startsWith("handed you");
         return
             panel("fill, ins 6 38 6 0", "[grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0",
                 panel("fill, ins 8 12 8 10, gap 12", "[][grow][]")
-                .withStyle(it -> it.backgroundColor(DARK.RAISED()).border(1, DARK.BORDER()).borderRadius(12))
-                .add(label("🗎").withStyle(it -> it.componentFont(f -> f.size(22).color(DARK.FLAME()))))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.RAISED()).border(1, p.BORDER()).borderRadius(12))
+                .add(label("🗎").withStyle(palette, (p, it) -> it.componentFont(f -> f.size(22).color(p.FLAME()))))
                 .add("growx, wmin 0",
                     box("fill, wrap 1, ins 0, gap 0")
                     .add("growx, wmin 0",
                         label(entry.get().title())
-                        .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(13).weight(2f).color(DARK.TEXT())))
+                        .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(13).weight(2f).color(now.palette().TEXT())))
                     )
                     .add("growx, wmin 0", label(entry.get().text()).group(Skin.META))
                 )
@@ -499,18 +522,18 @@ final class ChatRows {
         String text = entry.get().text();
         return
             panel("fill, ins 6 0 6 0, gap 8", "[" + GENIE_SIZE + "!][grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top", failed ? picture(_ -> GenieSvgUtil.Pose.DIZZY, _ -> false) : box())
             .add("growx, wmin 0",
                 box().withMinSize(0, 0)
-                .withStyle(it -> it
-                    .backgroundColor(failed ? DARK.TROUBLE_WASH() : DARK.TRANSPARENT())
-                    .border(failed ? 1 : 0, DARK.TROUBLE())
+                .withStyle(theme, (now, it) -> it
+                    .backgroundColor(failed ? now.palette().TROUBLE_WASH() : now.palette().TRANSPARENT())
+                    .border(failed ? 1 : 0, now.palette().TROUBLE())
                     .borderRadius(8)
                     .padding(6, 10, 6, 10)
                     .text(t -> t
                         .content(StyledString.of(
-                            f -> f.family(Fonts.DEFAULT.FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? DARK.TROUBLE() : DARK.SUBTEXT()),
+                            f -> f.family(now.fonts().FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? now.palette().TROUBLE() : now.palette().SUBTEXT()),
                             text
                         ))
                         .placement(UI.Placement.TOP_LEFT)
@@ -523,10 +546,10 @@ final class ChatRows {
 
     // ─── small helpers ─────────────────────────────────────────────────────────────────────
 
-    /// About how wide `text` is at the body size, in the window's units: its longest line. The
+    /// About how wide `text` is in `fonts` at the body size, in the window's units: its longest line. The
     /// font painted may be a little wider than the one measured, hence the slack where it is used.
-    private static int widthOf(String text) {
-        Font font = new Font(Fonts.DEFAULT.FONT(), Font.PLAIN, MarkdownStylingUtil.BODY);
+    private static int widthOf(Fonts fonts, String text) {
+        Font font = new Font(fonts.FONT(), Font.PLAIN, MarkdownStylingUtil.BODY);
         FontRenderContext context = new FontRenderContext(null, true, true);
         double widest = 0;
         for (String line : text.lines().toList())
