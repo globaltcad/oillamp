@@ -3,7 +3,6 @@ package dev.gui.view;
 import java.util.UUID;
 
 import dev.gui.Genies;
-import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.HostAccess;
@@ -17,7 +16,6 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.layout.FlowCell;
 
-import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// A genie's host access: whether its agent may reach this computer, and the permission rules the
@@ -71,8 +69,9 @@ final class HostAccessPage {
     }
 
     private final Var<GeniesState> state;
-    /// The colours and the fonts of the state.
+    /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
+    private final Val<Palette> palette;
     private final Genies app;
 
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
@@ -88,6 +87,7 @@ final class HostAccessPage {
     HostAccessPage(Var<GeniesState> state, Genies app) {
         this.state = state;
         theme = Theme.of(state);
+        palette = Theme.paletteOf(state);
         this.app = app;
         genie      = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         hostAccess = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
@@ -108,7 +108,7 @@ final class HostAccessPage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(20, 4, 28, 4))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(20, 4, 28, 4))
                 .add(WHOLE, top())
                 .add(SWITCH, onOrOff())
                 .add(BESIDE_THE_SWITCH, experimental())
@@ -161,8 +161,8 @@ final class HostAccessPage {
             .add("growx, wmin 0",
                 panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
                 .isVisibleIf(lockedBecause.viewAs(Boolean.class, it -> !it.isEmpty()))
-                .withStyle(it -> it.backgroundColor(DARK.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, DARK.BRASS()))
-                .add("top, gaptop 2", label("").withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, DARK.BRASS()))))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, p.BRASS()))
+                .add("top, gaptop 2", label("").withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, p.BRASS()))))
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true)))
             )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
@@ -181,8 +181,8 @@ final class HostAccessPage {
     private UIForAnySwing<?, ?> experimental() {
         return
             panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
-            .withStyle(it -> it.backgroundColor(DARK.TROUBLE_WASH()).borderRadius(12))
-            .add("top", label("⚠").withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(DARK.TROUBLE()))))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TROUBLE_WASH()).borderRadius(12))
+            .add("top", label("⚠").withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(14).color(now.palette().TROUBLE()))))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     theme,
@@ -215,14 +215,16 @@ final class HostAccessPage {
                 button(busy.viewAsString(it -> it ? "Saving…" : "Save")).group(Skin.FLAME_BUTTON)
                 .isEnabledIf(canSave)
                 .withTooltip("Write these rules into the genie's lamp")
-                .withStyle(canSave, (can, it) ->
-                    can
+                .withStyle(Themed.of(canSave, theme), (themed, it) -> {
+                    var can = themed.item();
+                    Palette p = themed.palette();
+                    return can
                         ? it
-                        : it.backgroundColor(DARK.RAISED())
-                          .foregroundColor(DARK.SUBTEXT())
-                          .componentFont(f -> f.color(DARK.SUBTEXT()))
-                          .cursor(UI.Cursor.DEFAULT)
-                )
+                        : it.backgroundColor(p.RAISED())
+                          .foregroundColor(p.SUBTEXT())
+                          .componentFont(f -> f.color(p.SUBTEXT()))
+                          .cursor(UI.Cursor.DEFAULT);
+                })
                 .onClick(_ -> app.saveHostAccess(selected()))
             );
     }
@@ -235,7 +237,11 @@ final class HostAccessPage {
     private UIForAnySwing<?, ?> section(String words) {
         return
             label(words).group(Skin.SECTION)
-            .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(DARK.SUBTEXT()))));
+            .withStyle(Themed.of(changeable, theme), (themed, it) -> {
+                var can = themed.item();
+                Palette p = themed.palette();
+                return can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(p.SUBTEXT())));
+            });
     }
 
     /// One of the three texts: a heading, the text, as tall as the other two so they line up
@@ -248,21 +254,27 @@ final class HostAccessPage {
             .add("growx, wmin 0, h " + TEXT_HEIGHT + "!",
                 scrollPane().withEmptyBorder(0)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
-                .withStyle(changeable, (can, it) -> it
-                    .backgroundColor(can ? DARK.RAISED() : DARK.SMOKE())
-                    .border(1, can ? DARK.BORDER() : DARK.SMOKE())
-                    .borderRadius(12)
-                )
+                .withStyle(Themed.of(changeable, theme), (themed, it) -> {
+                    var can = themed.item();
+                    Palette p = themed.palette();
+                    return it
+                        .backgroundColor(can ? p.RAISED() : p.SMOKE())
+                        .border(1, can ? p.BORDER() : p.SMOKE())
+                        .borderRadius(12);
+                })
                 .add(
                     textArea(text).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
                     .isEnabledIf(changeable)
-                    .withStyle(changeable, (can, it) -> it
-                        .backgroundColor(DARK.TRANSPARENT())
-                        .border(0, DARK.TRANSPARENT())
-                        .padding(10, 12, 10, 12)
-                        .cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
-                        .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(can ? DARK.TEXT() : ViewPartsUtil.dim(DARK.SUBTEXT())))
-                    )
+                    .withStyle(Themed.of(changeable, theme), (themed, it) -> {
+                        var can = themed.item();
+                        Palette p = themed.palette();
+                        return it
+                            .backgroundColor(p.TRANSPARENT())
+                            .border(0, p.TRANSPARENT())
+                            .padding(10, 12, 10, 12)
+                            .cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
+                            .componentFont(f -> f.family(themed.fonts().FONT()).size(14).color(can ? p.TEXT() : ViewPartsUtil.dim(p.SUBTEXT())));
+                    })
                 )
             )
             .add("growx, wmin 0", ViewPartsUtil.note(theme, note, Val.of(true)));
