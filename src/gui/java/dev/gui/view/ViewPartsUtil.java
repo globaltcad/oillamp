@@ -17,6 +17,7 @@ import javax.swing.JTextArea;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
+import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 
 import sprouts.Val;
@@ -29,7 +30,7 @@ import swingtree.UIForLabel;
 import swingtree.components.JBox;
 import swingtree.style.StyledString;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// Small pieces the views share.
@@ -55,7 +56,7 @@ final class ViewPartsUtil {
             .withStyle(it ->
                 it.padding(2, 0, 2, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(FONT).size(11).color(SUBTEXT), text))
+                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT()), text))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -71,7 +72,7 @@ final class ViewPartsUtil {
             .withStyle(text, (words, it) ->
                 it.padding(2, 0, 2, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(FONT).size(12).color(colour), words))
+                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(colour), words))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -129,7 +130,7 @@ final class ViewPartsUtil {
             .withStyle(it ->
                 it.padding(1, 0, 1, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(FONT).size(size).weight(weight).color(colour), text))
+                    t.content(StyledString.of(f -> f.family(Fonts.DEFAULT.FONT()).size(size).weight(weight).color(colour), text))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
@@ -142,10 +143,10 @@ final class ViewPartsUtil {
         return
             label(text)
             .withStyle(it -> it
-                .backgroundColor(RAISED)
+                .backgroundColor(DARK.RAISED())
                 .borderRadius(8)
                 .padding(2, 8, 2, 8)
-                .componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))
+                .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT()))
             );
     }
 
@@ -153,7 +154,7 @@ final class ViewPartsUtil {
     static UIForButton<JButton> link(String text) {
         return
             button(text).group(Skin.ICON_BUTTON)
-            .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(FONT).size(12).color(BRASS)));
+            .withStyle(it -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.BRASS())));
     }
 
     /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
@@ -161,7 +162,7 @@ final class ViewPartsUtil {
     static UIForAnySwing<?, ?> yesOrNo(Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
         return
             box("ins 2, gap 2")
-            .withStyle(changeable, (can, it) -> it.backgroundColor(SMOKE).border(1, can ? BORDER : SMOKE).borderRadius(11))
+            .withStyle(changeable, (can, it) -> it.backgroundColor(DARK.SMOKE()).border(1, can ? DARK.BORDER() : DARK.SMOKE()).borderRadius(11))
             .add(part("No", yes.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
             .add(part("Yes", yes, changeable, () -> choose.accept(true)));
     }
@@ -178,13 +179,13 @@ final class ViewPartsUtil {
             .withStyle(looks, (part, it) -> it
                 .borderRadius(9)
                 .padding(4, 12, 4, 12)
-                .backgroundColor(!part.chosen() ? TRANSPARENT : part.changeable() ? RAISED : CARD)
+                .backgroundColor(!part.chosen() ? DARK.TRANSPARENT() : part.changeable() ? DARK.RAISED() : DARK.CARD())
                 .cursor(part.changeable() ? UI.Cursor.HAND : UI.Cursor.DEFAULT)
                 .componentFont(f -> f
-                    .family(FONT)
+                    .family(Fonts.DEFAULT.FONT())
                     .size(12)
                     .weight(part.chosen() ? 2f : 1f)
-                    .color(part.changeable() ? (part.chosen() ? TEXT : SUBTEXT) : dim(SUBTEXT))
+                    .color(part.changeable() ? (part.chosen() ? DARK.TEXT() : DARK.SUBTEXT()) : dim(DARK.SUBTEXT()))
                 )
             )
             .onClick(_ -> choose.run());
