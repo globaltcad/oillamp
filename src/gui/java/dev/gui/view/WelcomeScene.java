@@ -4,6 +4,7 @@ import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
@@ -12,13 +13,17 @@ import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.gui.model.Genie;
+import dev.gui.model.Palette;
 
 import swingtree.UI;
 import swingtree.style.SvgIcon;
@@ -33,6 +38,11 @@ import swingtree.style.SvgIcon;
 /// pixels grow until they are the genie's, on the genie's own grid, and as they grow, the flame
 /// and its light turn from the lamp's amber to the genie's colour. So the flame and the genie are
 /// made of the same pixels, in the same colour.
+///
+/// It is painted in a palette, on that palette's night: the lamp, before it is lit, sinks into
+/// the night, which is dark at night and pale by day; the light is a little weaker by day, as a
+/// flame's is in daylight; and the genie gets an outline where its colour stands out too little
+/// from the night, as it does in the genies' list and their chat ([GenieSvgUtil#outline]).
 ///
 /// Everything follows from the moment, so a moment is painted the same way whenever it is painted.
 final class WelcomeScene {
@@ -166,6 +176,10 @@ final class WelcomeScene {
         }
     }
 
+    /// How strong the light is by day, of what it is at night: a lamp's light is less against
+    /// the daylight, and a strong glow of amber on paper looks like a stain rather than a light.
+    private static final double BY_DAY = 0.7;
+
     private static final Color SMOKE = new Color(0x6f, 0x64, 0x79);
     private static final Color ASH = new Color(0xa8, 0x9c, 0x8a);
 
@@ -194,8 +208,8 @@ final class WelcomeScene {
     /// all, made the window slow to resize. Pictures that hold a colour are kept for a few
     /// colours at a time, since the colour changes each moment while the flame turns the genie's.
     ///
-    /// The lamp, cold, smoking or not, and dark or not, for each size.
-    private record Lamp(int size, boolean smoking, boolean dark) {}
+    /// The lamp, cold, smoking or not, and sunk into a night of a colour or not, for each size.
+    private record Lamp(int size, boolean smoking, Optional<Color> sunk) {}
     private static final Map<Lamp, BufferedImage> LAMPS = new ConcurrentHashMap<>();
     /// The flame's shine on the lamp, for each size and colour of flame.
     private record Shine(int size, boolean smoking, Color hot, Color flame) {}
@@ -208,25 +222,25 @@ final class WelcomeScene {
     private static final int COLOURS_KEPT = 32;
 
     /// Paints `play` as it is at `clock`, in seconds of the page, onto `g`, `width` by `height`
-    /// pixels.
-    static void paint(Graphics2D g, int width, int height, Play play, double clock) {
+    /// pixels, on the night of `palette`.
+    static void paint(Graphics2D g, Palette palette, int width, int height, Play play, double clock) {
         // Pixels fill whole pixels, which smoothing their edges only makes slower to paint.
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         Stage stage = Stage.of(width, height);
         if (clock < play.began()) {
             double since = clock - play.poofed();
-            lamp(g, stage, play.gone(), 1, strength(FORMED) * clamp(1 - since / POOF), false, 1);
+            lamp(g, palette, stage, play.gone(), 1, strength(FORMED) * clamp(1 - since / POOF), false, 1);
             poof(g, stage, play.gone(), since);
             return;
         }
         double time = clock - play.began();
         Hues hues = hues(play, time);
         // In a play after a poof, the lamp is there already, and the smoke is the poof's.
-        lamp(g, stage, play.pip(), tinted(time), strength(time), time < LIT + 0.15, play.poofed() >= 0 ? 1 : clamp(time / SHOWN));
+        lamp(g, palette, stage, play.pip(), tinted(time), strength(time), time < LIT + 0.15, play.poofed() >= 0 ? 1 : clamp(time / SHOWN));
         flame(g, stage, hues, time);
         sparks(g, stage, hues, time);
-        if (time >= FORMING) pip(g, stage, play.pip(), hues, time);
+        if (time >= FORMING) pip(g, palette, stage, play.pip(), hues, time);
     }
 
     /// Whether the point `x`, `y` of a picture `width` by `height` is on the lamp or on the genie.
@@ -245,12 +259,13 @@ final class WelcomeScene {
     /// It is a round glow in the flame's colour, a touch wider than tall. Its middle is the
     /// flame's, and then the genie's; it is as large as they are, and grows and shrinks as they
     /// flicker. It grows bright as the flame catches, flares as it bursts, and fades out in a poof.
-    static void light(Graphics2D g, int width, int stageHeight, int cut, Play play, double clock) {
+    /// On a light night of `palette`, by day, it is weaker, by [#BY_DAY].
+    static void light(Graphics2D g, Palette palette, int width, int stageHeight, int cut, Play play, double clock) {
         Stage stage = Stage.of(width, stageHeight);
         boolean poofing = clock < play.began();
         double time = poofing ? FORMED : clock - play.began();
         double left = poofing ? clamp(1 - (clock - play.poofed()) / POOF) : 1;
-        double strength = clamp(strength(time) * left);
+        double strength = clamp(strength(time) * left * (palette.isDark() ? 1 : BY_DAY));
         if (strength <= 0) return;
         double tinted = poofing ? 1 : tinted(time);
         Hues genie = Hues.of(poofing ? play.gone() : play.pip());
@@ -378,11 +393,12 @@ final class WelcomeScene {
     }
 
     /// The lamp, cold, smoking or not, `shown` from 0, not at all, to 1, and lit by its flame:
-    /// dark where no flame burns, and shining in the flame's colour where its light falls, on
-    /// top and towards the wick, as strong as `light`. The flame is `tinted` of the way from
-    /// amber to the colour of `genie`.
+    /// sunk into the night of `palette` where no flame burns, dark at night and pale by day, and
+    /// shining in the flame's colour where its light falls, on top and towards the wick, as
+    /// strong as `light`. The flame is `tinted` of the way from amber to the colour of `genie`.
     private static void lamp(
         final Graphics2D g,
+        final Palette palette,
         final Stage stage,
         final GenieSvgUtil.Appearance genie,
         final double tinted,
@@ -395,11 +411,12 @@ final class WelcomeScene {
         int x = (int) Math.round(stage.lampX());
         int y = (int) Math.round(stage.lampY());
         Composite before = g.getComposite();
-        // The lamp darkens less the more it is lit: the lamp, and its dark self over it, fading as
-        // the flame's light grows. It fades in only before the flame catches, all dark.
-        if (lit > 0) g.drawImage(lamp(new Lamp(size, smoking, false)), x, y, null);
+        // The lamp sinks less into the night the more it is lit: the lamp, and its sunk self over
+        // it, fading as the flame's light grows. It fades in only before the flame catches, all
+        // sunk.
+        if (lit > 0) g.drawImage(lamp(new Lamp(size, smoking, Optional.empty())), x, y, null);
         g.setComposite(AlphaComposite.SrcOver.derive((float) (shown * (1 - lit))));
-        g.drawImage(lamp(new Lamp(size, smoking, true)), x, y, null);
+        g.drawImage(lamp(new Lamp(size, smoking, Optional.of(sunk(palette)))), x, y, null);
         // Its shine turns the genie's colour as the light does.
         for (int which = 0; which < 2; which++) {
             Hues hues = which == 0 ? Hues.AMBER : Hues.of(genie);
@@ -410,7 +427,7 @@ final class WelcomeScene {
             g.drawImage(SHINES.computeIfAbsent(new Shine(size, smoking, hues.hot(), hues.flame()), _ -> {
                 BufferedImage shine = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB_PRE);
                 Graphics2D on = shine.createGraphics();
-                on.drawImage(lamp(new Lamp(size, smoking, false)), 0, 0, null);
+                on.drawImage(lamp(new Lamp(size, smoking, Optional.empty())), 0, 0, null);
                 // Only over the lamp itself.
                 on.setComposite(AlphaComposite.SrcIn);
                 double wickX = LampSvgUtil.WICK_X / 64 * size;
@@ -429,6 +446,12 @@ final class WelcomeScene {
         g.setComposite(before);
     }
 
+    /// What the cold lamp sinks into: black at night, as it always did, and the paper of the
+    /// night by day, so that an unlit lamp looks faded there rather than burnt.
+    private static Color sunk(Palette palette) {
+        return palette.isDark() ? Color.BLACK : palette.NIGHT();
+    }
+
     private static BufferedImage lamp(Lamp lamp) {
         return LAMPS.computeIfAbsent(lamp, it -> {
             BufferedImage drawn = new BufferedImage(it.size(), it.size(), BufferedImage.TYPE_INT_ARGB_PRE);
@@ -438,11 +461,11 @@ final class WelcomeScene {
             SvgIcon.of(it.smoking() ? LampSvgUtil.lamp(Genie.Phase.ASLEEP) : LampSvgUtil.cold())
             .withIconSize(units, units)
             .paintIcon(null, on, 0, 0);
-            if (it.dark()) {
+            it.sunk().ifPresent(night -> {
                 on.setComposite(AlphaComposite.SrcAtop);
-                on.setColor(alpha(Color.BLACK, 0.45));
+                on.setColor(alpha(night, 0.45));
                 on.fillRect(0, 0, it.size(), it.size());
-            }
+            });
             on.dispose();
             return drawn;
         });
@@ -535,7 +558,7 @@ final class WelcomeScene {
     /// The genie, taking form from the flame pixel by pixel from its tail up, and from then on
     /// the flame itself: its tail is a flame on the wick, the pixels above it flicker in the
     /// flame's colours, and it glows.
-    private static void pip(Graphics2D g, Stage stage, GenieSvgUtil.Appearance pip, Hues hues, double time) {
+    private static void pip(Graphics2D g, Palette palette, Stage stage, GenieSvgUtil.Appearance pip, Hues hues, double time) {
         int pixel = stage.pixel();
         double lived = time - FORMED;
         Act act = ACTS.get(actAt(lived));
@@ -563,11 +586,12 @@ final class WelcomeScene {
         int risen = risen(time);
         // It sways too: its body leans, while its tail, a flame, stays on the wick.
         int lean = lean(time);
+        outline(g, palette, stage, pip, pixels, lean, risen, time);
         for (int row = 0; row < pixels.length; row++)
             for (int column = 0; column < pixels[row].length; column++) {
                 char letter = pixels[row][column];
                 if (letter == '.') continue;
-                double appears = FORMING + 0.55 * (0.65 * (1 - row / 19.0) + 0.35 * chance(-1, row, column));
+                double appears = appears(row, column);
                 if (time < appears) continue;
                 Color colour = Character.isDigit(letter) ? hues.get(letter - '0') : colours.getOrDefault(letter, pip.colour());
                 // Above the flame of its tail, its body burns here and there.
@@ -582,6 +606,48 @@ final class WelcomeScene {
                 g.fillRect(x, stage.pipY() + (row < 15 ? row - risen : row) * pixel, pixel, pixel);
                 if (row == 15 && risen == 1) g.fillRect(x, stage.pipY() + 14 * pixel, pixel, pixel);
             }
+    }
+
+    /// The outline of the genie, under it, on each empty pixel beside one of its pixels that has
+    /// appeared, where it is shown with its body leaning `lean` and risen `risen`: in the colour
+    /// [GenieSvgUtil#outline] gives it on the night of `palette`, and none where it stands out
+    /// by itself. Each pixel of it is painted once, so that none is darker for lying beside more
+    /// than one of the genie's.
+    private static void outline(
+        final Graphics2D g,
+        final Palette palette,
+        final Stage stage,
+        final GenieSvgUtil.Appearance pip,
+        final char[][] pixels,
+        final int lean,
+        final int risen,
+        final double time
+    ) {
+        Color outline = GenieSvgUtil.outline(pip, palette.NIGHT());
+        if (outline.getAlpha() == 0) return;
+        // Where the genie is, in its pixels, as it is shown: the body moved, the tail not, and
+        // the tail's top row drawn twice while the body is risen.
+        Set<Point> shape = new HashSet<>();
+        for (int row = 0; row < pixels.length; row++)
+            for (int column = 0; column < pixels[row].length; column++) {
+                if (pixels[row][column] == '.' || time < appears(row, column)) continue;
+                shape.add(new Point(column + (row < 15 ? lean : 0), row < 15 ? row - risen : row));
+                if (row == 15 && risen == 1) shape.add(new Point(column, 14));
+            }
+        Set<Point> around = new HashSet<>();
+        for (Point at : shape)
+            for (Point next : List.of(new Point(at.x - 1, at.y), new Point(at.x + 1, at.y), new Point(at.x, at.y - 1), new Point(at.x, at.y + 1)))
+                // Not on the lamp: the tail stands on the wick, at the top of row 18.
+                if (!shape.contains(next) && next.y < 18) around.add(next);
+        g.setColor(outline);
+        int pixel = stage.pixel();
+        for (Point at : around) g.fillRect(stage.pipX() + at.x * pixel, stage.pipY() + at.y * pixel, pixel, pixel);
+    }
+
+    /// When the genie's pixel in `row` and `column` appears as it takes form: its tail first, and
+    /// its head last, each pixel a little sooner or later by chance.
+    private static double appears(int row, int column) {
+        return FORMING + 0.55 * (0.65 * (1 - row / 19.0) + 0.35 * chance(-1, row, column));
     }
 
     /// The genie `gone` vanishing, `since` seconds ago: a flash, its pixels flying apart and
