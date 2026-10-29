@@ -33,6 +33,7 @@ import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.Home;
+import dev.gui.model.Palette;
 
 import sprouts.From;
 import sprouts.Tuple;
@@ -114,9 +115,12 @@ final class HomeFolders {
     private final Var<Integer> pointed = Var.of(-1);
     /// The tree, once it exists.
     private Optional<JTree> shownTree = Optional.empty();
+    /// The colours and the fonts of the state.
+    private final Val<Theme> theme;
 
     HomeFolders(Var<GeniesState> state, Genies app) {
         this.app = app;
+        theme = Theme.of(state);
         genie = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         selected = state.viewAs(UUID.class, GeniesState::selected);
         home = genie.viewAs(Home.class, Genie::home);
@@ -342,7 +346,7 @@ final class HomeFolders {
                 )
             )
             .add(
-                ViewPartsUtil.link("Open in your file manager")
+                ViewPartsUtil.link(theme, "Open in your file manager")
                 .isEnabledIf(linkable)
                 .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
             )
@@ -370,16 +374,17 @@ final class HomeFolders {
                 )
             )
             .add("growx, wmin 0",
-                ViewPartsUtil.wrapped(said, DARK.CONTENT(), outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
+                ViewPartsUtil.wrapped(theme, said, Palette::CONTENT, outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(said, DARK.TROUBLE(), outcome.viewAs(Boolean.class, Outcome::trouble)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, said, Palette::TROUBLE, outcome.viewAs(Boolean.class, Outcome::trouble)))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
+                    theme,
                     genie.viewAsString(it ->
                         "Or drag a folder from the tree into your file manager. "
                         + "Deleting " + it.name() + " leaves its links behind, leading nowhere."
                     ),
-                    DARK.SUBTEXT(),
+                    Palette::SUBTEXT,
                     Val.of(true)
                 )
             );

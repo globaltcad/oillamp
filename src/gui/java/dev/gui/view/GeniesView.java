@@ -296,7 +296,7 @@ public final class GeniesView extends JPanel {
             .add(
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3")
                 .add("left",
-                    ViewPartsUtil.link("Add a lamp from elsewhere…")
+                    ViewPartsUtil.link(theme, "Add a lamp from elsewhere…")
                     .withTooltip("Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself")
                     .onClick(_ -> addLamp())
                 )
@@ -313,8 +313,9 @@ public final class GeniesView extends JPanel {
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         state.viewAsString(it -> it.settingsProblem().orElse("")),
-                        DARK.TROUBLE(),
+                        Palette::TROUBLE,
                         state.viewAs(Boolean.class, it -> it.settingsProblem().isPresent())
                     )
                 )
@@ -933,13 +934,15 @@ public final class GeniesView extends JPanel {
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         Viewable.of(String.class, name, request, (who, what) -> who + " asks you to allow: " + what),
-                        DARK.TEXT(),
+                        Palette::TEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
+                        theme,
                         "A model allowed it already; this one needs you too. "
                         + "Nothing happens until you decide, and after a minute it is refused.",
                         Val.of(true)
@@ -1392,8 +1395,9 @@ public final class GeniesView extends JPanel {
             box("fill, wrap 1, ins 6 18 16 18, gap 0, hidemode 3", "[grow]")
             .add("growx, wmin 0, gapbottom 6",
                 ViewPartsUtil.wrapped(
+                    theme,
                     genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
-                    DARK.SUBTEXT(),
+                    Palette::SUBTEXT,
                     answeringElsewhere
                 )
             )
@@ -1480,8 +1484,9 @@ public final class GeniesView extends JPanel {
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         genie.viewAsString(it -> it.name() + " could not wake: " + it.activity()),
-                        DARK.TROUBLE(),
+                        Palette::TROUBLE,
                         phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
                     )
                 )
