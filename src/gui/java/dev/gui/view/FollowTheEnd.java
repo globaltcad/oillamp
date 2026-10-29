@@ -1,7 +1,9 @@
 package dev.gui.view;
 
+import java.awt.EventQueue;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 
 import javax.swing.BoundedRangeModel;
@@ -81,8 +83,13 @@ final class FollowTheEnd {
     private void changed() {
         if (scrolling || dragging) return;
         int wanted = atBottom ? range.getMaximum() - range.getExtent() : userPosition;
-        // Later, because a wheel scroll changes the scroll bar before userScrolled has seen it.
-        if (range.getValue() != wanted) SwingUtilities.invokeLater(this::restore);
+        if (range.getValue() == wanted) return;
+        // A wheel scroll changes the scroll bar before userScrolled has seen it, so that is set
+        // back later. Any other change is set back at once: a layout is painted right after it,
+        // and set back later, the chat would show at the wrong place for a moment, such as at its
+        // top when it is shown again.
+        if (EventQueue.getCurrentEvent() instanceof MouseWheelEvent) SwingUtilities.invokeLater(this::restore);
+        else restore();
     }
 
     /// Sets the scroll position to the bottom, or to where the user last scrolled to. While the
