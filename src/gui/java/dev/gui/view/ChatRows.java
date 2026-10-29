@@ -143,16 +143,12 @@ final class ChatRows {
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("align right, wmin 0, wmax " + YOURS_WIDTH,
                 box().withMinSize(0, 0)
-                // On paper, the bubble is hardly darker than the chat around it, so it gets a rim
-                // and a shadow, as much as it lacks.
+                // On paper, the bubble is hardly darker than the chat around it, so it gets a rim,
+                // as strong as it lacks. No shadow: it would fall outside the bubble, where its
+                // style does not paint.
                 .withStyle(theme, (now, it) -> it
                     .backgroundColor(now.palette().YOURS())
                     .border(1, ContrastUtil.rim(now.palette().YOURS(), now.palette().NIGHT(), 64))
-                    .shadow("bubble", s -> s
-                        .color(ContrastUtil.shadow(now.palette().YOURS(), now.palette().NIGHT(), 34))
-                        .offset(0, 2)
-                        .blurRadius(8)
-                    )
                     .borderRadius(16)
                     .padding(9, 14, 9, 14)
                     .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
@@ -373,20 +369,15 @@ final class ChatRows {
 
     /// The ground under an answer in `p`. In the dark, none: the answer is text on the night,
     /// lit by the lamp. By day, text on the bare page floats, with nothing to say where an answer
-    /// begins and ends; so there it is on a sheet of the cards' paper, with a rim and a shadow as
-    /// strong as the sheet lacks contrast with the chat around it.
+    /// begins and ends; so there it is on a sheet of the cards' paper, with a rim as strong as the
+    /// sheet lacks contrast with the chat around it.
     private static ComponentStyleDelegate<JBox> sheet(Palette p, ComponentStyleDelegate<JBox> style) {
         if (p.isDark()) return style.padding(3, 0, 3, 0);
         return style
             .backgroundColor(p.CARD())
             .border(1, ContrastUtil.rim(p.CARD(), p.NIGHT(), 70))
             .borderRadius(14)
-            .padding(10, 16, 10, 16)
-            .shadow("sheet", s -> s
-                .color(ContrastUtil.shadow(p.CARD(), p.NIGHT(), 26))
-                .offset(0, 2)
-                .blurRadius(10)
-            );
+            .padding(10, 16, 10, 16);
     }
 
     /// Whether the answer with id `answer` is the one `genie` writes now: the last of its answers
