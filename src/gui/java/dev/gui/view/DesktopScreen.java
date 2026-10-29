@@ -32,6 +32,7 @@ import javax.swing.Timer;
 import dev.gui.desktop.Desktop;
 import dev.gui.desktop.RfbConnection;
 import dev.gui.desktop.X11KeysymUtil;
+import dev.gui.model.Palette;
 
 import sprouts.Val;
 import sprouts.Var;
@@ -339,11 +340,11 @@ final class DesktopScreen extends JComponent implements Scrollable {
     @Override protected void paintComponent(Graphics graphics) {
         Graphics2D g = (Graphics2D) graphics.create();
         try {
-            g.setColor(Palette.SMOKE);
+            g.setColor(Palette.DARK.SMOKE());
             g.fillRect(0, 0, getWidth(), getHeight());
             if (connection.isEmpty()) {
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                g.setColor(Palette.SUBTEXT);
+                g.setColor(Palette.DARK.SUBTEXT());
                 g.setFont(getFont().deriveFont(UI.scale(13f)));
                 int width = g.getFontMetrics().stringWidth(message);
                 g.drawString(message, Math.max(8, (getWidth() - width) / 2), getHeight() / 2);
@@ -360,7 +361,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
             }
             if (hasFocus()) {
                 // The keyboard goes to the desktop now: say so, around the picture.
-                g.setColor(Palette.FLAME);
+                g.setColor(Palette.DARK.FLAME());
                 g.setStroke(new BasicStroke(UI.scale(2f)));
                 g.drawRect((int) left + 1, (int) top + 1, width - 2, height - 2);
             }

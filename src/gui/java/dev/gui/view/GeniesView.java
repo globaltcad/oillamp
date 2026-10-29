@@ -2,6 +2,7 @@ package dev.gui.view;
 
 import dev.gui.Genies;
 import dev.gui.model.*;
+import dev.gui.model.Fonts;
 import sprouts.*;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
@@ -43,7 +44,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntSupplier;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// The Genies window: the genies on the left, the conversation with the selected one in the
@@ -248,21 +249,21 @@ public final class GeniesView extends JPanel {
             .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? aboveTheGenie(it.genieList().height()) : BESIDE_THE_GENIE))
             .withStyle(narrow, (on, it) ->
                 on
-                    ? it.borderAt(UI.Edge.RIGHT, 0, TRANSPARENT).borderAt(UI.Edge.BOTTOM, 1, BORDER).padding(12, 12, 2, 12)
+                    ? it.borderAt(UI.Edge.RIGHT, 0, DARK.TRANSPARENT()).borderAt(UI.Edge.BOTTOM, 1, DARK.BORDER()).padding(12, 12, 2, 12)
                     : it
             )
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
             .add(
                 button("New genie").group(Skin.FLAME_BUTTON).withIconTextGap(6)
-                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, ON_FLAME)))
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, DARK.ON_FLAME())))
                 .withTooltip("A new genie, with a sandboxed desktop of its own")
                 .onClick(_ -> app.newGenie())
             )
             .add(
                 toggleButton(narrow.viewAsString(it -> it ? "" : "Settings"), settingsShown)
                 .group(Skin.QUIET_BUTTON).withIconTextGap(6)
-                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SETTINGS, TEXT)))
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SETTINGS, DARK.TEXT())))
                 .withTooltip("Settings: the model every genie uses. Pressed again, back to the genie")
             )
             .add(label("YOUR GENIES").group(Skin.SECTION).isVisibleIf(wide))
@@ -273,7 +274,7 @@ public final class GeniesView extends JPanel {
                 )
                 .group(Skin.PAGE_SCROLL).withMinSize(0, 0).withEmptyBorder(0)
                 .peek(it -> cards[0] = it)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .addAll(genies, this::genieChip)
             )
             .add(
@@ -294,9 +295,9 @@ public final class GeniesView extends JPanel {
                 .add("growx",
                     button(state.viewAsString(it -> troubleInfoMessage(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(it -> it
-                        .backgroundColor(TROUBLE_WASH)
-                        .border(1, TROUBLE)
-                        .componentFont(f -> f.color(TROUBLE))
+                        .backgroundColor(DARK.TROUBLE_WASH())
+                        .border(1, DARK.TROUBLE())
+                        .componentFont(f -> f.color(DARK.TROUBLE()))
                     )
                     .isVisibleIf(state.viewAs(Boolean.class, it -> !it.troubles().isEmpty()))
                     .withTooltip("Genies carried on. Click to see what happened")
@@ -305,7 +306,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         state.viewAsString(it -> it.settingsProblem().orElse("")),
-                        TROUBLE,
+                        DARK.TROUBLE(),
                         state.viewAs(Boolean.class, it -> it.settingsProblem().isPresent())
                     )
                 )
@@ -327,7 +328,7 @@ public final class GeniesView extends JPanel {
         );
         return UI.of(UI.use(look, () ->
             panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
-            .withStyle(it -> it.backgroundColor(TRANSPARENT))
+            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
             .add("growx, wmin 0, gaptop 14, gapbottom 4",
                 label("LAMPS FROM ELSEWHERE").group(Skin.SECTION)
                 .isVisibleIf(firstFromElsewhere)
@@ -361,7 +362,7 @@ public final class GeniesView extends JPanel {
     private UIForPanel<JPanel> genieChipBody(Var<Genie> shown) {
         UUID id = shown.get().id();
         // A lamp from elsewhere is marked in brass, the colour of the lamp, rather than the flame.
-        Color accent = shown.get().fromElsewhere() ? BRASS : FLAME;
+        Color accent = shown.get().fromElsewhere() ? DARK.BRASS() : DARK.FLAME();
         Val<Boolean> isSelected = selected.viewAs(Boolean.class, it -> it.equals(id));
         // What the genie shows on its desktop, said here until the user is at its chat to see it.
         Val<Boolean> atItsChat = state.viewAs(Boolean.class, it -> it.selected().equals(id) && it.page() == GeniesState.Page.CHAT);
@@ -382,10 +383,10 @@ public final class GeniesView extends JPanel {
         return
             panel("fill, ins 7 8 7 8, gap 8, hidemode 3", "[grow][]")
             .withStyle(isSelected, (on, it) -> it
-                .backgroundColor(on ? RAISED : TRANSPARENT)
-                .border(1, on ? BORDER : TRANSPARENT)
+                .backgroundColor(on ? DARK.RAISED() : DARK.TRANSPARENT())
+                .border(1, on ? DARK.BORDER() : DARK.TRANSPARENT())
                 // Always there, lit when selected, so selecting a genie moves nothing.
-                .borderAt(UI.Edge.LEFT, 3, on ? accent : TRANSPARENT)
+                .borderAt(UI.Edge.LEFT, 3, on ? accent : DARK.TRANSPARENT())
                 .borderRadius(10)
                 // A thin gap between one card's border and the next.
                 .margin(2, 0, 2, 0)
@@ -394,8 +395,8 @@ public final class GeniesView extends JPanel {
             .withTransitionalStyle(hovered, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) ->
                 isSelected.get()
                     ? it
-                    : it.backgroundColor(ViewPartsUtil.withAlpha(RAISED, (int) Math.round(150 * status.progress())))
-                      .border(1, ViewPartsUtil.withAlpha(BORDER, (int) Math.round(255 * status.progress())))
+                    : it.backgroundColor(ViewPartsUtil.withAlpha(DARK.RAISED(), (int) Math.round(150 * status.progress())))
+                      .border(1, ViewPartsUtil.withAlpha(DARK.BORDER(), (int) Math.round(255 * status.progress())))
             )
             .onMouseEnter(_ -> hovered.set(true))
             .onMouseExit(_ -> hovered.set(false))
@@ -435,10 +436,10 @@ public final class GeniesView extends JPanel {
                     label(shown.viewAsString(Genie::name))
                     .withStyle(it -> it
                         .componentFont(f -> f
-                            .family(FONT)
+                            .family(Fonts.DEFAULT.FONT())
                             .size(13)
                             .weight(2f)
-                            .color(TEXT)
+                            .color(DARK.TEXT())
                         )
                     )
                 )
@@ -454,9 +455,9 @@ public final class GeniesView extends JPanel {
                     .withTooltip(shown.viewAsString(it -> it.elsewhere().map(Path::toString).orElse("")))
                     .withStyle(it -> it
                         .componentFont(f -> f
-                            .family(MONO)
+                            .family(Fonts.DEFAULT.MONO())
                             .size(11)
-                            .color(BRASS)
+                            .color(DARK.BRASS())
                         )
                     )
                 )
@@ -473,9 +474,9 @@ public final class GeniesView extends JPanel {
                     ))
                     .withStyle(it -> it
                         .componentFont(f -> f
-                            .family(FONT)
+                            .family(Fonts.DEFAULT.FONT())
                             .size(11)
-                            .color(BRASS)
+                            .color(DARK.BRASS())
                         )
                     )
                 )
@@ -484,9 +485,9 @@ public final class GeniesView extends JPanel {
                     .isVisibleIf(showsElsewhere)
                     .withStyle(it -> it
                         .componentFont(f -> f
-                            .family(FONT)
+                            .family(Fonts.DEFAULT.FONT())
                             .size(11)
-                            .color(FLAME)
+                            .color(DARK.FLAME())
                         )
                     )
                 )
@@ -495,7 +496,7 @@ public final class GeniesView extends JPanel {
                 button("").group(Skin.ICON_BUTTON)
                 .isVisibleIf(awakeAndOut.viewAs(Boolean.class, it -> !it))
                 .withStyle(folded, (on, it) -> it
-                    .icon(SignSvgUtil.sign(on ? SignSvgUtil.UNFOLD : SignSvgUtil.FOLD, SUBTEXT))
+                    .icon(SignSvgUtil.sign(on ? SignSvgUtil.UNFOLD : SignSvgUtil.FOLD, DARK.SUBTEXT()))
                     .padding(3, 5, 3, 5)
                 )
                 .withTooltip(folded.viewAsString(on -> on ? "Show this genie's conversations" : "Fold this genie's conversations away"))
@@ -562,7 +563,7 @@ public final class GeniesView extends JPanel {
                     Optional.of(
                         button("").group(Skin.ICON_BUTTON).isVisibleIf(awake).isEnabledIf(idle)
                         .withStyle(it -> it
-                            .icon(SignSvgUtil.sign(SignSvgUtil.NEW, SUBTEXT))
+                            .icon(SignSvgUtil.sign(SignSvgUtil.NEW, DARK.SUBTEXT()))
                             .padding(1, 6, 1, 6)
                         )
                         .withTooltip("Start a new conversation with this genie; the others are kept")
@@ -573,7 +574,7 @@ public final class GeniesView extends JPanel {
             .add("left, gaptop 2",
                 button("Delete…").group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
                 .isVisibleIf(eitherOpen)
-                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, SUBTEXT)))
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, DARK.SUBTEXT())))
                 .withTooltip("Delete the conversation this genie is in, with all its branches")
                 .onClick(_ -> confirmForget(id))
             );
@@ -623,7 +624,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     label(treeFoldSymbolText)
                     .group(Skin.META).withCursor(UI.Cursor.HAND)
-                    .withStyle(lineHovered, (on, it) -> on ? it.componentFont(f -> f.color(TEXT)) : it)
+                    .withStyle(lineHovered, (on, it) -> on ? it.componentFont(f -> f.color(DARK.TEXT())) : it)
                     .withTooltip(tip)
                     .onMouseEnter(_ -> lineHovered.set(true))
                     .onMouseExit(_ -> lineHovered.set(false))
@@ -641,11 +642,11 @@ public final class GeniesView extends JPanel {
                 .withVerticalScrollIncrement(16)
                 // At most the fold's height; a tree of a few rows takes only what it needs.
                 .withMaxHeight(fold.viewAs(Integer.class, Fold::height))
-                .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .add(
                     // In a panel of its own: on its own, a tree asks its scroll pane for room for
                     // twenty rows, however many it has.
-                    panel("fill, ins 0").withStyle(it -> it.backgroundColor(TRANSPARENT))
+                    panel("fill, ins 0").withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                     .peek(it -> it.addComponentListener(relayout))
                     .add("grow, wmin 0",
                         UI.trees(rows, conf -> conf
@@ -696,15 +697,15 @@ public final class GeniesView extends JPanel {
                         .withStyle(pointed, (row, it) -> {
                             JTree tree = it.component();
                             return
-                                it.backgroundColor(TRANSPARENT)
-                                .componentFont(f -> f.family(FONT).size(12).color(TEXT))
+                                it.backgroundColor(DARK.TRANSPARENT())
+                                .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.TEXT()))
                                 .painter(UI.Layer.BACKGROUND, g -> {
                                     Rectangle bounds = row < 0 || !tree.isEnabled() ? null : tree.getRowBounds(row);
                                     if (bounds == null) return;
                                     // SwingTree scales a painter's units to pixels; the tree's rows are in pixels.
                                     g.scale(1 / UI.scale(), 1 / UI.scale());
                                     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                                    g.setColor(ViewPartsUtil.withAlpha(BORDER, 170));
+                                    g.setColor(ViewPartsUtil.withAlpha(DARK.BORDER(), 170));
                                     g.fillRoundRect(0, bounds.y, tree.getWidth(), bounds.height, UI.scale(8), UI.scale(8));
                                 });
                         })
@@ -735,7 +736,7 @@ public final class GeniesView extends JPanel {
             .withTooltip(tip)
             .withStyle(it -> {
                 int width = it.componentWidth(), height = it.componentHeight();
-                return it.backgroundColor(TRANSPARENT).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
+                return it.backgroundColor(DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
             })
             .onMousePress(it -> {
                 dragFrom[0] = UI.unscale(it.mouseYOnScreen());
@@ -759,9 +760,9 @@ public final class GeniesView extends JPanel {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         if (width < height) g.rotate(Math.PI / 2, width / 2.0, width / 2.0);
         int length = Math.max(width, height), middle = Math.min(width, height) / 2;
-        g.setColor(BORDER);
+        g.setColor(DARK.BORDER());
         g.fillRect(0, middle, length, 1);
-        g.setColor(SUBTEXT);
+        g.setColor(DARK.SUBTEXT());
         g.fillRoundRect(length / 2 - 14, middle - 1, 28, 3, 3, 3);
     }
 
@@ -853,10 +854,10 @@ public final class GeniesView extends JPanel {
                 button(state.viewAsString(it -> "⚠ " + it.troubles().size())).group(Skin.QUIET_BUTTON)
                 .isVisibleIf(hiddenTroubles)
                 .withStyle(it -> it
-                    .backgroundColor(TROUBLE_WASH)
-                    .border(1, TROUBLE)
+                    .backgroundColor(DARK.TROUBLE_WASH())
+                    .border(1, DARK.TROUBLE())
                     .padding(3, 8, 3, 8)
-                    .componentFont(f -> f.color(TROUBLE))
+                    .componentFont(f -> f.color(DARK.TROUBLE()))
                 )
                 .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
                 .onClick(_ -> showTroubles())
@@ -883,18 +884,18 @@ public final class GeniesView extends JPanel {
                 )
                 .add(
                     toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, TEXT)))
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, DARK.TEXT())))
                     .withTooltip("Desktop: watch the genie's desktop, and use it")
                 )
                 .add(
                     button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, TEXT)))
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, DARK.TEXT())))
                     .withTooltip("Stop what the genie is doing")
                     .onClick(_ -> app.stop(genie.get().id()))
                 )
                 .add(
                     button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
-                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, TEXT)))
+                    .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, DARK.TEXT())))
                     .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
                     .onClick(_ -> app.sleep(genie.get().id()))
                 )
@@ -919,13 +920,13 @@ public final class GeniesView extends JPanel {
         return
             panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[grow][][]")
             .isVisibleIf(shown)
-            .withStyle(it -> it.backgroundColor(YOURS).borderAt(UI.Edge.LEFT, 3, BRASS).borderAt(UI.Edge.BOTTOM, 1, BORDER))
+            .withStyle(it -> it.backgroundColor(DARK.YOURS()).borderAt(UI.Edge.LEFT, 3, DARK.BRASS()).borderAt(UI.Edge.BOTTOM, 1, DARK.BORDER()))
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         Viewable.of(String.class, name, request, (who, what) -> who + " asks you to allow: " + what),
-                        TEXT,
+                        DARK.TEXT(),
                         Val.of(true)
                     )
                 )
@@ -1003,7 +1004,7 @@ public final class GeniesView extends JPanel {
 
     /// The well a switch between pages stands in, whose lit part stands out of it.
     private static UIForBox<JBox> switchOfPages() {
-        return box("ins 2, gap 2").withStyle(it -> it.backgroundColor(SMOKE).border(1, BORDER).borderRadius(11));
+        return box("ins 2, gap 2").withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(11));
     }
 
     /// The part of a switch that goes to `to`, with its words while `words` holds. The schedule's
@@ -1046,9 +1047,9 @@ public final class GeniesView extends JPanel {
             .withStyle(shown, (on, it) -> it
                 .borderRadius(9)
                 .padding(4, 10, 4, 10)
-                .icon(SignSvgUtil.sign(sign, on ? TEXT : SUBTEXT))
-                .backgroundColor(on ? RAISED : TRANSPARENT)
-                .componentFont(f -> f.family(FONT).size(12).weight(on ? 2f : 1f).color(on ? TEXT : SUBTEXT))
+                .icon(SignSvgUtil.sign(sign, on ? DARK.TEXT() : DARK.SUBTEXT()))
+                .backgroundColor(on ? DARK.RAISED() : DARK.TRANSPARENT())
+                .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).weight(on ? 2f : 1f).color(on ? DARK.TEXT() : DARK.SUBTEXT()))
             );
     }
 
@@ -1112,11 +1113,11 @@ public final class GeniesView extends JPanel {
             .onResize(it -> state.update(From.VIEW, s -> s.withArea(it.getWidth(), it.getHeight())))
             .add(
                 panel(state.viewAs(Layout.class, GeniesView::arrangement)).withMinSize(0, 0)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .add(
                     panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][][]")
                     .withMinSize(0, 0)
-                    .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                    .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                     .add("grow, push, wmin 0", transcript())
                     .add("growx, wmin 0", outbox())
                     .add("growx, wmin 0", bottomBar())
@@ -1144,7 +1145,7 @@ public final class GeniesView extends JPanel {
             )
             .withStyle(it -> {
                 int width = it.componentWidth(), height = it.componentHeight();
-                return it.backgroundColor(TRANSPARENT).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
+                return it.backgroundColor(DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> grip(g, width, height));
             })
             .onMousePress(it -> {
                 dragFrom[0] = UI.unscale(beside.get() ? it.mouseXOnScreen() : it.mouseYOnScreen());
@@ -1182,12 +1183,12 @@ public final class GeniesView extends JPanel {
             panel("fill, wrap 1, ins 8 12 12 12, gap 6, hidemode 3", "[grow]")
             .isVisibleIf(shown)
             .withMinSize(0, 0)
-            .withStyle(it -> it.backgroundColor(TRANSPARENT))
+            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
             .add("growx, wmin 0",
                 label(genie.viewAsString(it -> "✦  " + it.name() + " shows you: " + it.showing()))
                 .isVisibleIf(showing)
                 .withTooltip(genie.viewAsString(Genie::showing))
-                .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(FLAME)))
+                .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(13).weight(2f).color(DARK.FLAME())))
             )
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 2, hidemode 3")
@@ -1227,8 +1228,8 @@ public final class GeniesView extends JPanel {
                 .add(
                     button(state.viewAsString(it -> it.narrow() ? "" : "Keys")).group(Skin.ICON_BUTTON).withIconTextGap(6)
                     .withStyle(it -> it
-                        .icon(SignSvgUtil.sign(SignSvgUtil.KEYS, SUBTEXT))
-                        .componentFont(f -> f.family(FONT).size(12).color(SUBTEXT))
+                        .icon(SignSvgUtil.sign(SignSvgUtil.KEYS, DARK.SUBTEXT()))
+                        .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.SUBTEXT()))
                     )
                     .withTooltip("The keys that make a window on the desktop fullscreen, close it or minimize it")
                     .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
@@ -1238,7 +1239,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0, hmin 0",
                 scrollPane()
                 .withEmptyBorder(0).withMinSize(0, 0)
-                .withStyle(it -> it.backgroundColor(SMOKE).border(1, BORDER).borderRadius(10))
+                .withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(10))
                 .add(UI.of(desktop))
             );
     }
@@ -1251,10 +1252,10 @@ public final class GeniesView extends JPanel {
             UI.popupMenu()
             .add(
                 panel("wrap 2, ins 12 14 12 14, gap 14 7", "[][]")
-                .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .add("span 2",
                     label("Keys for the desktop")
-                    .withStyle(it -> it.componentFont(f -> f.family(FONT).size(13).weight(2f).color(TEXT)))
+                    .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(13).weight(2f).color(DARK.TEXT())))
                 )
                 .add("span 2, gapbottom 4", label("Click a window first, so that it has the keyboard.").group(Skin.META))
                 .add(keyCaps("F"))
@@ -1273,7 +1274,7 @@ public final class GeniesView extends JPanel {
 
     /// What a key of the desktop does, beside its [#keyCaps].
     private static UIForLabel<JLabel> keyLabel(String text) {
-        return label(text).withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT)));
+        return label(text).withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.TEXT())));
     }
 
     /// Ctrl + Super + `letter`, each drawn as a key on a keyboard.
@@ -1281,15 +1282,15 @@ public final class GeniesView extends JPanel {
         UIForBox<JBox> caps = box("ins 0, gap 4, aligny center");
         for (String key : List.of("Ctrl", "Super", letter)) {
             if (!key.equals("Ctrl"))
-                caps = caps.add(label("+").withStyle(it -> it.componentFont(f -> f.family(FONT).size(11).color(SUBTEXT))));
+                caps = caps.add(label("+").withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).color(DARK.SUBTEXT()))));
             caps = caps.add(
                 label(key).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
                 .withStyle(it -> it
-                    .backgroundColor(RAISED)
-                    .border(1, BORDER)
+                    .backgroundColor(DARK.RAISED())
+                    .border(1, DARK.BORDER())
                     .borderRadius(5)
                     .padding(1, 7, 2, 7)
-                    .componentFont(f -> f.family(FONT).size(11).weight(2f).color(TEXT))
+                    .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(11).weight(2f).color(DARK.TEXT()))
                 )
             );
         }
@@ -1318,7 +1319,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0",
                 scrollPanels().group(Skin.PAGE_SCROLL).withMinSize(0, 0).withPrefSize(560, 500).withEmptyBorder(0)
                 .isVisibleIf(pictureShown.viewAs(Boolean.class, it -> !it))
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).padding(12, 18, 12, 18))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(12, 18, 12, 18))
                 .addAll(entries, rows::row)
                 // Follows the conversation while the user is at its end, and leaves them be
                 // while they scroll back to read. Another genie's conversation starts at its end.
@@ -1384,7 +1385,7 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0, gapbottom 6",
                 ViewPartsUtil.wrapped(
                     genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
-                    SUBTEXT,
+                    DARK.SUBTEXT(),
                     answeringElsewhere
                 )
             )
@@ -1397,7 +1398,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0, hmin 36, hmax 160",
                     scrollPane().withEmptyBorder(0).withMinSize(0, 36)
                     .withHorizontalScrollBarPolicy(UI.Active.NEVER)
-                    .withStyle(it -> it.backgroundColor(TRANSPARENT))
+                    .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                     .add(
                         // Bound here rather than with textArea(draft): when the draft changes,
                         // SwingTree 1.0.0 sets the text with Swing's own listeners taken off the
@@ -1416,7 +1417,7 @@ public final class GeniesView extends JPanel {
                             if (!settingDraft) draft.set(From.VIEW, it.getComponent().getText());
                         })
                         // The composer is the box; the text in it needs no second one.
-                        .withStyle(it -> it.backgroundColor(TRANSPARENT).border(0, TRANSPARENT))
+                        .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).border(0, DARK.TRANSPARENT()))
                         .withTooltip("Return sends; Shift and Return starts a new line")
                         // Swing stops laying out at the scroll pane, so the composer never learns
                         // that the text grew or shrank; told here, it grows up to its hmax, then scrolls.
@@ -1440,9 +1441,9 @@ public final class GeniesView extends JPanel {
                     .withStyle(canSend, (on, it) ->
                         on
                             ? it
-                            : it.backgroundColor(RAISED)
-                              .foregroundColor(SUBTEXT)
-                              .componentFont(f -> f.color(SUBTEXT))
+                            : it.backgroundColor(DARK.RAISED())
+                              .foregroundColor(DARK.SUBTEXT())
+                              .componentFont(f -> f.color(DARK.SUBTEXT()))
                               .cursor(UI.Cursor.DEFAULT)
                     )
                     .onClick(_ -> send())
@@ -1472,7 +1473,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         genie.viewAsString(it -> it.name() + " could not wake: " + it.activity()),
-                        TROUBLE,
+                        DARK.TROUBLE(),
                         phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
                     )
                 )
@@ -1491,64 +1492,64 @@ public final class GeniesView extends JPanel {
     /// reach what the style sheet does not paint: dialogs, the tree of conversations, lists
     /// of choices, scroll bars.
     public static void setUpLook() {
-        com.formdev.flatlaf.FlatLaf.setPreferredFontFamily(FONT);
-        com.formdev.flatlaf.FlatLaf.setPreferredMonospacedFontFamily(MONO);
+        com.formdev.flatlaf.FlatLaf.setPreferredFontFamily(Fonts.DEFAULT.FONT());
+        com.formdev.flatlaf.FlatLaf.setPreferredMonospacedFontFamily(Fonts.DEFAULT.MONO());
         com.formdev.flatlaf.FlatLaf.setGlobalExtraDefaults(Map.ofEntries(
-            Map.entry("@background", hex(CARD)),
-            Map.entry("@foreground", hex(TEXT)),
+            Map.entry("@background", hex(DARK.CARD())),
+            Map.entry("@foreground", hex(DARK.TEXT())),
             // Halfway between the subtext and the borders, so what cannot be used now steps back.
             Map.entry("@disabledForeground", "#716769"),
-            Map.entry("@accentColor", hex(FLAME)),
-            Map.entry("@selectionBackground", hex(YOURS)),
-            Map.entry("@selectionForeground", hex(TEXT)),
-            Map.entry("@selectionInactiveBackground", hex(YOURS)),
-            Map.entry("@selectionInactiveForeground", hex(TEXT)),
-            Map.entry("Component.borderColor", hex(BORDER)),
-            Map.entry("Component.focusColor", hex(FLAME)),
-            Map.entry("Component.focusedBorderColor", hex(BRASS)),
+            Map.entry("@accentColor", hex(DARK.FLAME())),
+            Map.entry("@selectionBackground", hex(DARK.YOURS())),
+            Map.entry("@selectionForeground", hex(DARK.TEXT())),
+            Map.entry("@selectionInactiveBackground", hex(DARK.YOURS())),
+            Map.entry("@selectionInactiveForeground", hex(DARK.TEXT())),
+            Map.entry("Component.borderColor", hex(DARK.BORDER())),
+            Map.entry("Component.focusColor", hex(DARK.FLAME())),
+            Map.entry("Component.focusedBorderColor", hex(DARK.BRASS())),
             Map.entry("Component.arc", "10"),
             Map.entry("Button.arc", "10"),
             Map.entry("TextComponent.arc", "10"),
-            Map.entry("ComboBox.background", hex(RAISED)),
-            Map.entry("ComboBox.editableBackground", hex(RAISED)),
-            Map.entry("ComboBox.buttonBackground", hex(RAISED)),
-            Map.entry("ComboBox.buttonEditableBackground", hex(RAISED)),
-            Map.entry("ComboBox.popupBackground", hex(CARD)),
-            Map.entry("TextField.background", hex(RAISED)),
-            Map.entry("PasswordField.background", hex(RAISED)),
-            Map.entry("TextArea.background", hex(RAISED)),
+            Map.entry("ComboBox.background", hex(DARK.RAISED())),
+            Map.entry("ComboBox.editableBackground", hex(DARK.RAISED())),
+            Map.entry("ComboBox.buttonBackground", hex(DARK.RAISED())),
+            Map.entry("ComboBox.buttonEditableBackground", hex(DARK.RAISED())),
+            Map.entry("ComboBox.popupBackground", hex(DARK.CARD())),
+            Map.entry("TextField.background", hex(DARK.RAISED())),
+            Map.entry("PasswordField.background", hex(DARK.RAISED())),
+            Map.entry("TextArea.background", hex(DARK.RAISED())),
             Map.entry("Tree.selectionArc", "6"),
-            Map.entry("CheckBox.icon.selectedBackground", hex(FLAME)),
-            Map.entry("CheckBox.icon.selectedBorderColor", hex(FLAME)),
-            Map.entry("CheckBox.icon.checkmarkColor", hex(ON_FLAME)),
-            Map.entry("CheckBox.icon.focusedSelectedBackground", hex(FLAME)),
-            Map.entry("CheckBox.icon.hoverSelectedBackground", hex(FLAME)),
+            Map.entry("CheckBox.icon.selectedBackground", hex(DARK.FLAME())),
+            Map.entry("CheckBox.icon.selectedBorderColor", hex(DARK.FLAME())),
+            Map.entry("CheckBox.icon.checkmarkColor", hex(DARK.ON_FLAME())),
+            Map.entry("CheckBox.icon.focusedSelectedBackground", hex(DARK.FLAME())),
+            Map.entry("CheckBox.icon.hoverSelectedBackground", hex(DARK.FLAME())),
             Map.entry("ScrollBar.width", "10"),
             Map.entry("ScrollBar.showButtons", "false"),
-            Map.entry("ScrollBar.track", hex(NIGHT)),
-            Map.entry("ScrollBar.thumb", hex(BORDER)),
-            Map.entry("ScrollBar.hoverThumbColor", hex(SUBTEXT)),
-            Map.entry("ScrollBar.pressedThumbColor", hex(BRASS)),
+            Map.entry("ScrollBar.track", hex(DARK.NIGHT())),
+            Map.entry("ScrollBar.thumb", hex(DARK.BORDER())),
+            Map.entry("ScrollBar.hoverThumbColor", hex(DARK.SUBTEXT())),
+            Map.entry("ScrollBar.pressedThumbColor", hex(DARK.BRASS())),
             Map.entry("ScrollBar.thumbArc", "999"),
             Map.entry("ScrollBar.thumbInsets", "2,2,2,2"),
-            Map.entry("ToolTip.background", hex(RAISED)),
-            Map.entry("ToolTip.foreground", hex(TEXT)),
+            Map.entry("ToolTip.background", hex(DARK.RAISED())),
+            Map.entry("ToolTip.foreground", hex(DARK.TEXT())),
             // The title bars Genies draws itself, of its window and its dialogs, in the sidebar's
             // colour, a line under them as under the genie's header.
-            Map.entry("TitlePane.background", hex(SIDEBAR)),
-            Map.entry("TitlePane.inactiveBackground", hex(SIDEBAR)),
-            Map.entry("TitlePane.foreground", hex(TEXT)),
-            Map.entry("TitlePane.inactiveForeground", hex(SUBTEXT)),
-            Map.entry("TitlePane.embeddedForeground", hex(TEXT)),
-            Map.entry("TitlePane.borderColor", hex(BORDER)),
-            Map.entry("TitlePane.buttonHoverBackground", hex(RAISED)),
-            Map.entry("TitlePane.buttonPressedBackground", hex(BORDER)),
-            Map.entry("TitlePane.closeHoverBackground", hex(TROUBLE)),
-            Map.entry("TitlePane.closePressedBackground", hex(TROUBLE_WASH)),
-            Map.entry("MenuBar.background", hex(SIDEBAR)),
-            Map.entry("MenuBar.borderColor", hex(SIDEBAR)),
-            Map.entry("RootPane.activeBorderColor", hex(BORDER)),
-            Map.entry("RootPane.inactiveBorderColor", hex(BORDER))
+            Map.entry("TitlePane.background", hex(DARK.SIDEBAR())),
+            Map.entry("TitlePane.inactiveBackground", hex(DARK.SIDEBAR())),
+            Map.entry("TitlePane.foreground", hex(DARK.TEXT())),
+            Map.entry("TitlePane.inactiveForeground", hex(DARK.SUBTEXT())),
+            Map.entry("TitlePane.embeddedForeground", hex(DARK.TEXT())),
+            Map.entry("TitlePane.borderColor", hex(DARK.BORDER())),
+            Map.entry("TitlePane.buttonHoverBackground", hex(DARK.RAISED())),
+            Map.entry("TitlePane.buttonPressedBackground", hex(DARK.BORDER())),
+            Map.entry("TitlePane.closeHoverBackground", hex(DARK.TROUBLE())),
+            Map.entry("TitlePane.closePressedBackground", hex(DARK.TROUBLE_WASH())),
+            Map.entry("MenuBar.background", hex(DARK.SIDEBAR())),
+            Map.entry("MenuBar.borderColor", hex(DARK.SIDEBAR())),
+            Map.entry("RootPane.activeBorderColor", hex(DARK.BORDER())),
+            Map.entry("RootPane.inactiveBorderColor", hex(DARK.BORDER()))
         ));
         com.formdev.flatlaf.FlatDarkLaf.setup();
         // On Linux the desktop draws title bars, unless asked not to; FlatLaf then draws them, and
@@ -1574,11 +1575,11 @@ public final class GeniesView extends JPanel {
         JMenuBar bar = new JMenuBar();
         UI.use(look, () ->
             UI.of(bar).withLayout("ins 0 6 0 0, gap 8, aligny center")
-            .withStyle(it -> it.backgroundColor(TRANSPARENT).border(0, TRANSPARENT))
+            .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).border(0, DARK.TRANSPARENT()))
             .add(
                 button("").group(Skin.ICON_BUTTON)
                 .isVisibleIf(state.viewAs(Boolean.class, GeniesState::hasGenies))
-                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, SUBTEXT)))
+                .withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, DARK.SUBTEXT())))
                 .withTooltip(genieList.viewAsString(it -> it.shown() ? "Hide your genies" : "Show your genies"))
                 .onClick(_ -> genieList.update(From.VIEW, Fold::toggled))
             )
@@ -1600,15 +1601,15 @@ public final class GeniesView extends JPanel {
             .withStyle(on, (lit, it) -> it
                 .borderRadius(9)
                 .padding(3, 10, 3, 10)
-                .backgroundColor(lit ? RAISED : TRANSPARENT)
-                .componentFont(f -> f.family(FONT).size(12).weight(lit ? 2f : 1f).color(lit ? TEXT : SUBTEXT))
+                .backgroundColor(lit ? DARK.RAISED() : DARK.TRANSPARENT())
+                .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).weight(lit ? 2f : 1f).color(lit ? DARK.TEXT() : DARK.SUBTEXT()))
             );
     }
 
     private static UIForButton<JButton> zoomButton(String text, String tip) {
         return
             button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
-            .withStyle(it -> it.componentFont(f -> f.family(FONT).size(12).color(TEXT)));
+            .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(12).color(DARK.TEXT())));
     }
 
     /// A button's words while the header has room for them; its sign alone says it otherwise.
@@ -1642,7 +1643,7 @@ public final class GeniesView extends JPanel {
                 .peek(JPopupMenu::addSeparator)
                 .add(
                     UI.of(ViewPartsUtil.item(delete, true, () -> confirmDelete(id)))
-                    .withForeground(TROUBLE)
+                    .withForeground(DARK.TROUBLE())
                 );
             }))
             .get(JPopupMenu.class);
@@ -1709,7 +1710,7 @@ public final class GeniesView extends JPanel {
                     scrollPane()
                     .add(
                         textArea(details.toString()).group(Skin.INPUT)
-                        .withStyle(it -> it.componentFont(f -> f.family(MONO).size(12)))
+                        .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.MONO()).size(12)))
                         .peek(area -> { area.setEditable(false); area.setCaretPosition(0); })
                     )
                 )
@@ -1835,7 +1836,7 @@ public final class GeniesView extends JPanel {
                         .type(UI.GradientType.LINEAR)
                         .span(UI.Span.LEFT_TO_RIGHT)
                         .cycle(UI.Cycle.REPEAT)
-                        .colors(SUBTEXT, FLAME, SUBTEXT)
+                        .colors(DARK.SUBTEXT(), DARK.FLAME(), DARK.SUBTEXT())
                         .size(WAVE_LENGTH)
                         .offset(wave.at() * WAVE_LENGTH, 0)
                     ))

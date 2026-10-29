@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComponent;
 
 import dev.gui.Genies;
+import dev.gui.model.Fonts;
 import dev.gui.model.GeniesState;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Settings;
@@ -31,7 +32,7 @@ import swingtree.layout.LayoutConstraint;
 import swingtree.layout.MigAddConstraint;
 import swingtree.style.StyledString;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// The settings: where the genies' model runs, and how they reach it.
@@ -229,7 +230,7 @@ final class SettingsPage {
                 // The welcome's light, on the whole page behind it, so that only the window's
                 // edges cut it off.
                 .withStyle(clock, (at, it) ->
-                    it.backgroundColor(Palette.TRANSPARENT).padding(0, 16, 0, 16)
+                    it.backgroundColor(DARK.TRANSPARENT()).padding(0, 16, 0, 16)
                     .painter(UI.Layer.BACKGROUND, g -> {
                         JComponent shown = welcomeBox.get();
                         if (shown == null || !shown.isVisible()) return;
@@ -262,11 +263,11 @@ final class SettingsPage {
                                         ? "Where your genies' model runs, and how they reach it."
                                         : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."
                                     ),
-                                    SUBTEXT,
+                                    DARK.SUBTEXT(),
                                     Val.of(true)
                                 )
                             )
-                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, SUBTEXT, anyAwake))
+                            .add("growx, wmin 0", ViewPartsUtil.wrapped(awakeNote, DARK.SUBTEXT(), anyAwake))
                         )
                         .add(
                             box("ins 0, hidemode 3")
@@ -295,12 +296,12 @@ final class SettingsPage {
                                         ? "Genies is looking what this computer has…"
                                         : it.found().hardware().words()
                                 ),
-                                TEXT,
+                                DARK.TEXT(),
                                 Val.of(true)
                             )
                         )
                         .add(LABEL, label("Ollama"))
-                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::words), TEXT, Val.of(true)))
+                        .add(FIELD, ViewPartsUtil.wrapped(ollama.viewAsString(OllamaSetup::words), DARK.TEXT(), Val.of(true)))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -315,7 +316,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     ollama.viewAsString(it -> it.found().hardware().words(it.wanted())),
-                                    TEXT,
+                                    DARK.TEXT(),
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())
                                 )
                             )
@@ -357,14 +358,14 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     ollama.viewAsString(OllamaSetup::says),
-                                    SUBTEXT,
+                                    DARK.SUBTEXT(),
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())
                                 )
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     ollama.viewAsString(OllamaSetup::says),
-                                    TROUBLE,
+                                    DARK.TROUBLE(),
                                     ollama.viewAs(Boolean.class, it -> it.step() == OllamaSetup.Step.FAILED)
                                 )
                             )
@@ -375,7 +376,7 @@ final class SettingsPage {
                                         case ELSEWHERE -> "the model server at " + it.elsewhere().address().strip() + ".";
                                         case THIS_MACHINE -> "the model server at " + it.local().address().strip() + ".";
                                     }),
-                                    SUBTEXT,
+                                    DARK.SUBTEXT(),
                                     state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())
                                 )
                             )
@@ -411,7 +412,7 @@ final class SettingsPage {
                     .add(WHOLE,
                         box()
                         .isVisibleIf(Viewable.of(Boolean.class, advanced, split, (shown, beside) -> shown && !beside))
-                        .withStyle(it -> it.borderAt(UI.Edge.TOP, 1, Palette.BORDER))
+                        .withStyle(it -> it.borderAt(UI.Edge.TOP, 1, DARK.BORDER()))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -487,7 +488,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     lookUpNote,
-                                    Palette.SUBTEXT,
+                                    DARK.SUBTEXT(),
                                     lookUpNote.viewAs(Boolean.class, it -> !it.isEmpty())
                                 )
                             )
@@ -498,7 +499,7 @@ final class SettingsPage {
                         label("Changes take effect when a genie wakes.").group(Skin.META)
                         .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
                     )
-                    .add(WHOLE, ViewPartsUtil.wrapped(problem, Palette.TROUBLE, hasProblem))
+                    .add(WHOLE, ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), hasProblem))
                     .add(WHOLE, label("✓  Your genies can reach their model.").group(Skin.FINE).isVisibleIf(fine))
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")
@@ -560,7 +561,7 @@ final class SettingsPage {
             // Painted whole, its cut top above the welcome, and as far aside as it has moved.
             .withStyle(clock, (at, it) -> {
                 int width = UI.scale(it.componentWidth());
-                return it.backgroundColor(Palette.TRANSPARENT).painter(UI.Layer.CONTENT, g -> {
+                return it.backgroundColor(DARK.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
                     // SwingTree scales a painter's units to pixels; the welcome paints in pixels.
                     g.scale(1 / UI.scale(), 1 / UI.scale());
                     g.translate(asideBy(width, aside.get()), -UI.scale(cut.get()));
@@ -600,7 +601,7 @@ final class SettingsPage {
             )
             .add(WORDS,
                 box("wrap 1, ins 0, gap 12", "[grow, fill]").withMinSize(0, 0)
-                .add("growx, wmin 0", fading(Val.of("Welcome to Genies"), 22, TEXT, clock, fit, aside))
+                .add("growx, wmin 0", fading(Val.of("Welcome to Genies"), 22, DARK.TEXT(), clock, fit, aside))
                 .add("growx, wmin 0",
                     fading(
                         Val.of(
@@ -608,13 +609,13 @@ final class SettingsPage {
                             + "where it can browse the web, run programs and make files, without ever touching yours."
                         ),
                         14,
-                        SUBTEXT,
+                        DARK.SUBTEXT(),
                         clock,
                         fit,
                         aside
                     )
                 )
-                .add("growx, wmin 0", fading(foundKey, 14, SUBTEXT, clock, fit, aside))
+                .add("growx, wmin 0", fading(foundKey, 14, DARK.SUBTEXT(), clock, fit, aside))
             )
             .add(BESIDE,
                 box().withMinSize(0, 0)
@@ -651,7 +652,7 @@ final class SettingsPage {
                         t.content(
                             StyledString.of(
                                 f ->
-                                    f.family(FONT)
+                                    f.family(Fonts.DEFAULT.FONT())
                                     .size((int) Math.round(size * faded.fit().larger()))
                                     .color(ViewPartsUtil.withAlpha(colour, (int) Math.round(255 * faded.shown())))
                                     .horizontalAlignment(faded.fit().wide() ? UI.HorizontalAlignment.LEFT : UI.HorizontalAlignment.CENTER),
@@ -722,9 +723,9 @@ final class SettingsPage {
                 int length = it.componentWidth();
                 int thickness = it.componentHeight();
                 return
-                    it.backgroundColor(RAISED).borderRadius(3)
+                    it.backgroundColor(DARK.RAISED()).borderRadius(3)
                     .painter(UI.Layer.CONTENT, g -> {
-                        g.setColor(FLAME);
+                        g.setColor(DARK.FLAME());
                         float filled = (float) (length * Math.max(0, Math.min(1, part)));
                         g.fill(new RoundRectangle2D.Float(0, 0, filled, thickness, thickness, thickness));
                     });

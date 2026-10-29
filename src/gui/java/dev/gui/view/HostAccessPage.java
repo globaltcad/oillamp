@@ -3,6 +3,7 @@ package dev.gui.view;
 import java.util.UUID;
 
 import dev.gui.Genies;
+import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.HostAccess;
@@ -15,7 +16,7 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.layout.FlowCell;
 
-import static dev.gui.view.Palette.*;
+import static dev.gui.model.Palette.DARK;
 import static swingtree.UI.*;
 
 /// A genie's host access: whether its agent may reach this computer, and the permission rules the
@@ -103,7 +104,7 @@ final class HostAccessPage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(it -> it.backgroundColor(TRANSPARENT).padding(20, 4, 28, 4))
+                .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()).padding(20, 4, 28, 4))
                 .add(WHOLE, top())
                 .add(SWITCH, onOrOff())
                 .add(BESIDE_THE_SWITCH, experimental())
@@ -150,17 +151,17 @@ final class HostAccessPage {
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
             .add(label("Host access").group(Skin.EMPTY_TITLE))
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(says, SUBTEXT, Val.of(true)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(says, DARK.SUBTEXT(), Val.of(true)))
             // As loud as the banner of a request for permission: the user should not have to
             // find out by typing that nothing they type is kept.
             .add("growx, wmin 0",
                 panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
                 .isVisibleIf(lockedBecause.viewAs(Boolean.class, it -> !it.isEmpty()))
-                .withStyle(it -> it.backgroundColor(YOURS).borderRadius(12).borderAt(UI.Edge.LEFT, 3, BRASS))
-                .add("top, gaptop 2", label("").withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, BRASS))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(lockedBecause, TEXT, Val.of(true)))
+                .withStyle(it -> it.backgroundColor(DARK.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, DARK.BRASS()))
+                .add("top, gaptop 2", label("").withStyle(it -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, DARK.BRASS()))))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(lockedBecause, DARK.TEXT(), Val.of(true)))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), problem.viewAs(Boolean.class, it -> !it.isEmpty())));
     }
 
     // ─── the switch, and what it switches ──────────────────────────────────────────────────
@@ -176,15 +177,15 @@ final class HostAccessPage {
     private UIForAnySwing<?, ?> experimental() {
         return
             panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
-            .withStyle(it -> it.backgroundColor(TROUBLE_WASH).borderRadius(12))
-            .add("top", label("⚠").withStyle(it -> it.componentFont(f -> f.family(FONT).size(14).color(TROUBLE))))
+            .withStyle(it -> it.backgroundColor(DARK.TROUBLE_WASH()).borderRadius(12))
+            .add("top", label("⚠").withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(DARK.TROUBLE()))))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     Val.of(
                         "Experimental. Never turn this on on a computer with sensitive data. "
                         + "The model that judges reads these rules with every request, and nothing else."
                     ),
-                    TEXT,
+                    DARK.TEXT(),
                     Val.of(true)
                 )
             );
@@ -199,7 +200,7 @@ final class HostAccessPage {
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
         return
             box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(warning, BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(warning, DARK.BRASS(), warning.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("skip 0",
                 button("Undo changes").group(Skin.QUIET_BUTTON)
                 .isEnabledIf(canSave)
@@ -212,9 +213,9 @@ final class HostAccessPage {
                 .withStyle(canSave, (can, it) ->
                     can
                         ? it
-                        : it.backgroundColor(RAISED)
-                          .foregroundColor(SUBTEXT)
-                          .componentFont(f -> f.color(SUBTEXT))
+                        : it.backgroundColor(DARK.RAISED())
+                          .foregroundColor(DARK.SUBTEXT())
+                          .componentFont(f -> f.color(DARK.SUBTEXT()))
                           .cursor(UI.Cursor.DEFAULT)
                 )
                 .onClick(_ -> app.saveHostAccess(selected()))
@@ -229,7 +230,7 @@ final class HostAccessPage {
     private UIForAnySwing<?, ?> section(String words) {
         return
             label(words).group(Skin.SECTION)
-            .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(SUBTEXT))));
+            .withStyle(changeable, (can, it) -> can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(DARK.SUBTEXT()))));
     }
 
     /// One of the three texts: a heading, the text, as tall as the other two so they line up
@@ -243,19 +244,19 @@ final class HostAccessPage {
                 scrollPane().withEmptyBorder(0)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
                 .withStyle(changeable, (can, it) -> it
-                    .backgroundColor(can ? RAISED : SMOKE)
-                    .border(1, can ? BORDER : SMOKE)
+                    .backgroundColor(can ? DARK.RAISED() : DARK.SMOKE())
+                    .border(1, can ? DARK.BORDER() : DARK.SMOKE())
                     .borderRadius(12)
                 )
                 .add(
                     textArea(text).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
                     .isEnabledIf(changeable)
                     .withStyle(changeable, (can, it) -> it
-                        .backgroundColor(TRANSPARENT)
-                        .border(0, TRANSPARENT)
+                        .backgroundColor(DARK.TRANSPARENT())
+                        .border(0, DARK.TRANSPARENT())
                         .padding(10, 12, 10, 12)
                         .cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
-                        .componentFont(f -> f.family(FONT).size(14).color(can ? TEXT : ViewPartsUtil.dim(SUBTEXT)))
+                        .componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).color(can ? DARK.TEXT() : ViewPartsUtil.dim(DARK.SUBTEXT())))
                     )
                 )
             )
