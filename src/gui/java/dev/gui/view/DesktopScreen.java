@@ -34,8 +34,10 @@ import dev.gui.desktop.RfbConnection;
 import dev.gui.desktop.X11KeysymUtil;
 import dev.gui.model.Palette;
 
+import sprouts.From;
 import sprouts.Val;
 import sprouts.Var;
+import sprouts.Viewable;
 import swingtree.UI;
 
 /// A genie's desktop, at the size of the room it has, drawn to fit, or at a chosen scale, with
@@ -63,6 +65,9 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// How long a desktop that is let go of has to take its own size back.
     static final int GIVING_BACK_MILLIS = 3000;
 
+    /// The colours of the state, which the screen paints itself in; held, since the state only
+    /// weakly holds its views.
+    private final Val<Palette> palette;
     private Optional<RfbConnection> connection = Optional.empty();
     private Optional<Desktop> shown = Optional.empty();
     /// Whether the desktop shown said no to another size; it is then drawn to fit.
@@ -84,7 +89,9 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// Called with +1 or -1 when the user turns the wheel with Control held, to zoom.
     private IntConsumer zoomSteps = _ -> {};
 
-    DesktopScreen() {
+    DesktopScreen(Val<Palette> palette) {
+        this.palette = palette;
+        Viewable.cast(palette).onChange(From.ALL, _ -> repaint());
         sizeSettled.setRepeats(false);
         addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent event) { sizeSettled.restart(); }
@@ -339,12 +346,13 @@ final class DesktopScreen extends JComponent implements Scrollable {
 
     @Override protected void paintComponent(Graphics graphics) {
         Graphics2D g = (Graphics2D) graphics.create();
+        Palette p = palette.get();
         try {
-            g.setColor(Palette.DARK.SMOKE());
+            g.setColor(p.SMOKE());
             g.fillRect(0, 0, getWidth(), getHeight());
             if (connection.isEmpty()) {
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-                g.setColor(Palette.DARK.SUBTEXT());
+                g.setColor(p.SUBTEXT());
                 g.setFont(getFont().deriveFont(UI.scale(13f)));
                 int width = g.getFontMetrics().stringWidth(message);
                 g.drawString(message, Math.max(8, (getWidth() - width) / 2), getHeight() / 2);
@@ -361,7 +369,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
             }
             if (hasFocus()) {
                 // The keyboard goes to the desktop now: say so, around the picture.
-                g.setColor(Palette.DARK.FLAME());
+                g.setColor(p.FLAME());
                 g.setStroke(new BasicStroke(UI.scale(2f)));
                 g.drawRect((int) left + 1, (int) top + 1, width - 2, height - 2);
             }
