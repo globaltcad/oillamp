@@ -222,4 +222,46 @@ class FollowingTheEndOfAChatSpec extends Specification {
             readAt <= 250
             range.value == readAt
     }
+
+    def 'The wheel still scrolls the chat after the look-and-feel was set up anew'() {
+        reportInfo """
+            Let's consider a user who switches the Appearance from Dark to Light, then goes back
+            to a conversation. Switching sets the look-and-feel up anew, and every component in
+            the window takes it: the chat's scroll pane gets a new UI delegate, and that delegate
+            adds its own wheel listener again, after the ones already there. Yet the wheel must
+            still move the chat, and the chat must stay where the wheel left it.
+        """
+        given:
+            Closure layOut
+            layOut = { Container it ->
+                it.doLayout()
+                it.components.each { inside -> if (inside instanceof Container) layOut(inside) }
+            }
+            JScrollPanels pane = null
+            SwingUtilities.invokeAndWait {
+                pane = UI.scrollPanels().get(JScrollPanels)
+                pane.setSize(300, 400)
+                10.times { pane.contentPanel.add(new JPanel(preferredSize: new Dimension(200, 100))) }
+                layOut(pane)
+                FollowTheEnd.on(pane).toEnd()
+            }
+            SwingUtilities.invokeAndWait {}
+            var range = pane.verticalScrollBar.model
+            var wheel = { int notches ->
+                SwingUtilities.invokeAndWait {
+                    pane.dispatchEvent(new MouseWheelEvent(pane, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), 0,
+                            10, 10, 10, 10, 0, false, MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, notches, notches as double))
+                }
+                SwingUtilities.invokeAndWait {}
+            }
+            int bottom = range.maximum - range.extent
+
+        when: 'the look-and-feel is set up anew, and the user turns the wheel up three notches'
+            SwingUtilities.invokeAndWait { SwingUtilities.updateComponentTreeUI(pane) }
+            SwingUtilities.invokeAndWait {}
+            3.times { wheel(-1) }
+
+        then:
+            range.value < bottom
+    }
 }
