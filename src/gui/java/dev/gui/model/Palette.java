@@ -3,7 +3,9 @@ package dev.gui.model;
 import java.awt.Color;
 
 /// The colours of Genies. [#DARK] is a lamp burning at night: deep plum for the dark, brass for
-/// the lamp, and the amber of its flame for whatever is alive or asks to be clicked.
+/// the lamp, and the amber of its flame for whatever is alive or asks to be clicked. [#LIGHT] is
+/// the same lamp by day: warm paper, plum ink, and the flame a deeper amber, so that it still
+/// reads against the light.
 ///
 /// The palette is a value, so that Genies can be shown in more than one: a light one beside the
 /// dark, say. It is the only part of the model that knows [java.awt]; a [Color] is as immutable
@@ -65,6 +67,38 @@ public record Palette(
         new Color(0xa8, 0x9c, 0x8a, 48),
         new Color(0, 0, 0, 0)
     );
+
+    public static final Palette LIGHT = new Palette(
+        new Color(0xf4, 0xef, 0xe6),
+        new Color(0xec, 0xe5, 0xd9),
+        new Color(0xff, 0xfb, 0xf4),
+        new Color(0xf0, 0xe9, 0xdd),
+        new Color(0xdc, 0xd1, 0xc1),
+        new Color(0x2b, 0x23, 0x33),
+        new Color(0x6e, 0x63, 0x57),
+        new Color(0xad, 0x66, 0x0c),
+        new Color(0xff, 0xfa, 0xf2),
+        new Color(0x8f, 0x64, 0x20),
+        new Color(0x9a, 0x4a, 0x12),
+        new Color(0xf5, 0xe4, 0xc6),
+        new Color(0xec, 0xe6, 0xf1),
+        new Color(0xe9, 0xe2, 0xd6),
+        new Color(0xb8, 0x3a, 0x2e),
+        new Color(0xf7, 0xe0, 0xdb),
+        new Color(0x2f, 0x7a, 0x4a),
+        new Color(0xe8, 0x9a, 0x30, 46),
+        new Color(0xe8, 0x9a, 0x30, 80),
+        new Color(0xc2, 0x74, 0x10, 140),
+        new Color(0x6e, 0x63, 0x57, 40),
+        new Color(0, 0, 0, 0)
+    );
+
+    /// Whether this is a palette for the dark: its night is darker than the middle grey, so
+    /// text and light are painted on dark ground. What the palette does not name follows it,
+    /// such as the look-and-feel Genies builds on and the shadows under its cards.
+    public boolean isDark() {
+        return NIGHT.getRed() * 299 + NIGHT.getGreen() * 587 + NIGHT.getBlue() * 114 < 128_000;
+    }
 
     /// The colour of a branch on the history page, one of [Lines#COLOURS]. Each is the flame at
     /// another hue, softened, so they all stand out against the night as the flame does, in
