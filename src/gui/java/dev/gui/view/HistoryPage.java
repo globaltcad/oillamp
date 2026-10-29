@@ -36,6 +36,7 @@ import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.Lines;
+import dev.gui.model.Palette;
 import dev.gui.model.Recurrence;
 import dev.gui.model.Schedule;
 
@@ -125,6 +126,8 @@ final class HistoryPage {
     private static final Tuple<Double> GROWTH_CHOICES = Tuple.of(Double.class, 0.5, 1.0, 2.0, 5.0, 10.0, 0.0);
 
     private final Var<GeniesState> state;
+    /// The colours and the fonts of the state.
+    private final Val<Theme> theme;
     private final Genies app;
     private final Look look;
 
@@ -154,6 +157,7 @@ final class HistoryPage {
 
     HistoryPage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
+        theme = Theme.of(state);
         this.app = app;
         this.look = look;
         genie   = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
@@ -261,14 +265,14 @@ final class HistoryPage {
                     box("fill, ins 0, gap 8", "[10!][grow]")
                     .add("top, gaptop 5", ViewPartsUtil.dot(status.viewAs(Color.class, Status::colour), 8))
                     .add("growx, wmin 0",
-                        ViewPartsUtil.wrapped(status.viewAsString(Status::words), DARK.SUBTEXT(), Val.of(true))
+                        ViewPartsUtil.wrapped(theme, status.viewAsString(Status::words), Palette::SUBTEXT, Val.of(true))
                     )
                 )
                 .add("growx, wmin 0",
-                    ViewPartsUtil.wrapped(note, DARK.SUBTEXT(), note.viewAs(Boolean.class, it -> !it.isEmpty()))
+                    ViewPartsUtil.wrapped(theme, note, Palette::SUBTEXT, note.viewAs(Boolean.class, it -> !it.isEmpty()))
                 )
                 .add("growx, wmin 0",
-                    ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), problem.viewAs(Boolean.class, it -> !it.isEmpty()))
+                    ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty()))
                 )
             )
             .add(BUTTONS,
@@ -329,8 +333,8 @@ final class HistoryPage {
             )
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(wentBack.viewAsString(it -> it + "."), DARK.TEXT(), Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.note("How it was before is kept, so you can return to it.", Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, wentBack.viewAsString(it -> it + "."), Palette::TEXT, Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.note(theme, "How it was before is kept, so you can return to it.", Val.of(true)))
             )
             .add("top",
                 button("↶  Undo")
@@ -410,8 +414,8 @@ final class HistoryPage {
             )
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 4", "[grow]")
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(asked.viewAsString(Asked::question), DARK.TEXT(), Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(asked.viewAsString(Asked::consequences), DARK.SUBTEXT(), Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, asked.viewAsString(Asked::question), Palette::TEXT, Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, asked.viewAsString(Asked::consequences), Palette::SUBTEXT, Val.of(true)))
             )
             .add("top",
                 panel().withFlowLayout(UI.HorizontalAlignment.RIGHT, 8, 4)
@@ -492,16 +496,17 @@ final class HistoryPage {
                 .isVisibleIf(none)
                 .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.ASLEEP), 56))
                 .add("growx, wmin 0",
-                    ViewPartsUtil.words("Nothing saved yet", 15, 2f, DARK.TEXT())
+                    ViewPartsUtil.words(theme, "Nothing saved yet", 15, 2f, Palette::TEXT)
                     .withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP)))
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         genie.viewAsString(it ->
                             it.name() + "'s home is saved the first time it wakes, and from then on "
                             + "whenever something changed. Each save is a moment you can bring it back to."
                         ),
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
@@ -626,7 +631,7 @@ final class HistoryPage {
             .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
             .add("skip 1, growy, w " + railsWidth(lanes) + "!", rails(lanes, day, 34, day.date().equals(today)))
             .add("growx, wmin 0, gapleft 8, gaptop 12, gapbottom 4",
-                ViewPartsUtil.words(label + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""), 13, 2f, DARK.TEXT())
+                ViewPartsUtil.words(theme, label + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""), 13, 2f, Palette::TEXT)
             );
     }
 
@@ -895,11 +900,11 @@ final class HistoryPage {
                 )
             )
             .add("growx, wmin 0, hidemode 3",
-                ViewPartsUtil.words(detail, 12, 1f, failed ? DARK.TROUBLE() : DARK.SUBTEXT())
+                ViewPartsUtil.words(theme, detail, 12, 1f, p -> failed ? p.TROUBLE() : p.SUBTEXT())
                 .isVisibleIf(!detail.isEmpty())
             )
             .add("growx, wmin 0, hidemode 3",
-                ViewPartsUtil.words(standsHere, 11, 1f, DARK.SUBTEXT())
+                ViewPartsUtil.words(theme, standsHere, 11, 1f, Palette::SUBTEXT)
                 .isVisibleIf(!standsHere.isEmpty())
             )
             .add("growx, wmin 0, gaptop 4, hidemode 3",
@@ -941,7 +946,7 @@ final class HistoryPage {
                     .onClick(_ -> app.planReset(selected(), moment.id()))
                 )
                 .add(
-                    ViewPartsUtil.link("Open the conversation  →")
+                    ViewPartsUtil.link(theme, "Open the conversation  →")
                     .isVisibleIf(canOpen)
                     .onClick(_ -> app.openConversation(selected(), moment.conversation()))
                 )
@@ -985,7 +990,7 @@ final class HistoryPage {
                 .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .addAll(chips, chip -> UI.of(UI.use(look, () -> chipView(chip).get(JPanel.class))))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(about, DARK.SUBTEXT(), Val.of(true)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, about, Palette::SUBTEXT, Val.of(true)))
             .add("growx, wmin 0, hidemode 3",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 4)
                 .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
@@ -1066,18 +1071,19 @@ final class HistoryPage {
                 panel("fill, wrap 2, gap 8 10, hidemode 3", "[grow][]")
                 .group(Skin.TILE)
                 .add("span 2, growx, wmin 0",
-                    ViewPartsUtil.wrapped(settingsLocked, DARK.BRASS(), changeable.viewAs(Boolean.class, it -> !it))
+                    ViewPartsUtil.wrapped(theme, settingsLocked, Palette::BRASS, changeable.viewAs(Boolean.class, it -> !it))
                 )
-                .add("growx, wmin 0", ViewPartsUtil.words("As it wakes", 13, 1f, DARK.TEXT()))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it wakes", 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::waking, History.Autosave::withWaking, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words("After it went to sleep", 13, 1f, DARK.TEXT()))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, "After it went to sleep", 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::sleeping, History.Autosave::withSleeping, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words("As it begins on a question or a job", 13, 1f, DARK.TEXT()))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it begins on a question or a job", 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::beforeRun, History.Autosave::withBeforeRun, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words("As it answers, or ends a job", 13, 1f, DARK.TEXT()))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it answers, or ends a job", 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::afterRun, History.Autosave::withAfterRun, changeable))
                 .add("span 2, growx, wmin 0",
                     ViewPartsUtil.note(
+                        theme,
                         "A job is told what its last runs said and changed from "
                         + "what was saved as they ended. Saving by hand works whatever these say.",
                         Val.of(true)
@@ -1096,41 +1102,45 @@ final class HistoryPage {
                 .group(Skin.TILE)
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         genie.viewAsString(it ->
                             it.name() + "'s home: the files it made, its notes and its conversations, "
                             + "and the settings of its lamp. Going back brings all of these back together."
                         ),
-                        DARK.TEXT(),
+                        Palette::TEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         Val.of(
                             "Its schedule stays as it is, and so does everything "
                             + "on this computer outside the genie's lamp."
                         ),
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         genie.viewAsString(it ->
                             "A branch is a line of moments with a home of its own, schedule and settings "
                             + "included, to try something without losing the rest. " + it.name() + " lives on one at a time."
                         ),
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         Val.of(
                             "Save by hand before something you might want to undo, "
                             + "such as a big change to a project."
                         ),
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
@@ -1174,14 +1184,14 @@ final class HistoryPage {
         return
             panel("fill, wrap 1, gap 8, hidemode 3", "[grow]")
             .group(Skin.TILE)
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(about, DARK.TEXT(), about.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, about, Palette::TEXT, about.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 6, 6)
                 .withStyle(it -> it.backgroundColor(DARK.TRANSPARENT()))
                 .isVisibleIf(history.viewAs(Boolean.class, it -> it.maxGrowthGb().isPresent()))
                 .addAll(choices, growth -> UI.of(UI.use(look, () -> growthChip(growth, changeable).get(JButton.class))))
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(pruned, DARK.SUBTEXT(), pruned.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, pruned, Palette::SUBTEXT, pruned.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("left",
                 button("Tidy up now…")
                 .group(Skin.QUIET_BUTTON)
@@ -1240,6 +1250,7 @@ final class HistoryPage {
         final Val<Boolean> changeable
     ) {
         return ViewPartsUtil.yesOrNo(
+            theme,
             autosave.viewAs(Boolean.class, on),
             changeable,
             yes -> app.autosave(selected(), with.apply(autosave.get(), yes))

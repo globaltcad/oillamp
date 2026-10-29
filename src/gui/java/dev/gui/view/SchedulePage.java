@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import javax.swing.JButton;
@@ -31,6 +32,7 @@ import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.JobDraft;
+import dev.gui.model.Palette;
 import dev.gui.model.Recurrence;
 import dev.gui.model.Schedule;
 import dev.gui.model.Timeline;
@@ -104,6 +106,8 @@ final class SchedulePage {
     private static final int NODE_Y = 15;
 
     private final Var<GeniesState> state;
+    /// The colours and the fonts of the state.
+    private final Val<Theme> theme;
     private final Genies app;
     private final Look look;
 
@@ -125,6 +129,7 @@ final class SchedulePage {
 
     SchedulePage(Var<GeniesState> state, Genies app, Look look) {
         this.state = state;
+        theme = Theme.of(state);
         this.app = app;
         this.look = look;
         genie    = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
@@ -202,9 +207,9 @@ final class SchedulePage {
                 .add("growx, wmin 0",
                     box("fill, ins 0, gap 8", "[10!][grow]")
                     .add("top, gaptop 5", ViewPartsUtil.dot(status.viewAs(Color.class, Status::colour), 8))
-                    .add("growx, wmin 0", ViewPartsUtil.wrapped(status.viewAsString(Status::words), DARK.SUBTEXT(), Val.of(true)))
+                    .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, status.viewAsString(Status::words), Palette::SUBTEXT, Val.of(true)))
                 )
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(problem, DARK.TROUBLE(), problem.viewAs(Boolean.class, it -> !it.isEmpty())))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())))
             )
             .add(BUTTONS,
                 // Right, beside what is said; left, under it, when there is no room beside it.
@@ -297,10 +302,11 @@ final class SchedulePage {
                 .add("skip 1, center", ViewPartsUtil.dot(Val.of(day.date().equals(today) ? DARK.FLAME() : DARK.SUBTEXT()), 5))
                 .add("growx, wmin 0, gapleft 8",
                     ViewPartsUtil.words(
+                        theme,
                         day.label() + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""),
                         13,
                         2f,
-                        day.date().isBefore(today) ? DARK.SUBTEXT() : DARK.TEXT()
+                        p -> day.date().isBefore(today) ? p.SUBTEXT() : p.TEXT()
                     )
                 )
             );
@@ -401,14 +407,14 @@ final class SchedulePage {
         boolean picked = moment.emphasis() == Timeline.Emphasis.PICKED;
         boolean faded = moment.emphasis() == Timeline.Emphasis.FADED;
         boolean working = moment.kind() == Timeline.Kind.WORKING;
-        Color detail = switch (moment.kind()) {
-            case DUE -> DARK.BRASS();
+        Function<Palette, Color> detail = switch (moment.kind()) {
+            case DUE -> Palette::BRASS;
             case RAN ->
                 moment.outcome().filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT).isPresent()
-                    ? DARK.TROUBLE()
-                    : DARK.SUBTEXT();
-            case WORKING -> DARK.FLAME();
-            default -> DARK.SUBTEXT();
+                    ? Palette::TROUBLE
+                    : Palette::SUBTEXT;
+            case WORKING -> Palette::FLAME;
+            default -> Palette::SUBTEXT;
         };
         return
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
@@ -436,13 +442,13 @@ final class SchedulePage {
                 if (!moment.job().isEmpty()) schedule.update(From.VIEW, s -> s.pick(moment.job()));
             })
             .add("growx, wmin 0",
-                ViewPartsUtil.words(moment.title(), 13, moment.kind() == Timeline.Kind.RAN ? 1f : 1.5f, faded ? DARK.SUBTEXT() : DARK.TEXT())
+                ViewPartsUtil.words(theme, moment.title(), 13, moment.kind() == Timeline.Kind.RAN ? 1f : 1.5f, p -> faded ? p.SUBTEXT() : p.TEXT())
             )
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 8, hidemode 3", "[grow][]")
-                .add("growx, wmin 0", ViewPartsUtil.words(moment.detail(), 12, 1f, faded ? ViewPartsUtil.dim(detail) : detail))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, moment.detail(), 12, 1f, p -> faded ? ViewPartsUtil.dim(detail.apply(p)) : detail.apply(p)))
                 .add("top",
-                    ViewPartsUtil.tag(state.viewAsString(it -> "added by " + it.genie().name()))
+                    ViewPartsUtil.tag(theme, state.viewAsString(it -> "added by " + it.genie().name()))
                     .isVisibleIf(moment.byGenie())
                 )
             )
@@ -450,7 +456,7 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .isVisibleIf(moment.conversation().isPresent() || working)
                 .add(
-                    ViewPartsUtil.link("Open the conversation  →").isVisibleIf(moment.conversation().isPresent())
+                    ViewPartsUtil.link(theme, "Open the conversation  →").isVisibleIf(moment.conversation().isPresent())
                     .onClick(_ -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id)))
                 )
                 .add(
@@ -478,17 +484,18 @@ final class SchedulePage {
                 .isVisibleIf(none)
                 .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.ASLEEP), 56))
                 .add("growx, wmin 0",
-                    ViewPartsUtil.words("Nothing on the schedule yet", 15, 2f, DARK.TEXT())
+                    ViewPartsUtil.words(theme, "Nothing on the schedule yet", 15, 2f, Palette::TEXT)
                     .withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP)))
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
+                        theme,
                         genie.viewAsString(it ->
                             "Give " + it.name() + " a task and a time, "
                             + "once or again and again: a morning check of the build, a weekly report, a reminder "
                             + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards."
                         ),
-                        DARK.SUBTEXT(),
+                        Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
@@ -534,12 +541,12 @@ final class SchedulePage {
                     .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> menu(id)))
                 )
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(job.viewAsString(it -> shortened(it.prompt(), 280)), DARK.SUBTEXT(), Val.of(true)))
+            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, job.viewAsString(it -> shortened(it.prompt(), 280)), Palette::SUBTEXT, Val.of(true)))
             .add("growx, wmin 0",
                 box("ins 0, gap 6, hidemode 3")
-                .add(ViewPartsUtil.tag(next).isVisibleIf(next.viewAs(Boolean.class, it -> !it.isEmpty())))
+                .add(ViewPartsUtil.tag(theme, next).isVisibleIf(next.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add(
-                    ViewPartsUtil.tag(job.viewAsString(it ->
+                    ViewPartsUtil.tag(theme, job.viewAsString(it ->
                         it.expires()
                         .map(end -> "until " + DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate()))
                         .orElse("")
@@ -547,7 +554,7 @@ final class SchedulePage {
                     .isVisibleIf(job.viewAs(Boolean.class, it -> it.expires().isPresent()))
                 )
                 .add(
-                    ViewPartsUtil.tag(genie.viewAsString(it -> "added by " + it.name()))
+                    ViewPartsUtil.tag(theme, genie.viewAsString(it -> "added by " + it.name()))
                     .isVisibleIf(job.viewAs(Boolean.class, Schedule.Job::byGenie))
                 )
             );
@@ -618,6 +625,7 @@ final class SchedulePage {
                     )
                     .add("growx, wmin 0",
                         ViewPartsUtil.note(
+                            theme,
                             "It gets the task at the time you choose, in a conversation of its own, "
                             + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.",
                             Val.of(true)
@@ -633,7 +641,7 @@ final class SchedulePage {
             .add(NARROW_SIDE, when())
             .add(WHOLE,
                 box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(refused, DARK.TROUBLE(), refused.viewAs(Boolean.class, it -> !it.isEmpty())))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, refused, Palette::TROUBLE, refused.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add("skip 0",
                     button("Cancel").group(Skin.QUIET_BUTTON)
                     .onClick(_ -> schedule.update(From.VIEW, Schedule::closeEditor))
@@ -689,6 +697,7 @@ final class SchedulePage {
                 box("fill, ins 0, gap 12", "[grow][]")
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
+                        theme,
                         "Brief it as you would a colleague: what to do, where things are, and "
                         + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
                         + "keeps notes in ~/workspace/NOTES.md.",
@@ -775,6 +784,7 @@ final class SchedulePage {
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
+                        theme,
                         "Five fields, as cron has them: minute, hour, day of the month, month, "
                         + "day of the week. 0 9 1 * * is nine on the first of each month; */30 * * * * every half hour.",
                         Val.of(true)
@@ -839,8 +849,8 @@ final class SchedulePage {
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 10 12 10 12, gap 4, hidemode 3", "[grow]")
                 .withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(12))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(summary, DARK.TEXT(), summary.viewAs(Boolean.class, it -> !it.isEmpty())))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(timing, DARK.TROUBLE(), timing.viewAs(Boolean.class, it -> !it.isEmpty())))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, summary, Palette::TEXT, summary.viewAs(Boolean.class, it -> !it.isEmpty())))
+                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, timing, Palette::TROUBLE, timing.viewAs(Boolean.class, it -> !it.isEmpty())))
             );
     }
 
@@ -864,7 +874,7 @@ final class SchedulePage {
             .withStyle(it -> it.backgroundColor(DARK.SMOKE()).border(1, DARK.BORDER()).borderRadius(12))
             .add("span 7, growx",
                 box("fill, ins 0 2 4 0, gap 2", "[grow][][]")
-                .add("growx, wmin 0", ViewPartsUtil.words(title, 13, 2f, DARK.TEXT()))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, title, 13, 2f, Palette::TEXT))
                 .add(
                     button("‹").group(Skin.ICON_BUTTON).withTooltip("The month before")
                     .isEnabledIf(month.month().isAfter(YearMonth.from(month.today())))

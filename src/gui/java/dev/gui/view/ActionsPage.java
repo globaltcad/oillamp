@@ -13,6 +13,7 @@ import dev.gui.Genies;
 import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
+import dev.gui.model.Palette;
 
 import sprouts.From;
 import sprouts.Val;
@@ -64,6 +65,8 @@ final class ActionsPage {
     );
 
     private final Var<GeniesState> state;
+    /// The colours and the fonts of the state.
+    private final Val<Theme> theme;
     private final Genies app;
     private final Runnable saveNow;
     private final Consumer<UUID> delete;
@@ -85,6 +88,7 @@ final class ActionsPage {
     /// @param delete  asks the user whether to delete a genie for good, and does so
     ActionsPage(Var<GeniesState> state, Genies app, Runnable saveNow, Consumer<UUID> delete) {
         this.state = state;
+        theme = Theme.of(state);
         this.app = app;
         this.saveNow = saveNow;
         this.delete = delete;
@@ -127,11 +131,12 @@ final class ActionsPage {
             .add(label("Actions").group(Skin.EMPTY_TITLE))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
+                    theme,
                     genie.viewAsString(it ->
                         "What can be done with " + it.name()
                         + " as a whole. A right-click on its card in your list offers the same."
                     ),
-                    DARK.SUBTEXT(),
+                    Palette::SUBTEXT,
                     Val.of(true)
                 )
             );
@@ -302,7 +307,7 @@ final class ActionsPage {
     private UUID selected() { return state.get().selected(); }
 
     /// A tile whose sign is that of sleep while `asleepSign` holds, and of waking otherwise.
-    private static UIForAnySwing<?, ?> tile(
+    private UIForAnySwing<?, ?> tile(
         final Val<Boolean> asleepSign,
         final Color colour,
         final Val<String> title,
@@ -319,7 +324,7 @@ final class ActionsPage {
         );
     }
 
-    private static UIForAnySwing<?, ?> tile(
+    private UIForAnySwing<?, ?> tile(
         final String sign,
         final Color colour,
         final Val<String> title,
@@ -331,7 +336,7 @@ final class ActionsPage {
 
     /// One action: its sign beside its title, a sentence on what it does, and its button, or
     /// whatever else does it.
-    private static UIForAnySwing<?, ?> tile(
+    private UIForAnySwing<?, ?> tile(
         final UIForAnySwing<?, ?> sign,
         final Val<String> title,
         final Val<String> says,
@@ -344,7 +349,7 @@ final class ActionsPage {
                 label(title)
                 .withStyle(it -> it.componentFont(f -> f.family(Fonts.DEFAULT.FONT()).size(14).weight(2f).color(DARK.TEXT())))
             )
-            .add("cell 1 1, growx, wmin 0", ViewPartsUtil.wrapped(says, DARK.SUBTEXT(), Val.of(true)))
+            .add("cell 1 1, growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
             // A button keeps its own width; anything else, such as the name's field, takes the row.
             .add(doing instanceof UIForButton<?> ? "cell 1 2, gaptop 6" : "cell 1 2, growx, wmin 0, gaptop 6", doing);
     }
