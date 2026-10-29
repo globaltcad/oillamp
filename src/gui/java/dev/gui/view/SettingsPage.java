@@ -140,12 +140,15 @@ final class SettingsPage {
     private static final double WORDS_FROM = 7.4;
     private static final double WORDS_TAKE = 0.8;
 
-    /// How tall the welcome's picture is. In a narrow window, the empty top of the picture would
-    /// look tall beside its narrow sides, so its top is cut away: none of it while the welcome is
-    /// `UNCUT_WIDTH` wide or wider, `PICTURE_CUT` once it is `CUT_WIDTH` or narrower, and in
-    /// between, an even share. The lamp and the genie stay their size, at the bottom.
+    /// How tall the welcome's picture is. The genie's hat is some 140 units below its top, so the
+    /// top of the picture is cut away, leaving room above the hat for the genie to float and
+    /// sparkle in: `LEAST_CUT` while the welcome is `UNCUT_WIDTH` wide or wider, `PICTURE_CUT`
+    /// once it is `CUT_WIDTH` or narrower, where the empty top would look tall beside the
+    /// picture's narrow sides, and in between, an even share. The lamp and the genie stay their
+    /// size, at the bottom.
     private static final int PICTURE_HEIGHT = 360;
-    private static final int PICTURE_CUT = 100;
+    private static final int LEAST_CUT = 90;
+    private static final int PICTURE_CUT = 115;
     private static final int UNCUT_WIDTH = 760;
     private static final int CUT_WIDTH = 360;
 
@@ -214,7 +217,7 @@ final class SettingsPage {
         Var<WelcomeScene.Play> scene = Var.of(WelcomeScene.Play.first(0));
         // How much of the welcome's picture is cut from its top, in units, and the welcome
         // itself, so that the page can paint its light where it is.
-        Var<Integer> cut = Var.of(0);
+        Var<Integer> cut = Var.of(LEAST_CUT);
         AtomicReference<JComponent> welcomeBox = new AtomicReference<>();
         // How the welcome fits its width, and how far its picture has moved from the middle to
         // its room beside the words, from 0 to 1.
@@ -587,13 +590,14 @@ final class SettingsPage {
         );
         Val<Integer> room = cut.viewAs(Integer.class, it -> PICTURE_HEIGHT - it);
         return
-            panel().withFlowLayout(UI.HorizontalAlignment.CENTER, 0, 12)
+            // Rows close together: the page already keeps the welcome apart from the card below.
+            panel().withFlowLayout(UI.HorizontalAlignment.CENTER, 0, 4)
             .withMinSize(0, 0).withPrefSize(WELCOME_REFERENCE, 0)
             .isVisibleIf(welcome).peek(welcomeBox::set)
             .onResize(it -> {
                 int width = it.getComponent().getWidth();
                 double narrowed = (UNCUT_WIDTH - UI.unscale(width)) / (double) (UNCUT_WIDTH - CUT_WIDTH);
-                cut.set((int) Math.round(PICTURE_CUT * Math.max(0, Math.min(1, narrowed))));
+                cut.set((int) Math.round(LEAST_CUT + (PICTURE_CUT - LEAST_CUT) * Math.max(0, Math.min(1, narrowed))));
                 // Wide where the grid puts the words beside the picture: from four fifths of its
                 // reference width on.
                 fit.set(new Fit(
