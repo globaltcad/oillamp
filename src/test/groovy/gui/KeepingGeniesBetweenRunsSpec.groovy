@@ -6,6 +6,7 @@ import dev.gui.genie.OllamaKeeper
 import dev.gui.genie.Shelf
 import dev.gui.model.GeniesState
 import dev.gui.model.Genie
+import dev.gui.model.Palette
 import dev.gui.model.Settings
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -82,6 +83,34 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
 
         then:
             new Shelf(tmp).settings().model() == 'mistral/mistral-large-latest'
+            app != null
+    }
+
+    def 'Genies keeps the palette the window is in, and starts in it the next time'() {
+        reportInfo """
+            Let's consider a user who switches the Appearance on the settings page from Dark to
+            Light. The window is painted in the light palette at once, and nothing else waits for
+            Done: Genies writes the choice to `look.json` on its shelf as soon as the palette in
+            its state changes. So `Shelf.palette()` reads the light palette back the next time
+            Genies starts. A shelf without `look.json`, as on the very first start, reads the
+            dark palette, the lamp at night that Genies always had.
+        """
+        given:
+            var genie = Genie.named('Genie 1')
+            var state = Var.of(GeniesState.of(Tuple.of(Genie, genie), Settings.defaults(), Optional.of('sk-env')))
+            // Held until the end: the app watches the palette through a view it keeps, which goes when it goes.
+            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, progress, events -> throw new IOException('no lamps here') } as LampLighter,
+                                 new OllamaKeeper(tmp.resolve('ollama')))
+
+        expect: 'a shelf without look.json reads the dark palette'
+            new Shelf(tmp).palette() == Palette.DARK
+
+        when: 'the palette in the state becomes the light one, as the Appearance switch makes it'
+            state.update(From.VIEW, { it.withPalette(Palette.LIGHT) })
+
+        then:
+            new Shelf(tmp).palette() == Palette.LIGHT
+            Files.readString(tmp.resolve('look.json')).contains('"LIGHT"')
             app != null
     }
 

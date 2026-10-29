@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
+import dev.gui.model.Palette;
 import dev.gui.model.Settings;
 
 import sprouts.Tuple;
@@ -27,6 +28,7 @@ import sprouts.Tuple;
 ///   did not make, but found lit elsewhere or was given;
 /// - `removed-lamps.json`: the lamps from elsewhere the user removed, not to be taken in again;
 /// - `settings.json`: the model settings, readable by this user only, because it can hold a key;
+/// - `look.json`: how the window looks: its palette, dark or light;
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
 /// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it.
 ///
@@ -103,6 +105,15 @@ public final class Shelf {
         ObjectNode file = JSON.createObjectNode();
         file.set("lamps", list);
         write("removed-lamps.json", file);
+    }
+
+    /// The palette the window was last in, or the dark one, the first time.
+    public Palette palette() {
+        return read("look.json").path("palette").asText().equals("LIGHT") ? Palette.LIGHT : Palette.DARK;
+    }
+
+    public void keep(Palette palette) throws IOException {
+        write("look.json", JSON.createObjectNode().put("palette", palette.isDark() ? "DARK" : "LIGHT"));
     }
 
     /// The settings as last kept, or the defaults.
