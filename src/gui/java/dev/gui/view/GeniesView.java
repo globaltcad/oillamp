@@ -145,6 +145,7 @@ public final class GeniesView extends JPanel {
         });
         rows = new ChatRows(
             look,
+            theme,
             genie,
             this::saveHandout,
             pulse,
