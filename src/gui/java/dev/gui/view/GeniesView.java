@@ -902,10 +902,12 @@ public final class GeniesView extends JPanel {
                 )
                 .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
             )
-            // One group on the right, so buttons that are hidden leave no gap behind.
+            // One group on the right, so buttons that are hidden leave no gap behind. The pages
+            // come last, at the edge: the buttons before them come and go with the genie's phase
+            // and page, and the token count grows, and the name's cell gives or takes that room,
+            // so the pages never move.
             .add("cell 3 0",
                 box("ins 0, gap 10, hidemode 3, aligny center")
-                .add(pages())
                 .add(
                     label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens())))
                     .group(Skin.META)
@@ -929,6 +931,7 @@ public final class GeniesView extends JPanel {
                     .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
                     .onClick(_ -> app.sleep(genie.get().id()))
                 )
+                .add(pages())
             )
             .add("cell 0 1, span 4, growx, wmin 0", pagesBelow());
     }
