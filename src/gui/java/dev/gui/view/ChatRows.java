@@ -37,7 +37,6 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.UIForPanel;
 import swingtree.animation.LifeTime;
-import swingtree.api.IconDeclaration;
 import swingtree.style.ComponentBackend;
 import swingtree.style.StyledString;
 
@@ -350,14 +349,17 @@ final class ChatRows {
     /// `moves` says so, and otherwise stand still in their last frame, as a picture of what the
     /// genie did then. A picture in the style, not a component of its own.
     private UIForAnySwing<?, ?> picture(Function<Genie, GenieSvgUtil.Pose> pose, Predicate<Genie> moves) {
-        Val<IconDeclaration> picture = Viewable.of(IconDeclaration.class, genie, pulse, (it, progress) -> {
+        Val<GenieSvgUtil.Picture> picture = Viewable.of(GenieSvgUtil.Picture.class, genie, pulse, (it, progress) -> {
             GenieSvgUtil.Pose shown = pose.apply(it);
             int frame = moves.test(it) ? GenieSvgUtil.frameAt(shown, progress) : shown.frames - 1;
-            return GenieSvgUtil.genie(GenieSvgUtil.appearanceOf(it.id()), shown, frame);
+            return GenieSvgUtil.Picture.of(GenieSvgUtil.appearanceOf(it.id()), shown, frame);
         });
         return
             box().withPrefSize(GENIE_SIZE, GENIE_SIZE).withMinSize(GENIE_SIZE, GENIE_SIZE)
-            .withStyle(picture, (icon, it) -> it.image(img -> img.image(icon).fitMode(UI.FitComponent.MIN_DIM)));
+            // On the night of the chat, outlined there as much as it needs.
+            .withStyle(Themed.of(picture, theme), (themed, it) ->
+                it.image(img -> img.image(themed.item().on(themed.palette().NIGHT())).fitMode(UI.FitComponent.MIN_DIM))
+            );
     }
 
     /// Whether the answer with id `answer` is the one `genie` writes now: the last of its answers

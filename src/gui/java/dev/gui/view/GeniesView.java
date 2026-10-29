@@ -12,7 +12,6 @@ import swingtree.UIForPanel;
 import swingtree.animation.Animation;
 import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
-import swingtree.api.IconDeclaration;
 import swingtree.components.JBox;
 import swingtree.api.Layout;
 import swingtree.dialogs.ConfirmAnswer;
@@ -391,10 +390,10 @@ public final class GeniesView extends JPanel {
             shown.zoomTo(Genie::conversations, Genie::withConversations)
             .zoomTo(Conversations::folded, Conversations::withFolded);
         Var<Boolean> hovered = Var.of(false);
-        Val<IconDeclaration> picture = Viewable.of(IconDeclaration.class, shown, pulse, (it, progress) -> {
-            if (!it.phase().isAwake()) return GenieSvgUtil.NONE;
+        Val<GenieSvgUtil.Picture> picture = Viewable.of(GenieSvgUtil.Picture.class, shown, pulse, (it, progress) -> {
+            if (!it.phase().isAwake()) return GenieSvgUtil.Picture.NOBODY;
             GenieSvgUtil.Pose pose = GenieSvgUtil.poseOf(it);
-            return GenieSvgUtil.genie(GenieSvgUtil.appearanceOf(it.id()), pose, GenieSvgUtil.frameAt(pose, progress));
+            return GenieSvgUtil.Picture.of(GenieSvgUtil.appearanceOf(it.id()), pose, GenieSvgUtil.frameAt(pose, progress));
         });
         return
             panel("fill, ins 7 8 7 8, gap 8, hidemode 3", "[grow][]")
@@ -422,9 +421,10 @@ public final class GeniesView extends JPanel {
             .onMouseEnter(_ -> hovered.set(true))
             .onMouseExit(_ -> hovered.set(false))
             // Painted on the card rather than added to it, so it moves none of the card's parts.
-            .withStyle(picture, (icon, it) -> it
+            // Outlined for the sidebar, which a card's own ground hardly differs from.
+            .withStyle(Themed.of(picture, theme), (themed, it) -> it
                 .image(img -> img
-                    .image(icon)
+                    .image(themed.item().on(themed.palette().SIDEBAR()))
                     .placement(UI.Placement.TOP_RIGHT)
                     .size(46, 46)
                     .padding(5, 6, 1, 0)
