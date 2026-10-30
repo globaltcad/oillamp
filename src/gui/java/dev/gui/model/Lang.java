@@ -249,7 +249,14 @@ public record Lang(
         About IS_ANSWERING_IN_ANOTHER_CONVERSATION,
         String GIVE_THE_GENIE_A_FILE_IT_LANDS_IN_INBOX,
         String RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE,
-        String SEND
+        String SEND,
+        String NEW_CONVERSATION,
+        String START_A_NEW_CONVERSATION_OR_SELECT_ONE_IN_THE_TREE_TO_RETURN_TO_IT,
+        WhoAndWhat WAKING,
+        About IS_ASLEEP_ITS_SANDBOX_IS_OFF,
+        WhoAndWhat COULD_NOT_WAKE_BECAUSE,
+        String TRY_AGAIN,
+        String WAKE
     ) {
         public static final Chat ENGLISH = new Chat(
             name -> name + " is listening.",
@@ -265,7 +272,14 @@ public record Lang(
             name -> name + " is answering in another conversation. Write here once it is done.",
             "Give the genie a file; it lands in ~/inbox",
             "Return sends; Shift and Return starts a new line",
-            "Send"
+            "Send",
+            "New conversation",
+            "Start a new conversation, or select a conversation in the tree to return to it",
+            (name, doing) -> "Waking " + name + ": " + doing + "…",
+            name -> name + " is asleep. Its sandbox is off, its home and conversation are kept.",
+            (name, why) -> name + " could not wake: " + why,
+            "Try again",
+            "Wake"
         );
     }
 }
