@@ -184,14 +184,22 @@ final class HistoryPage {
         zone = genie.viewAs(ZoneId.class, it -> it.schedule().zone());
         lines = Viewable.of(Lines.class, history, zone, History::lines);
         wording = Viewable.of(Wording.class, genie, state, (it, s) ->
-            new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate())
+            new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate(), s.lang().HISTORY_PAGE())
         );
         shownLine = history.viewAsString(History::shownLine);
     }
 
     /// What the words of moments are made of: the genie's name, its history, its conversations
-    /// and jobs, which give runs their titles, and the day, against which "today" is said.
-    private record Wording(String name, History history, Conversations conversations, Schedule schedule, LocalDate today) {
+    /// and jobs, which give runs their titles, the day, against which "today" is said, and the
+    /// words of the page.
+    private record Wording(
+        String name,
+        History history,
+        Conversations conversations,
+        Schedule schedule,
+        LocalDate today,
+        Lang.HistoryPage words
+    ) {
 
         String title(History.Moment moment) {
             return history.title(moment, conversations, schedule, today.atStartOfDay());
@@ -368,44 +376,39 @@ final class HistoryPage {
 
     private static Asked asked(Wording wording) {
         History history = wording.history();
+        Lang.HistoryPage words = wording.words();
         return history.plan().map(plan -> switch (plan) {
             case History.Plan.Reset reset -> {
-                String when = history.find(reset.target()).map(wording::when).orElse("then");
+                String when = history.find(reset.target()).map(wording::when).orElse(words.THEN());
                 String branch = history.lampBranch();
                 String unsaved = reset.unsaved()
-                    ? "What changed in " + wording.name() + "'s home since the newest moment was never saved, and is lost. "
+                    ? words.WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST().of(wording.name()) + " "
                     : "";
                 yield new Asked(
-                    "Reset " + branch + " to how it was " + when + "?",
-                    (
-                        reset.moments() == 0 ? "No moment comes after it on " + branch + ". "
-                        : reset.moments() == 1 ? "The moment after it leaves " + branch + ". "
-                        : "The " + reset.moments() + " moments after it leave " + branch + ". "
-                    )
+                    words.RESET_TO_HOW_IT_WAS().of(branch, when),
+                    words.MOMENTS_AFTER_IT_LEAVE().of(reset.moments(), branch) + " "
                     + unsaved
-                    + "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
-                    + "Going back instead keeps how it is now as a moment of its own.",
-                    "Reset " + branch,
+                    + words.A_RESET_KEEPS_NO_COPY_SO_IT_CANNOT_BE_UNDONE(),
+                    words.RESET().of(branch),
                     true,
                     true
                 );
             }
             case History.Plan.DeleteBranch delete -> new Asked(
-                "Delete the branch " + delete.branch() + "?",
-                delete.moments() == 0 ? "Every moment on it is on another branch too, so no moment is lost."
-                : delete.moments() == 1 ? "One moment is on " + delete.branch() + " alone, and goes with it."
-                : delete.moments() + " moments are on " + delete.branch() + " alone, and go with it.",
-                "Delete " + delete.branch(),
+                words.DELETE_THE_BRANCH().of(delete.branch()),
+                words.MOMENTS_ON_IT_ALONE_GO_WITH_IT().of(delete.moments(), delete.branch()),
+                words.DELETE().of(delete.branch()),
                 delete.moments() > 0,
                 false
             );
             case History.Plan.Prune prune -> new Asked(
-                "Delete the " + (prune.moments() == 1 ? "oldest moment" : prune.moments() + " oldest moments") + "?",
-                (prune.moments() == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
-                + (prune.branches().isEmpty() ? "" : ", on " + words(prune.branches())) + ". Deleting "
-                + (prune.moments() == 1 ? "it" : "them") + " frees " + bytes(prune.bytesFreed())
-                + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
-                "Delete " + (prune.moments() == 1 ? "it" : "them"),
+                words.DELETE_THE_OLDEST_MOMENTS().of(prune.moments()),
+                words.THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW().of(
+                    prune.moments(),
+                    words.NAMES_LISTED().of(prune.branches().toList()),
+                    bytes(prune.bytesFreed())
+                ),
+                words.DELETE_THEM().of(prune.moments()),
                 true,
                 false
             );
@@ -434,15 +437,15 @@ final class HistoryPage {
                 panel().withFlowLayout(UI.HorizontalAlignment.RIGHT, 8, 4)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add(
-                    button("Cancel")
+                    button(words.viewAsString(Lang.HistoryPage::CANCEL))
                     .group(Skin.QUIET_BUTTON)
                     .onClick(_ -> history.update(From.VIEW, it -> it.withPlan(Optional.empty())))
                 )
                 .add(
-                    button("↺  Go back instead")
+                    button(words.viewAsString(it -> "↺  " + it.GO_BACK_INSTEAD()))
                     .group(Skin.QUIET_BUTTON)
                     .isVisibleIf(asked.viewAs(Boolean.class, Asked::insteadGoBack))
-                    .withTooltip("Bring it back to that moment, and keep how it is now as a moment you can return to")
+                    .withTooltip(words.viewAsString(Lang.HistoryPage::BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW))
                     .onClick(_ -> goBackInstead())
                 )
                 .add(
