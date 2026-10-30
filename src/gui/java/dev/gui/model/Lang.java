@@ -256,7 +256,22 @@ public record Lang(
         About IS_ASLEEP_ITS_SANDBOX_IS_OFF,
         WhoAndWhat COULD_NOT_WAKE_BECAUSE,
         String TRY_AGAIN,
-        String WAKE
+        String WAKE,
+        String EDIT,
+        String ASK_THIS_DIFFERENTLY_WHAT_FOLLOWED_IS_KEPT_AS_A_BRANCH,
+        String PREVIOUS_CONVERSATION_VERSION,
+        String NEXT_CONVERSATION_VERSION,
+        String COPY,
+        String COPY_THE_ANSWER_AS_THE_GENIE_WROTE_IT,
+        String THINKING,
+        String THOUGHT,
+        String CLICK_TO_FOLD_THE_THOUGHTS_AWAY,
+        String CLICK_TO_SEE_WHAT_THE_GENIE_THINKS,
+        About YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE,
+        String RUNNING,
+        String FAILED,
+        String CLICK_TO_SEE_WHAT_IT_PRINTED,
+        String SAVE_ELLIPSIS
     ) {
         public static final Chat ENGLISH = new Chat(
             name -> name + " is listening.",
@@ -279,7 +294,22 @@ public record Lang(
             name -> name + " is asleep. Its sandbox is off, its home and conversation are kept.",
             (name, why) -> name + " could not wake: " + why,
             "Try again",
-            "Wake"
+            "Wake",
+            "Edit",
+            "Ask this differently. What followed is kept, as a branch in the genie's conversations.",
+            "Previous conversation version",
+            "Next conversation version",
+            "Copy",
+            "Copy the answer, as the genie wrote it",
+            "thinking",
+            "thought",
+            "Click to fold the thoughts away",
+            "Click to see what the genie thinks",
+            job -> job + ". The genie does one thing at a time, so your message waits until this job is done.",
+            "running…",
+            "failed",
+            "Click to see what it printed",
+            "Save…"
         );
     }
 }
