@@ -153,7 +153,7 @@ final class ViewPartsUtil {
     }
 
     /// A button that reads as a link, in brass.
-    static UIForButton<JButton> link(Val<Theme> theme, String text) {
+    static UIForButton<JButton> link(Val<Theme> theme, Val<String> text) {
         return
             button(text).group(Skin.ICON_BUTTON)
             .withStyle(theme, (now, it) -> it.padding(2, 0, 2, 0).componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().BRASS())));
