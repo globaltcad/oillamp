@@ -104,6 +104,10 @@ public record Lang(
     /// list, or empty when that goes without saying, and how much deleting them `frees`.
     public interface OldestMoments { String of(int moments, String branches, String frees); }
 
+    /// What the user looks at in a genie's history: the `shown` branch, while the `genie` lives
+    /// on another, its `home`.
+    public interface Looking { String of(String shown, String genie, String home); }
+
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
         String NEW_GENIE,
@@ -936,7 +940,16 @@ public record Lang(
         About KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN,
         String RESET_TO_HERE_ELLIPSIS,
         String TAKE_EVERY_MOMENT_AFTER_THIS_ONE_OFF_THE_BRANCH_FOR_GOOD,
-        String OPEN_THE_CONVERSATION
+        String OPEN_THE_CONVERSATION,
+        WhoAndWhat LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE,
+        Looking YOU_ARE_LOOKING_AT,
+        WhoAndWhat MOVE_TO_ELLIPSIS,
+        String MAKE_THIS_BRANCH_THE_GENIES_HOME,
+        About DELETE_ELLIPSIS,
+        String DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS,
+        About LIVES_ON_THIS_BRANCH,
+        String ITS_LINE_IS_THE_ONE_WITH_WORDS,
+        String CLICK_TO_LOOK_AT_ITS_LINE
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1007,7 +1020,16 @@ public record Lang(
             genie -> "Keep this moment as a branch of its own, to try something else from here. " + genie + " stays where it lives",
             "Reset to here…",
             "Take every moment after this one off the branch, for good. You are asked first",
-            "Open the conversation"
+            "Open the conversation",
+            (genie, branch) -> genie + " lives on " + branch + ", and every save goes there. Click another branch, or its line, to look at it.",
+            (shown, genie, home) -> "You are looking at " + shown + ". " + genie + " lives on " + home + ", and stays there until you move it.",
+            (genie, branch) -> "Move " + genie + " to " + branch + "…",
+            "Make this branch the genie's home: its files and conversations become this branch's newest moment",
+            branch -> "Delete " + branch + "…",
+            "Delete this branch. You are told first how many moments only it holds",
+            genie -> genie + " lives on this branch.",
+            "Its line is the one with words",
+            "Click to look at its line"
         );
 
         /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
