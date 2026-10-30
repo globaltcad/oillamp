@@ -11,59 +11,104 @@ import java.util.Locale;
 /// The words of Genies: every text the window shows, in one language. A value, as [Palette] is,
 /// so that Genies can be shown in another language as it can in other colours.
 ///
-/// A text is a component named after what it says in English, such as `YOUR_GENIES`. A text that
-/// is assembled from something else, such as a count, is a function from that to the words: an
-/// interface declared here, as languages differ in how they assemble one. Each language is a
-/// single constant, such as [#ENGLISH], so that its functions are the same objects whenever the
-/// window compares two of them, and a view follows the words only when the language changes.
-///
-/// The texts are in a record for each part of the window, as a record has room for no more than
-/// 255 components, and as whoever words a part finds its texts together.
-///
-/// @param WINDOW the window around the genies: the list of them, and what went wrong
-/// @param HEADER the header above a genie's pages, and what its lamp asks the user to allow
-/// @param DESKTOP a genie's desktop, beside its chat
-/// @param CHAT    a genie's chat: the conversation, and the composer under it
-/// @param DIALOGS the dialogs the window asks and tells the user things in
-/// @param ACTIONS_PAGE what can be done with a genie as a whole
-/// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
-/// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
-/// @param SETTINGS_PAGE the settings every genie shares, and the welcome above them
-/// @param SCHEDULE_PAGE when jobs wake a genie, and what they did
-/// @param HISTORY_PAGE the moments a genie's home was saved at, and going back to one
-/// @param PARTS   the parts of the window that several pages share
-/// @param DATES   days and spans of time, as the pages say them
-public record Lang(
-    Window WINDOW,
-    Header HEADER,
-    Desktop DESKTOP,
-    Chat CHAT,
-    Dialogs DIALOGS,
-    ActionsPage ACTIONS_PAGE,
-    HomeFolders HOME_FOLDERS,
-    HostAccessPage HOST_ACCESS_PAGE,
-    SettingsPage SETTINGS_PAGE,
-    SchedulePage SCHEDULE_PAGE,
-    HistoryPage HISTORY_PAGE,
-    Parts PARTS,
-    Dates DATES
-) {
+/// The texts are in a record for each part of the window, as whoever words a part finds its
+/// texts together. A part knows the language it speaks, and each of its texts is a method named
+/// after what it says in English, such as `YOUR_GENIES()`, which says it in that language. A text
+/// assembled from something else, such as a count, takes that as its parameters, as languages
+/// differ in how they assemble one.
+public enum Lang {
+    ENGLISH;
 
-    public static final Lang ENGLISH = new Lang(
-        Window.ENGLISH,
-        Header.ENGLISH,
-        Desktop.ENGLISH,
-        Chat.ENGLISH,
-        Dialogs.ENGLISH,
-        ActionsPage.ENGLISH,
-        HomeFolders.ENGLISH,
-        HostAccessPage.ENGLISH,
-        SettingsPage.ENGLISH,
-        SchedulePage.ENGLISH,
-        HistoryPage.ENGLISH,
-        Parts.ENGLISH,
-        Dates.ENGLISH
-    );
+    /// The words of the window around the genies: the list of them, and what went wrong.
+    public Window WINDOW() {
+        return switch (this) {
+            case ENGLISH -> Window.ENGLISH;
+        };
+    }
+
+    /// The words of the header above a genie's pages, and what its lamp asks the user to allow.
+    public Header HEADER() {
+        return switch (this) {
+            case ENGLISH -> Header.ENGLISH;
+        };
+    }
+
+    /// The words of a genie's desktop, beside its chat.
+    public Desktop DESKTOP() {
+        return switch (this) {
+            case ENGLISH -> Desktop.ENGLISH;
+        };
+    }
+
+    /// The words of a genie's chat: the conversation, and the composer under it.
+    public Chat CHAT() {
+        return switch (this) {
+            case ENGLISH -> Chat.ENGLISH;
+        };
+    }
+
+    /// The words of the dialogs the window asks and tells the user things in.
+    public Dialogs DIALOGS() {
+        return switch (this) {
+            case ENGLISH -> Dialogs.ENGLISH;
+        };
+    }
+
+    /// The words of what can be done with a genie as a whole.
+    public ActionsPage ACTIONS_PAGE() {
+        return switch (this) {
+            case ENGLISH -> ActionsPage.ENGLISH;
+        };
+    }
+
+    /// The words of a genie's home, and linking its folders into the user's.
+    public HomeFolders HOME_FOLDERS() {
+        return switch (this) {
+            case ENGLISH -> HomeFolders.ENGLISH;
+        };
+    }
+
+    /// The words of whether a genie may reach this computer, and its rules.
+    public HostAccessPage HOST_ACCESS_PAGE() {
+        return switch (this) {
+            case ENGLISH -> HostAccessPage.ENGLISH;
+        };
+    }
+
+    /// The words of the settings every genie shares, and the welcome above them.
+    public SettingsPage SETTINGS_PAGE() {
+        return switch (this) {
+            case ENGLISH -> SettingsPage.ENGLISH;
+        };
+    }
+
+    /// The words of when jobs wake a genie, and what they did.
+    public SchedulePage SCHEDULE_PAGE() {
+        return switch (this) {
+            case ENGLISH -> SchedulePage.ENGLISH;
+        };
+    }
+
+    /// The words of the moments a genie's home was saved at, and going back to one.
+    public HistoryPage HISTORY_PAGE() {
+        return switch (this) {
+            case ENGLISH -> HistoryPage.ENGLISH;
+        };
+    }
+
+    /// The words of the parts of the window that several pages share.
+    public Parts PARTS() {
+        return switch (this) {
+            case ENGLISH -> Parts.ENGLISH;
+        };
+    }
+
+    /// The words of days and spans of time, as the pages say them.
+    public Dates DATES() {
+        return switch (this) {
+            case ENGLISH -> Dates.ENGLISH;
+        };
+    }
 
     /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
     private static String listedInEnglish(List<String> names) {
