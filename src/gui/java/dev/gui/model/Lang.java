@@ -15,16 +15,19 @@ package dev.gui.model;
 /// @param WINDOW the window around the genies: the list of them, and what went wrong
 /// @param HEADER the header above a genie's pages, and what its lamp asks the user to allow
 /// @param DESKTOP a genie's desktop, beside its chat
+/// @param CHAT    a genie's chat: the conversation, and the composer under it
 public record Lang(
     Window WINDOW,
     Header HEADER,
-    Desktop DESKTOP
+    Desktop DESKTOP,
+    Chat CHAT
 ) {
 
     public static final Lang ENGLISH = new Lang(
         Window.ENGLISH,
         Header.ENGLISH,
-        Desktop.ENGLISH
+        Desktop.ENGLISH,
+        Chat.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -227,6 +230,42 @@ public record Lang(
             "Connecting to the desktop…",
             why -> "The desktop went away: " + why,
             why -> "Could not show the desktop: " + why
+        );
+    }
+
+    /// The words of a genie's chat: the conversation, the files the genie hands out, and the
+    /// composer under it.
+    public record Chat(
+        About IS_LISTENING,
+        About IS_WAKING,
+        About IS_IN_THE_LAMP,
+        About COULD_NOT_WAKE,
+        String ASK_FOR_ANYTHING_IT_HAS_A_DESKTOP_AND_A_SHELL_OF_ITS_OWN,
+        String ITS_SANDBOX_IS_STARTING_THE_VERY_FIRST_TIME_IT_IS_MADE,
+        String WAKE_IT_TO_TALK_IT_KEEPS_ITS_OWN_DESKTOP,
+        String WHAT_WENT_WRONG_IS_SAID_BELOW_TRY_AGAIN_ONCE_THAT_IS_SORTED_OUT,
+        String OUTBOX,
+        About SAVE_SOMEWHERE_ON_THIS_COMPUTER,
+        About IS_ANSWERING_IN_ANOTHER_CONVERSATION,
+        String GIVE_THE_GENIE_A_FILE_IT_LANDS_IN_INBOX,
+        String RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE,
+        String SEND
+    ) {
+        public static final Chat ENGLISH = new Chat(
+            name -> name + " is listening.",
+            name -> name + " is waking.",
+            name -> name + " is in the lamp.",
+            name -> name + " could not wake.",
+            "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.",
+            "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.",
+            "Wake it to talk. It keeps its own desktop, safely away from yours.",
+            "What went wrong is said below. Try again once that is sorted out.",
+            "OUTBOX",
+            file -> "Save " + file + " somewhere on this computer",
+            name -> name + " is answering in another conversation. Write here once it is done.",
+            "Give the genie a file; it lands in ~/inbox",
+            "Return sends; Shift and Return starts a new line",
+            "Send"
         );
     }
 }
