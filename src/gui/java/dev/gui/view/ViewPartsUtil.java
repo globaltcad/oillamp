@@ -49,14 +49,20 @@ final class ViewPartsUtil {
 
     /// A few lines of small print, wrapped to the width they are given.
     static UIForAnySwing<?, ?> note(Val<Theme> theme, String text, Val<Boolean> shown) {
+        return note(theme, Val.of(text), shown);
+    }
+
+    /// A few lines of small print that change, such as with the language, wrapped to the width
+    /// they are given.
+    static UIForAnySwing<?, ?> note(Val<Theme> theme, Val<String> text, Val<Boolean> shown) {
         return
             box().withMinSize(0, 0).isVisibleIf(shown)
             // Some padding, on purpose: text painted by the style engine sets its component's
             // height when it is painted, and a component of no height is never painted.
-            .withStyle(theme, (now, it) ->
+            .withStyle(Themed.of(text, theme), (words, it) ->
                 it.padding(2, 0, 2, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT()), text))
+                    t.content(StyledString.of(f -> f.family(words.fonts().FONT()).size(11).color(words.palette().SUBTEXT()), words.item()))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
