@@ -586,7 +586,24 @@ public record Lang(
         String STOP,
         String STOP_SETTING_UP_A_MODELS_DOWNLOAD_GOES_ON_THE_NEXT_TIME,
         String UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI,
-        About UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT
+        About UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT,
+        String THE_MODEL_RUNS,
+        String AT_EDEN_AI,
+        String IN_THE_EU_WITH_YOUR_EDEN_AI_KEY,
+        String ON_A_SERVER_ELSEWHERE,
+        String A_MODEL_SERVER_OF_YOUR_OWN_ON_ANOTHER_MACHINE,
+        String ON_THIS_COMPUTER,
+        String A_MODEL_SERVER_SUCH_AS_OLLAMA_LM_STUDIO_OR_LLAMA_CPP,
+        String KEY,
+        About USE,
+        String FOUND_WHERE_GENIES_WAS_STARTED,
+        String NOT_SET_WHERE_GENIES_WAS_STARTED,
+        String USE_THIS_KEY,
+        String THE_KEY_STAYS_ON_THIS_COMPUTER_GENIES_NEVER_SEE_IT,
+        String ADDRESS,
+        String WHERE_THE_SERVERS_API_IS_IT_MUST_BE_HTTPS,
+        String LEAVE_IT_EMPTY_IF_THE_SERVER_ASKS_FOR_NONE,
+        String WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -606,7 +623,27 @@ public record Lang(
             "Stop",
             "Stop setting up. A model's download goes on from where it was the next time",
             "Until then, your genies use Eden AI.",
-            address -> "Until then, your genies use the model server at " + address + "."
+            at -> "Until then, your genies use the model server at " + at + ".",
+            "The model runs",
+            "at Eden AI",
+            "In the EU, with your Eden AI key.",
+            "on a server elsewhere",
+            "A model server of your own on another machine, such as Ollama behind a proxy that asks for a key.",
+            "on this computer",
+            "A model server such as Ollama, LM Studio or llama.cpp.",
+            "Key",
+            variable -> "Use " + variable,
+            "Found where Genies was started.",
+            "Not set where Genies was started.",
+            "Use this key:",
+            "The key stays on this computer. Genies never see it: oillamp adds it to "
+            + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.",
+            "Address",
+            "Where the server's OpenAI-style API is, such as "
+            + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
+            "Leave it empty if the server asks for none.",
+            "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
+            + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed."
         );
     }
 }

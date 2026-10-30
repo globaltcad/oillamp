@@ -134,10 +134,6 @@ final class SettingsPage {
         it.verySmall(12).small(12).medium(12).large(12).veryLarge(BESIDE_SPAN).oversize(BESIDE_SPAN)
     );
 
-    private static final String KEY_STAYS_HERE =
-        "The key stays on this computer. Genies never see it: oillamp adds it to "
-        + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.";
-
     /// When the welcome's words fade in, and how long they take, in seconds of its play.
     private static final double WORDS_FROM = 7.4;
     private static final double WORDS_TAKE = 0.8;
@@ -407,23 +403,20 @@ final class SettingsPage {
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(advanced)
-                        .add(LABEL, label("The model runs"))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::THE_MODEL_RUNS)))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6")
-                            .add("wmin 0", radioButton("at Eden AI", Settings.Place.EDEN_AI, place))
-                            .add("growx, wmin 0, gapleft 24", ViewPartsUtil.note(theme, "In the EU, with your Eden AI key.", Val.of(true)))
-                            .add("wmin 0", radioButton("on a server elsewhere", Settings.Place.ELSEWHERE, place))
+                            .add("wmin 0", radioButton("", Settings.Place.EDEN_AI, place).withText(words.viewAsString(Lang.SettingsPage::AT_EDEN_AI)))
                             .add("growx, wmin 0, gapleft 24",
-                                ViewPartsUtil.note(
-                                    theme,
-                                    "A model server of your own on another machine, "
-                                    + "such as Ollama behind a proxy that asks for a key.",
-                                    Val.of(true)
-                                )
+                                ViewPartsUtil.note(theme, words.viewAsString(Lang.SettingsPage::IN_THE_EU_WITH_YOUR_EDEN_AI_KEY), Val.of(true))
                             )
-                            .add("wmin 0", radioButton("on this computer", Settings.Place.THIS_MACHINE, place))
+                            .add("wmin 0", radioButton("", Settings.Place.ELSEWHERE, place).withText(words.viewAsString(Lang.SettingsPage::ON_A_SERVER_ELSEWHERE)))
                             .add("growx, wmin 0, gapleft 24",
-                                ViewPartsUtil.note(theme, "A model server such as Ollama, LM Studio or llama.cpp.", Val.of(true))
+                                ViewPartsUtil.note(theme, words.viewAsString(Lang.SettingsPage::A_MODEL_SERVER_OF_YOUR_OWN_ON_ANOTHER_MACHINE), Val.of(true))
+                            )
+                            .add("wmin 0", radioButton("", Settings.Place.THIS_MACHINE, place).withText(words.viewAsString(Lang.SettingsPage::ON_THIS_COMPUTER)))
+                            .add("growx, wmin 0, gapleft 24",
+                                ViewPartsUtil.note(theme, words.viewAsString(Lang.SettingsPage::A_MODEL_SERVER_SUCH_AS_OLLAMA_LM_STUDIO_OR_LLAMA_CPP), Val.of(true))
                             )
                         )
                     )
@@ -439,58 +432,65 @@ final class SettingsPage {
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(advanced)
                         // ── Eden AI ──
-                        .add(LABEL, label("Key").isVisibleIf(isEdenAi))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::KEY)).isVisibleIf(isEdenAi))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6").isVisibleIf(isEdenAi)
-                            .add("wmin 0", radioButton("Use " + Settings.KEY_VARIABLE, Settings.KeySource.ENVIRONMENT, source))
+                            .add("wmin 0",
+                                radioButton("", Settings.KeySource.ENVIRONMENT, source)
+                                .withText(words.viewAsString(it -> it.USE().of(Settings.KEY_VARIABLE)))
+                            )
                             .add("growx, wmin 0, gapleft 24",
                                 ViewPartsUtil.note(
                                     theme,
-                                    found ? "Found where Genies was started." : "Not set where Genies was started.",
+                                    words.viewAsString(it -> found ? it.FOUND_WHERE_GENIES_WAS_STARTED() : it.NOT_SET_WHERE_GENIES_WAS_STARTED()),
                                     Val.of(true)
                                 )
                             )
-                            .add("wmin 0", radioButton("Use this key:", Settings.KeySource.ENTERED, source))
+                            .add("wmin 0", radioButton("", Settings.KeySource.ENTERED, source).withText(words.viewAsString(Lang.SettingsPage::USE_THIS_KEY)))
                             .add("growx, wmin 0",
                                 passwordField(edenKey).group(Skin.INPUT)
                                 .isEnabledIf(source.viewAs(Boolean.class, it -> it == Settings.KeySource.ENTERED))
                             )
-                            .add("growx, wmin 0", ViewPartsUtil.note(theme, KEY_STAYS_HERE, Val.of(true)))
+                            .add("growx, wmin 0", ViewPartsUtil.note(theme, words.viewAsString(Lang.SettingsPage::THE_KEY_STAYS_ON_THIS_COMPUTER_GENIES_NEVER_SEE_IT), Val.of(true)))
                         )
 
                         // ── a model server elsewhere ──
-                        .add(LABEL, label("Address").isVisibleIf(isElsewhere))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::ADDRESS)).isVisibleIf(isElsewhere))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isElsewhere)
                             .add("growx, wmin 0", textField(remoteAddress).group(Skin.INPUT))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
                                     theme,
-                                    "Where the server's OpenAI-style API is, such as "
-                                    + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
+                                    words.viewAsString(Lang.SettingsPage::WHERE_THE_SERVERS_API_IS_IT_MUST_BE_HTTPS),
                                     Val.of(true)
                                 )
                             )
                         )
-                        .add(LABEL, label("Key").isVisibleIf(isElsewhere))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::KEY)).isVisibleIf(isElsewhere))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isElsewhere)
                             .add("growx, wmin 0", passwordField(remoteKey).group(Skin.INPUT))
                             .add("growx, wmin 0",
-                                ViewPartsUtil.note(theme, "Leave it empty if the server asks for none. " + KEY_STAYS_HERE, Val.of(true))
+                                ViewPartsUtil.note(
+                                    theme,
+                                    words.viewAsString(it ->
+                                        it.LEAVE_IT_EMPTY_IF_THE_SERVER_ASKS_FOR_NONE() + " " + it.THE_KEY_STAYS_ON_THIS_COMPUTER_GENIES_NEVER_SEE_IT()
+                                    ),
+                                    Val.of(true)
+                                )
                             )
                         )
 
                         // ── a model server on this computer ──
-                        .add(LABEL, label("Address").isVisibleIf(isLocal))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::ADDRESS)).isVisibleIf(isLocal))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4").isVisibleIf(isLocal)
                             .add("growx, wmin 0", textField(localAddress).group(Skin.INPUT))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
                                     theme,
-                                    "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
-                                    + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.",
+                                    words.viewAsString(Lang.SettingsPage::WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED),
                                     Val.of(true)
                                 )
                             )
