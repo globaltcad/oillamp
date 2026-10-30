@@ -1008,12 +1008,10 @@ final class HistoryPage {
         Val<Boolean> several = history.viewAs(Boolean.class, it -> it.branches().size() > 1);
         Val<Boolean> elsewhere = history.viewAs(Boolean.class, it -> !it.shownLine().equals(it.lampBranch()));
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
-        Val<String> about = genie.viewAsString(it ->
+        Val<String> about = Viewable.of(String.class, genie, words, (it, page) ->
             it.history().shownLine().equals(it.history().lampBranch())
-                ? it.name() + " lives on " + it.history().lampBranch() + ", and every save goes there. "
-                  + "Click another branch, or its line, to look at it."
-                : "You are looking at " + it.history().shownLine() + ". " + it.name() + " lives on "
-                  + it.history().lampBranch() + ", and stays there until you move it."
+                ? page.LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE().of(it.name(), it.history().lampBranch())
+                : page.YOU_ARE_LOOKING_AT().of(it.history().shownLine(), it.name(), it.history().lampBranch())
         );
         return
             box("fillx, wrap 1, ins 0 0 6 0, gap 6, hidemode 3", "[grow]")
@@ -1029,7 +1027,7 @@ final class HistoryPage {
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .isVisibleIf(elsewhere)
                 .add(
-                    button(genie.viewAsString(it -> "⇄  Move " + it.name() + " to " + it.history().shownLine() + "…"))
+                    button(Viewable.of(String.class, genie, words, (it, page) -> "⇄  " + page.MOVE_TO_ELLIPSIS().of(it.name(), it.history().shownLine())))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
                     .withStyle(Themed.of(homeLocked, theme), (themed, it) -> {
@@ -1037,27 +1035,26 @@ final class HistoryPage {
                         Palette p = themed.palette();
                         return why.isEmpty() ? it : it.backgroundColor(p.SMOKE()).cursor(UI.Cursor.DEFAULT);
                     })
-                    .withTooltip(homeLocked.viewAsString(it ->
-                        it.isEmpty()
-                            ? "Make this branch the genie's home: its files and conversations become this branch's newest moment"
-                            : it
+                    .withTooltip(Viewable.of(String.class, homeLocked, words, (it, page) ->
+                        it.isEmpty() ? page.MAKE_THIS_BRANCH_THE_GENIES_HOME() : it
                     ))
                     .onClick(_ -> confirmSwitch())
                 )
                 .add(
-                    button(history.viewAsString(it -> "Delete " + it.shownLine() + "…"))
+                    button(Viewable.of(String.class, history, words, (it, page) -> page.DELETE_ELLIPSIS().of(it.shownLine())))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(idle)
-                    .withTooltip("Delete this branch. You are told first how many moments only it holds")
+                    .withTooltip(words.viewAsString(Lang.HistoryPage::DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS))
                     .onClick(_ -> app.planDeletingBranch(selected(), history.get().shownLine()))
                 )
             );
     }
 
     private UIForPanel<JPanel> chipView(Chip chip) {
-        String tooltip =
-            (chip.lampIsOn() ? genie.get().name() + " lives on this branch. " : "")
-            + (chip.shown() ? "Its line is the one with words" : "Click to look at its line");
+        Val<String> tooltip = Viewable.of(String.class, genie, words, (it, page) ->
+            (chip.lampIsOn() ? page.LIVES_ON_THIS_BRANCH().of(it.name()) + " " : "")
+            + (chip.shown() ? page.ITS_LINE_IS_THE_ONE_WITH_WORDS() : page.CLICK_TO_LOOK_AT_ITS_LINE())
+        );
         var view =
             panel("ins 3 10 3 10, gap 6, aligny center")
             .withCursor(UI.Cursor.HAND)
