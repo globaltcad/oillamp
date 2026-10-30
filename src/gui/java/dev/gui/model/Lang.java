@@ -915,7 +915,15 @@ public record Lang(
         Counted DELETE_THEM,
         String CANCEL,
         String GO_BACK_INSTEAD,
-        String BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW
+        String BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW,
+        String SHOW_ONLY_THE_NEWEST_MOMENTS,
+        Counted SHOW_EARLIER_MOMENTS,
+        String MOMENTS,
+        String READING_THE_HISTORY,
+        String NOTHING_SAVED_YET,
+        About ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES,
+        WhoAndWhat HOW_IT_IS_NOW_ON_BRANCH,
+        String NOW
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -944,29 +952,39 @@ public record Lang(
             "then",
             genie -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.",
             (branch, when) -> "Reset " + branch + " to how it was " + when + "?",
-            (moments, branch) ->
-                moments == 0 ? "No moment comes after it on " + branch + "."
-                : moments == 1 ? "The moment after it leaves " + branch + "."
-                : "The " + moments + " moments after it leave " + branch + ".",
+            (count, branch) ->
+                count == 0 ? "No moment comes after it on " + branch + "."
+                : count == 1 ? "The moment after it leaves " + branch + "."
+                : "The " + count + " moments after it leave " + branch + ".",
             "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
             + "Going back instead keeps how it is now as a moment of its own.",
             branch -> "Reset " + branch,
             branch -> "Delete the branch " + branch + "?",
-            (moments, branch) ->
-                moments == 0 ? "Every moment on it is on another branch too, so no moment is lost."
-                : moments == 1 ? "One moment is on " + branch + " alone, and goes with it."
-                : moments + " moments are on " + branch + " alone, and go with it.",
+            (count, branch) ->
+                count == 0 ? "Every moment on it is on another branch too, so no moment is lost."
+                : count == 1 ? "One moment is on " + branch + " alone, and goes with it."
+                : count + " moments are on " + branch + " alone, and go with it.",
             branch -> "Delete " + branch,
-            moments -> "Delete the " + (moments == 1 ? "oldest moment" : moments + " oldest moments") + "?",
-            (moments, branches, frees) ->
-                (moments == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
+            count -> "Delete the " + (count == 1 ? "oldest moment" : count + " oldest moments") + "?",
+            (count, branches, frees) ->
+                (count == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
                 + (branches.isEmpty() ? "" : ", on " + branches) + ". Deleting "
-                + (moments == 1 ? "it" : "them") + " frees " + frees
+                + (count == 1 ? "it" : "them") + " frees " + frees
                 + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
-            moments -> "Delete " + (moments == 1 ? "it" : "them"),
+            count -> "Delete " + (count == 1 ? "it" : "them"),
             "Cancel",
             "Go back instead",
-            "Bring it back to that moment, and keep how it is now as a moment you can return to"
+            "Bring it back to that moment, and keep how it is now as a moment you can return to",
+            "Show only the newest moments",
+            count -> "Show " + count + " earlier " + (count == 1 ? "moment" : "moments"),
+            "MOMENTS",
+            "Reading the history…",
+            "Nothing saved yet",
+            genie ->
+                genie + "'s home is saved the first time it wakes, and from then on "
+                + "whenever something changed. Each save is a moment you can bring it back to.",
+            (genie, branch) -> "How " + genie + " is now" + (branch.isEmpty() ? "" : ", on " + branch),
+            "now"
         );
     }
 
