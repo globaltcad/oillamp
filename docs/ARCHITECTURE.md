@@ -696,7 +696,8 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `rootfs/etc/oillamp/sway/config` | config | The compositor: includes, window frames, no key binding that runs a command. |
 | `rootfs/etc/xdg/foot/foot.ini` | config | The in-sandbox terminal's font and colours. |
 | `rootfs/etc/ssh/ssh_config.d/50-oillamp-proxy.conf` | config | Sends outbound SSH (`git@github.com:…`) through the egress proxy. |
-| `rootfs/usr/share/oillamp/wallpaper.svg`, `.png` | image | The desktop background. After editing the SVG, render it with `inkscape wallpaper.svg --export-type=png --export-filename=wallpaper.png`. |
+| `rootfs/usr/share/oillamp/wallpaper.svg`, `.png` | image | The desktop background, `display.wallpaper = "lamp"`. After editing the SVG, render it with `inkscape wallpaper.svg --export-type=png --export-filename=wallpaper.png`. |
+| `rootfs/usr/share/oillamp/wallpaper-waves-light.svg`, `wallpaper-waves-dark.svg`, `.png` | image | The two "waves" wallpapers: the same shapes in two palettes, so a change to one belongs in both. Rendered the same way; their lettering is Noto Serif Display Bold, which must be installed where they are rendered. Give inkscape absolute paths: the snap resolves relative ones from your home. |
 
 At build time Gradle writes a `MANIFEST` listing every file with its mode (`755` or `644`), so that
 `SandboxImageFilesUtil` can find the files inside the jar and extract them with the right permissions. An
@@ -794,7 +795,7 @@ podman run --detach --name oillamp-<id>
    outlive the container, and wayvnc cannot bind a path that already exists.
 3. Creates `/run/lamp` (infra user, 0711), `/run/lamp/private` (0700), `/run/agent` (agent, 0700)
    and cache directories. Writes sway's screen size to `/run/lamp/output.conf` and the window
-   layout to `/run/lamp/windows.conf`. Creates `/tmp/.X11-unix` as root with mode 1777.
+   layout to `/run/lamp/windows.conf`, and the wallpaper to `/run/lamp/wallpaper.conf`. Creates `/tmp/.X11-unix` as root with mode 1777.
 4. Copies pi's configuration and SDKMAN from `/usr/local/share/oillamp/` into the agent's home, as
    the agent user, never over anything already there. Failure never stops the container.
 5. Starts **sway** as the infra user and waits up to 20 s for `/run/lamp/wayland-1`. If the GPU
@@ -1386,6 +1387,14 @@ asks for, moves by its title bar and resizes by its 4-pixel border. `"tiling"` m
 screen instead. The entrypoint turns the choice into `/run/lamp/windows.conf`, and accepts only
 those two words, because that file is compositor configuration. Dialogs float either way.
 
+The wallpaper (`display.wallpaper`) is chosen the same way, into `/run/lamp/wallpaper.conf`, from
+three words. `"lamp"`, the default, is the lamp on a panel, drawn `center` on the desktop's surface
+colour, because it is transparent around the panel. `"waves-light"` and `"waves-dark"` are the
+inside of the lamp: its name carved into the wall above three rows of waves. They cover the whole
+screen and are drawn with `fill`, so a screen that is not 16:9 loses a little of their sides or of
+their top and bottom. `oillamp at <dir> --wallpaper <name>` writes the choice into a new lamp's
+`oillamp.toml`; for a lamp that has its file already, the option only says that the file decides.
+
 No key binding exits sway or runs a command, because the agent can type into the desktop and sway
 runs as the infra user. `TheSandboxImageSpec` checks the sway config for this.
 
@@ -1532,7 +1541,7 @@ line** by the entrypoint or the supervisor.
 | podman | the `podman run` arguments | every start, `SandboxPhase.containerArgv`, from `oillamp.toml` (`limits.*`, GPU decision) |
 | the image contents | Containerfile build arguments | every build, `SandboxPhase`, from `image.*`, `agent_tools.*` and `.oillamp/image/tools-revision` |
 | the entrypoint | `/oillamp/session/runtime.env` | every start, `RuntimeEnvFileUtil.render` |
-| sway | `/etc/oillamp/sway/config`, which includes `/run/lamp/output.conf` and `/run/lamp/windows.conf` | the config is in the image; the two includes are written by the entrypoint from `runtime.env` |
+| sway | `/etc/oillamp/sway/config`, which includes `/run/lamp/output.conf`, `/run/lamp/windows.conf` and `/run/lamp/wallpaper.conf` | the config is in the image; the three includes are written by the entrypoint from `runtime.env` |
 | wayvnc | command-line flags, `--config=/dev/null` | every start, the entrypoint (`OILLAMP_VNC_MAX_FPS`) |
 | wf-recorder | command-line flags | every start, the entrypoint (`OILLAMP_RECORDING_*`) |
 | socat bridges | command-line arguments | every start, the entrypoint (`OILLAMP_PROXY_PORT`, `OILLAMP_FORWARDS`) |
@@ -1558,7 +1567,7 @@ containing a line break are refused, because a root shell executes this file. Ke
 the file is stable.
 
 Contents: `OILLAMP_SESSION`, `OILLAMP_AGENT_ID`, `OILLAMP_LAMP_NAME`,
-`OILLAMP_DISPLAY_WIDTH/HEIGHT/SCALE`, `OILLAMP_WINDOWS`, `OILLAMP_RENDERER`, `OILLAMP_VNC_MAX_FPS`,
+`OILLAMP_DISPLAY_WIDTH/HEIGHT/SCALE`, `OILLAMP_WINDOWS`, `OILLAMP_WALLPAPER`, `OILLAMP_RENDERER`, `OILLAMP_VNC_MAX_FPS`,
 `OILLAMP_RECORDING_ENABLED/CODEC/CRF/MAX_FPS`, `OILLAMP_PROXY_PORT`, `OILLAMP_MODEL_PORT`, `OILLAMP_MODEL_EU_ONLY`, `OILLAMP_FORWARDS`
 (`name:port name:port`), the LLM variables when configured, and `EDENAI_MAX_TOKENS` when it is set
 on the host (`RuntimeEnvFileUtil.INHERITED_FROM_HOST`). The model key is never in it: it stays on the host,
@@ -1819,6 +1828,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `display.scale` | 1.0 | output scale (0.5–4.0) | yes |
 | `display.gpu` | `"auto"` | `auto`, `on`, `off` | yes |
 | `display.windows` | `"floating"` | `floating` or `tiling` | yes |
+| `display.wallpaper` | `"lamp"` | `lamp`, `waves-light` or `waves-dark`; `oillamp at <dir> --wallpaper` sets it in a new lamp | yes |
 | `viewer.open_on_start` | true | open the viewer when the session starts | yes |
 | `viewer.clipboard` | `"to-agent"` | `to-agent`, `both`, `none` | yes |
 | `viewer.view_only` | false | the viewer shows but sends no input | yes |

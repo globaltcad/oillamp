@@ -1769,7 +1769,8 @@ final class CommandExecutionUtil {
     private static String describe(LampConfig config) {
         return "display      " + config.display().size() + " scale " + config.display().scale()
                 + " gpu " + config.display().gpu().configName()
-                + ", " + config.display().windows().configName() + " windows\n"
+                + ", " + config.display().windows().configName() + " windows"
+                + ", wallpaper " + config.display().wallpaper().configName() + "\n"
              + "viewer       clipboard " + config.viewer().clipboard().configName()
                 + ", " + config.viewer().maxFps() + " fps"
                 + (config.viewer().viewOnly() ? ", view only" : "") + "\n"

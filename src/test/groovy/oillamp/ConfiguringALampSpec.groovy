@@ -401,6 +401,76 @@ class ConfiguringALampSpec extends Specification {
             checked.console().contains('"floating" or "tiling"')
     }
 
+    def 'A new lamp gets the wallpaper chosen on the command line, and keeps it'() {
+        reportInfo """
+            Let's consider a user who prefers a quieter desktop than the lamp on its panel. The
+            sandbox has three wallpapers: "lamp", the default, and "waves-light" and "waves-dark",
+            the inside of the lamp with its name carved into the wall. `--wallpaper` chooses one
+            when a lamp is made. The choice is written into the new `oillamp.toml` as
+            `display.wallpaper`, so the lamp keeps it, and it reaches the sandbox in `runtime.env`,
+            which accepts only these three words, because it turns them into compositor
+            configuration. Once the file exists it decides: the option does not overwrite it.
+        """
+        given:
+            var lamp = host.lampPath()
+
+        when: 'the user makes the lamp with the dark waves'
+            var made = host.oillamp.run('at', lamp.toString(), '--wallpaper', 'waves-dark')
+            var settings = Files.readString(lamp.resolve('oillamp.toml'))
+            var runtimeEnv = Files.readString(lamp.resolve('.oillamp/session/runtime.env'))
+
+        then: 'the first session already has them'
+            made.status() == LampExitStatus.SUCCESS
+            runtimeEnv.contains("OILLAMP_WALLPAPER='waves-dark'")
+
+        and: 'and the lamp\'s file names them, with the other two wallpapers in its comment'
+            settings.contains('wallpaper = "waves-dark"')
+            settings.contains('"waves-light"')
+
+        when: 'the user starts it again without the option'
+            host.oillamp.run('at', lamp.toString())
+
+        then: 'the lamp keeps its wallpaper'
+            Files.readString(lamp.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_WALLPAPER='waves-dark'")
+
+        when: 'the user asks for another wallpaper on the lamp that now exists'
+            var again = host.oillamp.run('at', lamp.toString(), '--wallpaper', 'waves-light')
+
+        then: 'the file still decides, and oillamp says so'
+            Files.readString(lamp.resolve('oillamp.toml')) == settings
+            Files.readString(lamp.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_WALLPAPER='waves-dark'")
+            again.console().contains('--wallpaper only chooses the wallpaper of a new lamp')
+
+        when: 'a lamp is made without the option'
+            var plain = host.lampPath('plain')
+            host.oillamp.run('at', plain.toString())
+
+        then: 'it has the lamp on its panel'
+            Files.readString(plain.resolve('oillamp.toml')).contains('wallpaper = "lamp"')
+            Files.readString(plain.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_WALLPAPER='lamp'")
+
+        when: 'the user asks for a wallpaper there is not'
+            var wrong = host.oillamp.run('at', host.lampPath('beach').toString(), '--wallpaper', 'beach')
+
+        then: 'oillamp refuses it, with the three that exist'
+            wrong.status() == LampExitStatus.USAGE
+            wrong.console().contains('"lamp", "waves-light" or "waves-dark"')
+
+        when: 'the file names one there is not'
+            host.givenConfig(lamp, '''
+                schema_version = 1
+
+                [display]
+                wallpaper = "beach"
+            '''.stripIndent())
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then:
+            checked.status() == LampExitStatus.USAGE
+            checked.reported('OIL-CONFIG-004')
+            checked.console().contains('"lamp", "waves-light" or "waves-dark"')
+    }
+
     def 'Oillamp keeps the sandbox on Eden AI\'s EU endpoint, whatever the host\'s environment says'() {
         reportInfo """
             The team's model traffic has to stay in the EU. Inside the sandbox, pi and opencode

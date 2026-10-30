@@ -22,6 +22,7 @@ set -a; . /oillamp/session/runtime.env; set +a
 : "${OILLAMP_DISPLAY_HEIGHT:?runtime.env is missing OILLAMP_DISPLAY_HEIGHT}"
 : "${OILLAMP_DISPLAY_SCALE:=1}"
 : "${OILLAMP_WINDOWS:=floating}"
+: "${OILLAMP_WALLPAPER:=lamp}"
 : "${OILLAMP_RENDERER:=pixman}"
 : "${OILLAMP_SESSION:?runtime.env is missing OILLAMP_SESSION}"
 : "${OILLAMP_PROXY_PORT:=3128}"
@@ -137,6 +138,18 @@ case "$OILLAMP_WINDOWS" in
     *)        fail "OILLAMP_WINDOWS is '$OILLAMP_WINDOWS'; expected floating or tiling" ;;
 esac
 chown lamp:lamp /run/lamp/windows.conf
+# The wallpaper (`display.wallpaper`), accepted the same way. "lamp" is the lamp itself, centred
+# on the colour the rest of the desktop uses: `center` rather than `stretch` so it looks right at
+# any size, and transparent around its panel, so this colour is the surface the panel sits on.
+# The two "waves" wallpapers cover the whole screen, so they `fill` it.
+case "$OILLAMP_WALLPAPER" in
+    lamp)        wallpaper='wallpaper.png center #161a22' ;;
+    waves-light) wallpaper='wallpaper-waves-light.png fill #d9d2c6' ;;
+    waves-dark)  wallpaper='wallpaper-waves-dark.png fill #12151c' ;;
+    *)           fail "OILLAMP_WALLPAPER is '$OILLAMP_WALLPAPER'; expected lamp, waves-light or waves-dark" ;;
+esac
+echo "output * bg /usr/share/oillamp/$wallpaper" > /run/lamp/wallpaper.conf
+chown lamp:lamp /run/lamp/wallpaper.conf
 
 # ── the agent's pi installation ──────────────────────────────────────────────────────────────
 # pi keeps its packages and its settings.json in its agent directory, which lives in the agent's

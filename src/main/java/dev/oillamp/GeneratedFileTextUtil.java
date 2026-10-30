@@ -15,6 +15,11 @@ final class GeneratedFileTextUtil {
     /// `ConfiguringALampSpec` checks this, because many users read this file as the
     /// documentation of the settings.
     public static String defaultConfig() {
+        return defaultConfig(Wallpaper.LAMP);
+    }
+
+    /// The same, with the wallpaper `oillamp at <dir> --wallpaper` chose for the new lamp.
+    public static String defaultConfig(Wallpaper wallpaper) {
         return """
             # oillamp lamp configuration. Edited by you, never visible to the agent.
             # Changes take effect at the next `oillamp at`. Arrays replace (not merge with) values
@@ -28,6 +33,9 @@ final class GeneratedFileTextUtil {
             gpu    = "auto"           # "auto" | "on" | "off"
             windows = "floating"      # "floating": move by the title bar, resize by the edges
                                       # "tiling": windows share the screen and never overlap
+            wallpaper = "%s"%s# "lamp": the lamp on a panel
+                                      # "waves-light", "waves-dark": inside the lamp, its name
+                                      # carved into the wall above three rows of waves
 
             [viewer]
             open_on_start = true
@@ -196,7 +204,9 @@ final class GeneratedFileTextUtil {
                                          # for every one) or "checker" (the checker alone)
             allow_additive    = true     # writing and copying files out, opening pages, notifications
             ask_the_user      = false    # ask you, rather than refuse, a request outside roots
-            """;
+            """.formatted(wallpaper.configName(),
+                          // the comment lines up with those of the other [display] settings
+                          " ".repeat(Math.max(1, 12 - wallpaper.configName().length())));
     }
 
     /// The bash completion script, printed by `oillamp completion bash`.
@@ -218,6 +228,12 @@ final class GeneratedFileTextUtil {
                 local current="${COMP_WORDS[COMP_CWORD]}"
                 local before=""
                 [ "$COMP_CWORD" -ge 2 ] && before="${COMP_WORDS[COMP_CWORD-2]}"
+
+                # `oillamp at <dir> --wallpaper waves-dark`: the option's value.
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --wallpaper ]; then
+                    COMPREPLY=($(compgen -W 'lamp waves-light waves-dark' -- "$current"))
+                    return
+                fi
 
                 # `oillamp config <dir> check`: the lamp comes first, then what to do with it.
                 if [ "$before" = config ]; then
@@ -247,7 +263,7 @@ final class GeneratedFileTextUtil {
                     -*)
                         local options='--verbose --debug --no-color'
                         case "$command" in
-                            at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling" ;;
+                            at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling --wallpaper" ;;
                             view)          options="$options --view-only" ;;
                             remove)        options="$options --yes --dry-run" ;;
                             history)       options="$options --message --all --delete --yes" ;;

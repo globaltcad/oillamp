@@ -36,6 +36,13 @@ record LampConfig(
     Autosave autosave,
     History history
 ) {
+    /// The same configuration with other `[display]` settings, such as the wallpaper a new lamp
+    /// was given on the command line.
+    public LampConfig withDisplay(Display changed) {
+        return new LampConfig(changed, viewer, terminal, recording, limits, network, forwards, llm,
+                              model, git, agentTools, image, host, timeouts, schedule, hostAccess, autosave, history);
+    }
+
     /// The same configuration with other `[model]` settings, such as those an application gave
     /// on the command line for one session.
     public LampConfig withModel(Model changed) {
@@ -85,13 +92,17 @@ record LampConfig(
     /// The version of the config schema this build writes and understands.
     public static final int SCHEMA_VERSION = 1;
 
-    public record Display(int width, int height, double scale, GpuMode gpu, WindowLayout windows) {
+    public record Display(int width, int height, double scale, GpuMode gpu, WindowLayout windows,
+                          Wallpaper wallpaper) {
         public Display {
             if (width  < 640 || width  > 7680) throw new IllegalArgumentException("display.width out of range: " + width);
             if (height < 480 || height > 4320) throw new IllegalArgumentException("display.height out of range: " + height);
             if (scale  < 0.5 || scale  > 4.0)  throw new IllegalArgumentException("display.scale out of range: " + scale);
         }
         public String size() { return width + "x" + height; }
+        public Display withWallpaper(Wallpaper changed) {
+            return new Display(width, height, scale, gpu, windows, changed);
+        }
     }
 
     public record Viewer(boolean openOnStart, ClipboardMode clipboard, boolean viewOnly, int maxFps) {

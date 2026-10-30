@@ -121,7 +121,7 @@ final class ConfigLoadingUtil {
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {
-        s.allowOnly("width", "height", "scale", "gpu", "windows");
+        s.allowOnly("width", "height", "scale", "gpu", "windows", "wallpaper");
         int width   = bounded(s, "width",  fallback.width(),  640, 7680, "a width between 640 and 7680");
         int height  = bounded(s, "height", fallback.height(), 480, 4320, "a height between 480 and 4320");
         double scale = s.number("scale", fallback.scale());
@@ -132,7 +132,8 @@ final class ConfigLoadingUtil {
         GpuMode gpu = s.oneOf("gpu", fallback.gpu(), ConfigLoadingUtil::parseGpuMode, "\"auto\", \"on\" or \"off\"");
         WindowLayout windows = s.oneOf("windows", fallback.windows(), ConfigLoadingUtil::parseWindowLayout,
                                        "\"floating\" or \"tiling\"");
-        return new LampConfig.Display(width, height, scale, gpu, windows);
+        Wallpaper wallpaper = s.oneOf("wallpaper", fallback.wallpaper(), Wallpaper::named, Wallpaper.names());
+        return new LampConfig.Display(width, height, scale, gpu, windows, wallpaper);
     }
 
     private static LampConfig.Viewer readViewer(ConfigSection s, LampConfig.Viewer fallback) {

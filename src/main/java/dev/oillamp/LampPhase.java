@@ -76,6 +76,17 @@ final class LampPhase {
                 .withSchedule(context.options().enableScheduling() ? configured.schedule().switchedOn()
                                                                    : configured.schedule())
                 .withHostAccess(((Result.Ok<LampConfig.HostAccess>) access).value());
+        // --wallpaper chooses the wallpaper of a lamp that has no oillamp.toml yet: it is written
+        // into the new file, and this first session has it too. A lamp with a file keeps the
+        // wallpaper the file names, so the option cannot quietly undo an edit.
+        Optional<Wallpaper> wallpaper = context.options().wallpaper();
+        boolean newFile = !FilesystemUtil.exists(layout.config());
+        if (wallpaper.isPresent() && newFile)
+            config = config.withDisplay(config.display().withWallpaper(wallpaper.get()));
+        else if (wallpaper.isPresent())
+            context.sink().accept(new LampEvent.Info("lamp", "--wallpaper only chooses the wallpaper of a new "
+                    + "lamp; this one keeps \"" + config.display().wallpaper().configName()
+                    + "\", as display.wallpaper in " + layout.config() + " says"));
         context.sinkAcceptProblems(configuration.warnings());
         describeConfiguration(config);
 
@@ -94,7 +105,7 @@ final class LampPhase {
         Result<Plan> skeleton = LampPlanUtil.planSkeleton(new LampPlanUtil.Inputs(
                 state, layout, config, session, agentId, machine.now(), context.version(),
                 existingRecordings(layout), Optional.empty(), FilesystemUtil.exists(layout.sessionMeta()),
-                context.options().init()));
+                context.options().init(), newFile ? wallpaper : Optional.empty()));
         if (skeleton instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
         context.sinkAcceptProblems(skeleton.warnings());
 

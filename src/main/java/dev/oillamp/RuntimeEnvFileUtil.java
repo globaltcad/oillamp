@@ -65,6 +65,7 @@ final class RuntimeEnvFileUtil {
             .put("OILLAMP_DISPLAY_HEIGHT",  Integer.toString(config.display().height()))
             .put("OILLAMP_DISPLAY_SCALE",   Double.toString(config.display().scale()))
             .put("OILLAMP_WINDOWS",         config.display().windows().configName())
+            .put("OILLAMP_WALLPAPER",       config.display().wallpaper().configName())
             .put("OILLAMP_RENDERER",        renderer)
             .put("OILLAMP_VNC_MAX_FPS",     Integer.toString(config.viewer().maxFps()))
             .put("OILLAMP_RECORDING_ENABLED", Boolean.toString(config.recording().enabled()))

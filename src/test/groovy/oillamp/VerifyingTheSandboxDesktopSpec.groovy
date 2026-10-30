@@ -57,6 +57,7 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
             OILLAMP_DISPLAY_HEIGHT='720'
             OILLAMP_DISPLAY_SCALE='1.0'
             OILLAMP_WINDOWS='floating'
+            OILLAMP_WALLPAPER='waves-dark'
             OILLAMP_RENDERER='pixman'
             OILLAMP_RECORDING_ENABLED='true'
             OILLAMP_RECORDING_CODEC='libx264'

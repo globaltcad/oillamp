@@ -304,6 +304,7 @@ oillamp at <dir>                 # start (or resume) a sandbox in <dir>
 oillamp update <dir>             # newer opencode and pi, and a fresh model list
 oillamp update <dir> --system    # the whole image again, with Debian's updates
 oillamp at <dir> --dry-run       # print every step it would take, and do nothing
+oillamp at <dir> --wallpaper waves-dark  # a new lamp with this wallpaper: lamp, waves-light, waves-dark
 oillamp at <dir> --model <id>    # answer every run with this model, old conversations too
 oillamp at <dir> --instructions-env <name>  # tell the agent what this variable holds
 oillamp doctor [<dir>]           # check this machine (and a lamp's config), change nothing
@@ -462,6 +463,7 @@ The agent cannot see or change this file. A few highlights:
 width  = 1920
 height = 1080
 gpu    = "auto"              # use your graphics card if possible, fall back if not
+wallpaper = "lamp"           # or "waves-light" / "waves-dark": inside the lamp, its name carved in
 
 [recording]
 enabled = false              # true records the whole desktop session to a video file
