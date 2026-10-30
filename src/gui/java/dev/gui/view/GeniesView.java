@@ -1001,7 +1001,7 @@ public final class GeniesView extends JPanel {
                 .add(part(GeniesState.Page.CHAT, wide))
                 .add(
                     half(Val.of(""), SignSvgUtil.MANAGE, managing)
-                    .withTooltip("Manage: the genie's actions, schedule, history and host access")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::MANAGE_THE_GENIES_ACTIONS_SCHEDULE_HISTORY_AND_HOST_ACCESS))
                     .onClick(_ -> page.update(From.VIEW, it -> it.managing() ? it : GeniesState.Page.ACTIONS))
                 )
             );
@@ -1029,15 +1029,20 @@ public final class GeniesView extends JPanel {
     /// The part of a switch that goes to `to`, with its words while `words` holds. The schedule's
     /// says how many jobs it has, once they were read.
     private UIForButton<JButton> part(GeniesState.Page to, Val<Boolean> words) {
-        Val<String> text = Viewable.of(String.class, genie, words, (shown, worded) -> switch (to) {
+        Val<String> text = Viewable.of(String.class, genie, Viewable.of(String.class, words, headerWords, (worded, header) ->
+            !worded ? "" : switch (to) {
+                case SCHEDULE -> header.SCHEDULE() + "  ";
+                case HISTORY -> header.HISTORY();
+                case HOST_ACCESS -> header.ACCESS();
+                case ACTIONS -> header.ACTIONS();
+                default -> header.CHAT();
+            }
+        ), (shown, worded) -> switch (to) {
             case SCHEDULE -> {
                 int jobs = shown.schedule().jobs().size();
-                yield (worded ? "Schedule  " : "") + (jobs == 0 ? "" : jobs);
+                yield worded + (jobs == 0 ? "" : jobs);
             }
-            case HISTORY -> worded ? "History" : "";
-            case HOST_ACCESS -> worded ? "Access" : "";
-            case ACTIONS -> worded ? "Actions" : "";
-            default -> worded ? "Chat" : "";
+            default -> worded;
         });
         String sign = switch (to) {
             case SCHEDULE -> SignSvgUtil.SCHEDULE;
@@ -1046,13 +1051,13 @@ public final class GeniesView extends JPanel {
             case ACTIONS -> SignSvgUtil.ACTIONS;
             default -> SignSvgUtil.CHAT;
         };
-        String tooltip = switch (to) {
-            case SCHEDULE -> "Schedule: when jobs wake the genie, and what they did";
-            case HISTORY -> "History: the moments the genie's home was saved at, and going back to one";
-            case HOST_ACCESS -> "Host access: whether the genie may reach this computer, and its rules";
-            case ACTIONS -> "Actions: rename, save, wake or sleep, link its folders, or delete the genie";
-            default -> "Chat: talk with the genie";
-        };
+        Val<String> tooltip = headerWords.viewAsString(header -> switch (to) {
+            case SCHEDULE -> header.SCHEDULE_WHEN_JOBS_WAKE_THE_GENIE_AND_WHAT_THEY_DID();
+            case HISTORY -> header.HISTORY_THE_MOMENTS_THE_GENIES_HOME_WAS_SAVED_AT();
+            case HOST_ACCESS -> header.HOST_ACCESS_WHETHER_THE_GENIE_MAY_REACH_THIS_COMPUTER();
+            case ACTIONS -> header.ACTIONS_RENAME_SAVE_WAKE_OR_SLEEP_LINK_ITS_FOLDERS_OR_DELETE_THE_GENIE();
+            default -> header.CHAT_TALK_WITH_THE_GENIE();
+        });
         return
             half(text, sign, page.viewAs(Boolean.class, it -> it == to))
             .withTooltip(tooltip)
