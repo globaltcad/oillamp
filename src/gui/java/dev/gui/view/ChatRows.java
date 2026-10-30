@@ -26,6 +26,7 @@ import dev.gui.model.Conversation;
 import dev.gui.model.Entry;
 import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -70,6 +71,7 @@ final class ChatRows {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang.Chat> words;
     private final Val<Genie> genie;
     private final Consumer<String> saveHandout;
     private final Val<Double> pulse;
@@ -78,6 +80,7 @@ final class ChatRows {
     private final Consumer<String> showLeaf;
 
     /// @param theme       the colours and the fonts of the state
+    /// @param words       the words of a genie's chat
     /// @param genie       the genie whose conversation this is
     /// @param saveHandout asks the user where to save the outbox file of that name
     /// @param pulse       loops from 0 to 1 while a genie works or wakes; drives the bars and the genie
@@ -88,6 +91,7 @@ final class ChatRows {
     ChatRows(
         final Look look,
         final Val<Theme> theme,
+        final Val<Lang.Chat> words,
         final Val<Genie> genie,
         final Consumer<String> saveHandout,
         final Val<Double> pulse,
@@ -98,6 +102,7 @@ final class ChatRows {
         this.look = look;
         this.theme = theme;
         this.palette = theme.viewAs(Palette.class, Theme::palette);
+        this.words = words;
         this.genie = genie;
         this.saveHandout = saveHandout;
         this.pulse = pulse;
@@ -162,8 +167,8 @@ final class ChatRows {
                 box("ins 0, gap 0, hidemode 3")
                 .add(versions(entry))
                 .add(
-                    button("✎  Edit").group(Skin.ICON_BUTTON).isVisibleIf(editable)
-                    .withTooltip("Ask this differently. What followed is kept, as a branch in the genie's conversations.")
+                    button(words.viewAsString(it -> "✎  " + it.EDIT())).group(Skin.ICON_BUTTON).isVisibleIf(editable)
+                    .withTooltip(words.viewAsString(Lang.Chat::ASK_THIS_DIFFERENTLY_WHAT_FOLLOWED_IS_KEPT_AS_A_BRANCH))
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT())))
                     .onClick(_ -> askInstead.accept(entry.get()))
                 )
@@ -192,7 +197,7 @@ final class ChatRows {
             .isVisibleIf(versions.viewAs(Boolean.class, it -> it.leaves().size() > 1))
             .add(
                 button("‹").group(Skin.ICON_BUTTON).isEnabledIf(hasEarlier)
-                .withTooltip("Previous conversation version")
+                .withTooltip(words.viewAsString(Lang.Chat::PREVIOUS_CONVERSATION_VERSION))
                 .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() - 1)))
             )
             .add(
@@ -201,7 +206,7 @@ final class ChatRows {
             )
             .add(
                 button("›").group(Skin.ICON_BUTTON).isEnabledIf(hasLater)
-                .withTooltip("Next conversation version")
+                .withTooltip(words.viewAsString(Lang.Chat::NEXT_CONVERSATION_VERSION))
                 .onClick(_ -> showLeaf.accept(versions.get().leaves().get(versions.get().at() + 1)))
             );
     }
@@ -261,8 +266,8 @@ final class ChatRows {
                     .withTooltip(writtenBy)
                 )
                 .add("left",
-                    button("⧉  Copy").group(Skin.ICON_BUTTON).isVisibleIf(copyable)
-                    .withTooltip("Copy the answer, as the genie wrote it")
+                    button(words.viewAsString(it -> "⧉  " + it.COPY())).group(Skin.ICON_BUTTON).isVisibleIf(copyable)
+                    .withTooltip(words.viewAsString(Lang.Chat::COPY_THE_ANSWER_AS_THE_GENIE_WROTE_IT))
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT())))
                     .onClick(_ -> copy(entry.get().text()))
                 )
@@ -281,7 +286,7 @@ final class ChatRows {
                 picture(_ -> GenieSvgUtil.Pose.THINKING, _ -> entry.get().isWriting()),
                 box("fill, ins 0, gap 8, hidemode 3", "[][grow][]")
                 .add(
-                    label(entry.viewAsString(it -> it.isWriting() ? "✦ thinking" : "✦ thought"))
+                    label(Viewable.of(String.class, entry, words, (it, chat) -> "✦ " + (it.isWriting() ? chat.THINKING() : chat.THOUGHT())))
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).weight(2f).color(now.palette().BRASS())))
                 )
                 .add("growx, wmin 0, h 4!", progress(writing))
@@ -304,8 +309,8 @@ final class ChatRows {
                         );
                 })
             )
-            .withTooltip(entry.viewAsString(it ->
-                it.expanded() ? "Click to fold the thoughts away" : "Click to see what the genie thinks"
+            .withTooltip(Viewable.of(String.class, entry, words, (it, chat) ->
+                it.expanded() ? chat.CLICK_TO_FOLD_THE_THOUGHTS_AWAY() : chat.CLICK_TO_SEE_WHAT_THE_GENIE_THINKS()
             ))
             .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
@@ -339,10 +344,10 @@ final class ChatRows {
                         ),
                         box().isVisibleIf(Val.of(false))
                     )
-                    .withTooltip(waiting.viewAsString(it ->
+                    .withTooltip(Viewable.of(String.class, waiting, words, (it, chat) ->
                         it.time().isEmpty()
                             ? it.what()
-                            : it.what() + ". The genie does one thing at a time, so your message waits until this job is done."
+                            : chat.YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE().of(it.what())
                     ))
                 )
             )
@@ -466,9 +471,9 @@ final class ChatRows {
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).color(now.palette().SUBTEXT())))
                 )
                 .add(
-                    label(entry.viewAsString(it -> switch (it.state()) {
-                        case WRITING -> "running…";
-                        case FAILED -> "✗ failed";
+                    label(Viewable.of(String.class, entry, words, (it, chat) -> switch (it.state()) {
+                        case WRITING -> chat.RUNNING();
+                        case FAILED -> "✗ " + chat.FAILED();
                         case DONE -> "✓";
                     }))
                     .withStyle(Themed.of(entry.viewAs(Entry.State.class, Entry::state), theme), (themed, it) -> {
@@ -501,8 +506,8 @@ final class ChatRows {
                         );
                 })
             )
-            .withTooltip(entry.viewAsString(it ->
-                it.detail().isBlank() ? it.title() + ": " + it.text() : "Click to see what it printed"
+            .withTooltip(Viewable.of(String.class, entry, words, (it, chat) ->
+                it.detail().isBlank() ? it.title() + ": " + it.text() : chat.CLICK_TO_SEE_WHAT_IT_PRINTED()
             ))
             .onMouseClick(_ -> entry.update(From.VIEW, e -> e.withExpanded(!e.expanded())));
     }
@@ -528,7 +533,7 @@ final class ChatRows {
                 )
                 .add(
                     handed
-                        ? button("⤓  Save…").group(Skin.QUIET_BUTTON).onClick(_ -> saveHandout.accept(entry.get().title()))
+                        ? button(words.viewAsString(it -> "⤓  " + it.SAVE_ELLIPSIS())).group(Skin.QUIET_BUTTON).onClick(_ -> saveHandout.accept(entry.get().title()))
                         : box()
                 )
             );
