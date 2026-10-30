@@ -66,7 +66,7 @@ public record Schedule(
         public String when(LocalDateTime now, ZoneId zone, Lang lang) {
             if (repeats.isPresent()) return repeats.get().describe(lang);
             return at.map(time -> LocalDateTime.ofInstant(time, zone))
-                     .map(time -> lang.SCHEDULE_PAGE().ONCE_AT().of(
+                     .map(time -> lang.SCHEDULE_PAGE().ONCE_AT(
                          DateWordingUtil.dayInSentence(time.toLocalDate(), now.toLocalDate(), lang.DATES()),
                          Recurrence.clock(time.toLocalTime())
                      ))
