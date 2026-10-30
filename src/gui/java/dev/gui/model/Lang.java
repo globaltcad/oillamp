@@ -21,6 +21,7 @@ package dev.gui.model;
 /// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
 /// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
 /// @param SETTINGS_PAGE the settings every genie shares, and the welcome above them
+/// @param PARTS   the parts of the window that several pages share
 public record Lang(
     Window WINDOW,
     Header HEADER,
@@ -30,7 +31,8 @@ public record Lang(
     ActionsPage ACTIONS_PAGE,
     HomeFolders HOME_FOLDERS,
     HostAccessPage HOST_ACCESS_PAGE,
-    SettingsPage SETTINGS_PAGE
+    SettingsPage SETTINGS_PAGE,
+    Parts PARTS
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -42,7 +44,8 @@ public record Lang(
         ActionsPage.ENGLISH,
         HomeFolders.ENGLISH,
         HostAccessPage.ENGLISH,
-        SettingsPage.ENGLISH
+        SettingsPage.ENGLISH,
+        Parts.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -603,7 +606,18 @@ public record Lang(
         String ADDRESS,
         String WHERE_THE_SERVERS_API_IS_IT_MUST_BE_HTTPS,
         String LEAVE_IT_EMPTY_IF_THE_SERVER_ASKS_FOR_NONE,
-        String WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED
+        String WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED,
+        String LOOK_UP,
+        String ASK_THE_SERVICE_WHICH_MODELS_IT_OFFERS,
+        String CHANGES_TAKE_EFFECT_WHEN_A_GENIE_WAKES,
+        String YOUR_GENIES_CAN_REACH_THEIR_MODEL,
+        String DONE,
+        String YOUR_FIRST_GENIE,
+        String A_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN_THAT_WAKES_AT_ONCE,
+        String APPEARANCE,
+        String THE_LAMP_AT_NIGHT_OR_BY_DAY,
+        String DARK,
+        String LIGHT
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -643,7 +657,29 @@ public record Lang(
             + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
             "Leave it empty if the server asks for none.",
             "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
-            + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed."
+            + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.",
+            "Look up",
+            "Ask the service which models it offers",
+            "Changes take effect when a genie wakes.",
+            "Your genies can reach their model.",
+            "Done",
+            "Your first genie",
+            "A genie, with a sandboxed desktop of its own, that wakes at once",
+            "Appearance",
+            "The lamp at night, or by day.",
+            "Dark",
+            "Light"
+        );
+    }
+
+    /// The words of the parts of the window that several pages share.
+    public record Parts(
+        String NO,
+        String YES
+    ) {
+        public static final Parts ENGLISH = new Parts(
+            "No",
+            "Yes"
         );
     }
 }

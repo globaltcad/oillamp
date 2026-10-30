@@ -497,15 +497,15 @@ final class SettingsPage {
                         )
 
                         // ── the model, wherever it runs ──
-                        .add(LABEL, label("Model"))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::MODEL)))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4, hidemode 3")
                             .add("growx, wmin 0",
                                 box("fill, ins 0, gap 8", "[grow][]")
                                 .add("growx, wmin 0", comboBox(model, offered).isEditableIf(true))
                                 .add(
-                                    button("Look up").group(Skin.QUIET_BUTTON)
-                                    .withTooltip("Ask the service which models it offers")
+                                    button(words.viewAsString(Lang.SettingsPage::LOOK_UP)).group(Skin.QUIET_BUTTON)
+                                    .withTooltip(words.viewAsString(Lang.SettingsPage::ASK_THE_SERVICE_WHICH_MODELS_IT_OFFERS))
                                     .onClick(_ -> app.lookUpModels())
                                 )
                             )
@@ -521,21 +521,21 @@ final class SettingsPage {
                     )
 
                     .add(WHOLE,
-                        label("Changes take effect when a genie wakes.").group(Skin.META)
+                        label(words.viewAsString(Lang.SettingsPage::CHANGES_TAKE_EFFECT_WHEN_A_GENIE_WAKES)).group(Skin.META)
                         .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
                     )
                     .add(WHOLE, ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, hasProblem))
-                    .add(WHOLE, label("✓  Your genies can reach their model.").group(Skin.FINE).isVisibleIf(fine))
+                    .add(WHOLE, label(words.viewAsString(it -> "✓  " + it.YOUR_GENIES_CAN_REACH_THEIR_MODEL())).group(Skin.FINE).isVisibleIf(fine))
                     .add(WHOLE,
                         box("fill, ins 0, hidemode 3", "[grow, right]")
                         .add(
-                            button("Done").group(Skin.FLAME_BUTTON)
+                            button(words.viewAsString(Lang.SettingsPage::DONE)).group(Skin.FLAME_BUTTON)
                             .isVisibleIf(welcome.viewAs(Boolean.class, it -> !it))
                             .onClick(_ -> app.settingsDone())
                         )
                         .add(
-                            button("+  Your first genie").group(Skin.FLAME_BUTTON)
-                            .withTooltip("A genie, with a sandboxed desktop of its own, that wakes at once")
+                            button(words.viewAsString(it -> "+  " + it.YOUR_FIRST_GENIE())).group(Skin.FLAME_BUTTON)
+                            .withTooltip(words.viewAsString(Lang.SettingsPage::A_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN_THAT_WAKES_AT_ONCE))
                             .isVisibleIf(state.viewAs(Boolean.class, it ->
                                 !it.hasGenies() &&
                                 it.settingsProblem().isEmpty() &&
@@ -554,17 +554,17 @@ final class SettingsPage {
                         box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
                         .add(
                             box("fill, wrap 1, ins 0, gap 12")
-                            .add("growx, wmin 0", label("Appearance").group(Skin.EMPTY_TITLE))
+                            .add("growx, wmin 0", label(words.viewAsString(Lang.SettingsPage::APPEARANCE)).group(Skin.EMPTY_TITLE))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    Val.of("The lamp at night, or by day."),
+                                    words.viewAsString(Lang.SettingsPage::THE_LAMP_AT_NIGHT_OR_BY_DAY),
                                     Palette::SUBTEXT,
                                     Val.of(true)
                                 )
                             )
                         )
-                        .add(ViewPartsUtil.eitherOr(theme, "Dark", "Light", light, Val.of(true), light::set))
+                        .add(ViewPartsUtil.eitherOr(theme, words.viewAsString(Lang.SettingsPage::DARK), words.viewAsString(Lang.SettingsPage::LIGHT), light, Val.of(true), light::set))
                     )
                 )
             );
