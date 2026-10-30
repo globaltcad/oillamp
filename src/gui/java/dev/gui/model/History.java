@@ -394,17 +394,18 @@ public record History(
     /// oillamp's rules, checked here so that the user learns them as they type rather than from a
     /// refusal: lowercase letters, digits, `-`, `_` and `.`, beginning with a letter or a digit,
     /// at most [#LONGEST_BRANCH_NAME] characters, and not a name a branch has already.
-    public Optional<String> branchNameProblem(String name) {
+    public Optional<String> branchNameProblem(String name, Lang lang) {
+        Lang.HistoryPage words = lang.HISTORY_PAGE();
         if (name.isEmpty())
-            return Optional.of("A branch needs a name, such as rust-rewrite.");
+            return Optional.of(words.A_BRANCH_NEEDS_A_NAME());
         if (name.length() > LONGEST_BRANCH_NAME)
-            return Optional.of("A branch's name is at most " + LONGEST_BRANCH_NAME + " characters long.");
+            return Optional.of(words.A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG().of(LONGEST_BRANCH_NAME));
         if (!name.matches("[a-z0-9][a-z0-9._-]*"))
-            return Optional.of("A branch's name is made of lowercase letters, digits, -, _ and ., and begins with a letter or a digit, such as rust-rewrite.");
+            return Optional.of(words.A_BRANCHS_NAME_IS_MADE_OF_LOWERCASE_LETTERS_DIGITS_AND_SIGNS());
         if (name.contains("..") || name.endsWith(".") || name.endsWith(".lock"))
-            return Optional.of("A branch's name cannot hold .., or end in . or .lock.");
+            return Optional.of(words.A_BRANCHS_NAME_CANNOT_HOLD_TWO_DOTS_OR_END_IN_A_DOT_OR_LOCK());
         if (branches.any(it -> it.name().equals(name)))
-            return Optional.of("There is a branch called " + name + " already.");
+            return Optional.of(words.THERE_IS_A_BRANCH_CALLED_IT_ALREADY().of(name));
         return Optional.empty();
     }
 
