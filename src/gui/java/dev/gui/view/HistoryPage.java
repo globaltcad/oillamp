@@ -1332,7 +1332,7 @@ final class HistoryPage {
             );
             if (!(answer instanceof String words)) return;
             name = words.strip();
-            Optional<String> wrong = genie.get().history().branchNameProblem(name);
+            Optional<String> wrong = genie.get().history().branchNameProblem(name, state.get().lang());
             if (wrong.isEmpty()) {
                 app.startBranch(shown.id(), name, moment);
                 return;
