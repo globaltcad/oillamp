@@ -486,6 +486,9 @@ final class HistoryPage {
     /// A row as the page draws it, with the lanes it draws them in.
     private record Drawn(Tuple<Lines.Lane> lanes, Lines.Row row) {}
 
+    /// How many moments before the newest ones the page hides, and whether it shows them anyway.
+    private record EarlierMoments(int hidden, boolean shown) {}
+
     private UIForAnySwing<?, ?> momentsColumn() {
         Val<Tuple<Drawn>> rows = lines.viewAs(
             Tuple.classTyped(Drawn.class),
@@ -496,34 +499,29 @@ final class HistoryPage {
         Val<Boolean> earlier = history.viewAs(Boolean.class, History::earlier);
         Val<Boolean> reading = history.viewAs(Boolean.class, it -> !it.read());
         Val<Boolean> none = history.viewAs(Boolean.class, it -> it.read() && it.all().isEmpty());
-        Val<String> earlierButtonText = Viewable.of(String.class, hidden, earlier, (more, shown) ->
-            shown
-                ? "Show only the newest moments"
-                : "Show " + more + " earlier " + (more == 1 ? "moment" : "moments")
+        Val<String> earlierButtonText = Viewable.of(String.class, Viewable.of(EarlierMoments.class, hidden, earlier, EarlierMoments::new), words, (it, page) ->
+            it.shown() ? page.SHOW_ONLY_THE_NEWEST_MOMENTS() : page.SHOW_EARLIER_MOMENTS().of(it.hidden())
         );
         Val<Boolean> earlierButtonShown = Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown);
         return
             box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(0, isWide ? 14 : 0, 0, 0))
-            .add("growx, wmin 0", label("MOMENTS").group(Skin.SECTION))
+            .add("growx, wmin 0", label(words.viewAsString(Lang.HistoryPage::MOMENTS)).group(Skin.SECTION))
             .add("growx, wmin 0", branchesBar())
-            .add("growx, wmin 0", label("Reading the history…").group(Skin.META).isVisibleIf(reading))
+            .add("growx, wmin 0", label(words.viewAsString(Lang.HistoryPage::READING_THE_HISTORY)).group(Skin.META).isVisibleIf(reading))
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 22 18 22 18, gap 8", "[grow, center]")
                 .group(Skin.TILE)
                 .isVisibleIf(none)
                 .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.ASLEEP), 56))
                 .add("growx, wmin 0",
-                    ViewPartsUtil.words(theme, "Nothing saved yet", 15, 2f, Palette::TEXT)
+                    ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::NOTHING_SAVED_YET), 15, 2f, Palette::TEXT)
                     .withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP)))
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        genie.viewAsString(it ->
-                            it.name() + "'s home is saved the first time it wakes, and from then on "
-                            + "whenever something changed. Each save is a moment you can bring it back to."
-                        ),
+                        Viewable.of(String.class, genie, words, (it, page) -> page.ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES().of(it.name())),
                         Palette::SUBTEXT,
                         Val.of(true)
                     )
@@ -627,20 +625,20 @@ final class HistoryPage {
 
     /// Now, at the top: where going back starts from, on the line of the branch the genie lives on.
     private UIForPanel<JPanel> nowRow(Tuple<Lines.Lane> lanes, Lines.Row.Now now) {
-        Val<String> words = genie.viewAsString(it ->
-            "How " + it.name() + " is now" + (now.lampLane().isPresent() ? ", on " + it.history().lampBranch() : "")
+        Val<String> howItIsNow = Viewable.of(String.class, genie, words, (it, page) ->
+            page.HOW_IT_IS_NOW_ON_BRANCH().of(it.name(), now.lampLane().isPresent() ? it.history().lampBranch() : "")
         );
         return
             panel("fill, ins 0, gap 0", columns(lanes))
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top, gaptop 9, right",
-                label("now")
+                label(words.viewAsString(Lang.HistoryPage::NOW))
                 .group(Skin.CLOCK)
                 .withStyle(palette, (p, it) -> it.componentFont(f -> f.color(p.FLAME()).weight(2f)))
             )
             .add("top, growy, w " + railsWidth(lanes) + "!", rails(lanes, now, 32, false))
             .add("growx, wmin 0, gaptop 8, gapleft 10",
-                label(words).group(Skin.META)
+                label(howItIsNow).group(Skin.META)
             );
     }
 
