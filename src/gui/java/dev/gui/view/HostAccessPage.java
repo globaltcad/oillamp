@@ -1,11 +1,13 @@
 package dev.gui.view;
 
 import java.util.UUID;
+import java.util.function.Function;
 
 import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.HostAccess;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -81,6 +83,8 @@ final class HostAccessPage {
     private final Var<String> mayRead;
     private final Var<String> mayChange;
     private final Var<String> words;
+    /// The words of the page, unlike [#words], which are the user's own.
+    private final Val<Lang.HostAccessPage> pageWords;
     /// Whether the rules may be changed now: the genie sleeps, has a lamp, and nothing is on its way.
     private final Val<Boolean> changeable;
 
@@ -88,6 +92,7 @@ final class HostAccessPage {
         this.state = state;
         theme = Theme.of(state);
         palette = Theme.paletteOf(state);
+        pageWords = Theme.langOf(state).viewAs(Lang.HostAccessPage.class, Lang::HOST_ACCESS_PAGE);
         this.app = app;
         genie      = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         hostAccess = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
@@ -112,16 +117,18 @@ final class HostAccessPage {
                 .add(WHOLE, top())
                 .add(SWITCH, onOrOff())
                 .add(BESIDE_THE_SWITCH, experimental())
-                .add(FOLDERS, text("FOLDERS IT MAY READ", mayRead, "One per line, such as ~/Documents."))
                 .add(FOLDERS,
-                    text("FOLDERS IT MAY READ AND CHANGE", mayChange, "It may write files there, and copy what it made there.")
+                    text(Lang.HostAccessPage::FOLDERS_IT_MAY_READ, mayRead, Lang.HostAccessPage::ONE_PER_LINE_SUCH_AS_DOCUMENTS)
+                )
+                .add(FOLDERS,
+                    text(
+                        Lang.HostAccessPage::FOLDERS_IT_MAY_READ_AND_CHANGE,
+                        mayChange,
+                        Lang.HostAccessPage::IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE
+                    )
                 )
                 .add(OWN_WORDS,
-                    text(
-                        "ANYTHING ELSE, IN YOUR OWN WORDS",
-                        words,
-                        "Say what must not happen, such as \"never open my tax returns\"."
-                    )
+                    text(Lang.HostAccessPage::ANYTHING_ELSE_IN_YOUR_OWN_WORDS, words, Lang.HostAccessPage::SAY_WHAT_MUST_NOT_HAPPEN)
                 )
                 .add(WHOLE, saving())
             );
@@ -134,27 +141,25 @@ final class HostAccessPage {
     // ─── on top: what this is, and why it cannot be changed now ────────────────────────────
 
     /// Why the rules cannot be changed now, in a sentence; empty when they can.
-    private static String locked(Genie genie) {
+    private static String locked(Genie genie, Lang.HostAccessPage words) {
         HostAccess access = genie.hostAccess();
-        if (!access.read()) return "Reading the host access…";
-        if (!access.lamp())
-            return "Wake " + genie.name() + " once first. Its settings are kept in its lamp, which it gets as it first wakes.";
-        if (!asleep(genie))
-            return "Send " + genie.name() + " to sleep to change these. While it is awake, it keeps the settings it woke with.";
+        if (!access.read()) return words.READING_THE_HOST_ACCESS();
+        if (!access.lamp()) return words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP().of(genie.name());
+        if (!asleep(genie)) return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE().of(genie.name());
         return "";
     }
 
     private UIForAnySwing<?, ?> top() {
-        Val<String> lockedBecause = genie.viewAsString(HostAccessPage::locked);
-        Val<String> says = genie.viewAsString(it ->
+        Val<String> lockedBecause = Viewable.of(String.class, genie, pageWords, HostAccessPage::locked);
+        Val<String> says = Viewable.of(String.class, genie, pageWords, (it, page) ->
             it.hostAccess().saved().on()
-                ? it.name() + " may ask to reach this computer. A model judges each request against these rules before anything happens."
-                : it.name() + " cannot reach this computer."
+                ? page.MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST().of(it.name())
+                : page.CANNOT_REACH_THIS_COMPUTER().of(it.name())
         );
         Val<String> problem = hostAccess.viewAsString(HostAccess::problem);
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
-            .add(label("Host access").group(Skin.EMPTY_TITLE))
+            .add(label(pageWords.viewAsString(Lang.HostAccessPage::HOST_ACCESS)).group(Skin.EMPTY_TITLE))
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
             // As loud as the banner of a request for permission: the user should not have to
             // find out by typing that nothing they type is kept.
@@ -174,7 +179,7 @@ final class HostAccessPage {
         Val<Boolean> on = draft.viewAs(Boolean.class, HostAccess.PermissionRules::on);
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
-            .add("growx, wmin 0", section("MAY IT REACH THIS COMPUTER?"))
+            .add("growx, wmin 0", section(Lang.HostAccessPage::MAY_IT_REACH_THIS_COMPUTER))
             .add(ViewPartsUtil.yesOrNo(theme, on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
     }
 
@@ -186,10 +191,7 @@ final class HostAccessPage {
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     theme,
-                    Val.of(
-                        "Experimental. Never turn this on on a computer with sensitive data. "
-                        + "The model that judges reads these rules with every request, and nothing else."
-                    ),
+                    pageWords.viewAsString(Lang.HostAccessPage::EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA),
                     Palette::TEXT,
                     Val.of(true)
                 )
@@ -207,14 +209,14 @@ final class HostAccessPage {
             box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, warning, Palette::BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("skip 0",
-                button("Undo changes").group(Skin.QUIET_BUTTON)
+                button(pageWords.viewAsString(Lang.HostAccessPage::UNDO_CHANGES)).group(Skin.QUIET_BUTTON)
                 .isEnabledIf(canSave)
                 .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved())))
             )
             .add(
-                button(busy.viewAsString(it -> it ? "Saving…" : "Save")).group(Skin.FLAME_BUTTON)
+                button(Viewable.of(String.class, busy, pageWords, (it, page) -> it ? page.SAVING() : page.SAVE())).group(Skin.FLAME_BUTTON)
                 .isEnabledIf(canSave)
-                .withTooltip("Write these rules into the genie's lamp")
+                .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::WRITE_THESE_RULES_INTO_THE_GENIES_LAMP))
                 .withStyle(Themed.of(canSave, theme), (themed, it) -> {
                     var can = themed.item();
                     Palette p = themed.palette();
@@ -234,9 +236,9 @@ final class HostAccessPage {
     private UUID selected() { return state.get().selected(); }
 
     /// A section's heading, dimmed while nothing under it can be changed.
-    private UIForAnySwing<?, ?> section(String words) {
+    private UIForAnySwing<?, ?> section(Function<Lang.HostAccessPage, String> heading) {
         return
-            label(words).group(Skin.SECTION)
+            label(pageWords.viewAsString(heading)).group(Skin.SECTION)
             .withStyle(Themed.of(changeable, theme), (themed, it) -> {
                 var can = themed.item();
                 Palette p = themed.palette();
@@ -247,7 +249,7 @@ final class HostAccessPage {
     /// One of the three texts: a heading, the text, as tall as the other two so they line up
     /// side by side, and a note under it. While the rules cannot be changed, the text sinks into
     /// the page, greyed, and cannot be typed in.
-    private UIForAnySwing<?, ?> text(String heading, Var<String> text, String note) {
+    private UIForAnySwing<?, ?> text(Function<Lang.HostAccessPage, String> heading, Var<String> text, Function<Lang.HostAccessPage, String> note) {
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
             .add("growx, wmin 0", section(heading))
@@ -277,6 +279,6 @@ final class HostAccessPage {
                     })
                 )
             )
-            .add("growx, wmin 0", ViewPartsUtil.note(theme, note, Val.of(true)));
+            .add("growx, wmin 0", ViewPartsUtil.note(theme, pageWords.viewAsString(note), Val.of(true)));
     }
 }
