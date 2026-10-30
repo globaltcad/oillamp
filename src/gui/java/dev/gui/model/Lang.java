@@ -13,12 +13,15 @@ package dev.gui.model;
 /// 255 components, and as whoever words a part finds its texts together.
 ///
 /// @param WINDOW the window around the genies: the list of them, and what went wrong
+/// @param HEADER the header above a genie's pages, and what its lamp asks the user to allow
 public record Lang(
-    Window WINDOW
+    Window WINDOW,
+    Header HEADER
 ) {
 
     public static final Lang ENGLISH = new Lang(
-        Window.ENGLISH
+        Window.ENGLISH,
+        Header.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -34,6 +37,9 @@ public record Lang(
     /// How long a conversation, or a branch of one, is: how many `questions` were asked in it,
     /// and how many times one of them was then asked `differently`.
     public interface Questions { String of(int questions, int differently); }
+
+    /// A request of a genie's lamp: `who` asks the user to allow `what`.
+    public interface WhoAsksWhat { String of(String who, String what); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
@@ -97,6 +103,43 @@ public record Lang(
                 (questions == 1 ? "one question" : questions + " questions")
                 + (differently == 0 ? "" : ", then asked differently " + (differently == 1 ? "once" : differently + " times")),
             "Drag to make this list taller or shorter"
+        );
+    }
+
+    /// The words of the header above a genie's pages, and of what its lamp asks the user to allow
+    /// under it.
+    public record Header(
+        String SOMETHING_WENT_WRONG_IN_GENIES_NOT_ONLY_IN_THIS_GENIE,
+        String DOUBLE_CLICK_TO_RENAME,
+        Counted TOKENS,
+        String TOKENS_THE_MODEL_COUNTED_FOR_THIS_GENIE_SINCE_GENIES_STARTED,
+        String DESKTOP,
+        String DESKTOP_WATCH_THE_GENIES_DESKTOP_AND_USE_IT,
+        String STOP,
+        String STOP_WHAT_THE_GENIE_IS_DOING,
+        String SLEEP,
+        String SLEEP_END_THE_GENIES_SANDBOX,
+        WhoAsksWhat ASKS_YOU_TO_ALLOW,
+        String A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO,
+        String REFUSE,
+        String ALLOW
+    ) {
+        public static final Header ENGLISH = new Header(
+            "Something went wrong in Genies, not only in this genie. Click to see what happened",
+            "Double-click to rename",
+            count -> count == 0 ? "" : String.format("%,d tokens", count),
+            "Tokens the model counted for this genie since Genies started",
+            "Desktop",
+            "Desktop: watch the genie's desktop, and use it",
+            "Stop",
+            "Stop what the genie is doing",
+            "Sleep",
+            "Sleep: end the genie's sandbox. Its home and this conversation are kept.",
+            (who, what) -> who + " asks you to allow: " + what,
+            "A model allowed it already; this one needs you too. "
+            + "Nothing happens until you decide, and after a minute it is refused.",
+            "Refuse",
+            "Allow"
         );
     }
 }
