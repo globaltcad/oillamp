@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import dev.lamp.LampProblem;
+import dev.lamp.LampWallpaper;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -208,7 +209,7 @@ sealed interface Command {
                     "--security-requirements-env needs a value, for example --security-requirements-env MY_RULES",
                     usageOf("at"));
             case "--wallpaper" -> ProblemCatalogUtil.usage(
-                    "--wallpaper needs a value: " + Wallpaper.names(), usageOf("at"));
+                    "--wallpaper needs a value: " + LampWallpaper.names(), usageOf("at"));
             case "--requirements-env" -> ProblemCatalogUtil.usage(
                     "--requirements-env needs a value, for example --requirements-env MY_RULES", usageOf("host-access"));
             default -> ProblemCatalogUtil.usage(
@@ -254,10 +255,10 @@ sealed interface Command {
             options = options.withHostAccess(Optional.of(new Context.Options.HostAccessGrant(requirementsEnv.get())));
 
         Optional<String> wallpaper = values.get("--wallpaper");
-        if (wallpaper.isPresent() && Wallpaper.named(wallpaper.get()).isEmpty())
+        if (wallpaper.isPresent() && LampWallpaper.named(wallpaper.get()).isEmpty())
             return Result.err(ProblemCatalogUtil.usage(
-                    "--wallpaper \"" + wallpaper.get() + "\": expected " + Wallpaper.names(), usageOf("at")));
-        options = options.withWallpaper(wallpaper.flatMap(Wallpaper::named));
+                    "--wallpaper \"" + wallpaper.get() + "\": expected " + LampWallpaper.names(), usageOf("at")));
+        options = options.withWallpaper(wallpaper.flatMap(LampWallpaper::named));
 
         if (positional.isEmpty()) return Result.ok(new NoCommand(options));
 

@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampProblem;
+import dev.lamp.LampWallpaper;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -79,7 +80,7 @@ final class LampPhase {
         // --wallpaper chooses the wallpaper of a lamp that has no oillamp.toml yet: it is written
         // into the new file, and this first session has it too. A lamp with a file keeps the
         // wallpaper the file names, so the option cannot quietly undo an edit.
-        Optional<Wallpaper> wallpaper = context.options().wallpaper();
+        Optional<LampWallpaper> wallpaper = context.options().wallpaper();
         boolean newFile = !FilesystemUtil.exists(layout.config());
         if (wallpaper.isPresent() && newFile)
             config = config.withDisplay(config.display().withWallpaper(wallpaper.get()));

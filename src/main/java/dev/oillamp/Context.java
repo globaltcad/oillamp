@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 
 import dev.lamp.LampEvent;
 import dev.lamp.LampProblem;
+import dev.lamp.LampWallpaper;
 
 import sprouts.Tuple;
 
@@ -48,7 +49,7 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
                           boolean autoInstall, boolean init, boolean openViewer, boolean openWindows,
                           boolean embedded,
                           ModelOverride model, boolean enableScheduling, Optional<String> instructionsEnv,
-                          Optional<HostAccessGrant> hostAccess, Optional<Wallpaper> wallpaper) {
+                          Optional<HostAccessGrant> hostAccess, Optional<LampWallpaper> wallpaper) {
 
         /// What an application asked for through the `Lamp` API, in front of the lamp's file: the
         /// name of the variable that holds the requirements. The text itself reaches the engine in
@@ -105,7 +106,7 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
             return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess, wallpaper);
         }
 
-        public Options withWallpaper(Optional<Wallpaper> wallpaper) {
+        public Options withWallpaper(Optional<LampWallpaper> wallpaper) {
             return new Options(verbose, debug, dryRun, autoInstall, init, openViewer, openWindows, embedded, model, enableScheduling, instructionsEnv, hostAccess, wallpaper);
         }
 

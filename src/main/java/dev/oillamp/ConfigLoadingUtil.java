@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import dev.lamp.LampProblem;
+import dev.lamp.LampWallpaper;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -132,7 +133,7 @@ final class ConfigLoadingUtil {
         GpuMode gpu = s.oneOf("gpu", fallback.gpu(), ConfigLoadingUtil::parseGpuMode, "\"auto\", \"on\" or \"off\"");
         WindowLayout windows = s.oneOf("windows", fallback.windows(), ConfigLoadingUtil::parseWindowLayout,
                                        "\"floating\" or \"tiling\"");
-        Wallpaper wallpaper = s.oneOf("wallpaper", fallback.wallpaper(), Wallpaper::named, Wallpaper.names());
+        LampWallpaper wallpaper = s.oneOf("wallpaper", fallback.wallpaper(), LampWallpaper::named, LampWallpaper.names());
         return new LampConfig.Display(width, height, scale, gpu, windows, wallpaper);
     }
 

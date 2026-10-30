@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import dev.lamp.LampProblem;
 import dev.lamp.LampStartupPhase;
+import dev.lamp.LampWallpaper;
 
 import sprouts.Tuple;
 
@@ -49,7 +50,7 @@ final class LampPlanUtil {
         Optional<ContainerName> leftoverContainer,
         boolean sessionMetaExists,
         boolean initRequested,
-        Optional<Wallpaper> newWallpaper
+        Optional<LampWallpaper> newWallpaper
     ) {}
 
     /// Creates or repairs the lamp's directories, identity, keys and runtime directory.
@@ -96,7 +97,7 @@ final class LampPlanUtil {
         // ── the user's layer ───────────────────────────────────────────────────────────────
         steps = steps.add(new Step.CreateDirectory(layout.root(), PosixMode.PUBLIC_DIR));
         steps = steps.add(new Step.WriteFile(layout.config(),
-                GeneratedFileTextUtil.defaultConfig(inputs.newWallpaper().orElse(Wallpaper.LAMP)),
+                GeneratedFileTextUtil.defaultConfig(inputs.newWallpaper().orElse(LampWallpaper.LAMP)),
                 PosixMode.PRIVATE_FILE, Step.WritePolicy.IF_ABSENT));
         steps = steps.add(new Step.WriteFile(layout.readme(), GeneratedFileTextUtil.readme(layout),
                 PosixMode.PUBLIC_FILE, Step.WritePolicy.IF_ABSENT));

@@ -4,6 +4,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
 
+import dev.lamp.LampWallpaper;
+
 import sprouts.Association;
 import sprouts.Tuple;
 
@@ -93,14 +95,14 @@ record LampConfig(
     public static final int SCHEMA_VERSION = 1;
 
     public record Display(int width, int height, double scale, GpuMode gpu, WindowLayout windows,
-                          Wallpaper wallpaper) {
+                          LampWallpaper wallpaper) {
         public Display {
             if (width  < 640 || width  > 7680) throw new IllegalArgumentException("display.width out of range: " + width);
             if (height < 480 || height > 4320) throw new IllegalArgumentException("display.height out of range: " + height);
             if (scale  < 0.5 || scale  > 4.0)  throw new IllegalArgumentException("display.scale out of range: " + scale);
         }
         public String size() { return width + "x" + height; }
-        public Display withWallpaper(Wallpaper changed) {
+        public Display withWallpaper(LampWallpaper changed) {
             return new Display(width, height, scale, gpu, windows, changed);
         }
     }

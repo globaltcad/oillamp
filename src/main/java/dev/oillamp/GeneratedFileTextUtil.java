@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import dev.lamp.LampWallpaper;
+
 /// The text of files oillamp generates: the commented `oillamp.toml`, the lamp's
 /// `README.txt`, the agent's `.bashrc` and the bash completion script.
 ///
@@ -15,11 +17,11 @@ final class GeneratedFileTextUtil {
     /// `ConfiguringALampSpec` checks this, because many users read this file as the
     /// documentation of the settings.
     public static String defaultConfig() {
-        return defaultConfig(Wallpaper.LAMP);
+        return defaultConfig(LampWallpaper.LAMP);
     }
 
     /// The same, with the wallpaper `oillamp at <dir> --wallpaper` chose for the new lamp.
-    public static String defaultConfig(Wallpaper wallpaper) {
+    public static String defaultConfig(LampWallpaper wallpaper) {
         return """
             # oillamp lamp configuration. Edited by you, never visible to the agent.
             # Changes take effect at the next `oillamp at`. Arrays replace (not merge with) values

@@ -3,6 +3,8 @@ package dev.oillamp;
 import java.net.URI;
 import java.util.Optional;
 
+import dev.lamp.LampWallpaper;
+
 import sprouts.Association;
 import sprouts.Tuple;
 
@@ -17,7 +19,7 @@ final class ConfigDefaultsUtil {
 
     public static LampConfig lampConfig() {
         return new LampConfig(
-            new LampConfig.Display(1920, 1080, 1.0, GpuMode.AUTO, WindowLayout.FLOATING, Wallpaper.LAMP),
+            new LampConfig.Display(1920, 1080, 1.0, GpuMode.AUTO, WindowLayout.FLOATING, LampWallpaper.LAMP),
             new LampConfig.Viewer(true, ClipboardMode.TO_AGENT, false, 30),
             new LampConfig.Terminal.Auto(),
             new LampConfig.Recording(false, "libx264", 30, 10, 14, 20),

@@ -26,7 +26,7 @@ class TheShapeOfTheCodeSpec extends Specification {
             'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampDirectory', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'LampJobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
             'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
-            'LampConversation', 'LampLauncher', 'LampBranch', 'LampSaveOnBranches', 'LampSandbox'
+            'LampConversation', 'LampLauncher', 'LampBranch', 'LampSaveOnBranches', 'LampSandbox', 'LampWallpaper'
     ] as Set
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API
