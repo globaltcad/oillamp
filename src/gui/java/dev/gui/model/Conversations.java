@@ -65,7 +65,7 @@ public record Conversations(
 
     /// How many conversations the user had, a new one not yet on disk among them, and how many
     /// the jobs' runs had.
-    public int chatCount() { return chats().size(); }
+    public int chatCount() { return chats("").size(); }
     public int jobCount()  { return all.retainIf(Conversation::byJob).size(); }
 
     public Optional<Conversation> find(String id) {
@@ -84,12 +84,18 @@ public record Conversations(
     /// pi writes a new conversation to disk only once something was said in it. Until then, it
     /// is shown as a row of its own at the top, so the user sees where they are, or, while the
     /// genie answers in it and the chat shows another, can go back to it.
-    public Tuple<Talk> chats() {
-        Tuple<Talk> rows = all.retainIf(it -> !it.byJob()).mapTo(Talk.class, conversation -> conversation.talk(here));
+    public Tuple<Talk> chats(Lang lang) {
+        return chats(lang.WINDOW().A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET());
+    }
+
+    /// The same, with `untitled` the title of a conversation in which nothing was asked yet; for
+    /// what needs only the rows, whatever they are called.
+    private Tuple<Talk> chats(String untitled) {
+        Tuple<Talk> rows = all.retainIf(it -> !it.byJob()).mapTo(Talk.class, conversation -> conversation.talk(here, untitled));
         if (!here.file().isEmpty() && current().isEmpty())
-            rows = rows.addAt(0, new Talk.Chat(here.file(), "New conversation", 0, "", true, Tuple.of(Talk.Branch.class)));
+            rows = rows.addAt(0, new Talk.Chat(here.file(), untitled, 0, "", true, Tuple.of(Talk.Branch.class)));
         if (aside.isPresent() && fileOf(ASIDE).isPresent())
-            rows = rows.addAt(0, new Talk.Chat(ASIDE, "New conversation", 0, "", false, Tuple.of(Talk.Branch.class)));
+            rows = rows.addAt(0, new Talk.Chat(ASIDE, untitled, 0, "", false, Tuple.of(Talk.Branch.class)));
         return rows;
     }
 
@@ -108,15 +114,19 @@ public record Conversations(
     }
 
     /// The tree of the conversations the runs of the genie's scheduled jobs had.
-    public Tuple<Talk> jobRuns() {
-        return all.retainIf(Conversation::byJob).mapTo(Talk.class, conversation -> conversation.talk(here));
+    public Tuple<Talk> jobRuns(Lang lang) {
+        return jobRuns(lang.WINDOW().A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET());
+    }
+
+    private Tuple<Talk> jobRuns(String untitled) {
+        return all.retainIf(Conversation::byJob).mapTo(Talk.class, conversation -> conversation.talk(here, untitled));
     }
 
     /// The ids leading to the row where the genie is, in whichever tree it is: its conversation,
     /// and the branches down to the one it is on. Nothing when that is not known.
     public Tuple<String> herePath() {
-        Tuple<String> inChats = pathToHere(chats());
-        return inChats.isEmpty() ? pathToHere(jobRuns()) : inChats;
+        Tuple<String> inChats = pathToHere(chats(""));
+        return inChats.isEmpty() ? pathToHere(jobRuns("")) : inChats;
     }
 
     /// The ids leading to the row of `rows` where the genie is, or nothing when it is in none.

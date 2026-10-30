@@ -345,8 +345,8 @@ public record History(
             case BEFORE_RUN -> words.BEFORE_IT_WENT_TO_WORK();
             case RAN -> !moment.job().isEmpty()
                 ? schedule.job(moment.job()).map(job -> words.DID_THE_JOB().of(job.title())).orElse(words.DID_A_SCHEDULED_JOB())
-                : conversations.find(moment.conversation()).map(it -> words.ANSWERED().of(it.title())).orElse(words.ANSWERED_A_QUESTION());
-            case CHATTED -> conversations.find(moment.conversation()).map(it -> words.TALKED().of(it.title())).orElse(words.TALKED_WITH_YOU());
+                : conversations.find(moment.conversation()).map(it -> words.ANSWERED().of(it.title(lang))).orElse(words.ANSWERED_A_QUESTION());
+            case CHATTED -> conversations.find(moment.conversation()).map(it -> words.TALKED().of(it.title(lang))).orElse(words.TALKED_WITH_YOU());
             case BEFORE_GOING_BACK -> words.BEFORE_GOING_BACK();
             case WENT_BACK ->
                 undid(moment)

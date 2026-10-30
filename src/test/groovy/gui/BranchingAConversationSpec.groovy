@@ -2,6 +2,7 @@ package gui
 
 import dev.gui.model.Conversation
 import dev.gui.model.Conversations
+import dev.gui.model.Lang
 import dev.gui.model.Fold
 import dev.gui.model.Talk
 import spock.lang.Specification
@@ -35,7 +36,7 @@ class BranchingAConversationSpec extends Specification {
                     question('q3', 'a2', 'Still jammed'), answer('a3', 'q3'))
 
         when:
-            var chat = conversation.talk(Conversations.Here.UNKNOWN)
+            var chat = conversation.talk(Conversations.Here.UNKNOWN, Lang.ENGLISH)
 
         then:
             chat.title() == 'How do I fix my printer?'
@@ -60,7 +61,7 @@ class BranchingAConversationSpec extends Specification {
                     question('q2b', 'a1', 'By bike'), answer('a2b', 'q2b'))
 
         when:
-            var chat = conversation.talk(Conversations.Here.UNKNOWN)
+            var chat = conversation.talk(Conversations.Here.UNKNOWN, Lang.ENGLISH)
 
         then:
             chat.title() == 'Plan a trip'
@@ -83,7 +84,7 @@ class BranchingAConversationSpec extends Specification {
                     question('q1b', 'm', 'Write a limerick'), answer('a1b', 'q1b'))
 
         when:
-            var chat = conversation.talk(Conversations.Here.UNKNOWN)
+            var chat = conversation.talk(Conversations.Here.UNKNOWN, Lang.ENGLISH)
 
         then:
             chat.branches()*.title() == ['Write a poem', 'Write a limerick']
@@ -106,7 +107,7 @@ class BranchingAConversationSpec extends Specification {
                                                   new Conversations.Here(conversation.file(), 'a2b'))
 
         when:
-            var chat = conversations.chats().first() as Talk.Chat
+            var chat = conversations.chats(Lang.ENGLISH).first() as Talk.Chat
 
         then:
             chat.here()
@@ -163,8 +164,8 @@ class BranchingAConversationSpec extends Specification {
                                                   new Conversations.Here('.pi/agent/sessions/--home-agent--/new.jsonl', ''))
 
         expect:
-            conversations.chats()*.title() == ['New conversation', 'Hi']
-            conversations.chats().first().here()
+            conversations.chats(Lang.ENGLISH)*.title() == ['New conversation', 'Hi']
+            conversations.chats(Lang.ENGLISH).first().here()
             conversations.herePath().size() == 1
     }
 
@@ -182,14 +183,14 @@ class BranchingAConversationSpec extends Specification {
             var conversations = new Conversations(Tuple.of(Conversation, jobs, mine), new Conversations.Here(jobs.file(), ''))
 
         expect:
-            conversations.chats()*.id() == ['s1']
-            conversations.jobRuns()*.id() == ['s2']
+            conversations.chats(Lang.ENGLISH)*.id() == ['s1']
+            conversations.jobRuns(Lang.ENGLISH)*.id() == ['s2']
             conversations.chatCount() == 1
             conversations.jobCount() == 1
 
         and: 'the genie is in the job\'s conversation, so that tree selects it and the other nothing'
-            Conversations.pathToHere(conversations.jobRuns()).toList() == ['s2']
-            Conversations.pathToHere(conversations.chats()).isEmpty()
+            Conversations.pathToHere(conversations.jobRuns(Lang.ENGLISH)).toList() == ['s2']
+            Conversations.pathToHere(conversations.chats(Lang.ENGLISH)).isEmpty()
             conversations.herePath().toList() == ['s2']
     }
 
@@ -229,10 +230,10 @@ class BranchingAConversationSpec extends Specification {
             line and shortened; a conversation someone named is titled by its name.
         """
         expect:
-            conversation(question('q1', '', 'Line one\n  line two ' + 'x' * 80)).title() ==~ /Line one line two x+…/
-            conversation(question('q1', '', 'Line one\n  line two ' + 'x' * 80)).title().length() == 60
-            new Conversation('s1', 'f', 'Trip planning', '', Tuple.of(Conversation.Step), '').title() == 'Trip planning'
-            new Conversation('s1', 'f', '', '', Tuple.of(Conversation.Step), '').title() == 'New conversation'
+            conversation(question('q1', '', 'Line one\n  line two ' + 'x' * 80)).title(Lang.ENGLISH) ==~ /Line one line two x+…/
+            conversation(question('q1', '', 'Line one\n  line two ' + 'x' * 80)).title(Lang.ENGLISH).length() == 60
+            new Conversation('s1', 'f', 'Trip planning', '', Tuple.of(Conversation.Step), '').title(Lang.ENGLISH) == 'Trip planning'
+            new Conversation('s1', 'f', '', '', Tuple.of(Conversation.Step), '').title(Lang.ENGLISH) == 'New conversation'
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
