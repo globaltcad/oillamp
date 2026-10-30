@@ -1635,7 +1635,7 @@ public final class GeniesView extends JPanel {
                 button("").group(Skin.ICON_BUTTON)
                 .isVisibleIf(state.viewAs(Boolean.class, GeniesState::hasGenies))
                 .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.GENIES, p.SUBTEXT())))
-                .withTooltip(genieList.viewAsString(it -> it.shown() ? "Hide your genies" : "Show your genies"))
+                .withTooltip(Viewable.of(String.class, genieList, windowWords, (it, words) -> it.shown() ? words.HIDE_YOUR_GENIES() : words.SHOW_YOUR_GENIES()))
                 .onClick(_ -> genieList.update(From.VIEW, Fold::toggled))
             )
             .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.READY), 26))
@@ -1684,16 +1684,18 @@ public final class GeniesView extends JPanel {
             .applyIfPresent(state.get().find(id).map(shown -> ui -> {
                 Genie.Phase now = shown.phase();
                 boolean idle = now != Genie.Phase.WORKING && now != Genie.Phase.WAKING;
-                String wake = now == Genie.Phase.BROKEN ? "Try waking again" : "Wake";
-                String delete = (shown.fromElsewhere() ? "Remove from Genies" : "Delete " + shown.name()) + "…";
+                // The menu is built as it opens, in the words of that moment.
+                Lang.Window words = windowWords.get();
+                String wake = now == Genie.Phase.BROKEN ? words.TRY_WAKING_AGAIN() : words.WAKE();
+                String delete = shown.fromElsewhere() ? words.REMOVE_FROM_GENIES_ELLIPSIS() : words.DELETE_GENIE_ELLIPSIS().of(shown.name());
                 ui
-                .add(ViewPartsUtil.item("Rename…", true, () -> rename(id)))
-                .add(ViewPartsUtil.item("New conversation", idle, () -> app.startAfresh(id)))
-                .add(ViewPartsUtil.item("Save now…", shown.history().busy().isEmpty(), () -> historyPage.save(this)))
-                .add(ViewPartsUtil.item("Link its workspace into " + app.documents().getFileName(), true, () -> linkWorkspace(id)))
+                .add(ViewPartsUtil.item(words.RENAME_ELLIPSIS(), true, () -> rename(id)))
+                .add(ViewPartsUtil.item(words.NEW_CONVERSATION(), idle, () -> app.startAfresh(id)))
+                .add(ViewPartsUtil.item(words.SAVE_NOW_ELLIPSIS(), shown.history().busy().isEmpty(), () -> historyPage.save(this)))
+                .add(ViewPartsUtil.item(words.LINK_ITS_WORKSPACE_INTO().of(String.valueOf(app.documents().getFileName())), true, () -> linkWorkspace(id)))
                 .peek(JPopupMenu::addSeparator)
                 .applyIf(now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item("Sleep", true, () -> app.sleep(id)))
+                    .add(ViewPartsUtil.item(words.SLEEP(), true, () -> app.sleep(id)))
                 )
                 .applyIf(!now.isAwake(), ui1 -> ui1
                     .add(ViewPartsUtil.item(wake, now != Genie.Phase.WAKING, () -> app.wake(id)))

@@ -77,7 +77,18 @@ public record Lang(
         String DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN,
         String ITS_FIRST_QUESTION_WAS_ASKED_DIFFERENTLY,
         Questions QUESTIONS_THEN_ASKED_DIFFERENTLY,
-        String DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER
+        String DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER,
+        String HIDE_YOUR_GENIES,
+        String SHOW_YOUR_GENIES,
+        String RENAME_ELLIPSIS,
+        String NEW_CONVERSATION,
+        String SAVE_NOW_ELLIPSIS,
+        About LINK_ITS_WORKSPACE_INTO,
+        String SLEEP,
+        String WAKE,
+        String TRY_WAKING_AGAIN,
+        String REMOVE_FROM_GENIES_ELLIPSIS,
+        About DELETE_GENIE_ELLIPSIS
     ) {
         public static final Window ENGLISH = new Window(
             "New genie",
@@ -109,7 +120,18 @@ public record Lang(
             (questions, differently) ->
                 (questions == 1 ? "one question" : questions + " questions")
                 + (differently == 0 ? "" : ", then asked differently " + (differently == 1 ? "once" : differently + " times")),
-            "Drag to make this list taller or shorter"
+            "Drag to make this list taller or shorter",
+            "Hide your genies",
+            "Show your genies",
+            "Rename…",
+            "New conversation",
+            "Save now…",
+            folder -> "Link its workspace into " + folder,
+            "Sleep",
+            "Wake",
+            "Try waking again",
+            "Remove from Genies…",
+            name -> "Delete " + name + "…"
         );
     }
 
