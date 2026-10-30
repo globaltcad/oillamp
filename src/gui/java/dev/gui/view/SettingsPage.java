@@ -285,12 +285,12 @@ final class SettingsPage {
                         .add(
                             box("ins 0, hidemode 3")
                             .add(
-                                ViewPartsUtil.link(theme, "Advanced: Eden AI, or a model server of your own  ›").isVisibleIf(simple)
+                                ViewPartsUtil.link(theme, Val.of("Advanced: Eden AI, or a model server of your own  ›")).isVisibleIf(simple)
                                 .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
                                 .onClick(_ -> advanced.set(From.VIEW, true))
                             )
                             .add(
-                                ViewPartsUtil.link(theme, "‹  Back to the simple way: Ollama, set up by Genies").isVisibleIf(advanced)
+                                ViewPartsUtil.link(theme, Val.of("‹  Back to the simple way: Ollama, set up by Genies")).isVisibleIf(advanced)
                                 .onClick(_ -> advanced.set(From.VIEW, false))
                             )
                         )

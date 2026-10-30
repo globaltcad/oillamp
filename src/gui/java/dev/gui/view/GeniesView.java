@@ -64,6 +64,8 @@ public final class GeniesView extends JPanel {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    /// The words of the window around the genies.
+    private final Val<Lang.Window> windowWords;
     private final Look look;
     private final DesktopScreen desktop;
 
@@ -103,6 +105,7 @@ public final class GeniesView extends JPanel {
         this.app = app;
         theme   = Theme.of(state);
         palette = Theme.paletteOf(state);
+        windowWords = Theme.langOf(state).viewAs(Lang.Window.class, Lang::WINDOW);
         look    = new Look(theme);
         desktop = new DesktopScreen(palette);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
@@ -194,10 +197,6 @@ public final class GeniesView extends JPanel {
         return desktop.letGo();
     }
 
-    private static String troubleInfoMessage(int troubles) {
-        return troubles == 1 ? "⚠  Something went wrong" : "⚠  " + troubles + " things went wrong";
-    }
-
     /*
      *  The list of genies has two arrangements of the same parts, chosen by the window's width:
      *
@@ -269,18 +268,18 @@ public final class GeniesView extends JPanel {
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
             .add(
-                button("New genie").group(Skin.FLAME_BUTTON).withIconTextGap(6)
+                button(windowWords.viewAsString(Lang.Window::NEW_GENIE)).group(Skin.FLAME_BUTTON).withIconTextGap(6)
                 .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.NEW, p.ON_FLAME())))
-                .withTooltip("A new genie, with a sandboxed desktop of its own")
+                .withTooltip(windowWords.viewAsString(Lang.Window::A_NEW_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN))
                 .onClick(_ -> app.newGenie())
             )
             .add(
-                toggleButton(narrow.viewAsString(it -> it ? "" : "Settings"), settingsShown)
+                toggleButton(Viewable.of(String.class, narrow, windowWords, (it, words) -> it ? "" : words.SETTINGS()), settingsShown)
                 .group(Skin.QUIET_BUTTON).withIconTextGap(6)
                 .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.SETTINGS, p.TEXT())))
-                .withTooltip("Settings: the model every genie uses. Pressed again, back to the genie")
+                .withTooltip(windowWords.viewAsString(Lang.Window::SETTINGS_THE_MODEL_EVERY_GENIE_USES))
             )
-            .add(label("YOUR GENIES").group(Skin.SECTION).isVisibleIf(wide))
+            .add(label(windowWords.viewAsString(Lang.Window::YOUR_GENIES)).group(Skin.SECTION).isVisibleIf(wide))
             .add(
                 // As tall as the cards, so that above the genie a few of them take only their room.
                 scrollPanels(conf -> conf
@@ -296,25 +295,25 @@ public final class GeniesView extends JPanel {
                     genieList,
                     () -> UI.unscale(cards[0].getHeight()),
                     narrow,
-                    "Drag to see more of your genies, or up to fold them away"
+                    windowWords.viewAsString(Lang.Window::DRAG_TO_SEE_MORE_OF_YOUR_GENIES)
                 )
             )
             .add(
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3")
                 .add("left",
-                    ViewPartsUtil.link(theme, "Add a lamp from elsewhere…")
-                    .withTooltip("Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself")
+                    ViewPartsUtil.link(theme, windowWords.viewAsString(Lang.Window::ADD_A_LAMP_FROM_ELSEWHERE))
+                    .withTooltip(windowWords.viewAsString(Lang.Window::SHOW_A_LAMP_YOU_MADE_WITH_OILLAMP_AT_HERE_TOO))
                     .onClick(_ -> addLamp())
                 )
                 .add("growx",
-                    button(state.viewAsString(it -> troubleInfoMessage(it.troubles().size()))).group(Skin.QUIET_BUTTON)
+                    button(state.viewAsString(it -> it.lang().WINDOW().THINGS_WENT_WRONG().of(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(palette, (p, it) -> it
                         .backgroundColor(p.TROUBLE_WASH())
                         .border(1, p.TROUBLE())
                         .componentFont(f -> f.color(p.TROUBLE()))
                     )
                     .isVisibleIf(state.viewAs(Boolean.class, it -> !it.troubles().isEmpty()))
-                    .withTooltip("Genies carried on. Click to see what happened")
+                    .withTooltip(windowWords.viewAsString(Lang.Window::GENIES_CARRIED_ON_CLICK_TO_SEE_WHAT_HAPPENED))
                     .onClick(_ -> showTroubles())
                 )
                 .add("growx, wmin 0",
@@ -345,9 +344,9 @@ public final class GeniesView extends JPanel {
             panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0, gaptop 14, gapbottom 4",
-                label("LAMPS FROM ELSEWHERE").group(Skin.SECTION)
+                label(windowWords.viewAsString(Lang.Window::LAMPS_FROM_ELSEWHERE)).group(Skin.SECTION)
                 .isVisibleIf(firstFromElsewhere)
-                .withTooltip("Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are")
+                .withTooltip(windowWords.viewAsString(Lang.Window::LAMPS_SOMEONE_LIT_WITH_OILLAMP_AT_OUTSIDE_GENIES))
             )
             .add("growx, wmin 0", genieChipBody(shown))
             .get(JPanel.class)
@@ -743,7 +742,7 @@ public final class GeniesView extends JPanel {
                 )
             )
             .add("growx, wmin 0, h 9!",
-                grip(fold, () -> UI.unscale(area[0].getHeight()), open, "Drag to make this list taller or shorter")
+                grip(fold, () -> UI.unscale(area[0].getHeight()), open, Val.of("Drag to make this list taller or shorter"))
             );
     }
 
@@ -756,7 +755,7 @@ public final class GeniesView extends JPanel {
         final Var<Fold> fold,
         final IntSupplier areaHeight,
         final Val<Boolean> shown,
-        final String tip
+        final Val<String> tip
     ) {
         // Where a drag began: the pointer's height on the screen, the area's, and the fold's.
         int[] dragFrom = new int[3];
