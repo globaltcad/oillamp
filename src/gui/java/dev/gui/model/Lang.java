@@ -923,7 +923,20 @@ public record Lang(
         String NOTHING_SAVED_YET,
         About ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES,
         WhoAndWhat HOW_IT_IS_NOW_ON_BRANCH,
-        String NOW
+        String NOW,
+        About LIVES_HERE,
+        Counted AND_MORE,
+        String CLICK_A_LINE_TO_SHOW_IT_HERE,
+        Listed STAND_HERE,
+        String CLICK_AGAIN_TO_CLOSE,
+        String CLICK_TO_GO_BACK_TO_THIS_MOMENT_START_A_BRANCH_FROM_IT_OR_OPEN_ITS_CONVERSATION,
+        String GO_BACK_TO_THIS_MOMENT_ELLIPSIS,
+        String BRING_ITS_FILES_AND_CONVERSATIONS_BACK_TO_HOW_THEY_WERE_THEN,
+        String START_A_BRANCH_HERE_ELLIPSIS,
+        About KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN,
+        String RESET_TO_HERE_ELLIPSIS,
+        String TAKE_EVERY_MOMENT_AFTER_THIS_ONE_OFF_THE_BRANCH_FOR_GOOD,
+        String OPEN_THE_CONVERSATION
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -945,10 +958,7 @@ public record Lang(
             "How it was before is kept, so you can return to it.",
             "Undo",
             "Go back to how it was before",
-            names ->
-                names.size() < 2
-                    ? String.join("", names)
-                    : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast(),
+            HistoryPage::listed,
             "then",
             genie -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.",
             (branch, when) -> "Reset " + branch + " to how it was " + when + "?",
@@ -984,8 +994,28 @@ public record Lang(
                 genie + "'s home is saved the first time it wakes, and from then on "
                 + "whenever something changed. Each save is a moment you can bring it back to.",
             (genie, branch) -> "How " + genie + " is now" + (branch.isEmpty() ? "" : ", on " + branch),
-            "now"
+            "now",
+            genie -> "(" + genie + " lives here)",
+            count -> "and " + count + " more",
+            "Click a line to show it here",
+            branches -> listed(branches) + (branches.size() == 1 ? " stands here" : " stand here"),
+            "Click again to close",
+            "Click to go back to this moment, start a branch from it, or open its conversation",
+            "Go back to this moment…",
+            "Bring its files and conversations back to how they were then",
+            "Start a branch here…",
+            genie -> "Keep this moment as a branch of its own, to try something else from here. " + genie + " stays where it lives",
+            "Reset to here…",
+            "Take every moment after this one off the branch, for good. You are asked first",
+            "Open the conversation"
         );
+
+        /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
+        private static String listed(List<String> names) {
+            return names.size() < 2
+                ? String.join("", names)
+                : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
+        }
     }
 
     /// The words of the parts of the window that several pages share.
