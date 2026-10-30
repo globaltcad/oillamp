@@ -21,6 +21,7 @@ package dev.gui.model;
 /// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
 /// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
 /// @param SETTINGS_PAGE the settings every genie shares, and the welcome above them
+/// @param SCHEDULE_PAGE when jobs wake a genie, and what they did
 /// @param PARTS   the parts of the window that several pages share
 public record Lang(
     Window WINDOW,
@@ -32,6 +33,7 @@ public record Lang(
     HomeFolders HOME_FOLDERS,
     HostAccessPage HOST_ACCESS_PAGE,
     SettingsPage SETTINGS_PAGE,
+    SchedulePage SCHEDULE_PAGE,
     Parts PARTS
 ) {
 
@@ -45,6 +47,7 @@ public record Lang(
         HomeFolders.ENGLISH,
         HostAccessPage.ENGLISH,
         SettingsPage.ENGLISH,
+        SchedulePage.ENGLISH,
         Parts.ENGLISH
     );
 
@@ -679,6 +682,37 @@ public record Lang(
             "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
             + "Or have Genies set up a model on this computer instead: the simple way, below.",
             "To think, genies need a model. Genies can set one up for you, right here on this computer."
+        );
+    }
+
+    /// The words of a genie's Schedule page: when jobs wake the genie, and what they did.
+    public record SchedulePage(
+        String PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE,
+        About ON_JOBS_WAKE_IT_AT_THEIR_TIMES,
+        About IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE,
+        About IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE,
+        String SCHEDULE,
+        String WAKE,
+        String JOBS_RUN_ONLY_WHILE_THE_GENIE_IS_AWAKE,
+        String RESUME,
+        String PAUSE,
+        String LET_THE_JOBS_RUN_AGAIN,
+        String HOLD_EVERY_JOB_UNTIL_YOU_RESUME_NOTHING_IS_LOST,
+        String NEW_JOB
+    ) {
+        public static final SchedulePage ENGLISH = new SchedulePage(
+            "Paused. No job runs until you resume the schedule.",
+            genie -> "On. Jobs wake " + genie + " at their times, one after the other.",
+            genie -> genie + " is waking. Jobs run once it is awake.",
+            genie -> genie + " is asleep. Jobs run only while it is awake; one whose time came meanwhile runs as soon as it wakes.",
+            "Schedule",
+            "Wake",
+            "Jobs run only while the genie is awake",
+            "Resume",
+            "Pause",
+            "Let the jobs run again",
+            "Hold every job until you resume; nothing is lost",
+            "New job"
         );
     }
 
