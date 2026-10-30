@@ -617,7 +617,11 @@ public record Lang(
         String APPEARANCE,
         String THE_LAMP_AT_NIGHT_OR_BY_DAY,
         String DARK,
-        String LIGHT
+        String LIGHT,
+        String WELCOME_TO_GENIES,
+        String A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN,
+        String GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED,
+        String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -668,7 +672,13 @@ public record Lang(
             "Appearance",
             "The lamp at night, or by day.",
             "Dark",
-            "Light"
+            "Light",
+            "Welcome to Genies",
+            "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
+            + "where it can browse the web, run programs and make files, without ever touching yours.",
+            "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
+            + "Or have Genies set up a model on this computer instead: the simple way, below.",
+            "To think, genies need a model. Genies can set one up for you, right here on this computer."
         );
     }
 

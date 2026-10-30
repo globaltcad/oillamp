@@ -584,11 +584,11 @@ final class SettingsPage {
         final Val<Boolean> welcome
     ) {
         Val<Theme> theme = Theme.of(state);
+        Val<Lang.SettingsPage> words = Theme.langOf(state).viewAs(Lang.SettingsPage.class, Lang::SETTINGS_PAGE);
         Val<String> foundKey = state.viewAsString(it ->
             it.environmentKey().isPresent() && it.settings().place() == Settings.Place.EDEN_AI
-                ? "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
-                  + "Or have Genies set up a model on this computer instead: the simple way, below."
-                : "To think, genies need a model. Genies can set one up for you, right here on this computer."
+                ? it.lang().SETTINGS_PAGE().GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED()
+                : it.lang().SETTINGS_PAGE().TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU()
         );
         Val<Integer> room = cut.viewAs(Integer.class, it -> PICTURE_HEIGHT - it);
         return
@@ -637,14 +637,11 @@ final class SettingsPage {
             )
             .add(WORDS,
                 box("wrap 1, ins 0, gap 12", "[grow, fill]").withMinSize(0, 0)
-                .add("growx, wmin 0", fading(theme, Val.of("Welcome to Genies"), 22, Palette::TEXT, clock, fit, aside))
+                .add("growx, wmin 0", fading(theme, words.viewAsString(Lang.SettingsPage::WELCOME_TO_GENIES), 22, Palette::TEXT, clock, fit, aside))
                 .add("growx, wmin 0",
                     fading(
                         theme,
-                        Val.of(
-                            "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
-                            + "where it can browse the web, run programs and make files, without ever touching yours."
-                        ),
+                        words.viewAsString(Lang.SettingsPage::A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN),
                         14,
                         Palette::SUBTEXT,
                         clock,
