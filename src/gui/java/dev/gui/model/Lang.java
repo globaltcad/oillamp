@@ -192,7 +192,8 @@ public record Lang(
         String WAKE,
         String TRY_WAKING_AGAIN,
         String REMOVE_FROM_GENIES_ELLIPSIS,
-        About DELETE_GENIE_ELLIPSIS
+        About DELETE_GENIE_ELLIPSIS,
+        String DOING_A_SCHEDULED_JOB
     ) {
         public static final Window ENGLISH = new Window(
             "New genie",
@@ -235,7 +236,8 @@ public record Lang(
             "Wake",
             "Try waking again",
             "Remove from Genies…",
-            name -> "Delete " + name + "…"
+            name -> "Delete " + name + "…",
+            "doing a scheduled job"
         );
     }
 
@@ -397,7 +399,9 @@ public record Lang(
         String RUNNING,
         String FAILED,
         String CLICK_TO_SEE_WHAT_IT_PRINTED,
-        String SAVE_ELLIPSIS
+        String SAVE_ELLIPSIS,
+        WhoAndWhat IS_DOING_A_SCHEDULED_JOB_FIRST,
+        About IS_THINKING
     ) {
         public static final Chat ENGLISH = new Chat(
             name -> name + " is listening.",
@@ -435,7 +439,9 @@ public record Lang(
             "running…",
             "failed",
             "Click to see what it printed",
-            "Save…"
+            "Save…",
+            (name, job) -> name + " is doing a scheduled job first: " + job,
+            name -> name + " is thinking"
         );
     }
 
