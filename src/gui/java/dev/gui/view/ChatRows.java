@@ -71,6 +71,7 @@ final class ChatRows {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang> lang;
     private final Val<Lang.Chat> words;
     private final Val<Genie> genie;
     private final Consumer<String> saveHandout;
@@ -80,7 +81,7 @@ final class ChatRows {
     private final Consumer<String> showLeaf;
 
     /// @param theme       the colours and the fonts of the state
-    /// @param words       the words of a genie's chat
+    /// @param lang        the words of the state
     /// @param genie       the genie whose conversation this is
     /// @param saveHandout asks the user where to save the outbox file of that name
     /// @param pulse       loops from 0 to 1 while a genie works or wakes; drives the bars and the genie
@@ -91,7 +92,7 @@ final class ChatRows {
     ChatRows(
         final Look look,
         final Val<Theme> theme,
-        final Val<Lang.Chat> words,
+        final Val<Lang> lang,
         final Val<Genie> genie,
         final Consumer<String> saveHandout,
         final Val<Double> pulse,
@@ -102,7 +103,8 @@ final class ChatRows {
         this.look = look;
         this.theme = theme;
         this.palette = theme.viewAs(Palette.class, Theme::palette);
-        this.words = words;
+        this.lang = lang;
+        this.words = lang.viewAs(Lang.Chat.class, Lang::CHAT);
         this.genie = genie;
         this.saveHandout = saveHandout;
         this.pulse = pulse;
@@ -220,7 +222,7 @@ final class ChatRows {
     /// plain as a chat between two people.
     private UIForAnySwing<?, ?> answer(Var<Entry> entry) {
         Val<Boolean> copyable = entry.viewAs(Boolean.class, it -> !it.isWriting());
-        Val<String> writtenBy = entry.viewAsString(Entry::writtenBy);
+        Val<String> writtenBy = Viewable.of(String.class, entry, lang, Entry::writtenBy);
         UUID id = entry.get().id();
         var entryMarkdown =
             entry.viewAsString(Entry::text)

@@ -201,7 +201,7 @@ final class HostAccessPage {
     // ─── saving ────────────────────────────────────────────────────────────────────────────
 
     private UIForAnySwing<?, ?> saving() {
-        Val<String> warning = draft.viewAsString(it -> it.warning().orElse(""));
+        Val<String> warning = Viewable.of(String.class, draft, Theme.langOf(state), (it, lang) -> it.warning(lang).orElse(""));
         Val<Boolean> changed = hostAccess.viewAs(Boolean.class, HostAccess::changed);
         Val<Boolean> canSave = Viewable.of(Boolean.class, changeable, changed, (a, b) -> a && b);
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);

@@ -4,6 +4,7 @@ import dev.gui.Genies
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.HostAccess
+import dev.gui.model.Lang
 import dev.gui.model.Settings
 import dev.lamp.Lamp
 import oillamp.ScenarioHost
@@ -142,7 +143,7 @@ class KeepingAGeniesHostAccessSpec extends Specification {
 
         expect:
             var rules = new HostAccess.PermissionRules(on, mayRead, '', words)
-            rules.warning().orElse('').contains(because)
+            rules.warning(Lang.ENGLISH).orElse('').contains(because)
 
         when:
             SwingUtilities.invokeAndWait {
