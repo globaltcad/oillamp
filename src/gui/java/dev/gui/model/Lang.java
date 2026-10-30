@@ -193,7 +193,8 @@ public record Lang(
         String TRY_WAKING_AGAIN,
         String REMOVE_FROM_GENIES_ELLIPSIS,
         About DELETE_GENIE_ELLIPSIS,
-        String DOING_A_SCHEDULED_JOB
+        String DOING_A_SCHEDULED_JOB,
+        String A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET
     ) {
         public static final Window ENGLISH = new Window(
             "New genie",
@@ -237,7 +238,8 @@ public record Lang(
             "Try waking again",
             "Remove from Genies…",
             name -> "Delete " + name + "…",
-            "doing a scheduled job"
+            "doing a scheduled job",
+            "New conversation"
         );
     }
 
