@@ -1,12 +1,15 @@
 package oillamp
 
+import dev.lamp.Lamp
 import dev.lamp.LampExitStatus
+import dev.lamp.LampWallpaper
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 
 /**
  *  `oillamp.toml` is where a user says how big the desktop is, whether the screen is recorded,
@@ -469,6 +472,32 @@ class ConfiguringALampSpec extends Specification {
             checked.status() == LampExitStatus.USAGE
             checked.reported('OIL-CONFIG-004')
             checked.console().contains('"lamp", "waves-light" or "waves-dark"')
+    }
+
+    def 'An application gives the lamp it makes a wallpaper, as --wallpaper would'() {
+        reportInfo """
+            Let's consider an application built on oillamp's Java API that lets its user pick the
+            desktop's look when they make a lamp. It says so with `LampDirectory.wallpaper`, and
+            the lamp passes the choice to the engine as `--wallpaper`, so the new lamp gets it
+            exactly as one made at a terminal would: in its `oillamp.toml`, and from its first
+            session on.
+        """
+        given:
+            var lamp = host.lampPath()
+
+        when: 'the application makes the lamp with the light waves'
+            var running = Lamp.at(lamp).wallpaper(LampWallpaper.WAVES_LIGHT).launchedBy(host.launcher).start()
+            var up = running.awaitRunning(Duration.ofSeconds(30))
+            var runtimeEnv = Files.readString(lamp.resolve('.oillamp/session/runtime.env'))
+            running.close()
+
+        then: 'the engine was asked for them on its command line'
+            up
+            host.engines.first().arguments == ['at', lamp.toString(), '--embedded', '--wallpaper', 'waves-light']
+
+        and: 'the first session has them, and the lamp\'s file keeps them'
+            runtimeEnv.contains("OILLAMP_WALLPAPER='waves-light'")
+            Files.readString(lamp.resolve('oillamp.toml')).contains('wallpaper = "waves-light"')
     }
 
     def 'Oillamp keeps the sandbox on Eden AI\'s EU endpoint, whatever the host\'s environment says'() {

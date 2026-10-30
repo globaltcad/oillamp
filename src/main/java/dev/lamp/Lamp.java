@@ -119,7 +119,7 @@ public final class Lamp implements AutoCloseable {
     public static LampDirectory at(Path directory) {
         return new LampDirectory(directory.toAbsolutePath(), List.of(), Lamp::sameJava,
                             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false,
-                            Optional.empty());
+                            Optional.empty(), Optional.empty());
     }
 
     /// Everything an engine said, and how it ended.

@@ -1394,6 +1394,8 @@ inside of the lamp: its name carved into the wall above three rows of waves. The
 screen and are drawn with `fill`, so a screen that is not 16:9 loses a little of their sides or of
 their top and bottom. `oillamp at <dir> --wallpaper <name>` writes the choice into a new lamp's
 `oillamp.toml`; for a lamp that has its file already, the option only says that the file decides.
+An application does the same with `Lamp.at(dir).wallpaper(LampWallpaper.WAVES_DARK).start()`,
+which passes `--wallpaper` to the engine.
 
 No key binding exits sway or runs a command, because the agent can type into the desktop and sway
 runs as the infra user. `TheSandboxImageSpec` checks the sway config for this.
