@@ -66,6 +66,8 @@ public final class GeniesView extends JPanel {
     private final Val<Palette> palette;
     /// The words of the window around the genies.
     private final Val<Lang.Window> windowWords;
+    /// The words of the header above a genie's pages.
+    private final Val<Lang.Header> headerWords;
     private final Look look;
     private final DesktopScreen desktop;
 
@@ -106,6 +108,7 @@ public final class GeniesView extends JPanel {
         theme   = Theme.of(state);
         palette = Theme.paletteOf(state);
         windowWords = Theme.langOf(state).viewAs(Lang.Window.class, Lang::WINDOW);
+        headerWords = Theme.langOf(state).viewAs(Lang.Header.class, Lang::HEADER);
         look    = new Look(theme);
         desktop = new DesktopScreen(palette);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
@@ -871,7 +874,7 @@ public final class GeniesView extends JPanel {
                     .padding(3, 8, 3, 8)
                     .componentFont(f -> f.color(p.TROUBLE()))
                 )
-                .withTooltip("Something went wrong in Genies, not only in this genie. Click to see what happened")
+                .withTooltip(headerWords.viewAsString(Lang.Header::SOMETHING_WENT_WRONG_IN_GENIES_NOT_ONLY_IN_THIS_GENIE))
                 .onClick(_ -> showTroubles())
             )
             .add("cell 1 0", ViewPartsUtil.lamp(phase, 30))
@@ -879,7 +882,7 @@ public final class GeniesView extends JPanel {
                 box("fill, wrap 1, ins 0, gap 0")
                 .add("growx, wmin 0",
                     label(name).group(Skin.TITLE)
-                    .withTooltip("Double-click to rename")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::DOUBLE_CLICK_TO_RENAME))
                     .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); })
                 )
                 .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
@@ -891,26 +894,26 @@ public final class GeniesView extends JPanel {
             .add("cell 3 0",
                 box("ins 0, gap 10, hidemode 3, aligny center")
                 .add(
-                    label(genie.viewAsString(it -> it.tokens() == 0 ? "" : String.format("%,d tokens", it.tokens())))
+                    label(Viewable.of(String.class, genie, headerWords, (it, words) -> words.TOKENS().of(it.tokens())))
                     .group(Skin.META)
                     .isVisibleIf(wide)
-                    .withTooltip("Tokens the model counted for this genie since Genies started")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::TOKENS_THE_MODEL_COUNTED_FOR_THIS_GENIE_SINCE_GENIES_STARTED))
                 )
                 .add(
-                    toggleButton(worded("Desktop"), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
+                    toggleButton(worded(Lang.Header::DESKTOP), desktopShown).group(Skin.QUIET_BUTTON).isVisibleIf(awake)
                     .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.DESKTOP, p.TEXT())))
-                    .withTooltip("Desktop: watch the genie's desktop, and use it")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::DESKTOP_WATCH_THE_GENIES_DESKTOP_AND_USE_IT))
                 )
                 .add(
-                    button(worded("Stop")).group(Skin.QUIET_BUTTON).isVisibleIf(working)
+                    button(worded(Lang.Header::STOP)).group(Skin.QUIET_BUTTON).isVisibleIf(working)
                     .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, p.TEXT())))
-                    .withTooltip("Stop what the genie is doing")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::STOP_WHAT_THE_GENIE_IS_DOING))
                     .onClick(_ -> app.stop(genie.get().id()))
                 )
                 .add(
-                    button(worded("Sleep")).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
+                    button(worded(Lang.Header::SLEEP)).group(Skin.QUIET_BUTTON).isVisibleIf(canSleepHere)
                     .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, p.TEXT())))
-                    .withTooltip("Sleep: end the genie's sandbox. Its home and this conversation are kept.")
+                    .withTooltip(headerWords.viewAsString(Lang.Header::SLEEP_END_THE_GENIES_SANDBOX))
                     .onClick(_ -> app.sleep(genie.get().id()))
                 )
                 .add(pages())
@@ -941,7 +944,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, name, request, (who, what) -> who + " asks you to allow: " + what),
+                        Viewable.of(String.class, state, request, (s, what) -> s.lang().HEADER().ASKS_YOU_TO_ALLOW().of(s.genie().name(), what)),
                         Palette::TEXT,
                         Val.of(true)
                     )
@@ -949,18 +952,17 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
                         theme,
-                        "A model allowed it already; this one needs you too. "
-                        + "Nothing happens until you decide, and after a minute it is refused.",
+                        headerWords.viewAsString(Lang.Header::A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO),
                         Val.of(true)
                     )
                 )
             )
             .add(
-                button("Refuse").group(Skin.QUIET_BUTTON)
+                button(headerWords.viewAsString(Lang.Header::REFUSE)).group(Skin.QUIET_BUTTON)
                 .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), false))
             )
             .add(
-                button("Allow").group(Skin.FLAME_BUTTON)
+                button(headerWords.viewAsString(Lang.Header::ALLOW)).group(Skin.FLAME_BUTTON)
                 .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), true))
             );
     }
@@ -1654,8 +1656,8 @@ public final class GeniesView extends JPanel {
     }
 
     /// A button's words while the header has room for them; its sign alone says it otherwise.
-    private Val<String> worded(String words) {
-        return state.viewAsString(it -> it.roomForWords() ? words : "");
+    private Val<String> worded(Function<Lang.Header, String> words) {
+        return state.viewAsString(it -> it.roomForWords() ? words.apply(it.lang().HEADER()) : "");
     }
 
     /// What can be done with a genie beyond its everyday buttons, as on its Actions page: a
