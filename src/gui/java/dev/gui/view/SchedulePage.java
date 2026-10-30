@@ -186,9 +186,9 @@ final class SchedulePage {
         if (genie.schedule().paused())
             return new Status(p.BRASS(), words.PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE());
         return switch (genie.phase()) {
-            case READY, WORKING -> new Status(p.CONTENT(), words.ON_JOBS_WAKE_IT_AT_THEIR_TIMES().of(genie.name()));
-            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE().of(genie.name()));
-            case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), words.IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE().of(genie.name()));
+            case READY, WORKING -> new Status(p.CONTENT(), words.ON_JOBS_WAKE_IT_AT_THEIR_TIMES(genie.name()));
+            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE(genie.name()));
+            case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), words.IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE(genie.name()));
         };
     }
 
@@ -263,7 +263,7 @@ final class SchedulePage {
                 .add("wmin 0", label(words.viewAsString(Lang.SchedulePage::THE_WEEK)).group(Skin.SECTION))
                 .add(
                     button(Viewable.of(String.class, Viewable.of(EarlierRuns.class, hidden, earlier, EarlierRuns::new), words, (it, page) ->
-                        it.shown() ? page.SHOW_ONLY_THE_LAST_RUNS() : page.SHOW_EARLIER_RUNS().of(it.hidden())
+                        it.shown() ? page.SHOW_ONLY_THE_LAST_RUNS() : page.SHOW_EARLIER_RUNS(it.hidden())
                     ))
                     .group(Skin.ICON_BUTTON).isVisibleIf(canFold)
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().BRASS())))
@@ -459,7 +459,7 @@ final class SchedulePage {
                 box("fill, ins 0, gap 8, hidemode 3", "[grow][]")
                 .add("growx, wmin 0", ViewPartsUtil.words(theme, moment.detail(), 12, 1f, p -> faded ? ViewPartsUtil.dim(detail.apply(p)) : detail.apply(p)))
                 .add("top",
-                    ViewPartsUtil.tag(theme, state.viewAsString(it -> it.lang().SCHEDULE_PAGE().ADDED_BY().of(it.genie().name())))
+                    ViewPartsUtil.tag(theme, state.viewAsString(it -> it.lang().SCHEDULE_PAGE().ADDED_BY(it.genie().name())))
                     .isVisibleIf(moment.byGenie())
                 )
             )
@@ -488,7 +488,7 @@ final class SchedulePage {
             .isVisibleIf(overview)
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 12, 0, 0, isWide ? 14 : 0))
             .add("growx, wmin 0",
-                label(Viewable.of(String.class, jobs, words, (it, page) -> page.JOBS().of(it.size()))).group(Skin.SECTION)
+                label(Viewable.of(String.class, jobs, words, (it, page) -> page.JOBS(it.size()))).group(Skin.SECTION)
             )
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 22 18 22 18, gap 8", "[grow, center]").group(Skin.TILE)
@@ -501,7 +501,7 @@ final class SchedulePage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, genie, words, (it, page) -> page.GIVE_IT_A_TASK_AND_A_TIME().of(it.name())),
+                        Viewable.of(String.class, genie, words, (it, page) -> page.GIVE_IT_A_TASK_AND_A_TIME(it.name())),
                         Palette::SUBTEXT,
                         Val.of(true)
                     )
@@ -559,13 +559,13 @@ final class SchedulePage {
                 .add(
                     ViewPartsUtil.tag(theme, Viewable.of(String.class, job, words, (it, page) ->
                         it.expires()
-                        .map(end -> page.UNTIL().of(DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate(), state.get().lang().DATES())))
+                        .map(end -> page.UNTIL(DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate(), state.get().lang().DATES())))
                         .orElse("")
                     ))
                     .isVisibleIf(job.viewAs(Boolean.class, it -> it.expires().isPresent()))
                 )
                 .add(
-                    ViewPartsUtil.tag(theme, Viewable.of(String.class, genie, words, (it, page) -> page.ADDED_BY().of(it.name())))
+                    ViewPartsUtil.tag(theme, Viewable.of(String.class, genie, words, (it, page) -> page.ADDED_BY(it.name())))
                     .isVisibleIf(job.viewAs(Boolean.class, Schedule.Job::byGenie))
                 )
             );
@@ -588,7 +588,7 @@ final class SchedulePage {
                 : at.toLocalDate().equals(today.plusDays(1))
                     ? words.TOMORROW()
                     : DateWordingUtil.shortDay(at.toLocalDate(), state.lang().DATES());
-        return words.NEXT().of(day, Recurrence.clock(at.toLocalTime()));
+        return words.NEXT(day, Recurrence.clock(at.toLocalTime()));
     }
 
     private JPopupMenu menu(String id) {
@@ -609,7 +609,7 @@ final class SchedulePage {
     private void confirmRemove(Schedule.Job job) {
         Lang.SchedulePage page = words.get();
         ConfirmAnswer answer =
-            UI.confirmation(page.TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY().of(job.title()))
+            UI.confirmation(page.TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY(job.title()))
             .titled(page.REMOVE_A_JOB())
             .yesOption(page.REMOVE()).noOption(page.KEEP()).cancelOption("")
             .show();
@@ -638,7 +638,7 @@ final class SchedulePage {
                     box("fill, wrap 1, ins 0, gap 4")
                     .add("growx, wmin 0",
                         label(Viewable.of(String.class, changing, state, (isChange, it) ->
-                            isChange ? it.lang().SCHEDULE_PAGE().CHANGE_A_JOB() : it.lang().SCHEDULE_PAGE().A_NEW_JOB_FOR().of(it.genie().name())
+                            isChange ? it.lang().SCHEDULE_PAGE().CHANGE_A_JOB() : it.lang().SCHEDULE_PAGE().A_NEW_JOB_FOR(it.genie().name())
                         ))
                         .group(Skin.EMPTY_TITLE)
                     )
@@ -890,7 +890,7 @@ final class SchedulePage {
 
     /// A month of days, seven to a row, Monday first.
     private UIForPanel<JPanel> calendar(Month month) {
-        Val<String> title = words.viewAsString(it -> it.MONTH_AND_YEAR().of(month.month()));
+        Val<String> title = words.viewAsString(it -> it.MONTH_AND_YEAR(month.month()));
         var grid =
             panel("wrap 7, ins 10 10 8 10, gap 3 3", "[34!][34!][34!][34!][34!][34!][34!]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).border(1, p.BORDER()).borderRadius(12))
@@ -908,7 +908,7 @@ final class SchedulePage {
                 )
             );
         for (DayOfWeek day : DayOfWeek.values())
-            grid = grid.add("center", label(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS().of(day))).group(Skin.META));
+            grid = grid.add("center", label(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS(day))).group(Skin.META));
         int blank = month.month().atDay(1).getDayOfWeek().getValue() - 1;
         for (int i = 0; i < blank; i++) grid = grid.add(box());
         for (int number = 1; number <= month.month().lengthOfMonth(); number++)
@@ -946,8 +946,8 @@ final class SchedulePage {
         for (DayOfWeek day : DayOfWeek.values()) {
             Val<Boolean> on = draft.viewAs(Boolean.class, it -> it.days().contains(day));
             row = row.add("w 36!, h 36!",
-                button(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS().of(day))).group(Skin.DAY)
-                .withTooltip(words.viewAsString(it -> it.WEEKDAY().of(day)))
+                button(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS(day))).group(Skin.DAY)
+                .withTooltip(words.viewAsString(it -> it.WEEKDAY(day)))
                 .withStyle(Themed.of(on, theme), (themed, it) -> {
                     var isOn = themed.item();
                     Palette p = themed.palette();

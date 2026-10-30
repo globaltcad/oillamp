@@ -76,9 +76,7 @@ public enum Lang {
 
     /// The words of when jobs wake a genie, and what they did.
     public SchedulePage SCHEDULE_PAGE() {
-        return switch (this) {
-            case ENGLISH -> SchedulePage.ENGLISH;
-        };
+        return new SchedulePage(this);
     }
 
     /// The words of the moments a genie's home was saved at, and going back to one.
@@ -1417,245 +1415,700 @@ public enum Lang {
     }
 
     /// The words of a genie's Schedule page: when jobs wake the genie, and what they did.
-    public record SchedulePage(
-        String PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE,
-        About ON_JOBS_WAKE_IT_AT_THEIR_TIMES,
-        About IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE,
-        About IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE,
-        String SCHEDULE,
-        String WAKE,
-        String JOBS_RUN_ONLY_WHILE_THE_GENIE_IS_AWAKE,
-        String RESUME,
-        String PAUSE,
-        String LET_THE_JOBS_RUN_AGAIN,
-        String HOLD_EVERY_JOB_UNTIL_YOU_RESUME_NOTHING_IS_LOST,
-        String NEW_JOB,
-        String THE_WEEK,
-        String SHOW_ONLY_THE_LAST_RUNS,
-        Counted SHOW_EARLIER_RUNS,
-        String READING_THE_SCHEDULE,
-        String NOTHING_RAN_THIS_WEEK_AND_NOTHING_IS_PLANNED,
-        String CLICK_AGAIN_TO_SEE_EVERY_JOB,
-        String CLICK_TO_BRING_THIS_JOBS_TIMES_FORWARD,
-        About ADDED_BY,
-        String OPEN_THE_CONVERSATION,
-        String STOP,
-        String STOP_THIS_RUN_WHAT_THE_GENIE_DID_SO_FAR_IS_KEPT,
-        Counted JOBS,
-        String NOTHING_ON_THE_SCHEDULE_YET,
-        About GIVE_IT_A_TASK_AND_A_TIME,
-        String CHANGE_SWITCH_OFF_OR_REMOVE_THIS_JOB,
-        About UNTIL,
-        String SWITCHED_OFF,
-        String WILL_NOT_RUN_AGAIN,
-        String DUE_NOW,
-        String TODAY,
-        String TOMORROW,
-        DayAndTime NEXT,
-        String CHANGE_ELLIPSIS,
-        String SWITCH_OFF,
-        String SWITCH_ON,
-        String REMOVE_ELLIPSIS,
-        About TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY,
-        String REMOVE_A_JOB,
-        String REMOVE,
-        String KEEP,
-        String ON_CLICK_TO_SWITCH_IT_OFF_KEEPING_IT_ON_THE_SCHEDULE,
-        String OFF_CLICK_TO_SWITCH_IT_ON,
-        String CHANGE_A_JOB,
-        About A_NEW_JOB_FOR,
-        String IT_GETS_THE_TASK_AT_THE_TIME_YOU_CHOOSE_IN_A_CONVERSATION_OF_ITS_OWN,
-        String CLOSE_WITHOUT_SAVING,
-        String CANCEL,
-        String SAVING,
-        String SAVE_THE_JOB,
-        String ADD_TO_THE_SCHEDULE,
-        String CTRL_AND_RETURN_SAVE_TOO,
-        String THE_TASK,
-        String BRIEF_IT_AS_YOU_WOULD_A_COLLEAGUE,
-        String WHEN,
-        String ONCE,
-        String AGAIN_AND_AGAIN,
-        String IN_AN_HOUR,
-        String THIS_EVENING,
-        String TOMORROW_MORNING,
-        String MONDAY_MORNING,
-        String AT,
-        String A_NUMBER_FROM_0_TO_59,
-        String MINUTES_PAST_EACH_HOUR,
-        String FIVE_FIELDS_AS_CRON_HAS_THEM,
-        String SUCH_AS_09_00_OR_9_30,
-        String ENDS,
-        String NEVER,
-        String ON_A_DAY,
-        String THE_MONTH_BEFORE,
-        String THE_MONTH_AFTER,
-        OfMonth MONTH_AND_YEAR,
-        OfWeekday WEEKDAY_IN_TWO_LETTERS,
-        OfWeekday WEEKDAY,
-        Listed DAYS_LISTED,
-        String EVERY_HOUR_ON_THE_HOUR,
-        About EVERY_HOUR_AT_PAST,
-        About EVERY_DAY_AT,
-        About EVERY_WEEKDAY_AT,
-        DayAndTime EVERY_DAYS_AT,
-        Counted EVERY_MINUTES,
-        Counted EVERY_HOURS_ON_THE_HOUR,
-        EveryHours EVERY_HOURS_AT_PAST,
-        About ON_THE_CRON_SCHEDULE,
-        String EVERY_HOUR,
-        String EVERY_DAY,
-        String WEEKDAYS,
-        String SOME_DAYS,
-        String CUSTOM,
-        String WRITE_WHAT_THE_GENIE_SHOULD_DO,
-        TooLong A_TASK_CAN_BE_AT_MOST,
-        String THAT_TIME_HAS_PASSED_PICK_A_LATER_ONE,
-        String THE_MINUTE_PAST_THE_HOUR_IS_A_NUMBER_FROM_0_TO_59,
-        String PICK_AT_LEAST_ONE_DAY,
-        String WRITE_A_CRON_EXPRESSION,
-        String THE_LAST_DAY_HAS_PASSED,
-        String WRITE_THE_TIME_AS_HOURS_AND_MINUTES,
-        OnceAt ONCE_AT_FROM_NOW,
-        DayAndTime FIRST_AT,
-        String BUT_NOT_BEFORE_ITS_LAST_DAY,
-        String OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB,
-        DayAndTime ONCE_AT,
-        String ONCE_WITHOUT_A_TIME,
-        String A_JOB_THAT_HAS_RUN,
-        String A_JOB,
-        About WORKING_ON_IT_SINCE,
-        String NOW_ON_THE_TIMELINE,
-        String ITS_TIME_CAME_IT_RUNS_AS_SOON_AS_THE_GENIE_IS_AWAKE_AND_FREE,
-        TimesFromTo TIMES_FROM_TO,
-        String DONE,
-        String FAILED,
-        String RAN_OUT_OF_TIME,
-        String STOPPED
-    ) {
-        public static final SchedulePage ENGLISH = new SchedulePage(
-            "Paused. No job runs until you resume the schedule.",
-            genie -> "On. Jobs wake " + genie + " at their times, one after the other.",
-            genie -> genie + " is waking. Jobs run once it is awake.",
-            genie -> genie + " is asleep. Jobs run only while it is awake; one whose time came meanwhile runs as soon as it wakes.",
-            "Schedule",
-            "Wake",
-            "Jobs run only while the genie is awake",
-            "Resume",
-            "Pause",
-            "Let the jobs run again",
-            "Hold every job until you resume; nothing is lost",
-            "New job",
-            "THE WEEK",
-            "Show only the last runs",
-            count -> "Show " + count + " earlier " + (count == 1 ? "run" : "runs"),
-            "Reading the schedule…",
-            "Nothing ran this week, and nothing is planned.",
-            "Click again to see every job",
-            "Click to bring this job's times forward",
-            genie -> "added by " + genie,
-            "Open the conversation",
-            "Stop",
-            "Stop this run; what the genie did so far is kept, and saved",
-            count -> count == 0 ? "JOBS" : "JOBS  ·  " + count,
-            "Nothing on the schedule yet",
-            genie ->
-                "Give " + genie + " a task and a time, "
-                + "once or again and again: a morning check of the build, a weekly report, a reminder "
-                + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards.",
-            "Change, switch off or remove this job",
-            day -> "until " + day,
-            "switched off",
-            "will not run again",
-            "due now",
-            "today",
-            "tomorrow",
-            (day, time) -> "next: " + day + ", " + time,
-            "Change…",
-            "Switch off",
-            "Switch on",
-            "Remove…",
-            job -> "Take \"" + job + "\" off the schedule? What its runs did stays in the history.",
-            "Remove a job",
-            "Remove",
-            "Keep",
-            "On: click to switch it off, keeping it on the schedule",
-            "Off: click to switch it on",
-            "Change a job",
-            genie -> "A new job for " + genie,
-            "It gets the task at the time you choose, in a conversation of its own, "
-            + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.",
-            "Close without saving",
-            "Cancel",
-            "Saving…",
-            "Save the job",
-            "Add to the schedule",
-            "Ctrl and Return save too",
-            "THE TASK",
-            "Brief it as you would a colleague: what to do, where things are, and "
-            + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
-            + "keeps notes in ~/workspace/NOTES.md.",
-            "WHEN",
-            "Once",
-            "Again and again",
-            "In an hour",
-            "This evening",
-            "Tomorrow morning",
-            "Monday morning",
-            "At",
-            "A number from 0 to 59",
-            "minutes past each hour",
-            "Five fields, as cron has them: minute, hour, day of the month, month, "
-            + "day of the week. 0 9 1 * * is nine on the first of each month; */30 * * * * every half hour.",
-            "Such as 09:00, or 9.30",
-            "Ends",
-            "Never",
-            "On a day",
-            "The month before",
-            "The month after",
-            month -> month.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.getYear(),
-            day -> day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2),
-            day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH),
-            Lang::listedInEnglish,
-            "Every hour, on the hour",
-            minute -> "Every hour at " + minute + " past",
-            time -> "Every day at " + time,
-            time -> "Every weekday at " + time,
-            (days, time) -> "Every " + days + " at " + time,
-            count -> "Every " + count + " minutes",
-            count -> "Every " + count + " hours, on the hour",
-            (count, minute) -> "Every " + count + " hours, at " + minute + " past",
-            cron -> "On the cron schedule “" + cron + "”",
-            "Every hour",
-            "Every day",
-            "Weekdays",
-            "Some days",
-            "Custom",
-            "Write what the genie should do.",
-            (most, has) -> "A task can be at most " + String.format("%,d", most) + " characters; this one has " + String.format("%,d", has) + ".",
-            "That time has passed. Pick a later one.",
-            "The minute past the hour is a number from 0 to 59.",
-            "Pick at least one day.",
-            "Write a cron expression, such as 0 9 * * 1-5.",
-            "The last day has passed.",
-            "Write the time as hours and minutes, such as 09:00.",
-            (day, time, fromNow) -> "Once, " + day + " at " + time + " — " + fromNow + ".",
-            (day, time) -> "first " + day + " at " + time,
-            "but not before its last day",
-            "oillamp reads the expression when you save the job.",
-            (day, time) -> "Once, " + day + " at " + time,
-            "Once",
-            "A job that has run",
-            "A job",
-            time -> "working on it, since " + time,
-            "Now",
-            "its time came; it runs as soon as the genie is awake and free",
-            (times, first, last) -> times + " times, " + first + " to " + last,
-            "Done",
-            "Failed",
-            "Ran out of time",
-            "Stopped"
-        );
+    public record SchedulePage(Lang lang) {
+        public String PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "Paused. No job runs until you resume the schedule.";
+            };
+        }
+
+        public String ON_JOBS_WAKE_IT_AT_THEIR_TIMES(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "On. Jobs wake " + genie + " at their times, one after the other.";
+            };
+        }
+
+        public String IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is waking. Jobs run once it is awake.";
+            };
+        }
+
+        public String IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is asleep. Jobs run only while it is awake; one whose time came meanwhile runs as soon as it wakes.";
+            };
+        }
+
+        public String SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "Schedule";
+            };
+        }
+
+        public String WAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Wake";
+            };
+        }
+
+        public String JOBS_RUN_ONLY_WHILE_THE_GENIE_IS_AWAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Jobs run only while the genie is awake";
+            };
+        }
+
+        public String RESUME() {
+            return switch (lang) {
+                case ENGLISH -> "Resume";
+            };
+        }
+
+        public String PAUSE() {
+            return switch (lang) {
+                case ENGLISH -> "Pause";
+            };
+        }
+
+        public String LET_THE_JOBS_RUN_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Let the jobs run again";
+            };
+        }
+
+        public String HOLD_EVERY_JOB_UNTIL_YOU_RESUME_NOTHING_IS_LOST() {
+            return switch (lang) {
+                case ENGLISH -> "Hold every job until you resume; nothing is lost";
+            };
+        }
+
+        public String NEW_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "New job";
+            };
+        }
+
+        public String THE_WEEK() {
+            return switch (lang) {
+                case ENGLISH -> "THE WEEK";
+            };
+        }
+
+        public String SHOW_ONLY_THE_LAST_RUNS() {
+            return switch (lang) {
+                case ENGLISH -> "Show only the last runs";
+            };
+        }
+
+        public String SHOW_EARLIER_RUNS(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Show " + count + " earlier " + (count == 1 ? "run" : "runs");
+            };
+        }
+
+        public String READING_THE_SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "Reading the schedule…";
+            };
+        }
+
+        public String NOTHING_RAN_THIS_WEEK_AND_NOTHING_IS_PLANNED() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing ran this week, and nothing is planned.";
+            };
+        }
+
+        public String CLICK_AGAIN_TO_SEE_EVERY_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Click again to see every job";
+            };
+        }
+
+        public String CLICK_TO_BRING_THIS_JOBS_TIMES_FORWARD() {
+            return switch (lang) {
+                case ENGLISH -> "Click to bring this job's times forward";
+            };
+        }
+
+        public String ADDED_BY(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "added by " + genie;
+            };
+        }
+
+        public String OPEN_THE_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "Open the conversation";
+            };
+        }
+
+        public String STOP() {
+            return switch (lang) {
+                case ENGLISH -> "Stop";
+            };
+        }
+
+        public String STOP_THIS_RUN_WHAT_THE_GENIE_DID_SO_FAR_IS_KEPT() {
+            return switch (lang) {
+                case ENGLISH -> "Stop this run; what the genie did so far is kept, and saved";
+            };
+        }
+
+        public String JOBS(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 0 ? "JOBS" : "JOBS  ·  " + count;
+            };
+        }
+
+        public String NOTHING_ON_THE_SCHEDULE_YET() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing on the schedule yet";
+            };
+        }
+
+        public String GIVE_IT_A_TASK_AND_A_TIME(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Give " + genie + " a task and a time, "
+                    + "once or again and again: a morning check of the build, a weekly report, a reminder "
+                    + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards.";
+            };
+        }
+
+        public String CHANGE_SWITCH_OFF_OR_REMOVE_THIS_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Change, switch off or remove this job";
+            };
+        }
+
+        public String UNTIL(String day) {
+            return switch (lang) {
+                case ENGLISH -> "until " + day;
+            };
+        }
+
+        public String SWITCHED_OFF() {
+            return switch (lang) {
+                case ENGLISH -> "switched off";
+            };
+        }
+
+        public String WILL_NOT_RUN_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "will not run again";
+            };
+        }
+
+        public String DUE_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "due now";
+            };
+        }
+
+        public String TODAY() {
+            return switch (lang) {
+                case ENGLISH -> "today";
+            };
+        }
+
+        public String TOMORROW() {
+            return switch (lang) {
+                case ENGLISH -> "tomorrow";
+            };
+        }
+
+        public String NEXT(String day, String time) {
+            return switch (lang) {
+                case ENGLISH -> "next: " + day + ", " + time;
+            };
+        }
+
+        public String CHANGE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Change…";
+            };
+        }
+
+        public String SWITCH_OFF() {
+            return switch (lang) {
+                case ENGLISH -> "Switch off";
+            };
+        }
+
+        public String SWITCH_ON() {
+            return switch (lang) {
+                case ENGLISH -> "Switch on";
+            };
+        }
+
+        public String REMOVE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Remove…";
+            };
+        }
+
+        public String TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY(String job) {
+            return switch (lang) {
+                case ENGLISH -> "Take \"" + job + "\" off the schedule? What its runs did stays in the history.";
+            };
+        }
+
+        public String REMOVE_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Remove a job";
+            };
+        }
+
+        public String REMOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Remove";
+            };
+        }
+
+        public String KEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Keep";
+            };
+        }
+
+        public String ON_CLICK_TO_SWITCH_IT_OFF_KEEPING_IT_ON_THE_SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "On: click to switch it off, keeping it on the schedule";
+            };
+        }
+
+        public String OFF_CLICK_TO_SWITCH_IT_ON() {
+            return switch (lang) {
+                case ENGLISH -> "Off: click to switch it on";
+            };
+        }
+
+        public String CHANGE_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Change a job";
+            };
+        }
+
+        public String A_NEW_JOB_FOR(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "A new job for " + genie;
+            };
+        }
+
+        public String IT_GETS_THE_TASK_AT_THE_TIME_YOU_CHOOSE_IN_A_CONVERSATION_OF_ITS_OWN() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "It gets the task at the time you choose, in a conversation of its own, "
+                    + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.";
+            };
+        }
+
+        public String CLOSE_WITHOUT_SAVING() {
+            return switch (lang) {
+                case ENGLISH -> "Close without saving";
+            };
+        }
+
+        public String CANCEL() {
+            return switch (lang) {
+                case ENGLISH -> "Cancel";
+            };
+        }
+
+        public String SAVING() {
+            return switch (lang) {
+                case ENGLISH -> "Saving…";
+            };
+        }
+
+        public String SAVE_THE_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Save the job";
+            };
+        }
+
+        public String ADD_TO_THE_SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "Add to the schedule";
+            };
+        }
+
+        public String CTRL_AND_RETURN_SAVE_TOO() {
+            return switch (lang) {
+                case ENGLISH -> "Ctrl and Return save too";
+            };
+        }
+
+        public String THE_TASK() {
+            return switch (lang) {
+                case ENGLISH -> "THE TASK";
+            };
+        }
+
+        public String BRIEF_IT_AS_YOU_WOULD_A_COLLEAGUE() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Brief it as you would a colleague: what to do, where things are, and "
+                    + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
+                    + "keeps notes in ~/workspace/NOTES.md.";
+            };
+        }
+
+        public String WHEN() {
+            return switch (lang) {
+                case ENGLISH -> "WHEN";
+            };
+        }
+
+        public String ONCE() {
+            return switch (lang) {
+                case ENGLISH -> "Once";
+            };
+        }
+
+        public String AGAIN_AND_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Again and again";
+            };
+        }
+
+        public String IN_AN_HOUR() {
+            return switch (lang) {
+                case ENGLISH -> "In an hour";
+            };
+        }
+
+        public String THIS_EVENING() {
+            return switch (lang) {
+                case ENGLISH -> "This evening";
+            };
+        }
+
+        public String TOMORROW_MORNING() {
+            return switch (lang) {
+                case ENGLISH -> "Tomorrow morning";
+            };
+        }
+
+        public String MONDAY_MORNING() {
+            return switch (lang) {
+                case ENGLISH -> "Monday morning";
+            };
+        }
+
+        public String AT() {
+            return switch (lang) {
+                case ENGLISH -> "At";
+            };
+        }
+
+        public String A_NUMBER_FROM_0_TO_59() {
+            return switch (lang) {
+                case ENGLISH -> "A number from 0 to 59";
+            };
+        }
+
+        public String MINUTES_PAST_EACH_HOUR() {
+            return switch (lang) {
+                case ENGLISH -> "minutes past each hour";
+            };
+        }
+
+        public String FIVE_FIELDS_AS_CRON_HAS_THEM() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Five fields, as cron has them: minute, hour, day of the month, month, "
+                    + "day of the week. 0 9 1 * * is nine on the first of each month; */30 * * * * every half hour.";
+            };
+        }
+
+        public String SUCH_AS_09_00_OR_9_30() {
+            return switch (lang) {
+                case ENGLISH -> "Such as 09:00, or 9.30";
+            };
+        }
+
+        public String ENDS() {
+            return switch (lang) {
+                case ENGLISH -> "Ends";
+            };
+        }
+
+        public String NEVER() {
+            return switch (lang) {
+                case ENGLISH -> "Never";
+            };
+        }
+
+        public String ON_A_DAY() {
+            return switch (lang) {
+                case ENGLISH -> "On a day";
+            };
+        }
+
+        public String THE_MONTH_BEFORE() {
+            return switch (lang) {
+                case ENGLISH -> "The month before";
+            };
+        }
+
+        public String THE_MONTH_AFTER() {
+            return switch (lang) {
+                case ENGLISH -> "The month after";
+            };
+        }
+
+        public String MONTH_AND_YEAR(YearMonth month) {
+            return switch (lang) {
+                case ENGLISH -> month.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.getYear();
+            };
+        }
+
+        public String WEEKDAY_IN_TWO_LETTERS(DayOfWeek day) {
+            return switch (lang) {
+                case ENGLISH -> day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2);
+            };
+        }
+
+        public String WEEKDAY(DayOfWeek day) {
+            return switch (lang) {
+                case ENGLISH -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+            };
+        }
+
+        public String DAYS_LISTED(List<String> names) {
+            return switch (lang) {
+                case ENGLISH -> listedInEnglish(names);
+            };
+        }
+
+        public String EVERY_HOUR_ON_THE_HOUR() {
+            return switch (lang) {
+                case ENGLISH -> "Every hour, on the hour";
+            };
+        }
+
+        public String EVERY_HOUR_AT_PAST(String minute) {
+            return switch (lang) {
+                case ENGLISH -> "Every hour at " + minute + " past";
+            };
+        }
+
+        public String EVERY_DAY_AT(String time) {
+            return switch (lang) {
+                case ENGLISH -> "Every day at " + time;
+            };
+        }
+
+        public String EVERY_WEEKDAY_AT(String time) {
+            return switch (lang) {
+                case ENGLISH -> "Every weekday at " + time;
+            };
+        }
+
+        public String EVERY_DAYS_AT(String days, String time) {
+            return switch (lang) {
+                case ENGLISH -> "Every " + days + " at " + time;
+            };
+        }
+
+        public String EVERY_MINUTES(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Every " + count + " minutes";
+            };
+        }
+
+        public String EVERY_HOURS_ON_THE_HOUR(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Every " + count + " hours, on the hour";
+            };
+        }
+
+        public String EVERY_HOURS_AT_PAST(int count, String minute) {
+            return switch (lang) {
+                case ENGLISH -> "Every " + count + " hours, at " + minute + " past";
+            };
+        }
+
+        public String ON_THE_CRON_SCHEDULE(String cron) {
+            return switch (lang) {
+                case ENGLISH -> "On the cron schedule “" + cron + "”";
+            };
+        }
+
+        public String EVERY_HOUR() {
+            return switch (lang) {
+                case ENGLISH -> "Every hour";
+            };
+        }
+
+        public String EVERY_DAY() {
+            return switch (lang) {
+                case ENGLISH -> "Every day";
+            };
+        }
+
+        public String WEEKDAYS() {
+            return switch (lang) {
+                case ENGLISH -> "Weekdays";
+            };
+        }
+
+        public String SOME_DAYS() {
+            return switch (lang) {
+                case ENGLISH -> "Some days";
+            };
+        }
+
+        public String CUSTOM() {
+            return switch (lang) {
+                case ENGLISH -> "Custom";
+            };
+        }
+
+        public String WRITE_WHAT_THE_GENIE_SHOULD_DO() {
+            return switch (lang) {
+                case ENGLISH -> "Write what the genie should do.";
+            };
+        }
+
+        public String A_TASK_CAN_BE_AT_MOST(int most, int has) {
+            return switch (lang) {
+                case ENGLISH -> "A task can be at most " + String.format("%,d", most) + " characters; this one has " + String.format("%,d", has) + ".";
+            };
+        }
+
+        public String THAT_TIME_HAS_PASSED_PICK_A_LATER_ONE() {
+            return switch (lang) {
+                case ENGLISH -> "That time has passed. Pick a later one.";
+            };
+        }
+
+        public String THE_MINUTE_PAST_THE_HOUR_IS_A_NUMBER_FROM_0_TO_59() {
+            return switch (lang) {
+                case ENGLISH -> "The minute past the hour is a number from 0 to 59.";
+            };
+        }
+
+        public String PICK_AT_LEAST_ONE_DAY() {
+            return switch (lang) {
+                case ENGLISH -> "Pick at least one day.";
+            };
+        }
+
+        public String WRITE_A_CRON_EXPRESSION() {
+            return switch (lang) {
+                case ENGLISH -> "Write a cron expression, such as 0 9 * * 1-5.";
+            };
+        }
+
+        public String THE_LAST_DAY_HAS_PASSED() {
+            return switch (lang) {
+                case ENGLISH -> "The last day has passed.";
+            };
+        }
+
+        public String WRITE_THE_TIME_AS_HOURS_AND_MINUTES() {
+            return switch (lang) {
+                case ENGLISH -> "Write the time as hours and minutes, such as 09:00.";
+            };
+        }
+
+        public String ONCE_AT_FROM_NOW(String day, String time, String fromNow) {
+            return switch (lang) {
+                case ENGLISH -> "Once, " + day + " at " + time + " — " + fromNow + ".";
+            };
+        }
+
+        public String FIRST_AT(String day, String time) {
+            return switch (lang) {
+                case ENGLISH -> "first " + day + " at " + time;
+            };
+        }
+
+        public String BUT_NOT_BEFORE_ITS_LAST_DAY() {
+            return switch (lang) {
+                case ENGLISH -> "but not before its last day";
+            };
+        }
+
+        public String OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "oillamp reads the expression when you save the job.";
+            };
+        }
+
+        public String ONCE_AT(String day, String time) {
+            return switch (lang) {
+                case ENGLISH -> "Once, " + day + " at " + time;
+            };
+        }
+
+        public String ONCE_WITHOUT_A_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "Once";
+            };
+        }
+
+        public String A_JOB_THAT_HAS_RUN() {
+            return switch (lang) {
+                case ENGLISH -> "A job that has run";
+            };
+        }
+
+        public String A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "A job";
+            };
+        }
+
+        public String WORKING_ON_IT_SINCE(String time) {
+            return switch (lang) {
+                case ENGLISH -> "working on it, since " + time;
+            };
+        }
+
+        public String NOW_ON_THE_TIMELINE() {
+            return switch (lang) {
+                case ENGLISH -> "Now";
+            };
+        }
+
+        public String ITS_TIME_CAME_IT_RUNS_AS_SOON_AS_THE_GENIE_IS_AWAKE_AND_FREE() {
+            return switch (lang) {
+                case ENGLISH -> "its time came; it runs as soon as the genie is awake and free";
+            };
+        }
+
+        public String TIMES_FROM_TO(int times, String first, String last) {
+            return switch (lang) {
+                case ENGLISH -> times + " times, " + first + " to " + last;
+            };
+        }
+
+        public String DONE() {
+            return switch (lang) {
+                case ENGLISH -> "Done";
+            };
+        }
+
+        public String FAILED() {
+            return switch (lang) {
+                case ENGLISH -> "Failed";
+            };
+        }
+
+        public String RAN_OUT_OF_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "Ran out of time";
+            };
+        }
+
+        public String STOPPED() {
+            return switch (lang) {
+                case ENGLISH -> "Stopped";
+            };
+        }
     }
 
     /// The words of a genie's History page: the moments its home was saved at, its branches, and

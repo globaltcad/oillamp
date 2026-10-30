@@ -96,7 +96,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
         placed.add(new Placed(present, 1, schedule.running()
                 .map(running -> moment(schedule, Kind.WORKING, clockNow,
                         schedule.job(running.job()).map(Schedule.Job::title).orElse(words.A_JOB()),
-                        words.WORKING_ON_IT_SINCE().of(Recurrence.clock(LocalDateTime.ofInstant(running.since(), schedule.zone()).toLocalTime())),
+                        words.WORKING_ON_IT_SINCE(Recurrence.clock(LocalDateTime.ofInstant(running.since(), schedule.zone()).toLocalTime())),
                         running.job(), running.run(), Optional.empty(), Optional.empty(),
                         schedule.job(running.job()).map(Schedule.Job::byGenie).orElse(false)))
                 .orElseGet(() -> new Moment(Kind.NOW, clockNow, words.NOW_ON_THE_TIMELINE(), "", "", "", Optional.empty(), Optional.empty(),
@@ -118,7 +118,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
                     LocalDateTime first = times.getFirst();
                     String which = times.size() <= LISTED_TIMES
                             ? String.join(", ", times.stream().map(time -> Recurrence.clock(time.toLocalTime())).toList())
-                            : words.TIMES_FROM_TO().of(times.size(), Recurrence.clock(first.toLocalTime()), Recurrence.clock(times.getLast().toLocalTime()));
+                            : words.TIMES_FROM_TO(times.size(), Recurrence.clock(first.toLocalTime()), Recurrence.clock(times.getLast().toLocalTime()));
                     placed.add(new Placed(first, 3, moment(schedule, Kind.REPEATING, times.size() + "×",
                             job.title(), how + " · " + which, job.id(), "",
                             Optional.empty(), Optional.empty(), job.byGenie())));

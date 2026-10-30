@@ -51,10 +51,10 @@ public sealed interface Recurrence {
     default String describe(Lang lang) {
         Lang.SchedulePage words = lang.SCHEDULE_PAGE();
         return switch (this) {
-            case Hourly hourly     -> hourly.minute() == 0 ? words.EVERY_HOUR_ON_THE_HOUR() : words.EVERY_HOUR_AT_PAST().of(twoDigits(hourly.minute()));
-            case Daily daily       -> words.EVERY_DAY_AT().of(clock(daily.at()));
-            case Weekdays weekdays -> words.EVERY_WEEKDAY_AT().of(clock(weekdays.at()));
-            case Weekly weekly     -> words.EVERY_DAYS_AT().of(days(weekly.days(), words), clock(weekly.at()));
+            case Hourly hourly     -> hourly.minute() == 0 ? words.EVERY_HOUR_ON_THE_HOUR() : words.EVERY_HOUR_AT_PAST(twoDigits(hourly.minute()));
+            case Daily daily       -> words.EVERY_DAY_AT(clock(daily.at()));
+            case Weekdays weekdays -> words.EVERY_WEEKDAY_AT(clock(weekdays.at()));
+            case Weekly weekly     -> words.EVERY_DAYS_AT(days(weekly.days(), words), clock(weekly.at()));
             case Custom custom     -> describeCustom(custom.cron().strip(), words);
         };
     }
@@ -124,7 +124,7 @@ public sealed interface Recurrence {
 
     /// "Monday", "Monday and Thursday", "Monday, Wednesday and Friday".
     private static String days(Tuple<DayOfWeek> days, Lang.SchedulePage words) {
-        return words.DAYS_LISTED().of(days.mapTo(String.class, day -> words.WEEKDAY().of(day)).toList());
+        return words.DAYS_LISTED(days.mapTo(String.class, day -> words.WEEKDAY(day)).toList());
     }
 
     private static Optional<LocalDateTime> firstDayFrom(LocalDateTime from, LocalTime at, Tuple<DayOfWeek> days) {
@@ -167,13 +167,13 @@ public sealed interface Recurrence {
 
     private static String describeCustom(String cron, Lang.SchedulePage words) {
         Matcher every = Pattern.compile("\\*/(\\d+) \\* \\* \\* \\*").matcher(cron);
-        if (every.matches()) return words.EVERY_MINUTES().of(Integer.parseInt(every.group(1)));
+        if (every.matches()) return words.EVERY_MINUTES(Integer.parseInt(every.group(1)));
         Matcher hours = Pattern.compile("(\\d{1,2}) \\*/(\\d+) \\* \\* \\*").matcher(cron);
         if (hours.matches()) {
             int count = Integer.parseInt(hours.group(2));
             int minute = Integer.parseInt(hours.group(1));
-            return minute == 0 ? words.EVERY_HOURS_ON_THE_HOUR().of(count) : words.EVERY_HOURS_AT_PAST().of(count, twoDigits(minute));
+            return minute == 0 ? words.EVERY_HOURS_ON_THE_HOUR(count) : words.EVERY_HOURS_AT_PAST(count, twoDigits(minute));
         }
-        return words.ON_THE_CRON_SCHEDULE().of(cron);
+        return words.ON_THE_CRON_SCHEDULE(cron);
     }
 }
