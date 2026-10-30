@@ -49,12 +49,6 @@ final class ViewPartsUtil {
     }
 
     /// A few lines of small print, wrapped to the width they are given.
-    static UIForAnySwing<?, ?> note(Val<Theme> theme, String text, Val<Boolean> shown) {
-        return note(theme, Val.of(text), shown);
-    }
-
-    /// A few lines of small print that change, such as with the language, wrapped to the width
-    /// they are given.
     static UIForAnySwing<?, ?> note(Val<Theme> theme, Val<String> text, Val<Boolean> shown) {
         return
             box().withMinSize(0, 0).isVisibleIf(shown)
