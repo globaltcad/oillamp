@@ -27,6 +27,7 @@ import java.util.Locale;
 /// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
 /// @param SETTINGS_PAGE the settings every genie shares, and the welcome above them
 /// @param SCHEDULE_PAGE when jobs wake a genie, and what they did
+/// @param HISTORY_PAGE the moments a genie's home was saved at, and going back to one
 /// @param PARTS   the parts of the window that several pages share
 public record Lang(
     Window WINDOW,
@@ -39,6 +40,7 @@ public record Lang(
     HostAccessPage HOST_ACCESS_PAGE,
     SettingsPage SETTINGS_PAGE,
     SchedulePage SCHEDULE_PAGE,
+    HistoryPage HISTORY_PAGE,
     Parts PARTS
 ) {
 
@@ -53,6 +55,7 @@ public record Lang(
         HostAccessPage.ENGLISH,
         SettingsPage.ENGLISH,
         SchedulePage.ENGLISH,
+        HistoryPage.ENGLISH,
         Parts.ENGLISH
     );
 
@@ -860,6 +863,50 @@ public record Lang(
             month -> month.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.getYear(),
             day -> day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2),
             day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+        );
+    }
+
+    /// The words of a genie's History page: the moments its home was saved at, its branches, and
+    /// going back to a moment.
+    public record HistoryPage(
+        About IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE,
+        About IS_WORKING_GO_BACK_ONCE_IT_IS_DONE,
+        String A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE,
+        About SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS,
+        About IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND,
+        WhoAndWhat SAVED_WHENEVER,
+        String GOING_BACK_KEEPS_HOW_IT_IS_NOW_SO_YOU_CAN_ALWAYS_RETURN,
+        About IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE,
+        About IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE,
+        String HISTORY,
+        String NEW_BRANCH_ELLIPSIS,
+        About KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN,
+        String SAVE_NOW_ELLIPSIS,
+        String KEEP_HOW_THE_GENIE_IS_NOW_AS_A_MOMENT_TO_COME_BACK_TO,
+        String HOW_IT_WAS_BEFORE_IS_KEPT_SO_YOU_CAN_RETURN_TO_IT,
+        String UNDO,
+        String GO_BACK_TO_HOW_IT_WAS_BEFORE
+    ) {
+        public static final HistoryPage ENGLISH = new HistoryPage(
+            genie -> genie + " is waking; go back once it is awake",
+            genie -> genie + " is working; go back once it is done",
+            "A job is running; go back once it is done",
+            genie -> "Send " + genie + " to sleep first: its home changes only while it sleeps.",
+            genie -> genie + " is saved only when you save it by hand.",
+            (genie, when) -> "Saved whenever " + genie + " " + when + ".",
+            "Going back keeps how it is now, so you can always return.",
+            genie -> genie + " is working. You can go back once it is done.",
+            genie -> genie + " is waking. You can go back once it is awake.",
+            "History",
+            "New branch…",
+            genie ->
+                "Keep how " + genie + " was last saved as a branch of "
+                + "its own, to try something else from there. " + genie + " stays where it lives",
+            "Save now…",
+            "Keep how the genie is now as a moment to come back to, such as before a big change",
+            "How it was before is kept, so you can return to it.",
+            "Undo",
+            "Go back to how it was before"
         );
     }
 
