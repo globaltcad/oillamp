@@ -84,6 +84,9 @@ public record Lang(
     /// A job that runs once: on a `day`, at a `time`, which is `fromNow` so far off.
     public interface OnceAt { String of(String day, String time, String fromNow); }
 
+    /// How many `times` a job runs on a day, from the `first` to the `last`.
+    public interface TimesFromTo { String of(int times, String first, String last); }
+
     /// A text about something named, such as a genie or a window it shows.
     public interface About { String of(String what); }
 
@@ -882,7 +885,17 @@ public record Lang(
         String BUT_NOT_BEFORE_ITS_LAST_DAY,
         String OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB,
         DayAndTime ONCE_AT,
-        String ONCE_WITHOUT_A_TIME
+        String ONCE_WITHOUT_A_TIME,
+        String A_JOB_THAT_HAS_RUN,
+        String A_JOB,
+        About WORKING_ON_IT_SINCE,
+        String NOW_ON_THE_TIMELINE,
+        String ITS_TIME_CAME_IT_RUNS_AS_SOON_AS_THE_GENIE_IS_AWAKE_AND_FREE,
+        TimesFromTo TIMES_FROM_TO,
+        String DONE,
+        String FAILED,
+        String RAN_OUT_OF_TIME,
+        String STOPPED
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -995,7 +1008,17 @@ public record Lang(
             "but not before its last day",
             "oillamp reads the expression when you save the job.",
             (day, time) -> "Once, " + day + " at " + time,
-            "Once"
+            "Once",
+            "A job that has run",
+            "A job",
+            time -> "working on it, since " + time,
+            "Now",
+            "its time came; it runs as soon as the genie is awake and free",
+            (times, first, last) -> times + " times, " + first + " to " + last,
+            "Done",
+            "Failed",
+            "Ran out of time",
+            "Stopped"
         );
     }
 
