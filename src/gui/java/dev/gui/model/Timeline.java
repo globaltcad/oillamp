@@ -69,7 +69,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
     static final int LISTED_TIMES = 8;
 
     /// Lays out `schedule` around `now`.
-    public static Timeline of(Schedule schedule, Instant now) {
+    public static Timeline of(Schedule schedule, Instant now, Lang lang) {
         LocalDateTime present = LocalDateTime.ofInstant(now, schedule.zone());
         LocalDate today = present.toLocalDate();
         // Each moment with when it is and its rank among moments at the same time: what ran,
@@ -136,7 +136,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
             days.merge(each.at().toLocalDate(), Tuple.of(Moment.class, each.moment()), Tuple::addAll);
         Tuple<Day> laidOut = Tuple.of(Day.class);
         for (Map.Entry<LocalDate, Tuple<Moment>> day : days.entrySet())
-            laidOut = laidOut.add(new Day(day.getKey(), DateWordingUtil.day(day.getKey(), today), day.getValue()));
+            laidOut = laidOut.add(new Day(day.getKey(), DateWordingUtil.day(day.getKey(), today, lang.DATES()), day.getValue()));
         return new Timeline(laidOut, week.size() - shown);
     }
 

@@ -299,7 +299,7 @@ final class SchedulePage {
 
     private UIForPanel<JPanel> dayView(Timeline.Day day) {
         LocalDate today = state.get().localNow().toLocalDate();
-        boolean near = day.label().equals("Today") || day.label().equals("Tomorrow") || day.label().equals("Yesterday");
+        boolean near = DateWordingUtil.near(day.date(), today);
         var view =
             panel("fill, wrap 1, ins 0, gap 0", "[grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -310,7 +310,7 @@ final class SchedulePage {
                 .add("growx, wmin 0, gapleft 8",
                     ViewPartsUtil.words(
                         theme,
-                        day.label() + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""),
+                        state.viewAsString(it -> day.label() + (near ? "  ·  " + DateWordingUtil.shortDay(day.date(), it.lang().DATES()) : "")),
                         13,
                         2f,
                         p -> day.date().isBefore(today) ? p.SUBTEXT() : p.TEXT()
@@ -524,7 +524,7 @@ final class SchedulePage {
         String id = job.get().id();
         Val<Boolean> picked = schedule.viewAs(Boolean.class, it -> it.picked().equals(id));
         Val<Boolean> on = job.viewAs(Boolean.class, Schedule.Job::enabled);
-        Val<String> when = Viewable.of(String.class, job, state, (it, s) -> it.when(s.localNow(), s.genie().schedule().zone()));
+        Val<String> when = Viewable.of(String.class, job, state, (it, s) -> it.when(s.localNow(), s.genie().schedule().zone(), s.lang()));
         Val<String> next = Viewable.of(String.class, job, state, SchedulePage::nextWords);
         return
             panel("fill, wrap 1, gap 6, hidemode 3", "[grow]").group(Skin.TILE)
@@ -559,7 +559,7 @@ final class SchedulePage {
                 .add(
                     ViewPartsUtil.tag(theme, Viewable.of(String.class, job, words, (it, page) ->
                         it.expires()
-                        .map(end -> page.UNTIL().of(DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate())))
+                        .map(end -> page.UNTIL().of(DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate(), state.get().lang().DATES())))
                         .orElse("")
                     ))
                     .isVisibleIf(job.viewAs(Boolean.class, it -> it.expires().isPresent()))
@@ -587,7 +587,7 @@ final class SchedulePage {
                 ? words.TODAY()
                 : at.toLocalDate().equals(today.plusDays(1))
                     ? words.TOMORROW()
-                    : DateWordingUtil.shortDay(at.toLocalDate());
+                    : DateWordingUtil.shortDay(at.toLocalDate(), state.lang().DATES());
         return words.NEXT().of(day, Recurrence.clock(at.toLocalTime()));
     }
 
@@ -743,7 +743,7 @@ final class SchedulePage {
             how == JobDraft.Repeat.WEEKLY
         );
         Val<Boolean> calendarShown = draft.viewAs(Boolean.class, it -> !it.repeats() || it.endsOn().isPresent());
-        Val<String> summary = Viewable.of(String.class, draft, state, (it, s) -> it.summary(s.localNow()));
+        Val<String> summary = Viewable.of(String.class, draft, state, (it, s) -> it.summary(s.localNow(), s.lang()));
         Val<String> timing = Viewable.of(String.class, draft, state, (it, s) -> it.timingProblem(s.localNow()).orElse(""));
         return
             box("fill, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
@@ -928,7 +928,7 @@ final class SchedulePage {
         return
             button(String.valueOf(day.getDayOfMonth())).group(Skin.DAY)
             .isEnabledIf(!past)
-            .withTooltip(DateWordingUtil.day(day, month.today()))
+            .withTooltip(state.viewAsString(it -> DateWordingUtil.day(day, month.today(), it.lang().DATES())))
             .withStyle(palette, (p, it) -> it
                 .backgroundColor(picked ? p.FLAME() : inStretch ? p.YOURS() : p.TRANSPARENT())
                 .border(1, today && !picked ? p.BRASS() : p.TRANSPARENT())

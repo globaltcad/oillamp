@@ -328,13 +328,14 @@ public record History(
     ///
     /// @param genie whose conversations and jobs give runs their titles
     /// @param now   on the clock of the genie's schedule, against which days are named
-    public String title(Moment moment, Genie genie, LocalDateTime now) {
-        return title(moment, genie.conversations(), genie.schedule(), now);
+    /// @param lang  the words to say it in
+    public String title(Moment moment, Genie genie, LocalDateTime now, Lang lang) {
+        return title(moment, genie.conversations(), genie.schedule(), now, lang);
     }
 
-    /// What `moment` is about, as [#title(Moment, Genie, LocalDateTime)] says it, from only what
-    /// that reads: the genie's conversations and its schedule.
-    public String title(Moment moment, Conversations conversations, Schedule schedule, LocalDateTime now) {
+    /// What `moment` is about, as [#title(Moment, Genie, LocalDateTime, Lang)] says it, from only
+    /// what that reads: the genie's conversations and its schedule.
+    public String title(Moment moment, Conversations conversations, Schedule schedule, LocalDateTime now, Lang lang) {
         return switch (moment.kind()) {
             case WOKE -> "Woke up";
             case SLEPT -> "Went to sleep";
@@ -348,8 +349,8 @@ public record History(
             case WENT_BACK ->
                 undid(moment)
                 .flatMap(this::wentBackTo)
-                .map(it -> "Undid going back to how it was " + when(it.at(), schedule.zone(), now))
-                .or(() -> wentBackTo(moment).map(it -> "Went back to how it was " + when(it.at(), schedule.zone(), now)))
+                .map(it -> "Undid going back to how it was " + when(it.at(), schedule.zone(), now, lang))
+                .or(() -> wentBackTo(moment).map(it -> "Went back to how it was " + when(it.at(), schedule.zone(), now, lang)))
                 .orElse("Went back to an earlier moment");
             case BEFORE_SWITCHING -> "Before it moved to another branch";
         };
@@ -406,9 +407,9 @@ public record History(
     }
 
     /// "today at 14:05", "yesterday at 09:30", "on Thursday 1 October at 18:00".
-    public static String when(Instant at, ZoneId zone, LocalDateTime now) {
+    public static String when(Instant at, ZoneId zone, LocalDateTime now, Lang lang) {
         LocalDateTime then = LocalDateTime.ofInstant(at, zone);
-        return DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate()) + " at " + Recurrence.clock(then.toLocalTime());
+        return DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate(), lang.DATES()) + " at " + Recurrence.clock(then.toLocalTime());
     }
 
     /// The day `at` was on, on `zone`'s clock.

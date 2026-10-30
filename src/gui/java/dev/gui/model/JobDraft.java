@@ -190,24 +190,24 @@ public record JobDraft(
 
     /// When it will run, in a sentence, such as "Every weekday at 09:00, first tomorrow at 09:00."
     /// Empty while [#timingProblem] says what is wrong.
-    public String summary(LocalDateTime now) {
+    public String summary(LocalDateTime now, Lang lang) {
         if (timingProblem(now).isPresent()) return "";
         LocalDate today = now.toLocalDate();
         if (!repeats) {
             LocalDateTime at = once().orElseThrow();
             return
-                "Once, " + DateWordingUtil.dayInSentence(at.toLocalDate(), today) + " at " + Recurrence.clock(at.toLocalTime())
-                + " — " + DateWordingUtil.fromNow(Duration.between(now, at)) + ".";
+                "Once, " + DateWordingUtil.dayInSentence(at.toLocalDate(), today, lang.DATES()) + " at " + Recurrence.clock(at.toLocalTime())
+                + " — " + DateWordingUtil.fromNow(Duration.between(now, at), lang.DATES()) + ".";
         }
         Recurrence recurrence = recurrence().orElseThrow();
         String first =
             recurrence.nextAfter(now)
             .filter(next -> ends().isEmpty() || next.isBefore(ends().get()))
             .map(next ->
-                ", first " + DateWordingUtil.dayInSentence(next.toLocalDate(), today) + " at " + Recurrence.clock(next.toLocalTime())
+                ", first " + DateWordingUtil.dayInSentence(next.toLocalDate(), today, lang.DATES()) + " at " + Recurrence.clock(next.toLocalTime())
             )
             .orElse(recurrence instanceof Recurrence.Custom ? "" : ", but not before its last day");
-        String last = endsOn.map(day -> ", until " + DateWordingUtil.dayInSentence(day, today).replaceFirst("^on ", "")).orElse("");
+        String last = endsOn.map(day -> ", until " + DateWordingUtil.dayAfterAWord(day, today, lang.DATES())).orElse("");
         return
             recurrence.describe() + first + last + "."
             + (recurrence instanceof Recurrence.Custom ? " oillamp reads the expression when you save the job." : "");
