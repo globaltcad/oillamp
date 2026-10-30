@@ -1792,20 +1792,15 @@ public final class GeniesView extends JPanel {
     /// removed from Genies, so the question says that instead.
     private void confirmDelete(UUID id) {
         state.get().find(id).ifPresent(doomed -> {
+            Lang.Dialogs words = state.get().lang().DIALOGS();
             ConfirmAnswer answer = doomed.fromElsewhere()
-                ? UI.confirmation(
-                      "Remove " + doomed.name() + " from Genies? Its lamp stays where it is, at "
-                      + whereFrom(doomed) + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\"."
-                  )
-                  .titled("Remove a lamp from Genies")
-                  .yesOption("Remove").noOption("Keep").cancelOption("")
+                ? UI.confirmation(words.REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS().of(doomed.name(), whereFrom(doomed)))
+                  .titled(words.REMOVE_A_LAMP_FROM_GENIES())
+                  .yesOption(words.REMOVE()).noOption(words.KEEP()).cancelOption("")
                   .show()
-                : UI.confirmation(
-                      "Delete " + doomed.name() + " for good? Its home, everything it made "
-                      + "and your conversations with it are deleted."
-                  )
-                  .titled("Delete a genie")
-                  .yesOption("Delete").noOption("Keep").cancelOption("")
+                : UI.confirmation(words.DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT().of(doomed.name()))
+                  .titled(words.DELETE_A_GENIE())
+                  .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
                   .show();
             if (answer == ConfirmAnswer.YES) app.delete(id);
         });
@@ -1815,12 +1810,13 @@ public final class GeniesView extends JPanel {
     private void addLamp() {
         JFileChooser chooser = new JFileChooser(System.getProperty("user.home"));
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle("Add a lamp made with `oillamp at`");
-        if (chooser.showDialog(this, "Add") != JFileChooser.APPROVE_OPTION) return;
+        Lang.Dialogs words = state.get().lang().DIALOGS();
+        chooser.setDialogTitle(words.ADD_A_LAMP_MADE_WITH_OILLAMP_AT());
+        if (chooser.showDialog(this, words.ADD()) != JFileChooser.APPROVE_OPTION) return;
         try {
             app.addLamp(chooser.getSelectedFile().toPath());
         } catch (IOException failed) {
-            JOptionPane.showMessageDialog(this, failed.getMessage(), "Not a lamp", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, failed.getMessage(), words.NOT_A_LAMP(), JOptionPane.WARNING_MESSAGE);
         }
     }
 
@@ -1832,7 +1828,7 @@ public final class GeniesView extends JPanel {
         int answer = JOptionPane.showConfirmDialog(
             this,
             new JScrollPane(text),
-            "Ask " + genie.get().name() + " differently",
+            state.get().lang().DIALOGS().ASK_DIFFERENTLY().of(genie.get().name()),
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE
         );
@@ -1858,14 +1854,14 @@ public final class GeniesView extends JPanel {
 
     private void giveFile() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Give " + genie.get().name() + " a file");
+        chooser.setDialogTitle(state.get().lang().DIALOGS().GIVE_A_FILE().of(genie.get().name()));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
             app.giveFile(genie.get().id(), chooser.getSelectedFile().toPath());
     }
 
     private void saveHandout(String file) {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Save " + file);
+        chooser.setDialogTitle(state.get().lang().DIALOGS().SAVE().of(file));
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), file));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             Path target = chooser.getSelectedFile().toPath();
