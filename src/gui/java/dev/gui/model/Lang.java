@@ -59,9 +59,7 @@ public enum Lang {
 
     /// The words of a genie's home, and linking its folders into the user's.
     public HomeFolders HOME_FOLDERS() {
-        return switch (this) {
-            case ENGLISH -> HomeFolders.ENGLISH;
-        };
+        return new HomeFolders(this);
     }
 
     /// The words of whether a genie may reach this computer, and its rules.
@@ -810,38 +808,82 @@ public enum Lang {
 
     /// The words of a genie's home on its Actions page, and of linking its folders into the
     /// user's.
-    public record HomeFolders(
-        About HAS_NO_HOME_YET,
-        About ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS,
-        String ON_THIS_COMPUTER,
-        String OPEN_IN_YOUR_FILE_MANAGER,
-        String THE_LINKS_NAME,
-        About LINK_INTO,
-        String LINK_INTO_ELLIPSIS,
-        About OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER,
-        About WHERE_TO_PUT_THE_LINK,
-        String LINK_HERE,
-        About LINKED,
-        About IT_WAS_LINKED_ALREADY
-    ) {
-        public static final HomeFolders ENGLISH = new HomeFolders(
-            genie -> genie + " has no home yet. It gets one as it first wakes.",
-            genie ->
-                genie + "'s home is a folder on this computer. Link one of its folders into yours, to find what "
-                + genie + " made in your file manager. A link is no copy: a change on either side is one on both.",
-            "ON THIS COMPUTER",
-            "Open in your file manager",
-            "THE LINK'S NAME",
-            folder -> "Link into " + folder,
-            "Link into…",
-            genie ->
-                "Or drag a folder from the tree into your file manager. "
-                + "Deleting " + genie + " leaves its links behind, leading nowhere.",
-            link -> "Where to put the link \"" + link + "\"",
-            "Link here",
-            at -> "Linked: " + at,
-            at -> "It was linked already: " + at
-        );
+    public record HomeFolders(Lang lang) {
+        public String HAS_NO_HOME_YET(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " has no home yet. It gets one as it first wakes.";
+            };
+        }
+
+        public String ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    genie + "'s home is a folder on this computer. Link one of its folders into yours, to find what "
+                    + genie + " made in your file manager. A link is no copy: a change on either side is one on both.";
+            };
+        }
+
+        public String ON_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "ON THIS COMPUTER";
+            };
+        }
+
+        public String OPEN_IN_YOUR_FILE_MANAGER() {
+            return switch (lang) {
+                case ENGLISH -> "Open in your file manager";
+            };
+        }
+
+        public String THE_LINKS_NAME() {
+            return switch (lang) {
+                case ENGLISH -> "THE LINK'S NAME";
+            };
+        }
+
+        public String LINK_INTO(String folder) {
+            return switch (lang) {
+                case ENGLISH -> "Link into " + folder;
+            };
+        }
+
+        public String LINK_INTO_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Link into…";
+            };
+        }
+
+        public String OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Or drag a folder from the tree into your file manager. "
+                    + "Deleting " + genie + " leaves its links behind, leading nowhere.";
+            };
+        }
+
+        public String WHERE_TO_PUT_THE_LINK(String link) {
+            return switch (lang) {
+                case ENGLISH -> "Where to put the link \"" + link + "\"";
+            };
+        }
+
+        public String LINK_HERE() {
+            return switch (lang) {
+                case ENGLISH -> "Link here";
+            };
+        }
+
+        public String LINKED(String at) {
+            return switch (lang) {
+                case ENGLISH -> "Linked: " + at;
+            };
+        }
+
+        public String IT_WAS_LINKED_ALREADY(String at) {
+            return switch (lang) {
+                case ENGLISH -> "It was linked already: " + at;
+            };
+        }
     }
 
     /// The words of a genie's Host access page: whether it may reach this computer, and the
