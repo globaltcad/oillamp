@@ -57,7 +57,7 @@ public record Entry(
     /// What the chat says about the entry when the user points at it: for an answer, which model
     /// wrote it. Nothing when that is not known, so that nothing is shown.
     public String writtenBy(Lang lang) {
-        return kind == Kind.GENIE && !model.isBlank() ? lang.CHAT().WRITTEN_BY().of(model) : "";
+        return kind == Kind.GENIE && !model.isBlank() ? lang.CHAT().WRITTEN_BY(model) : "";
     }
 
     public boolean isWriting() { return state == State.WRITING; }

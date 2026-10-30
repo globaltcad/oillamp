@@ -324,7 +324,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
                             connection = Optional.empty();
                             shown = Optional.empty();
                             desktopSize.set("");
-                            message = it -> it.THE_DESKTOP_WENT_AWAY().of(why);
+                            message = it -> it.THE_DESKTOP_WENT_AWAY(why);
                             repaint();
                         }
                     }));
@@ -344,7 +344,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
         } catch (IOException failed) {
             SwingUtilities.invokeLater(() -> {
                 if (!shown.equals(Optional.of(desktop))) return;
-                message = it -> it.COULD_NOT_SHOW_THE_DESKTOP().of(String.valueOf(failed.getMessage()));
+                message = it -> it.COULD_NOT_SHOW_THE_DESKTOP(String.valueOf(failed.getMessage()));
                 repaint();
             });
         }
