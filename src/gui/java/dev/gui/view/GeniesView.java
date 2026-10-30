@@ -68,6 +68,8 @@ public final class GeniesView extends JPanel {
     private final Val<Lang.Window> windowWords;
     /// The words of the header above a genie's pages.
     private final Val<Lang.Header> headerWords;
+    /// The words of a genie's desktop.
+    private final Val<Lang.Desktop> desktopWords;
     private final Look look;
     private final DesktopScreen desktop;
 
@@ -109,6 +111,7 @@ public final class GeniesView extends JPanel {
         palette = Theme.paletteOf(state);
         windowWords = Theme.langOf(state).viewAs(Lang.Window.class, Lang::WINDOW);
         headerWords = Theme.langOf(state).viewAs(Lang.Header.class, Lang::HEADER);
+        desktopWords = Theme.langOf(state).viewAs(Lang.Desktop.class, Lang::DESKTOP);
         look    = new Look(theme);
         desktop = new DesktopScreen(palette);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
@@ -1166,10 +1169,7 @@ public final class GeniesView extends JPanel {
             panel()
             .isVisibleIf(shown)
             .withCursor(beside.viewAs(UI.Cursor.class, it -> it ? UI.Cursor.RESIZE_RIGHT : UI.Cursor.RESIZE_BOTTOM))
-            .withTooltip(
-                "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
-                + " Double-click to let Genies share it"
-            )
+            .withTooltip(desktopWords.viewAsString(Lang.Desktop::DRAG_TO_SHARE_THE_ROOM_BETWEEN_THE_CHAT_AND_THE_DESKTOP))
             .withStyle(palette, (p, it) -> {
                 int width = it.componentWidth(), height = it.componentHeight();
                 return it.backgroundColor(p.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> grip(p, g, width, height));
@@ -1197,12 +1197,14 @@ public final class GeniesView extends JPanel {
         // drawn fitted, as with Fit.
         Val<Boolean> keeps = Viewable.of(Boolean.class, zoom, desktop.keepsItsSize(), (it, kept) -> it.isFit() && kept);
         Val<Boolean> zooms = Viewable.of(Boolean.class, zoom, keeps, (it, kept) -> !it.isFit() || kept);
-        Val<String> panelSize = Viewable.of(String.class, keeps, desktop.desktopSize(), (kept, size) -> kept ? "fitted" : size);
-        Val<String> scale = Viewable.of(String.class, zoom, panelSize, (it, size) ->
-            it.isFit() ? size : it.isFixed() ? "fitted" : it.label()
-        );
-        Val<String> hint = Viewable.of(String.class, keeps, state.viewAs(Boolean.class, GeniesState::narrow), (kept, narrow) ->
-            kept ? "Recorded, so it keeps its own size" : narrow ? "" : "Click the desktop to use it"
+        // Between the zoom buttons: "fitted" while the desktop is drawn fitted into the panel; its
+        // size while it has the panel's; its scale otherwise.
+        Val<Boolean> fitted = Viewable.of(Boolean.class, zoom, keeps, (it, kept) -> it.isFixed() || (it.isFit() && kept));
+        Val<String> fittedWords = Viewable.of(String.class, fitted, desktopWords, (it, words) -> it ? words.FITTED() : "");
+        Val<String> sizeOrScale = Viewable.of(String.class, zoom, desktop.desktopSize(), (it, size) -> it.isFit() ? size : it.label());
+        Val<String> scale = Viewable.of(String.class, fittedWords, sizeOrScale, (words, size) -> words.isEmpty() ? size : words);
+        Val<String> hint = Viewable.of(String.class, keeps, state, (kept, s) ->
+            kept ? s.lang().DESKTOP().RECORDED_SO_IT_KEEPS_ITS_OWN_SIZE() : s.narrow() ? "" : s.lang().DESKTOP().CLICK_THE_DESKTOP_TO_USE_IT()
         );
         return
             // No row constraints: the line on what the genie shows is hidden at times, which moves
@@ -1212,7 +1214,7 @@ public final class GeniesView extends JPanel {
             .withMinSize(0, 0)
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0",
-                label(genie.viewAsString(it -> "✦  " + it.name() + " shows you: " + it.showing()))
+                label(Viewable.of(String.class, genie, desktopWords, (it, words) -> "✦  " + words.SHOWS_YOU().of(it.name(), it.showing())))
                 .isVisibleIf(showing)
                 .withTooltip(genie.viewAsString(Genie::showing))
                 .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(13).weight(2f).color(now.palette().FLAME())))
@@ -1221,17 +1223,16 @@ public final class GeniesView extends JPanel {
                 box("fill, ins 0, gap 2, hidemode 3")
                 .add(
                     modeButton(
-                        "⤢  Fit",
-                        "Give the desktop the size of this panel, so what the genie shows fills it."
-                        + " It gets its own size back when you close it.",
+                        desktopWords.viewAsString(it -> "⤢  " + it.FIT()),
+                        desktopWords.viewAsString(Lang.Desktop::GIVE_THE_DESKTOP_THE_SIZE_OF_THIS_PANEL),
                         zoom.viewAs(Boolean.class, DesktopZoom::isFit)
                     )
                     .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIT))
                 )
                 .add(
                     modeButton(
-                        "⊡  Fixed",
-                        "Show the whole desktop at its own size, shrunk into this panel",
+                        desktopWords.viewAsString(it -> "⊡  " + it.FIXED()),
+                        desktopWords.viewAsString(Lang.Desktop::SHOW_THE_WHOLE_DESKTOP_AT_ITS_OWN_SIZE),
                         zoom.viewAs(Boolean.class, DesktopZoom::isFixed)
                     )
                     .onClick(_ -> zoom.set(From.VIEW, DesktopZoom.FIXED))
@@ -1240,7 +1241,7 @@ public final class GeniesView extends JPanel {
                 // zoom, and between these the desktop's size could pass for something they change.
                 // A desktop that keeps its own size is drawn fitted, and zooms as from Fit.
                 .add(
-                    zoomButton("−", "Smaller (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
+                    zoomButton("−", desktopWords.viewAsString(Lang.Desktop::SMALLER_OR_CTRL_AND_THE_MOUSE_WHEEL)).isVisibleIf(zooms)
                     .onClick(_ -> zoom.update(From.VIEW, z -> z.out(desktop.fitScale())))
                 )
                 .add(
@@ -1248,17 +1249,17 @@ public final class GeniesView extends JPanel {
                     .withMinSize(70, 0).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
                 )
                 .add(
-                    zoomButton("+", "Larger (or Ctrl and the mouse wheel on the desktop)").isVisibleIf(zooms)
+                    zoomButton("+", desktopWords.viewAsString(Lang.Desktop::LARGER_OR_CTRL_AND_THE_MOUSE_WHEEL)).isVisibleIf(zooms)
                     .onClick(_ -> zoom.update(From.VIEW, z -> z.in(desktop.fitScale())))
                 )
                 .add("wmin 0, pushx, alignx right", label(hint).group(Skin.META))
                 .add(
-                    button(state.viewAsString(it -> it.narrow() ? "" : "Keys")).group(Skin.ICON_BUTTON).withIconTextGap(6)
+                    button(state.viewAsString(it -> it.narrow() ? "" : it.lang().DESKTOP().KEYS())).group(Skin.ICON_BUTTON).withIconTextGap(6)
                     .withStyle(theme, (now, it) -> it
                         .icon(SignSvgUtil.sign(SignSvgUtil.KEYS, now.palette().SUBTEXT()))
                         .componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().SUBTEXT()))
                     )
-                    .withTooltip("The keys that make a window on the desktop fullscreen, close it or minimize it")
+                    .withTooltip(desktopWords.viewAsString(Lang.Desktop::THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN))
                     .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
                     .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), this::desktopKeys))
                 )
@@ -1640,7 +1641,7 @@ public final class GeniesView extends JPanel {
     }
 
     /// One of the ways to show the desktop, lit while it is the one in use.
-    private UIForButton<JButton> modeButton(String text, String tip, Val<Boolean> on) {
+    private UIForButton<JButton> modeButton(Val<String> text, Val<String> tip, Val<Boolean> on) {
         return
             button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
             .withStyle(Themed.of(on, theme), (themed, it) -> {
@@ -1654,7 +1655,7 @@ public final class GeniesView extends JPanel {
             });
     }
 
-    private UIForButton<JButton> zoomButton(String text, String tip) {
+    private UIForButton<JButton> zoomButton(String text, Val<String> tip) {
         return
             button(text).group(Skin.ICON_BUTTON).withTooltip(tip)
             .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().TEXT())));
