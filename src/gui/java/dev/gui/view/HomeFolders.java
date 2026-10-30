@@ -348,7 +348,7 @@ final class HomeFolders {
                 )
             )
             .add(
-                ViewPartsUtil.link(theme, "Open in your file manager")
+                ViewPartsUtil.link(theme, Val.of("Open in your file manager"))
                 .isEnabledIf(linkable)
                 .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
             )

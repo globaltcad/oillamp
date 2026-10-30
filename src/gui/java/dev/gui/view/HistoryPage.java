@@ -977,7 +977,7 @@ final class HistoryPage {
                     .onClick(_ -> app.planReset(selected(), moment.id()))
                 )
                 .add(
-                    ViewPartsUtil.link(theme, "Open the conversation  →")
+                    ViewPartsUtil.link(theme, Val.of("Open the conversation  →"))
                     .isVisibleIf(canOpen)
                     .onClick(_ -> app.openConversation(selected(), moment.conversation()))
                 )
