@@ -29,6 +29,7 @@ import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.Home;
+import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
 import dev.gui.model.Settings;
@@ -75,6 +76,8 @@ public final class GeniesBackend implements Genies {
     private final Val<Tuple<String>> names;
     /// The window's palette. Kept as a field for the same reason: another one is kept on the shelf.
     private final Val<Palette> palette;
+    /// The window's language, kept as a field as the palette is.
+    private final Val<Lang> lang;
     /// The page on show. Kept as a field for the same reason: leaving the settings keeps them.
     private final Val<GeniesState.Page> page;
     /// The place the settings on show name, or nothing while they are not on show. Kept as a
@@ -122,6 +125,9 @@ public final class GeniesBackend implements Genies {
         // The palette is kept as soon as the user picks another.
         this.palette = state.viewAs(Palette.class, GeniesState::palette);
         Viewable.cast(palette).onChange(From.ALL, _ -> keepPalette());
+        // So is the language.
+        this.lang = state.viewAs(Lang.class, GeniesState::lang);
+        Viewable.cast(lang).onChange(From.ALL, _ -> keepLang());
         // The settings are kept however the user leaves them: with Done, or by clicking a genie.
         this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
         // Shown, they look again whether Ollama is there, and what it has.
@@ -170,8 +176,8 @@ public final class GeniesBackend implements Genies {
     ///
     /// @param lighter     lights the genies' lamps
     /// @param environment the environment Genies was started from, by variable
-    /// @param desktop     whether the desktop is dark or light, for the palette until the user
-    ///                    picks one
+    /// @param desktop     whether the desktop is dark or light, and the language it speaks, for
+    ///                    the palette and the language until the user picks them
     static GeniesBackend open(
         final Shelf shelf,
         final ErrorLog errors,
@@ -190,7 +196,9 @@ public final class GeniesBackend implements Genies {
         // The palette the user picked; before they ever did, the one that fits the desktop, so
         // that Genies comes light on a light desktop; and the lamp at night when nothing says.
         Palette palette = shelf.palette().or(desktop::palette).orElse(Palette.DARK);
-        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(palette)),
+        // The language the user picked; before they ever did, the desktop's, if Genies speaks it.
+        Lang lang = shelf.lang().or(desktop::lang).orElse(Lang.ENGLISH);
+        GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(palette).withLang(lang)),
                                 shelf, lighter, ollama, GenieHomeUtil.documents(environment));
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));
         // The tree of conversations under each genie is there before any genie wakes, and so is
@@ -716,6 +724,14 @@ public final class GeniesBackend implements Genies {
             shelf.keep(state.get().palette());
         } catch (IOException failed) {
             report(new IOException("could not keep the palette in " + shelf.root(), failed));
+        }
+    }
+
+    private void keepLang() {
+        try {
+            shelf.keep(state.get().lang());
+        } catch (IOException failed) {
+            report(new IOException("could not keep the language in " + shelf.root(), failed));
         }
     }
 
