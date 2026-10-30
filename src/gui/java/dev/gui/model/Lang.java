@@ -47,9 +47,7 @@ public enum Lang {
 
     /// The words of the dialogs the window asks and tells the user things in.
     public Dialogs DIALOGS() {
-        return switch (this) {
-            case ENGLISH -> Dialogs.ENGLISH;
-        };
+        return new Dialogs(this);
     }
 
     /// The words of what can be done with a genie as a whole.
@@ -586,64 +584,157 @@ public enum Lang {
     }
 
     /// The words of the dialogs the window asks and tells the user things in.
-    public record Dialogs(
-        About DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES,
-        String DELETE_A_CONVERSATION,
-        String DELETE,
-        String KEEP,
-        About A_NEW_NAME_FOR,
-        String RENAME_A_GENIE,
-        Linked WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY,
-        String LINKED,
-        String COULD_NOT_LINK,
-        Counted THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT,
-        String WHAT_WENT_WRONG,
-        About GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN,
-        String CLOSE,
-        WhoAndWhat REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS,
-        String REMOVE_A_LAMP_FROM_GENIES,
-        String REMOVE,
-        About DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT,
-        String DELETE_A_GENIE,
-        String ADD_A_LAMP_MADE_WITH_OILLAMP_AT,
-        String ADD,
-        String NOT_A_LAMP,
-        About ASK_DIFFERENTLY,
-        About GIVE_A_FILE,
-        About SAVE
-    ) {
-        public static final Dialogs ENGLISH = new Dialogs(
-            title -> "Delete the conversation \"" + title + "\" for good, with all its branches?",
-            "Delete a conversation",
-            "Delete",
-            "Keep",
-            name -> "A new name for " + name + ":",
-            "Rename a genie",
-            (genie, now, folder, link) ->
-                genie + "'s workspace " + (now ? "is" : "was") + " in your " + folder + (now ? " now" : " already")
-                + ", as \"" + link + "\".\nIt is a link, not a copy: " + genie + " sees what you change there.",
-            "Linked",
-            "Could not link",
-            count -> count == 1
-                ? "Something went wrong that Genies did not expect."
-                : count + " things went wrong that Genies did not expect.",
-            "What went wrong",
-            log -> "Genies carried on. All of it is kept in " + log + ", which helps whoever fixes it.",
-            "Close",
-            (name, where) ->
-                "Remove " + name + " from Genies? Its lamp stays where it is, at "
-                + where + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\".",
-            "Remove a lamp from Genies",
-            "Remove",
-            name -> "Delete " + name + " for good? Its home, everything it made and your conversations with it are deleted.",
-            "Delete a genie",
-            "Add a lamp made with `oillamp at`",
-            "Add",
-            "Not a lamp",
-            name -> "Ask " + name + " differently",
-            name -> "Give " + name + " a file",
-            file -> "Save " + file
-        );
+    public record Dialogs(Lang lang) {
+        public String DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES(String title) {
+            return switch (lang) {
+                case ENGLISH -> "Delete the conversation \"" + title + "\" for good, with all its branches?";
+            };
+        }
+
+        public String DELETE_A_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "Delete a conversation";
+            };
+        }
+
+        public String DELETE() {
+            return switch (lang) {
+                case ENGLISH -> "Delete";
+            };
+        }
+
+        public String KEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Keep";
+            };
+        }
+
+        public String A_NEW_NAME_FOR(String name) {
+            return switch (lang) {
+                case ENGLISH -> "A new name for " + name + ":";
+            };
+        }
+
+        public String RENAME_A_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Rename a genie";
+            };
+        }
+
+        public String WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY(String genie, boolean now, String folder, String link) {
+            return switch (lang) {
+                case ENGLISH ->
+                    genie + "'s workspace " + (now ? "is" : "was") + " in your " + folder + (now ? " now" : " already")
+                    + ", as \"" + link + "\".\nIt is a link, not a copy: " + genie + " sees what you change there.";
+            };
+        }
+
+        public String LINKED() {
+            return switch (lang) {
+                case ENGLISH -> "Linked";
+            };
+        }
+
+        public String COULD_NOT_LINK() {
+            return switch (lang) {
+                case ENGLISH -> "Could not link";
+            };
+        }
+
+        public String THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT(int count) {
+            return switch (lang) {
+                case ENGLISH ->
+                    count == 1
+                    ? "Something went wrong that Genies did not expect."
+                    : count + " things went wrong that Genies did not expect.";
+            };
+        }
+
+        public String WHAT_WENT_WRONG() {
+            return switch (lang) {
+                case ENGLISH -> "What went wrong";
+            };
+        }
+
+        public String GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN(String log) {
+            return switch (lang) {
+                case ENGLISH -> "Genies carried on. All of it is kept in " + log + ", which helps whoever fixes it.";
+            };
+        }
+
+        public String CLOSE() {
+            return switch (lang) {
+                case ENGLISH -> "Close";
+            };
+        }
+
+        public String REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS(String name, String where) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Remove " + name + " from Genies? Its lamp stays where it is, at "
+                    + where + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\".";
+            };
+        }
+
+        public String REMOVE_A_LAMP_FROM_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Remove a lamp from Genies";
+            };
+        }
+
+        public String REMOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Remove";
+            };
+        }
+
+        public String DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + name + " for good? Its home, everything it made and your conversations with it are deleted.";
+            };
+        }
+
+        public String DELETE_A_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Delete a genie";
+            };
+        }
+
+        public String ADD_A_LAMP_MADE_WITH_OILLAMP_AT() {
+            return switch (lang) {
+                case ENGLISH -> "Add a lamp made with `oillamp at`";
+            };
+        }
+
+        public String ADD() {
+            return switch (lang) {
+                case ENGLISH -> "Add";
+            };
+        }
+
+        public String NOT_A_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "Not a lamp";
+            };
+        }
+
+        public String ASK_DIFFERENTLY(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Ask " + name + " differently";
+            };
+        }
+
+        public String GIVE_A_FILE(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Give " + name + " a file";
+            };
+        }
+
+        public String SAVE(String file) {
+            return switch (lang) {
+                case ENGLISH -> "Save " + file;
+            };
+        }
     }
 
     /// The words of a genie's Actions page: what can be done with the genie as a whole.
