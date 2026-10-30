@@ -412,7 +412,7 @@ public record History(
     /// "today at 14:05", "yesterday at 09:30", "on Thursday 1 October at 18:00".
     public static String when(Instant at, ZoneId zone, LocalDateTime now, Lang lang) {
         LocalDateTime then = LocalDateTime.ofInstant(at, zone);
-        return lang.DATES().AT().of(DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate(), lang.DATES()), Recurrence.clock(then.toLocalTime()));
+        return lang.DATES().AT(DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate(), lang.DATES()), Recurrence.clock(then.toLocalTime()));
     }
 
     /// The day `at` was on, on `zone`'s clock.
