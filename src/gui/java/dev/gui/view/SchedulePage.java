@@ -465,7 +465,7 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .isVisibleIf(moment.conversation().isPresent() || working)
                 .add(
-                    ViewPartsUtil.link(theme, "Open the conversation  →").isVisibleIf(moment.conversation().isPresent())
+                    ViewPartsUtil.link(theme, Val.of("Open the conversation  →")).isVisibleIf(moment.conversation().isPresent())
                     .onClick(_ -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id)))
                 )
                 .add(
