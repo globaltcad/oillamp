@@ -122,7 +122,8 @@ public final class HistoryKeeper {
         work.execute(() -> {
             try {
                 Lamp.Autosave written = lamp.autosave(new Lamp.Autosave(wanted.waking(), wanted.sleeping(),
-                                                                         wanted.beforeRun(), wanted.afterRun()));
+                                                                         wanted.beforeRun(), wanted.afterRun(),
+                                                                         wanted.chatQuietMinutes()));
                 change(it -> it.withAutosave(Optional.of(asShown(written))));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withProblem("oillamp could not change when it saves: " + reason(failed)));
@@ -153,7 +154,8 @@ public final class HistoryKeeper {
     }
 
     private static History.Autosave asShown(Lamp.Autosave lamps) {
-        return new History.Autosave(lamps.startup(), lamps.shutdown(), lamps.beforeRun(), lamps.afterRun());
+        return new History.Autosave(lamps.startup(), lamps.shutdown(), lamps.beforeRun(), lamps.afterRun(),
+                                    lamps.chatQuietMinutes());
     }
 
     /// Saves the genie's home as a new moment, which is then picked. When nothing changed since
