@@ -235,7 +235,7 @@ class KeepingAGeniesHistorySpec extends Specification {
 
         then: 'the page shows that a new lamp saves around its runs only'
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP && app.state().get().find(jafar).orElseThrow().history().autosave().isPresent() }
-            app.state().get().find(jafar).orElseThrow().history().autosave().get() == new History.Autosave(false, false, true, true)
+            app.state().get().find(jafar).orElseThrow().history().autosave().get() == new History.Autosave(false, false, true, true, 10)
             app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'answers'
 
         when: 'the user switches on saving as it wakes'
