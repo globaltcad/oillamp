@@ -73,6 +73,9 @@ public record Lang(
     /// was there `already`, the folder it is in, and the link's own name there.
     public interface Linked { String of(String genie, boolean now, String folder, String link); }
 
+    /// A moment, by its `day`, such as "tomorrow", and its `time` on the clock.
+    public interface DayAndTime { String of(String day, String time); }
+
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
         String NEW_GENIE,
@@ -712,7 +715,25 @@ public record Lang(
         String STOP_THIS_RUN_WHAT_THE_GENIE_DID_SO_FAR_IS_KEPT,
         Counted JOBS,
         String NOTHING_ON_THE_SCHEDULE_YET,
-        About GIVE_IT_A_TASK_AND_A_TIME
+        About GIVE_IT_A_TASK_AND_A_TIME,
+        String CHANGE_SWITCH_OFF_OR_REMOVE_THIS_JOB,
+        About UNTIL,
+        String SWITCHED_OFF,
+        String WILL_NOT_RUN_AGAIN,
+        String DUE_NOW,
+        String TODAY,
+        String TOMORROW,
+        DayAndTime NEXT,
+        String CHANGE_ELLIPSIS,
+        String SWITCH_OFF,
+        String SWITCH_ON,
+        String REMOVE_ELLIPSIS,
+        About TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY,
+        String REMOVE_A_JOB,
+        String REMOVE,
+        String KEEP,
+        String ON_CLICK_TO_SWITCH_IT_OFF_KEEPING_IT_ON_THE_SCHEDULE,
+        String OFF_CLICK_TO_SWITCH_IT_ON
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -743,7 +764,25 @@ public record Lang(
             genie ->
                 "Give " + genie + " a task and a time, "
                 + "once or again and again: a morning check of the build, a weekly report, a reminder "
-                + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards."
+                + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards.",
+            "Change, switch off or remove this job",
+            day -> "until " + day,
+            "switched off",
+            "will not run again",
+            "due now",
+            "today",
+            "tomorrow",
+            (day, time) -> "next: " + day + ", " + time,
+            "Change…",
+            "Switch off",
+            "Switch on",
+            "Remove…",
+            job -> "Take \"" + job + "\" off the schedule? What its runs did stays in the history.",
+            "Remove a job",
+            "Remove",
+            "Keep",
+            "On: click to switch it off, keeping it on the schedule",
+            "Off: click to switch it on"
         );
     }
 
