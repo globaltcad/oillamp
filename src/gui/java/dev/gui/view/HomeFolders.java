@@ -32,6 +32,7 @@ import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.Home;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -83,9 +84,23 @@ final class HomeFolders {
         .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5)
     );
 
-    /// What the last link said: where it is, or why there is none.
-    private record Outcome(String words, boolean trouble) {
-        static final Outcome NONE = new Outcome("", false);
+    /// What the last link came to, and `what` it says of that: where the link is, or why there
+    /// is none.
+    private record Outcome(Kind kind, String what) {
+        enum Kind { NONE, LINKED, LINKED_ALREADY, FAILED }
+        static final Outcome NONE = new Outcome(Kind.NONE, "");
+
+        boolean trouble() { return kind == Kind.FAILED; }
+
+        /// What the page says of it, in `words`.
+        String words(Lang.HomeFolders words) {
+            return switch (kind) {
+                case NONE -> "";
+                case LINKED -> words.LINKED().of(what);
+                case LINKED_ALREADY -> words.IT_WAS_LINKED_ALREADY().of(what);
+                case FAILED -> what;
+            };
+        }
     }
 
     private final Genies app;
@@ -116,11 +131,13 @@ final class HomeFolders {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang.HomeFolders> words;
 
     HomeFolders(Var<GeniesState> state, Genies app) {
         this.app = app;
         theme = Theme.of(state);
         palette = Theme.paletteOf(state);
+        words = Theme.langOf(state).viewAs(Lang.HomeFolders.class, Lang::HOME_FOLDERS);
         genie = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         selected = state.viewAs(UUID.class, GeniesState::selected);
         home = genie.viewAs(Home.class, Genie::home);
@@ -157,11 +174,10 @@ final class HomeFolders {
 
     /// What the tile says on top: what a home is here, and what a link to it does.
     Val<String> says() {
-        return genie.viewAsString(it ->
+        return Viewable.of(String.class, genie, words, (it, folders) ->
             it.home().read() && it.home().where().isEmpty()
-                ? it.name() + " has no home yet. It gets one as it first wakes."
-                : it.name() + "'s home is a folder on this computer. Link one of its folders into yours, to find what "
-                  + it.name() + " made in your file manager. A link is no copy: a change on either side is one on both."
+                ? folders.HAS_NO_HOME_YET().of(it.name())
+                : folders.ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS().of(it.name())
         );
     }
 
@@ -331,10 +347,10 @@ final class HomeFolders {
         );
         Val<String> documentsName = Val.of(String.valueOf(app.documents().getFileName()));
         Val<Boolean> nameable = Viewable.of(Boolean.class, linkable, linkName, (can, name) -> can && !name.isBlank());
-        Val<String> said = outcome.viewAsString(Outcome::words);
+        Val<String> said = Viewable.of(String.class, outcome, words, Outcome::words);
         return
             box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[0:" + LINKING_WIDTH + ", grow]")
-            .add("growx, wmin 0", label("ON THIS COMPUTER").group(Skin.SECTION))
+            .add("growx, wmin 0", label(words.viewAsString(Lang.HomeFolders::ON_THIS_COMPUTER)).group(Skin.SECTION))
             // A field nobody types in, but that the path can be selected and copied from.
             .add("growx, wmin 0",
                 textField(where).group(Skin.INPUT)
@@ -348,11 +364,11 @@ final class HomeFolders {
                 )
             )
             .add(
-                ViewPartsUtil.link(theme, Val.of("Open in your file manager"))
+                ViewPartsUtil.link(theme, words.viewAsString(Lang.HomeFolders::OPEN_IN_YOUR_FILE_MANAGER))
                 .isEnabledIf(linkable)
                 .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
             )
-            .add("growx, wmin 0, gaptop 6", label("THE LINK'S NAME").group(Skin.SECTION))
+            .add("growx, wmin 0, gaptop 6", label(words.viewAsString(Lang.HomeFolders::THE_LINKS_NAME)).group(Skin.SECTION))
             .add("growx, wmin 0",
                 textField(linkName).group(Skin.INPUT)
                 .isEnabledIf(linkable)
@@ -362,29 +378,28 @@ final class HomeFolders {
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 8)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-8, -8, 0, -8))
                 .add(
-                    button(documentsName.viewAsString(it -> "Link into " + it)).group(Skin.FLAME_BUTTON)
+                    button(Viewable.of(String.class, documentsName, words, (it, folders) -> folders.LINK_INTO().of(it))).group(Skin.FLAME_BUTTON)
                     .isEnabledIf(nameable)
                     .withTooltip(app.documents().toString())
                     .withStyle(it -> it.padding(9, 16, 9, 16))
                     .onClick(_ -> link(app.documents()))
                 )
                 .add(
-                    button("Link into…").group(Skin.QUIET_BUTTON)
+                    button(words.viewAsString(Lang.HomeFolders::LINK_INTO_ELLIPSIS)).group(Skin.QUIET_BUTTON)
                     .isEnabledIf(nameable)
                     .withStyle(it -> it.padding(9, 16, 9, 16))
                     .onClick(it -> chooseWhere(it.getComponent()).ifPresent(this::link))
                 )
             )
             .add("growx, wmin 0",
-                ViewPartsUtil.wrapped(theme, said, Palette::CONTENT, outcome.viewAs(Boolean.class, it -> !it.words().isEmpty() && !it.trouble()))
+                ViewPartsUtil.wrapped(theme, said, Palette::CONTENT, outcome.viewAs(Boolean.class, it -> it.kind() == Outcome.Kind.LINKED || it.kind() == Outcome.Kind.LINKED_ALREADY))
             )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, said, Palette::TROUBLE, outcome.viewAs(Boolean.class, Outcome::trouble)))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     theme,
-                    genie.viewAsString(it ->
-                        "Or drag a folder from the tree into your file manager. "
-                        + "Deleting " + it.name() + " leaves its links behind, leading nowhere."
+                    Viewable.of(String.class, genie, words, (it, folders) ->
+                        folders.OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER().of(it.name())
                     ),
                     Palette::SUBTEXT,
                     Val.of(true)
@@ -396,8 +411,8 @@ final class HomeFolders {
     private Optional<Path> chooseWhere(Component button) {
         JFileChooser chooser = new JFileChooser(app.documents().toFile());
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle("Where to put the link \"" + linkName.get().strip() + "\"");
-        return chooser.showDialog(button, "Link here") == JFileChooser.APPROVE_OPTION
+        chooser.setDialogTitle(words.get().WHERE_TO_PUT_THE_LINK().of(linkName.get().strip()));
+        return chooser.showDialog(button, words.get().LINK_HERE()) == JFileChooser.APPROVE_OPTION
             ? Optional.of(chooser.getSelectedFile().toPath())
             : Optional.empty();
     }
@@ -405,9 +420,9 @@ final class HomeFolders {
     private void link(Path into) {
         try {
             Home.Link link = app.link(selected.get(), chosen.get(), into, linkName.get());
-            outcome.set(new Outcome((link.madeNow() ? "Linked: " : "It was linked already: ") + link.at(), false));
+            outcome.set(new Outcome(link.madeNow() ? Outcome.Kind.LINKED : Outcome.Kind.LINKED_ALREADY, link.at().toString()));
         } catch (IOException failed) {
-            outcome.set(new Outcome(String.valueOf(failed.getMessage()), true));
+            outcome.set(new Outcome(Outcome.Kind.FAILED, String.valueOf(failed.getMessage())));
         }
     }
 }
