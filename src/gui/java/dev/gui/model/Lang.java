@@ -5050,23 +5050,131 @@ public enum Lang {
             };
         }
 
-        public String AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB() {
+        public String BEFORE_EACH_JOB() {
             return switch (lang) {
-                case ENGLISH -> "As it begins on a question or a job";
-                case GERMAN -> "Wenn er sich an eine Frage oder einen Auftrag macht";
-                case SPANISH -> "Al empezar con una pregunta o una tarea";
-                case JAPANESE -> "質問やジョブに取りかかるとき";
-                case CHINESE -> "开始处理问题或任务时";
+                case ENGLISH -> "Before each job";
+                case GERMAN -> "Vor jedem Auftrag";
+                case SPANISH -> "Antes de cada tarea";
+                case JAPANESE -> "ジョブを始める前";
+                case CHINESE -> "每个任务开始前";
             };
         }
 
-        public String AS_IT_ANSWERS_OR_ENDS_A_JOB() {
+        public String AFTER_EACH_JOB() {
             return switch (lang) {
-                case ENGLISH -> "As it answers, or ends a job";
-                case GERMAN -> "Wenn er antwortet oder einen Auftrag beendet";
-                case SPANISH -> "Al responder, o al terminar una tarea";
-                case JAPANESE -> "答えたとき、またはジョブを終えたとき";
-                case CHINESE -> "回答时，或完成任务时";
+                case ENGLISH -> "After each job";
+                case GERMAN -> "Nach jedem Auftrag";
+                case SPANISH -> "Después de cada tarea";
+                case JAPANESE -> "ジョブを終えた後";
+                case CHINESE -> "每个任务结束后";
+            };
+        }
+
+        public String BEFORE_EACH_JOB_OR_QUESTION() {
+            return switch (lang) {
+                case ENGLISH -> "Before each job or question";
+                case GERMAN -> "Vor jedem Auftrag und jeder Frage";
+                case SPANISH -> "Antes de cada tarea o pregunta";
+                case JAPANESE -> "ジョブや質問に取りかかる前";
+                case CHINESE -> "每个任务或问题开始前";
+            };
+        }
+
+        public String AFTER_EACH_JOB_OR_ANSWER() {
+            return switch (lang) {
+                case ENGLISH -> "After each job or answer";
+                case GERMAN -> "Nach jedem Auftrag und jeder Antwort";
+                case SPANISH -> "Después de cada tarea o respuesta";
+                case JAPANESE -> "ジョブを終えたり、答えたりした後";
+                case CHINESE -> "每个任务结束或每次回答后";
+            };
+        }
+
+        public String CHATS_ONCE_QUIET_FOR() {
+            return switch (lang) {
+                case ENGLISH -> "Chats, once quiet for";
+                case GERMAN -> "Chats, nach einer Ruhe von";
+                case SPANISH -> "Los chats, tras una calma de";
+                case JAPANESE -> "チャットは、静かになってから";
+                case CHINESE -> "聊天安静多久后保存";
+            };
+        }
+
+        public String AFTER_EVERY_QUESTION() {
+            return switch (lang) {
+                case ENGLISH -> "After every question";
+                case GERMAN -> "Nach jeder Frage";
+                case SPANISH -> "Tras cada pregunta";
+                case JAPANESE -> "質問のたびに";
+                case CHINESE -> "每次提问后";
+            };
+        }
+
+        /// How long a chat must be quiet, as a choice and in a sentence: "10 minutes", "1 hour".
+        public String SPAN_OF_MINUTES(int minutes) {
+            boolean hours = minutes >= 60 && minutes % 60 == 0;
+            int count = hours ? minutes / 60 : minutes;
+            return switch (lang) {
+                case ENGLISH -> count + (hours ? (count == 1 ? " hour" : " hours") : (count == 1 ? " minute" : " minutes"));
+                case GERMAN -> count + (hours ? (count == 1 ? " Stunde" : " Stunden") : (count == 1 ? " Minute" : " Minuten"));
+                case SPANISH -> count + (hours ? (count == 1 ? " hora" : " horas") : (count == 1 ? " minuto" : " minutos"));
+                case JAPANESE -> count + (hours ? " 時間" : " 分");
+                case CHINESE -> count + (hours ? " 小时" : " 分钟");
+            };
+        }
+
+        public String QUESTIONS_ARE_SAVED_TOGETHER_ONCE_THE_CHAT_IS_QUIET(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "The questions of a chat are saved together, once " + genie + " was asked nothing for this "
+                    + "long, and also before a job begins and as it goes to sleep.";
+                case GERMAN -> "Die Fragen eines Chats werden zusammen gesichert, sobald " + genie + " so lange nichts gefragt wurde, und außerdem vor jedem Auftrag und beim Einschlafen.";
+                case SPANISH -> "Las preguntas de un chat se guardan juntas cuando " + genie + " pasa este tiempo sin que le pregunten nada, y también antes de empezar una tarea y al dormirse.";
+                case JAPANESE -> "チャットの質問は、" + genie + " がこの時間何も聞かれなかったときにまとめて保存されます。ジョブを始める前と眠るときにも保存されます。";
+                case CHINESE -> "聊天中的问题会在 " + genie + " 这么久没被提问后一起保存；任务开始前和休眠时也会保存。";
+            };
+        }
+
+        public String EACH_QUESTION_IS_SAVED_AS_A_JOB_IS() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Each question is saved by itself, before and after, as the switches above say for a job. "
+                    + "A large home makes every answer wait for it.";
+                case GERMAN -> "Jede Frage wird einzeln gesichert, davor und danach, so wie es die Schalter oben für einen Auftrag sagen. Bei einem großen Zuhause wartet dann jede Antwort darauf.";
+                case SPANISH -> "Cada pregunta se guarda por separado, antes y después, como dicen los interruptores de arriba para una tarea. Con un hogar grande, cada respuesta tiene que esperar a ese guardado.";
+                case JAPANESE -> "質問は一つずつ、前と後に、上のスイッチがジョブについて決めているとおりに保存されます。ホームが大きいと、答えるたびに保存を待つことになります。";
+                case CHINESE -> "每个问题都会单独保存，前后各一次，与上面任务的开关设置相同。主目录很大时，每次回答都要等保存完成。";
+            };
+        }
+
+        public String FINISHES_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "finishes a job";
+                case GERMAN -> "einen Auftrag beendet";
+                case SPANISH -> "termina una tarea";
+                case JAPANESE -> "ジョブを終える";
+                case CHINESE -> "完成任务";
+            };
+        }
+
+        public String BEGINS_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "begins a job";
+                case GERMAN -> "einen Auftrag beginnt";
+                case SPANISH -> "empieza una tarea";
+                case JAPANESE -> "ジョブを始める";
+                case CHINESE -> "开始任务";
+            };
+        }
+
+        /// The end of "Saved whenever Juniper …", with `span` from [#SPAN_OF_MINUTES(int)].
+        public String WAS_ASKED_NOTHING_FOR(String span) {
+            return switch (lang) {
+                case ENGLISH -> "was asked nothing for " + span;
+                case GERMAN -> span + " lang nichts gefragt wurde";
+                case SPANISH -> "pasa " + span + " sin que le pregunten nada";
+                case JAPANESE -> "何も聞かれないまま " + span + "たつ";
+                case CHINESE -> "连续 " + span + "没被提问";
             };
         }
 
