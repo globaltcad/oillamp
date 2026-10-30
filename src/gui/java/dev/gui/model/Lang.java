@@ -122,7 +122,18 @@ public record Lang(
         WhoAsksWhat ASKS_YOU_TO_ALLOW,
         String A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO,
         String REFUSE,
-        String ALLOW
+        String ALLOW,
+        String MANAGE_THE_GENIES_ACTIONS_SCHEDULE_HISTORY_AND_HOST_ACCESS,
+        String CHAT,
+        String ACTIONS,
+        String SCHEDULE,
+        String HISTORY,
+        String ACCESS,
+        String CHAT_TALK_WITH_THE_GENIE,
+        String ACTIONS_RENAME_SAVE_WAKE_OR_SLEEP_LINK_ITS_FOLDERS_OR_DELETE_THE_GENIE,
+        String SCHEDULE_WHEN_JOBS_WAKE_THE_GENIE_AND_WHAT_THEY_DID,
+        String HISTORY_THE_MOMENTS_THE_GENIES_HOME_WAS_SAVED_AT,
+        String HOST_ACCESS_WHETHER_THE_GENIE_MAY_REACH_THIS_COMPUTER
     ) {
         public static final Header ENGLISH = new Header(
             "Something went wrong in Genies, not only in this genie. Click to see what happened",
@@ -139,7 +150,18 @@ public record Lang(
             "A model allowed it already; this one needs you too. "
             + "Nothing happens until you decide, and after a minute it is refused.",
             "Refuse",
-            "Allow"
+            "Allow",
+            "Manage: the genie's actions, schedule, history and host access",
+            "Chat",
+            "Actions",
+            "Schedule",
+            "History",
+            "Access",
+            "Chat: talk with the genie",
+            "Actions: rename, save, wake or sleep, link its folders, or delete the genie",
+            "Schedule: when jobs wake the genie, and what they did",
+            "History: the moments the genie's home was saved at, and going back to one",
+            "Host access: whether the genie may reach this computer, and its rules"
         );
     }
 }
