@@ -4,6 +4,7 @@ import dev.gui.Genies
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.History
+import dev.gui.model.Lang
 import dev.gui.model.Lines
 import dev.gui.model.Settings
 import dev.lamp.Lamp
@@ -100,7 +101,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         and: 'it is titled by its conversation'
             var chatted = app.state().get().find(jafar).orElseThrow().history().moments().first()
             var now = LocalDateTime.ofInstant(NOW, BERLIN)
-            app.state().get().find(jafar).orElseThrow().history().title(chatted, app.state().get().find(jafar).orElseThrow(), now) == 'Talked: Plot the sales figures'
+            app.state().get().find(jafar).orElseThrow().history().title(chatted, app.state().get().find(jafar).orElseThrow(), now, Lang.ENGLISH) == 'Talked: Plot the sales figures'
             chatted.detail() == 'Saved once the chat had gone quiet'
 
         when: 'the user saves with nothing changed'
@@ -119,7 +120,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'the save is the newest moment, picked, and titled by what the user wrote'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.SAVED }
             var saved = app.state().get().find(jafar).orElseThrow().history().moments().first()
-            app.state().get().find(jafar).orElseThrow().history().title(saved, app.state().get().find(jafar).orElseThrow(), now) == 'before the big refactor'
+            app.state().get().find(jafar).orElseThrow().history().title(saved, app.state().get().find(jafar).orElseThrow(), now, Lang.ENGLISH) == 'before the big refactor'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().picked() == saved.id() }
             app.state().get().find(jafar).orElseThrow().history().note().isEmpty()
             app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()

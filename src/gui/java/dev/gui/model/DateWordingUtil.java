@@ -2,58 +2,63 @@ package dev.gui.model;
 
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 
-/// Days and spans of time in the words the schedule page uses.
+/// Days and spans of time in the words the schedule page uses, the [Lang.Dates] of a language.
 public final class DateWordingUtil {
 
     private DateWordingUtil() {}
 
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH);
-    private static final DateTimeFormatter SHORT_DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH);
-
-    /// "Today", "Tomorrow", "Yesterday", or the day written out, such as "Thursday 2 October".
-    public static String day(LocalDate day, LocalDate today) {
-        if (day.equals(today)) return "Today";
-        if (day.equals(today.plusDays(1))) return "Tomorrow";
-        if (day.equals(today.minusDays(1))) return "Yesterday";
-        return DAY.format(day);
+    /// Whether `day` is today, tomorrow or yesterday, which are said as words rather than dates.
+    public static boolean near(LocalDate day, LocalDate today) {
+        return !day.isBefore(today.minusDays(1)) && !day.isAfter(today.plusDays(1));
     }
 
-    /// The same, lower case where it is a word, for the middle of a sentence: "tomorrow",
-    /// "Thursday 2 October".
-    public static String dayInSentence(LocalDate day, LocalDate today) {
-        String said = day(day, today);
-        return said.equals("Today") || said.equals("Tomorrow") || said.equals("Yesterday")
-                ? said.toLowerCase(Locale.ENGLISH) : "on " + said;
+    /// "Today", "Tomorrow", "Yesterday", or the day written out, such as "Thursday 2 October".
+    public static String day(LocalDate day, LocalDate today, Lang.Dates words) {
+        if (day.equals(today)) return words.TODAY();
+        if (day.equals(today.plusDays(1))) return words.TOMORROW();
+        if (day.equals(today.minusDays(1))) return words.YESTERDAY();
+        return words.DAY().of(day);
+    }
+
+    /// The same, as it stands after a word such as "until": "tomorrow", "Thursday 2 October".
+    public static String dayAfterAWord(LocalDate day, LocalDate today, Lang.Dates words) {
+        if (day.equals(today)) return words.TODAY_IN_A_SENTENCE();
+        if (day.equals(today.plusDays(1))) return words.TOMORROW_IN_A_SENTENCE();
+        if (day.equals(today.minusDays(1))) return words.YESTERDAY_IN_A_SENTENCE();
+        return words.DAY().of(day);
+    }
+
+    /// The same, for the middle of a sentence: "tomorrow", "on Thursday 2 October".
+    public static String dayInSentence(LocalDate day, LocalDate today, Lang.Dates words) {
+        return near(day, today) ? dayAfterAWord(day, today, words) : words.ON_DAY().of(words.DAY().of(day));
     }
 
     /// "Thu 2 Oct".
-    public static String shortDay(LocalDate day) {
-        return SHORT_DAY.format(day);
+    public static String shortDay(LocalDate day, Lang.Dates words) {
+        return words.SHORT_DAY().of(day);
     }
 
     /// How far off something is, roughly: "in 5 minutes", "in 3 hours", "in 2 days". Under a
     /// minute is "now".
-    public static String fromNow(Duration ahead) {
+    public static String fromNow(Duration ahead, Lang.Dates words) {
         long minutes = ahead.toMinutes();
-        if (minutes < 1) return "now";
-        if (minutes < 60) return "in " + minutes + (minutes == 1 ? " minute" : " minutes");
+        if (minutes < 1) return words.NOW();
+        if (minutes < 60) return words.IN_MINUTES().of((int) minutes);
         long hours = Math.round(minutes / 60.0);
-        if (hours < 24) return "in " + hours + (hours == 1 ? " hour" : " hours");
+        if (hours < 24) return words.IN_HOURS().of((int) hours);
         long days = Math.round(hours / 24.0);
-        return "in " + days + (days == 1 ? " day" : " days");
+        return words.IN_DAYS().of((int) days);
     }
 
     /// How long ago something was: "just now", "5 minutes ago", "3 hours ago", "2 days ago".
-    public static String ago(Duration since) {
+    public static String ago(Duration since, Lang.Dates words) {
         long minutes = since.toMinutes();
-        if (minutes < 1) return "just now";
-        if (minutes < 60) return minutes + (minutes == 1 ? " minute ago" : " minutes ago");
+        if (minutes < 1) return words.JUST_NOW();
+        if (minutes < 60) return words.MINUTES_AGO().of((int) minutes);
         long hours = Math.round(minutes / 60.0);
-        if (hours < 24) return hours + (hours == 1 ? " hour ago" : " hours ago");
+        if (hours < 24) return words.HOURS_AGO().of((int) hours);
         long days = Math.round(hours / 24.0);
-        return days + (days == 1 ? " day ago" : " days ago");
+        return words.DAYS_AGO().of((int) days);
     }
 }
