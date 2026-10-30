@@ -357,7 +357,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             lines.rows().find { it instanceof Lines.Row.Shown }.newestOf().toList() == ['rust-rewrite']
 
         when: 'the user types a name oillamp would refuse'
-            var refused = app.state().get().find(jafar).orElseThrow().history().branchNameProblem('Rust Rewrite')
+            var refused = app.state().get().find(jafar).orElseThrow().history().branchNameProblem('Rust Rewrite', Lang.ENGLISH)
             SwingUtilities.invokeAndWait { app.startBranch(jafar, 'Rust Rewrite', '') }
 
         then: 'the dialog can say why before Genies calls LampDirectory.branch, and no branch is started'
