@@ -14,14 +14,17 @@ package dev.gui.model;
 ///
 /// @param WINDOW the window around the genies: the list of them, and what went wrong
 /// @param HEADER the header above a genie's pages, and what its lamp asks the user to allow
+/// @param DESKTOP a genie's desktop, beside its chat
 public record Lang(
     Window WINDOW,
-    Header HEADER
+    Header HEADER,
+    Desktop DESKTOP
 ) {
 
     public static final Lang ENGLISH = new Lang(
         Window.ENGLISH,
-        Header.ENGLISH
+        Header.ENGLISH,
+        Desktop.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -38,8 +41,9 @@ public record Lang(
     /// and how many times one of them was then asked `differently`.
     public interface Questions { String of(int questions, int differently); }
 
-    /// A request of a genie's lamp: `who` asks the user to allow `what`.
-    public interface WhoAsksWhat { String of(String who, String what); }
+    /// A text about something a genie does: `who` is the genie's name, and `what` what it does
+    /// it with, such as a request it asks the user to allow, or a window it shows.
+    public interface WhoAndWhat { String of(String who, String what); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
@@ -119,7 +123,7 @@ public record Lang(
         String STOP_WHAT_THE_GENIE_IS_DOING,
         String SLEEP,
         String SLEEP_END_THE_GENIES_SANDBOX,
-        WhoAsksWhat ASKS_YOU_TO_ALLOW,
+        WhoAndWhat ASKS_YOU_TO_ALLOW,
         String A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO,
         String REFUSE,
         String ALLOW,
@@ -162,6 +166,41 @@ public record Lang(
             "Schedule: when jobs wake the genie, and what they did",
             "History: the moments the genie's home was saved at, and going back to one",
             "Host access: whether the genie may reach this computer, and its rules"
+        );
+    }
+
+    /// The words of a genie's desktop, beside its chat, and of how it is shown.
+    public record Desktop(
+        String DRAG_TO_SHARE_THE_ROOM_BETWEEN_THE_CHAT_AND_THE_DESKTOP,
+        String FITTED,
+        String RECORDED_SO_IT_KEEPS_ITS_OWN_SIZE,
+        String CLICK_THE_DESKTOP_TO_USE_IT,
+        WhoAndWhat SHOWS_YOU,
+        String FIT,
+        String GIVE_THE_DESKTOP_THE_SIZE_OF_THIS_PANEL,
+        String FIXED,
+        String SHOW_THE_WHOLE_DESKTOP_AT_ITS_OWN_SIZE,
+        String SMALLER_OR_CTRL_AND_THE_MOUSE_WHEEL,
+        String LARGER_OR_CTRL_AND_THE_MOUSE_WHEEL,
+        String KEYS,
+        String THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN
+    ) {
+        public static final Desktop ENGLISH = new Desktop(
+            "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
+            + " Double-click to let Genies share it",
+            "fitted",
+            "Recorded, so it keeps its own size",
+            "Click the desktop to use it",
+            (who, what) -> who + " shows you: " + what,
+            "Fit",
+            "Give the desktop the size of this panel, so what the genie shows fills it."
+            + " It gets its own size back when you close it.",
+            "Fixed",
+            "Show the whole desktop at its own size, shrunk into this panel",
+            "Smaller (or Ctrl and the mouse wheel on the desktop)",
+            "Larger (or Ctrl and the mouse wheel on the desktop)",
+            "Keys",
+            "The keys that make a window on the desktop fullscreen, close it or minimize it"
         );
     }
 }
