@@ -4,6 +4,7 @@ import dev.gui.genie.LampApiConversionUtil
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.Handout
+import dev.gui.model.Lang
 import dev.gui.model.Schedule
 import dev.gui.pi.PiEvent
 import dev.lamp.LampConversation
@@ -146,16 +147,16 @@ class FollowingAConversationSpec extends Specification {
             var waiting = sent.withSchedule(sent.schedule().withRunning(Optional.of(job)))
 
         then:
-            waiting.waitingOn(start.plusSeconds(72)) == new Genie.Waiting(
+            waiting.waitingOn(start.plusSeconds(72), Lang.ENGLISH) == new Genie.Waiting(
                     'Aladdin is doing a scheduled job first: Do something creative', '1:12')
-            waiting.status() == 'doing a scheduled job'
+            waiting.status(Lang.ENGLISH) == 'doing a scheduled job'
 
         when:
             var answering = waiting.withSchedule(waiting.schedule().withRunning(Optional.empty()))
 
         then:
-            answering.waitingOn(start.plusSeconds(100)) == new Genie.Waiting('Aladdin is thinking', '')
-            answering.status() == 'thinking'
+            answering.waitingOn(start.plusSeconds(100), Lang.ENGLISH) == new Genie.Waiting('Aladdin is thinking', '')
+            answering.status(Lang.ENGLISH) == 'thinking'
     }
 
     def 'A thought that starts in the middle of an answer does not break the answer in two'() {
