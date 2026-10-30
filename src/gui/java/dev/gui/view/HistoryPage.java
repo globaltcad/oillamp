@@ -123,6 +123,8 @@ final class HistoryPage {
     private static final LifeTime SETTLING = LifeTime.of(0.22, TimeUnit.SECONDS);
     /// The sizes the page offers for how far the history may grow, in GB; 0 never deletes a moment.
     private static final Tuple<Double> GROWTH_CHOICES = Tuple.of(Double.class, 0.5, 1.0, 2.0, 5.0, 10.0, 0.0);
+    /// How long a chat may be quiet before it is saved, in minutes; 0 saves every question by itself.
+    private static final Tuple<Integer> QUIET_CHOICES = Tuple.of(Integer.class, 5, 10, 30, 60, 0);
 
     private final Var<GeniesState> state;
     /// The colours and the fonts of the state, and the colours alone.
@@ -1120,10 +1122,35 @@ final class HistoryPage {
                 .add("top, right", autosaveSwitch(History.Autosave::waking, History.Autosave::withWaking, changeable))
                 .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AFTER_IT_WENT_TO_SLEEP), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::sleeping, History.Autosave::withSleeping, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB), 13, 1f, Palette::TEXT))
+                // With each question saved by itself, the switches around a job apply to it too.
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, Viewable.of(String.class, autosave, words, (it, page) ->
+                    it.savesEachQuestion() ? page.BEFORE_EACH_JOB_OR_QUESTION() : page.BEFORE_EACH_JOB()
+                ), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::beforeRun, History.Autosave::withBeforeRun, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AS_IT_ANSWERS_OR_ENDS_A_JOB), 13, 1f, Palette::TEXT))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, Viewable.of(String.class, autosave, words, (it, page) ->
+                    it.savesEachQuestion() ? page.AFTER_EACH_JOB_OR_ANSWER() : page.AFTER_EACH_JOB()
+                ), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::afterRun, History.Autosave::withAfterRun, changeable))
+                .add("span 2, growx, wmin 0, gaptop 4", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::CHATS_ONCE_QUIET_FOR), 13, 1f, Palette::TEXT))
+                .add("span 2, growx, wmin 0",
+                    panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 6, 0)
+                    .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+                    .addAll(
+                        autosave.viewAs(Tuple.classTyped(Quiet.class), it -> quietChoices(it.chatQuietMinutes())),
+                        quiet -> UI.of(UI.use(look, () -> quietChip(quiet, changeable).get(JButton.class)))
+                    )
+                )
+                .add("span 2, growx, wmin 0",
+                    ViewPartsUtil.note(
+                        theme,
+                        Viewable.of(String.class, genie, words, (it, page) ->
+                            it.history().autosave().orElse(UNLESS_SAID).savesEachQuestion()
+                                ? page.EACH_QUESTION_IS_SAVED_AS_A_JOB_IS()
+                                : page.QUESTIONS_ARE_SAVED_TOGETHER_ONCE_THE_CHAT_IS_QUIET(it.name())
+                        ),
+                        Val.of(true)
+                    )
+                )
                 .add("span 2, growx, wmin 0",
                     ViewPartsUtil.note(
                         theme,
@@ -1188,6 +1215,9 @@ final class HistoryPage {
     /// One of the sizes the page offers for how far the history may grow, and whether the lamp's
     /// file has it.
     private record Growth(double gb, boolean chosen) {}
+
+    /// How long a chat must be quiet before it is saved, as a choice on the page.
+    private record Quiet(int minutes, boolean chosen) {}
 
     /// How far the history may grow beyond its first moment, the sizes to choose from, what
     /// oillamp last deleted to stay within it, and deleting what does not fit now.
@@ -1276,6 +1306,27 @@ final class HistoryPage {
         }
         String number = unit == 0 || size >= 10 ? String.valueOf(Math.round(size)) : String.format(Locale.ROOT, "%.1f", size);
         return number + " " + units[unit];
+    }
+
+    /// The choices of how long a chat must be quiet before it is saved, each with whether it is
+    /// the one the lamp has. A value the lamp's file has that is none of them is offered too, in
+    /// its place by length; every question saved by itself comes last.
+    private static Tuple<Quiet> quietChoices(int chosen) {
+        Tuple<Integer> offered = QUIET_CHOICES.contains(chosen)
+            ? QUIET_CHOICES
+            : QUIET_CHOICES.removeIf(it -> it == 0).add(chosen).sort(Integer::compare).add(0);
+        return offered.mapTo(Quiet.class, minutes -> new Quiet(minutes, minutes == chosen));
+    }
+
+    private UIForButton<JButton> quietChip(Quiet quiet, Val<Boolean> changeable) {
+        return
+            button(words.viewAsString(it -> quiet.minutes() == 0 ? it.AFTER_EVERY_QUESTION() : it.SPAN_OF_MINUTES(quiet.minutes())))
+            .group(Skin.CHIP)
+            .isEnabledIf(changeable)
+            .withStyle(palette, (p, it) ->
+                quiet.chosen() ? it.backgroundColor(p.YOURS()).border(1, p.FLAME()).componentFont(f -> f.color(p.TEXT()).weight(2f)) : it
+            )
+            .onClick(_ -> app.autosave(selected(), autosave.get().withChatQuietMinutes(quiet.minutes())));
     }
 
     /// The switch for one of the moments oillamp saves at by itself, which it writes into the
