@@ -163,7 +163,7 @@ public final class GeniesView extends JPanel {
         rows = new ChatRows(
             look,
             theme,
-            chatWords,
+            lang,
             genie,
             this::saveHandout,
             pulse,

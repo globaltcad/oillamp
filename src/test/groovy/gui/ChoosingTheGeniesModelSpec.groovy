@@ -164,7 +164,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
 
         and: 'GPT wrote the new answer in the same conversation, and pointing at each answer says so'
             Lamp.conversations(lamp).size() == 1
-            answers()*.writtenBy() == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
+            answers()*.writtenBy(Lang.ENGLISH) == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
 
         and: 'the lamp stayed lit'
             closed.isEmpty()
@@ -177,7 +177,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
         then: 'GPT wrote its first answer'
-            answers()*.writtenBy() == ["Written by ${GPT}".toString()]
+            answers()*.writtenBy(Lang.ENGLISH) == ["Written by ${GPT}".toString()]
     }
 
     def 'Pointing at an answer of a conversation read back from the lamp says which model wrote it'() {
@@ -204,8 +204,8 @@ class ChoosingTheGeniesModelSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 2 }
 
         then: 'each answer names its own model, and the user\'s messages name none'
-            answers()*.writtenBy() == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
-            genie.transcript().entries().findAll { it.kind() == Entry.Kind.YOU }*.writtenBy() == ['', '']
+            answers()*.writtenBy(Lang.ENGLISH) == ["Written by ${DEEPSEEK}", "Written by ${GPT}"]*.toString()
+            genie.transcript().entries().findAll { it.kind() == Entry.Kind.YOU }*.writtenBy(Lang.ENGLISH) == ['', '']
     }
 
     def 'A model from another place, or reached with another key, waits until the genie wakes again'() {
@@ -229,7 +229,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
         then: 'GPT still answers, and the lamp was not told of either change'
-            answers()*.writtenBy() == ["Written by ${GPT}".toString()]
+            answers()*.writtenBy(Lang.ENGLISH) == ["Written by ${GPT}".toString()]
             !host.engines.any { it.arguments.first() == 'model' }
 
         when: 'the genie sleeps and wakes with the new settings'
@@ -269,7 +269,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
 
         then: 'DeepSeek answered'
-            answers()*.writtenBy() == ["Written by ${DEEPSEEK}".toString()]
+            answers()*.writtenBy(Lang.ENGLISH) == ["Written by ${DEEPSEEK}".toString()]
     }
 
     def 'When the model service refuses a request, the chat says which model it refused it for'() {
