@@ -214,11 +214,13 @@ class KeepingAGeniesHistorySpec extends Specification {
     def 'When oillamp saves by itself is read from the lamp, and the history page changes it'() {
         reportInfo """
             Under the hood oillamp saves by itself at four moments, which the lamp's file
-            switches on and off: as the genie wakes, after it went to sleep, as it begins on a
-            question or a job, and as it answers or ends one. The history page shows these
-            switches and writes them into the lamp. A genie that never woke has no lamp yet, and
-            so nothing to read. The lamp reads its file as it wakes, so the page lets the user
-            change them only while the genie sleeps.
+            switches on and off: as the genie wakes, after it went to sleep, before a job, and
+            after one. The questions of a chat are saved together instead, once the genie was
+            asked nothing for a while, ten minutes unless the lamp says otherwise, or around each
+            question as around a job. The history page shows these settings and writes them into
+            the lamp. A genie that never woke has no lamp yet, and so nothing to read. The lamp
+            reads its file as it wakes, so the page lets the user change them only while the
+            genie sleeps.
         """
         when: 'the user opens the history of a genie that never woke'
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HISTORY) } }
@@ -233,10 +235,10 @@ class KeepingAGeniesHistorySpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
 
-        then: 'the page shows that a new lamp saves around its runs only'
+        then: 'the page shows that a new lamp saves around its jobs, and a chat once quiet for ten minutes'
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP && app.state().get().find(jafar).orElseThrow().history().autosave().isPresent() }
             app.state().get().find(jafar).orElseThrow().history().autosave().get() == new History.Autosave(false, false, true, true, 10)
-            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'answers'
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'finishes a job or was asked nothing for 10 minutes'
 
         when: 'the user switches on saving as it wakes'
             SwingUtilities.invokeAndWait { app.autosave(jafar, app.state().get().find(jafar).orElseThrow().history().autosave().get().withWaking(true)) }
@@ -244,8 +246,17 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'the lamp\'s file has it'
             waitUntil { Lamp.at(app.lampOf(jafar)).autosave().startup() }
             waitUntil { app.state().get().find(jafar).orElseThrow().history().autosave().get().waking() }
-            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'wakes or answers'
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'wakes, finishes a job or was asked nothing for 10 minutes'
             app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
+
+        when: 'the user lets a chat be quiet for an hour'
+            SwingUtilities.invokeAndWait { app.autosave(jafar, app.state().get().find(jafar).orElseThrow().history().autosave().get().withChatQuietMinutes(60)) }
+
+        then: 'the lamp\'s file has it, and the page says it'
+            waitUntil { Lamp.at(app.lampOf(jafar)).autosave().chatQuietMinutes() == 60 }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().autosave().get().chatQuietMinutes() == 60 }
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'wakes, finishes a job or was asked nothing for 1 hour'
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.GERMAN) == 'aufwacht, einen Auftrag beendet oder 1 Stunde lang nichts gefragt wurde'
 
         when: 'the genie wakes again'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
@@ -253,6 +264,29 @@ class KeepingAGeniesHistorySpec extends Specification {
 
         then: 'oillamp saved as it woke, and the page shows it'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().any { it.kind() == History.Kind.WOKE } }
+    }
+
+    def 'The history page says when a genie saves by itself: #when'() {
+        reportInfo """
+            Let's consider the sentence at the top of a genie's history page, such as "Saved
+            whenever Jafar wakes, finishes a job or was asked nothing for 10 minutes." It names
+            the moments its lamp saves at by itself. A chat is saved once the genie was asked
+            nothing for so long, unless every question is saved by itself, and then the moments
+            around a job are those around an answer too. Saving only before a job, without after,
+            is named by its beginning.
+        """
+        expect:
+            new History.Autosave(waking, sleeping, beforeRun, afterRun, quiet).when(Lang.ENGLISH) == when
+
+        where:
+            waking | sleeping | beforeRun | afterRun | quiet || when
+            false  | false    | true      | true     | 10    || 'finishes a job or was asked nothing for 10 minutes'
+            true   | true     | true      | true     | 30    || 'wakes, finishes a job, was asked nothing for 30 minutes or sleeps'
+            false  | false    | true      | false    | 120   || 'begins a job or was asked nothing for 2 hours'
+            false  | false    | false     | false    | 1     || 'was asked nothing for 1 minute'
+            false  | false    | true      | true     | 0     || 'answers or finishes a job'
+            false  | false    | true      | false    | 0     || 'begins to answer or begins a job'
+            false  | false    | false     | false    | 0     || ''
     }
 
     def 'A long history shows its newest forty moments, day by day, and waking does not end the offer to undo'() {
