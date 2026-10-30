@@ -247,6 +247,9 @@ final class SchedulePage {
 
     // ─── the timeline ──────────────────────────────────────────────────────────────────────
 
+    /// How many runs before the last ones the timeline hides, and whether it shows them anyway.
+    private record EarlierRuns(int hidden, boolean shown) {}
+
     private UIForAnySwing<?, ?> timelineColumn() {
         Val<Tuple<Timeline.Day>> days = timeline.viewAs(Tuple.classTyped(Timeline.Day.class), Timeline::days);
         Val<Integer> hidden = timeline.viewAs(Integer.class, Timeline::hiddenRuns);
@@ -259,21 +262,19 @@ final class SchedulePage {
             .withStyle(wide, (isWide, it) -> it.padding(0, isWide ? 14 : 0, 0, 0))
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 8, hidemode 3", "[grow][]")
-                .add("wmin 0", label("THE WEEK").group(Skin.SECTION))
+                .add("wmin 0", label(words.viewAsString(Lang.SchedulePage::THE_WEEK)).group(Skin.SECTION))
                 .add(
-                    button(Viewable.of(String.class, hidden, earlier, (more, shown) ->
-                        shown
-                            ? "Show only the last runs"
-                            : "Show " + more + " earlier " + (more == 1 ? "run" : "runs")
+                    button(Viewable.of(String.class, Viewable.of(EarlierRuns.class, hidden, earlier, EarlierRuns::new), words, (it, page) ->
+                        it.shown() ? page.SHOW_ONLY_THE_LAST_RUNS() : page.SHOW_EARLIER_RUNS().of(it.hidden())
                     ))
                     .group(Skin.ICON_BUTTON).isVisibleIf(canFold)
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().BRASS())))
                     .onClick(_ -> schedule.update(From.VIEW, s -> s.withEarlier(!s.earlier())))
                 )
             )
-            .add("growx, wmin 0", label("Reading the schedule…").group(Skin.META).isVisibleIf(reading))
+            .add("growx, wmin 0", label(words.viewAsString(Lang.SchedulePage::READING_THE_SCHEDULE)).group(Skin.META).isVisibleIf(reading))
             .add("growx, wmin 0",
-                label("Nothing ran this week, and nothing is planned.").group(Skin.META)
+                label(words.viewAsString(Lang.SchedulePage::NOTHING_RAN_THIS_WEEK_AND_NOTHING_IS_PLANNED)).group(Skin.META)
                 .isVisibleIf(Viewable.of(Boolean.class, timeline, reading, (it, isReading) ->
                     !isReading &&
                     it.days().stream().allMatch(day -> day.moments().stream().allMatch(m -> m.kind() == Timeline.Kind.NOW))
@@ -428,11 +429,11 @@ final class SchedulePage {
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
             .withMinSize(0, 0)
             .withCursor(UI.Cursor.HAND)
-            .withTooltip(
+            .withTooltip(words.viewAsString(page ->
                 moment.job().isEmpty()
                     ? ""
-                    : picked ? "Click again to see every job" : "Click to bring this job's times forward"
-            )
+                    : picked ? page.CLICK_AGAIN_TO_SEE_EVERY_JOB() : page.CLICK_TO_BRING_THIS_JOBS_TIMES_FORWARD()
+            ))
             // A transitional style follows no item: it reads the palette as it is gathered, which
             // it is anew whenever the palette changes, as every style the style sheet reaches.
             .withTransitionalStyle(hovered, LifeTime.of(0.14, TimeUnit.SECONDS), (status, it) -> {
@@ -460,7 +461,7 @@ final class SchedulePage {
                 box("fill, ins 0, gap 8, hidemode 3", "[grow][]")
                 .add("growx, wmin 0", ViewPartsUtil.words(theme, moment.detail(), 12, 1f, p -> faded ? ViewPartsUtil.dim(detail.apply(p)) : detail.apply(p)))
                 .add("top",
-                    ViewPartsUtil.tag(theme, state.viewAsString(it -> "added by " + it.genie().name()))
+                    ViewPartsUtil.tag(theme, state.viewAsString(it -> it.lang().SCHEDULE_PAGE().ADDED_BY().of(it.genie().name())))
                     .isVisibleIf(moment.byGenie())
                 )
             )
@@ -468,13 +469,13 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .isVisibleIf(moment.conversation().isPresent() || working)
                 .add(
-                    ViewPartsUtil.link(theme, Val.of("Open the conversation  →")).isVisibleIf(moment.conversation().isPresent())
+                    ViewPartsUtil.link(theme, words.viewAsString(it -> it.OPEN_THE_CONVERSATION() + "  →")).isVisibleIf(moment.conversation().isPresent())
                     .onClick(_ -> moment.conversation().ifPresent(id -> app.openConversation(selected(), id)))
                 )
                 .add(
-                    button("Stop").group(Skin.QUIET_BUTTON).isVisibleIf(working)
+                    button(words.viewAsString(Lang.SchedulePage::STOP)).group(Skin.QUIET_BUTTON).isVisibleIf(working)
                     .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.STOP, p.TEXT())))
-                    .withTooltip("Stop this run; what the genie did so far is kept, and saved")
+                    .withTooltip(words.viewAsString(Lang.SchedulePage::STOP_THIS_RUN_WHAT_THE_GENIE_DID_SO_FAR_IS_KEPT))
                     .onClick(_ -> app.stopRun(selected(), moment.run()))
                 )
             );
@@ -489,30 +490,26 @@ final class SchedulePage {
             .isVisibleIf(overview)
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 12, 0, 0, isWide ? 14 : 0))
             .add("growx, wmin 0",
-                label(jobs.viewAsString(it -> it.isEmpty() ? "JOBS" : "JOBS  ·  " + it.size())).group(Skin.SECTION)
+                label(Viewable.of(String.class, jobs, words, (it, page) -> page.JOBS().of(it.size()))).group(Skin.SECTION)
             )
             .add("growx, wmin 0",
                 panel("fill, wrap 1, ins 22 18 22 18, gap 8", "[grow, center]").group(Skin.TILE)
                 .isVisibleIf(none)
                 .add(ViewPartsUtil.lamp(Val.of(Genie.Phase.ASLEEP), 56))
                 .add("growx, wmin 0",
-                    ViewPartsUtil.words(theme, "Nothing on the schedule yet", 15, 2f, Palette::TEXT)
+                    ViewPartsUtil.words(theme, words.viewAsString(Lang.SchedulePage::NOTHING_ON_THE_SCHEDULE_YET), 15, 2f, Palette::TEXT)
                     .withStyle(it -> it.text(t -> t.placement(UI.Placement.TOP)))
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        genie.viewAsString(it ->
-                            "Give " + it.name() + " a task and a time, "
-                            + "once or again and again: a morning check of the build, a weekly report, a reminder "
-                            + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards."
-                        ),
+                        Viewable.of(String.class, genie, words, (it, page) -> page.GIVE_IT_A_TASK_AND_A_TIME().of(it.name())),
                         Palette::SUBTEXT,
                         Val.of(true)
                     )
                 )
                 .add("gaptop 6",
-                    button("＋  New job").group(Skin.FLAME_BUTTON)
+                    button(words.viewAsString(it -> "＋  " + it.NEW_JOB())).group(Skin.FLAME_BUTTON)
                     .onClick(_ -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))
                 )
             )
