@@ -149,24 +149,26 @@ public record Hardware(long memory, Optional<Graphics> graphics) {
     }
 
     /// The computer, in a few words: "64 GB of memory, and no graphics card a model can run on."
-    public String words() {
-        if (memory == 0) return "Genies could not read how much memory this computer has.";
-        return gigabytes(memory / (double) (1L << 30)) + " of memory, and "
-             + graphics.map(card -> "the graphics card " + card.name() + " with " + gigabytes(card.memory() / (double) (1L << 30)) + ".")
-                       .orElse("no graphics card a model can run on.");
+    public String words(Lang lang) {
+        Lang.SettingsPage words = lang.SETTINGS_PAGE();
+        if (memory == 0) return words.GENIES_COULD_NOT_READ_HOW_MUCH_MEMORY_THIS_COMPUTER_HAS();
+        String ours = gigabytes(memory / (double) (1L << 30));
+        return graphics
+            .map(card -> words.MEMORY_AND_THE_GRAPHICS_CARD().of(ours, card.name(), gigabytes(card.memory() / (double) (1L << 30))))
+            .orElse(words.MEMORY_AND_NO_GRAPHICS_CARD_A_MODEL_CAN_RUN_ON().of(ours));
     }
 
     /// How `model` would run here, in a sentence or two.
-    public String words(String model) {
+    public String words(String model, Lang lang) {
+        Lang.SettingsPage words = lang.SETTINGS_PAGE();
         Fit fit = fit(model);
-        String size = "About " + gigabytes(fit.size()) + " to download. ";
+        String size = words.ABOUT_SO_MUCH_TO_DOWNLOAD().of(gigabytes(fit.size())) + " ";
         return switch (fit.runs()) {
-            case UNKNOWN -> "Its name does not say how large it is, so Genies cannot tell how well it runs here.";
-            case ON_GRAPHICS -> size + "It runs on the graphics card, so it answers quickly.";
-            case ON_PROCESSOR -> size + (fit.pace() ? "It runs on the processor, at a fair pace."
-                                                    : "It runs on the processor, so it answers slowly.");
-            case TOO_LARGE -> size + "Running, it needs about " + gigabytes(fit.need())
-                              + " of memory, more than this computer can spare: it may not load, or be very slow.";
+            case UNKNOWN -> words.ITS_NAME_DOES_NOT_SAY_HOW_LARGE_IT_IS();
+            case ON_GRAPHICS -> size + words.IT_RUNS_ON_THE_GRAPHICS_CARD_SO_IT_ANSWERS_QUICKLY();
+            case ON_PROCESSOR -> size + (fit.pace() ? words.IT_RUNS_ON_THE_PROCESSOR_AT_A_FAIR_PACE()
+                                                    : words.IT_RUNS_ON_THE_PROCESSOR_SO_IT_ANSWERS_SLOWLY());
+            case TOO_LARGE -> size + words.RUNNING_IT_NEEDS_MORE_MEMORY_THAN_THIS_COMPUTER_CAN_SPARE().of(gigabytes(fit.need()));
         };
     }
 
