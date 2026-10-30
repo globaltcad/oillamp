@@ -620,6 +620,10 @@ final class SchedulePage {
 
     // ─── the editor ────────────────────────────────────────────────────────────────────────
 
+    /// What the editor's button to save says by: whether it changes a job, and whether saving is
+    /// on its way.
+    private record SaveButton(boolean changing, boolean busy) {}
+
     private UIForAnySwing<?, ?> editor() {
         Val<Boolean> changing = draft.viewAs(Boolean.class, it -> it.replaces().isPresent());
         Val<String> blocked = Viewable.of(String.class, draft, state, (it, s) -> it.problem(s.localNow()).orElse(""));
@@ -635,22 +639,21 @@ final class SchedulePage {
                 .add("growx, wmin 0",
                     box("fill, wrap 1, ins 0, gap 4")
                     .add("growx, wmin 0",
-                        label(Viewable.of(String.class, changing, genie, (isChange, it) ->
-                            isChange ? "Change a job" : "A new job for " + it.name()
+                        label(Viewable.of(String.class, changing, state, (isChange, it) ->
+                            isChange ? it.lang().SCHEDULE_PAGE().CHANGE_A_JOB() : it.lang().SCHEDULE_PAGE().A_NEW_JOB_FOR().of(it.genie().name())
                         ))
                         .group(Skin.EMPTY_TITLE)
                     )
                     .add("growx, wmin 0",
                         ViewPartsUtil.note(
                             theme,
-                            "It gets the task at the time you choose, in a conversation of its own, "
-                            + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.",
+                            words.viewAsString(Lang.SchedulePage::IT_GETS_THE_TASK_AT_THE_TIME_YOU_CHOOSE_IN_A_CONVERSATION_OF_ITS_OWN),
                             Val.of(true)
                         )
                     )
                 )
                 .add("top",
-                    button("✕").group(Skin.ICON_BUTTON).withTooltip("Close without saving")
+                    button("✕").group(Skin.ICON_BUTTON).withTooltip(words.viewAsString(Lang.SchedulePage::CLOSE_WITHOUT_SAVING))
                     .onClick(_ -> schedule.update(From.VIEW, Schedule::closeEditor))
                 )
             )
@@ -660,15 +663,15 @@ final class SchedulePage {
                 box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, refused, Palette::TROUBLE, refused.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add("skip 0",
-                    button("Cancel").group(Skin.QUIET_BUTTON)
+                    button(words.viewAsString(Lang.SchedulePage::CANCEL)).group(Skin.QUIET_BUTTON)
                     .onClick(_ -> schedule.update(From.VIEW, Schedule::closeEditor))
                 )
                 .add(
-                    button(Viewable.of(String.class, changing, busy, (isChange, isBusy) ->
-                        isBusy ? "Saving…" : isChange ? "Save the job" : "Add to the schedule"
+                    button(Viewable.of(String.class, Viewable.of(SaveButton.class, changing, busy, SaveButton::new), words, (it, page) ->
+                        it.busy() ? page.SAVING() : it.changing() ? page.SAVE_THE_JOB() : page.ADD_TO_THE_SCHEDULE()
                     ))
                     .group(Skin.FLAME_BUTTON).isEnabledIf(canSave)
-                    .withTooltip(blocked.viewAsString(it -> it.isEmpty() ? "Ctrl and Return save too" : it))
+                    .withTooltip(Viewable.of(String.class, blocked, words, (it, page) -> it.isEmpty() ? page.CTRL_AND_RETURN_SAVE_TOO() : it))
                     .withStyle(Themed.of(canSave, theme), (themed, it) -> {
                         var can = themed.item();
                         Palette p = themed.palette();
@@ -690,7 +693,7 @@ final class SchedulePage {
         return
             box("fill, wrap 1, ins 0, gap 8", "[grow]", "[][grow][]")
             .withStyle(wide, (isWide, it) -> it.padding(0, isWide ? 18 : 0, 0, 0))
-            .add("growx", label("THE TASK").group(Skin.SECTION))
+            .add("growx", label(words.viewAsString(Lang.SchedulePage::THE_TASK)).group(Skin.SECTION))
             .add("grow, push, wmin 0, hmin 220",
                 scrollPane().withEmptyBorder(0).withMinSize(0, 220).withPrefSize(520, 380)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
@@ -717,9 +720,7 @@ final class SchedulePage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
                         theme,
-                        "Brief it as you would a colleague: what to do, where things are, and "
-                        + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
-                        + "keeps notes in ~/workspace/NOTES.md.",
+                        words.viewAsString(Lang.SchedulePage::BRIEF_IT_AS_YOU_WOULD_A_COLLEAGUE),
                         Val.of(true)
                     )
                 )
@@ -749,11 +750,11 @@ final class SchedulePage {
         return
             box("fill, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 6, 0, 0, 0))
-            .add("growx", label("WHEN").group(Skin.SECTION))
+            .add("growx", label(words.viewAsString(Lang.SchedulePage::WHEN)).group(Skin.SECTION))
             .add(
                 box("ins 0, gap 6")
-                .add(chip("Once", once, () -> repeats.set(From.VIEW, false)))
-                .add(chip("Again and again", repeats, () -> repeats.set(From.VIEW, true)))
+                .add(chip(words.viewAsString(Lang.SchedulePage::ONCE), once, () -> repeats.set(From.VIEW, false)))
+                .add(chip(words.viewAsString(Lang.SchedulePage::AGAIN_AND_AGAIN), repeats, () -> repeats.set(From.VIEW, true)))
             )
 
             // ── once: quick picks, then a day and a time ──
@@ -842,14 +843,14 @@ final class SchedulePage {
                 .add(label("Ends").withStyle(it -> it.padding(0, 0, 0, 0)))
                 .add(
                     chip(
-                        "Never",
+                        Val.of("Never"),
                         draft.viewAs(Boolean.class, it -> it.endsOn().isEmpty()),
                         () -> draft.update(From.VIEW, it -> it.withEndsOn(Optional.empty()))
                     )
                 )
                 .add(
                     chip(
-                        "On a day",
+                        Val.of("On a day"),
                         draft.viewAs(Boolean.class, it -> it.endsOn().isPresent()),
                         () -> draft.update(From.VIEW, it ->
                             it.endsOn().isPresent()
@@ -970,7 +971,7 @@ final class SchedulePage {
     private UUID selected() { return state.get().selected(); }
 
     /// A choice among several, as a rounded chip that is lit while chosen.
-    private UIForButton<JButton> chip(String text, Val<Boolean> chosen, Runnable choose) {
+    private UIForButton<JButton> chip(Val<String> text, Val<Boolean> chosen, Runnable choose) {
         return
             button(text).group(Skin.CHIP)
             .withStyle(Themed.of(chosen, theme), (themed, it) -> {
@@ -982,7 +983,7 @@ final class SchedulePage {
     }
 
     private UIForButton<JButton> chip(JobDraft.Repeat how) {
-        return chip(how.label(), repeat.viewAs(Boolean.class, it -> it == how), () -> repeat.set(From.VIEW, how));
+        return chip(Val.of(how.label()), repeat.viewAs(Boolean.class, it -> it == how), () -> repeat.set(From.VIEW, how));
     }
 
     /// A chip that sets the day and the time of a job that runs once, from now.
@@ -1000,7 +1001,7 @@ final class SchedulePage {
     }
 
     private UIForButton<JButton> timeChip(String clock) {
-        return chip(clock, time.viewAs(Boolean.class, it -> it.strip().equals(clock)), () -> time.set(From.VIEW, clock));
+        return chip(Val.of(clock), time.viewAs(Boolean.class, it -> it.strip().equals(clock)), () -> time.set(From.VIEW, clock));
     }
 
     /// A switch, drawn as a small track with a knob that slides across as it turns on.

@@ -733,7 +733,21 @@ public record Lang(
         String REMOVE,
         String KEEP,
         String ON_CLICK_TO_SWITCH_IT_OFF_KEEPING_IT_ON_THE_SCHEDULE,
-        String OFF_CLICK_TO_SWITCH_IT_ON
+        String OFF_CLICK_TO_SWITCH_IT_ON,
+        String CHANGE_A_JOB,
+        About A_NEW_JOB_FOR,
+        String IT_GETS_THE_TASK_AT_THE_TIME_YOU_CHOOSE_IN_A_CONVERSATION_OF_ITS_OWN,
+        String CLOSE_WITHOUT_SAVING,
+        String CANCEL,
+        String SAVING,
+        String SAVE_THE_JOB,
+        String ADD_TO_THE_SCHEDULE,
+        String CTRL_AND_RETURN_SAVE_TOO,
+        String THE_TASK,
+        String BRIEF_IT_AS_YOU_WOULD_A_COLLEAGUE,
+        String WHEN,
+        String ONCE,
+        String AGAIN_AND_AGAIN
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -782,7 +796,24 @@ public record Lang(
             "Remove",
             "Keep",
             "On: click to switch it off, keeping it on the schedule",
-            "Off: click to switch it on"
+            "Off: click to switch it on",
+            "Change a job",
+            genie -> "A new job for " + genie,
+            "It gets the task at the time you choose, in a conversation of its own, "
+            + "and while it is awake: a job whose time came while it slept runs as soon as it wakes.",
+            "Close without saving",
+            "Cancel",
+            "Saving…",
+            "Save the job",
+            "Add to the schedule",
+            "Ctrl and Return save too",
+            "THE TASK",
+            "Brief it as you would a colleague: what to do, where things are, and "
+            + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
+            + "keeps notes in ~/workspace/NOTES.md.",
+            "WHEN",
+            "Once",
+            "Again and again"
         );
     }
 
