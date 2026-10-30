@@ -113,7 +113,7 @@ public final class GeniesView extends JPanel {
         headerWords = Theme.langOf(state).viewAs(Lang.Header.class, Lang::HEADER);
         desktopWords = Theme.langOf(state).viewAs(Lang.Desktop.class, Lang::DESKTOP);
         look    = new Look(theme);
-        desktop = new DesktopScreen(palette);
+        desktop = new DesktopScreen(palette, desktopWords);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
         // in it anew, and every window takes it.
         Viewable.cast(theme).onChange(From.ALL, it -> it.currentValue().ifPresent(now -> {
@@ -1282,34 +1282,39 @@ public final class GeniesView extends JPanel {
                 panel("wrap 2, ins 12 14 12 14, gap 14 7", "[][]")
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add("span 2",
-                    label("Keys for the desktop")
+                    label(desktopWords.viewAsString(Lang.Desktop::KEYS_FOR_THE_DESKTOP))
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(13).weight(2f).color(now.palette().TEXT())))
                 )
-                .add("span 2, gapbottom 4", label("Click a window first, so that it has the keyboard.").group(Skin.META))
+                .add("span 2, gapbottom 4", label(desktopWords.viewAsString(Lang.Desktop::CLICK_A_WINDOW_FIRST_SO_THAT_IT_HAS_THE_KEYBOARD)).group(Skin.META))
                 .add(keyCaps("F"))
-                .add(keyLabel("Fullscreen, and back"))
+                .add(keyLabel(Lang.Desktop::FULLSCREEN_AND_BACK))
                 .add(keyCaps("Q"))
-                .add(keyLabel("Close the window"))
+                .add(keyLabel(Lang.Desktop::CLOSE_THE_WINDOW))
                 .add(keyCaps("M"))
-                .add(keyLabel("Minimize the window"))
+                .add(keyLabel(Lang.Desktop::MINIMIZE_THE_WINDOW))
                 .add(keyCaps("N"))
-                .add(keyLabel("Bring every minimized window back"))
-                .add("span 2, gaptop 4", label("Super is the key with the Windows logo.").group(Skin.META))
+                .add(keyLabel(Lang.Desktop::BRING_EVERY_MINIMIZED_WINDOW_BACK))
+                .add("span 2, gaptop 4", label(desktopWords.viewAsString(Lang.Desktop::SUPER_IS_THE_KEY_WITH_THE_WINDOWS_LOGO)).group(Skin.META))
             )
             .get(JPopupMenu.class)
         );
     }
 
     /// What a key of the desktop does, beside its [#keyCaps].
-    private UIForLabel<JLabel> keyLabel(String text) {
-        return label(text).withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().TEXT())));
+    private UIForLabel<JLabel> keyLabel(Function<Lang.Desktop, String> text) {
+        return label(desktopWords.viewAsString(text)).withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().TEXT())));
     }
 
     /// Ctrl + Super + `letter`, each drawn as a key on a keyboard.
     private UIForBox<JBox> keyCaps(String letter) {
         UIForBox<JBox> caps = box("ins 0, gap 4, aligny center");
-        for (String key : List.of("Ctrl", "Super", letter)) {
-            if (!key.equals("Ctrl"))
+        List<Val<String>> keys = List.of(
+            desktopWords.viewAsString(Lang.Desktop::CTRL),
+            desktopWords.viewAsString(Lang.Desktop::SUPER),
+            Val.of(letter)
+        );
+        for (Val<String> key : keys) {
+            if (key != keys.getFirst())
                 caps = caps.add(label("+").withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(11).color(now.palette().SUBTEXT()))));
             caps = caps.add(
                 label(key).withHorizontalAlignment(UI.HorizontalAlignment.CENTER)

@@ -183,7 +183,20 @@ public record Lang(
         String SMALLER_OR_CTRL_AND_THE_MOUSE_WHEEL,
         String LARGER_OR_CTRL_AND_THE_MOUSE_WHEEL,
         String KEYS,
-        String THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN
+        String THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN,
+        String KEYS_FOR_THE_DESKTOP,
+        String CLICK_A_WINDOW_FIRST_SO_THAT_IT_HAS_THE_KEYBOARD,
+        String FULLSCREEN_AND_BACK,
+        String CLOSE_THE_WINDOW,
+        String MINIMIZE_THE_WINDOW,
+        String BRING_EVERY_MINIMIZED_WINDOW_BACK,
+        String SUPER_IS_THE_KEY_WITH_THE_WINDOWS_LOGO,
+        String CTRL,
+        String SUPER,
+        String THE_DESKTOP_SHOWS_HERE_WHILE_THE_GENIE_IS_AWAKE,
+        String CONNECTING_TO_THE_DESKTOP,
+        About THE_DESKTOP_WENT_AWAY,
+        About COULD_NOT_SHOW_THE_DESKTOP
     ) {
         public static final Desktop ENGLISH = new Desktop(
             "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
@@ -200,7 +213,20 @@ public record Lang(
             "Smaller (or Ctrl and the mouse wheel on the desktop)",
             "Larger (or Ctrl and the mouse wheel on the desktop)",
             "Keys",
-            "The keys that make a window on the desktop fullscreen, close it or minimize it"
+            "The keys that make a window on the desktop fullscreen, close it or minimize it",
+            "Keys for the desktop",
+            "Click a window first, so that it has the keyboard.",
+            "Fullscreen, and back",
+            "Close the window",
+            "Minimize the window",
+            "Bring every minimized window back",
+            "Super is the key with the Windows logo.",
+            "Ctrl",
+            "Super",
+            "The desktop shows here while the genie is awake.",
+            "Connecting to the desktop…",
+            why -> "The desktop went away: " + why,
+            why -> "Could not show the desktop: " + why
         );
     }
 }

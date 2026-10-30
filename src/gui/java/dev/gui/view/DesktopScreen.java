@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 
 import javax.swing.JComponent;
@@ -32,6 +33,7 @@ import javax.swing.Timer;
 import dev.gui.desktop.Desktop;
 import dev.gui.desktop.RfbConnection;
 import dev.gui.desktop.X11KeysymUtil;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -68,6 +70,8 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// The colours of the state, which the screen paints itself in; held, since the state only
     /// weakly holds its views.
     private final Val<Palette> palette;
+    /// The words of a genie's desktop, which the screen says while it shows none; held likewise.
+    private final Val<Lang.Desktop> words;
     private Optional<RfbConnection> connection = Optional.empty();
     private Optional<Desktop> shown = Optional.empty();
     /// Whether the desktop shown said no to another size; it is then drawn to fit.
@@ -79,7 +83,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
     private final Timer sizeSettled = new Timer(SETTLING_MILLIS, _ -> sizeTheDesktop());
     /// The connection being let go of, while it gives the desktop its own size back.
     private Optional<Thread> lettingGo = Optional.empty();
-    private String message = "The desktop shows here while the genie is awake.";
+    private Function<Lang.Desktop, String> message = Lang.Desktop::THE_DESKTOP_SHOWS_HERE_WHILE_THE_GENIE_IS_AWAKE;
     /// Where the desktop's picture was last drawn, to map the mouse back onto the desktop.
     private double scale = 1, left, top;
     private int buttons;
@@ -89,9 +93,11 @@ final class DesktopScreen extends JComponent implements Scrollable {
     /// Called with +1 or -1 when the user turns the wheel with Control held, to zoom.
     private IntConsumer zoomSteps = _ -> {};
 
-    DesktopScreen(Val<Palette> palette) {
+    DesktopScreen(Val<Palette> palette, Val<Lang.Desktop> words) {
         this.palette = palette;
+        this.words = words;
         Viewable.cast(palette).onChange(From.ALL, _ -> repaint());
+        Viewable.cast(words).onChange(From.ALL, _ -> repaint());
         sizeSettled.setRepeats(false);
         addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent event) { sizeSettled.restart(); }
@@ -233,7 +239,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
         asked = Optional.empty();
         keepsItsSize.set(false);
         desktopSize.set("");
-        message = desktop.isEmpty() ? "The desktop shows here while the genie is awake." : "Connecting to the desktop…";
+        message = desktop.isEmpty() ? Lang.Desktop::THE_DESKTOP_SHOWS_HERE_WHILE_THE_GENIE_IS_AWAKE : Lang.Desktop::CONNECTING_TO_THE_DESKTOP;
         repaint();
         desktop.ifPresent(it -> Thread.ofVirtual().name("desktop connect").start(() -> connect(it)));
     }
@@ -318,7 +324,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
                             connection = Optional.empty();
                             shown = Optional.empty();
                             desktopSize.set("");
-                            message = "The desktop went away: " + why;
+                            message = it -> it.THE_DESKTOP_WENT_AWAY().of(why);
                             repaint();
                         }
                     }));
@@ -338,7 +344,7 @@ final class DesktopScreen extends JComponent implements Scrollable {
         } catch (IOException failed) {
             SwingUtilities.invokeLater(() -> {
                 if (!shown.equals(Optional.of(desktop))) return;
-                message = "Could not show the desktop: " + failed.getMessage();
+                message = it -> it.COULD_NOT_SHOW_THE_DESKTOP().of(String.valueOf(failed.getMessage()));
                 repaint();
             });
         }
@@ -354,8 +360,9 @@ final class DesktopScreen extends JComponent implements Scrollable {
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 g.setColor(p.SUBTEXT());
                 g.setFont(getFont().deriveFont(UI.scale(13f)));
-                int width = g.getFontMetrics().stringWidth(message);
-                g.drawString(message, Math.max(8, (getWidth() - width) / 2), getHeight() / 2);
+                String said = message.apply(words.get());
+                int width = g.getFontMetrics().stringWidth(said);
+                g.drawString(said, Math.max(8, (getWidth() - width) / 2), getHeight() / 2);
                 return;
             }
             BufferedImage screen = connection.get().screen();
