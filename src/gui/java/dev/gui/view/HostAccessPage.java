@@ -144,8 +144,8 @@ final class HostAccessPage {
     private static String locked(Genie genie, Lang.HostAccessPage words) {
         HostAccess access = genie.hostAccess();
         if (!access.read()) return words.READING_THE_HOST_ACCESS();
-        if (!access.lamp()) return words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP().of(genie.name());
-        if (!asleep(genie)) return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE().of(genie.name());
+        if (!access.lamp()) return words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP(genie.name());
+        if (!asleep(genie)) return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE(genie.name());
         return "";
     }
 
@@ -153,8 +153,8 @@ final class HostAccessPage {
         Val<String> lockedBecause = Viewable.of(String.class, genie, pageWords, HostAccessPage::locked);
         Val<String> says = Viewable.of(String.class, genie, pageWords, (it, page) ->
             it.hostAccess().saved().on()
-                ? page.MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST().of(it.name())
-                : page.CANNOT_REACH_THIS_COMPUTER().of(it.name())
+                ? page.MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST(it.name())
+                : page.CANNOT_REACH_THIS_COMPUTER(it.name())
         );
         Val<String> problem = hostAccess.viewAsString(HostAccess::problem);
         return
