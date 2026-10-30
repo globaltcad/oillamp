@@ -32,6 +32,7 @@ import dev.gui.Genies;
 import dev.gui.model.Conversations;
 import dev.gui.model.DateWordingUtil;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.Lines;
@@ -1298,6 +1299,7 @@ final class HistoryPage {
     ) {
         return ViewPartsUtil.yesOrNo(
             theme,
+            Theme.langOf(state).viewAs(Lang.Parts.class, Lang::PARTS),
             autosave.viewAs(Boolean.class, on),
             changeable,
             yes -> app.autosave(selected(), with.apply(autosave.get(), yes))

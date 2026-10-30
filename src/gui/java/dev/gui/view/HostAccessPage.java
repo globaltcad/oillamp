@@ -180,7 +180,7 @@ final class HostAccessPage {
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
             .add("growx, wmin 0", section(Lang.HostAccessPage::MAY_IT_REACH_THIS_COMPUTER))
-            .add(ViewPartsUtil.yesOrNo(theme, on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
+            .add(ViewPartsUtil.yesOrNo(theme, Theme.langOf(state).viewAs(Lang.Parts.class, Lang::PARTS), on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
     }
 
     private UIForAnySwing<?, ?> experimental() {
