@@ -19,6 +19,7 @@ package dev.gui.model;
 /// @param DIALOGS the dialogs the window asks and tells the user things in
 /// @param ACTIONS_PAGE what can be done with a genie as a whole
 /// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
+/// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
 public record Lang(
     Window WINDOW,
     Header HEADER,
@@ -26,7 +27,8 @@ public record Lang(
     Chat CHAT,
     Dialogs DIALOGS,
     ActionsPage ACTIONS_PAGE,
-    HomeFolders HOME_FOLDERS
+    HomeFolders HOME_FOLDERS,
+    HostAccessPage HOST_ACCESS_PAGE
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -36,7 +38,8 @@ public record Lang(
         Chat.ENGLISH,
         Dialogs.ENGLISH,
         ActionsPage.ENGLISH,
-        HomeFolders.ENGLISH
+        HomeFolders.ENGLISH,
+        HostAccessPage.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -513,6 +516,51 @@ public record Lang(
             "Link here",
             at -> "Linked: " + at,
             at -> "It was linked already: " + at
+        );
+    }
+
+    /// The words of a genie's Host access page: whether it may reach this computer, and the
+    /// rules a model judges its requests by.
+    public record HostAccessPage(
+        String HOST_ACCESS,
+        About MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST,
+        About CANNOT_REACH_THIS_COMPUTER,
+        String READING_THE_HOST_ACCESS,
+        About WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP,
+        About SEND_IT_TO_SLEEP_TO_CHANGE_THESE,
+        String MAY_IT_REACH_THIS_COMPUTER,
+        String EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA,
+        String FOLDERS_IT_MAY_READ,
+        String ONE_PER_LINE_SUCH_AS_DOCUMENTS,
+        String FOLDERS_IT_MAY_READ_AND_CHANGE,
+        String IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE,
+        String ANYTHING_ELSE_IN_YOUR_OWN_WORDS,
+        String SAY_WHAT_MUST_NOT_HAPPEN,
+        String UNDO_CHANGES,
+        String SAVE,
+        String SAVING,
+        String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP
+    ) {
+        public static final HostAccessPage ENGLISH = new HostAccessPage(
+            "Host access",
+            genie -> genie + " may ask to reach this computer. A model judges each request against these rules before anything happens.",
+            genie -> genie + " cannot reach this computer.",
+            "Reading the host access…",
+            genie -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.",
+            genie -> "Send " + genie + " to sleep to change these. While it is awake, it keeps the settings it woke with.",
+            "MAY IT REACH THIS COMPUTER?",
+            "Experimental. Never turn this on on a computer with sensitive data. "
+            + "The model that judges reads these rules with every request, and nothing else.",
+            "FOLDERS IT MAY READ",
+            "One per line, such as ~/Documents.",
+            "FOLDERS IT MAY READ AND CHANGE",
+            "It may write files there, and copy what it made there.",
+            "ANYTHING ELSE, IN YOUR OWN WORDS",
+            "Say what must not happen, such as \"never open my tax returns\".",
+            "Undo changes",
+            "Save",
+            "Saving…",
+            "Write these rules into the genie's lamp"
         );
     }
 }
