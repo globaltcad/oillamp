@@ -949,7 +949,22 @@ public record Lang(
         String DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS,
         About LIVES_ON_THIS_BRANCH,
         String ITS_LINE_IS_THE_ONE_WITH_WORDS,
-        String CLICK_TO_LOOK_AT_ITS_LINE
+        String CLICK_TO_LOOK_AT_ITS_LINE,
+        About WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP,
+        String READING_ITS_SETTINGS,
+        About SEND_IT_TO_SLEEP_TO_CHANGE_THESE,
+        String WHEN_IT_SAVES_BY_ITSELF,
+        String AS_IT_WAKES,
+        String AFTER_IT_WENT_TO_SLEEP,
+        String AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB,
+        String AS_IT_ANSWERS_OR_ENDS_A_JOB,
+        String A_JOB_IS_TOLD_WHAT_ITS_LAST_RUNS_SAID_AND_CHANGED,
+        String HOW_LARGE_IT_MAY_GROW,
+        String WHAT_A_MOMENT_HOLDS,
+        About ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS,
+        String ITS_SCHEDULE_STAYS_AS_IT_IS,
+        About A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN,
+        String SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1029,7 +1044,27 @@ public record Lang(
             "Delete this branch. You are told first how many moments only it holds",
             genie -> genie + " lives on this branch.",
             "Its line is the one with words",
-            "Click to look at its line"
+            "Click to look at its line",
+            genie -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.",
+            "Reading its settings…",
+            genie -> "Send " + genie + " to sleep to change these. While it is awake, it keeps what it woke with.",
+            "WHEN IT SAVES BY ITSELF",
+            "As it wakes",
+            "After it went to sleep",
+            "As it begins on a question or a job",
+            "As it answers, or ends a job",
+            "A job is told what its last runs said and changed from "
+            + "what was saved as they ended. Saving by hand works whatever these say.",
+            "HOW LARGE IT MAY GROW",
+            "WHAT A MOMENT HOLDS",
+            genie ->
+                genie + "'s home: the files it made, its notes and its conversations, "
+                + "and the settings of its lamp. Going back brings all of these back together.",
+            "Its schedule stays as it is, and so does everything on this computer outside the genie's lamp.",
+            genie ->
+                "A branch is a line of moments with a home of its own, schedule and settings "
+                + "included, to try something without losing the rest. " + genie + " lives on one at a time.",
+            "Save by hand before something you might want to undo, such as a big change to a project."
         );
 
         /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".

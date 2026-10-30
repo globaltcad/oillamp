@@ -180,7 +180,7 @@ final class HistoryPage {
             : ""
         );
         autosave = history.viewAs(History.Autosave.class, it -> it.autosave().orElse(UNLESS_SAID));
-        settingsLocked = genie.viewAsString(HistoryPage::settingsLocked);
+        settingsLocked = Viewable.of(String.class, genie, words, HistoryPage::settingsLocked);
         zone = genie.viewAs(ZoneId.class, it -> it.schedule().zone());
         lines = Viewable.of(Lines.class, history, zone, History::lines);
         wording = Viewable.of(Wording.class, genie, state, (it, s) ->
@@ -1081,13 +1081,13 @@ final class HistoryPage {
     /// What a lamp's file has unless it says otherwise.
     private static final History.Autosave UNLESS_SAID = new History.Autosave(false, false, true, true);
 
-    private static String settingsLocked(Genie genie) {
+    private static String settingsLocked(Genie genie, Lang.HistoryPage words) {
         if (genie.history().autosave().isEmpty())
             return genie.history().read()
-                ? "Wake " + genie.name() + " once first. Its settings are kept in its lamp, which it gets as it first wakes."
-                : "Reading its settings…";
+                ? words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP().of(genie.name())
+                : words.READING_ITS_SETTINGS();
         if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
-            return "Send " + genie.name() + " to sleep to change these. While it is awake, it keeps what it woke with.";
+            return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE().of(genie.name());
         return "";
     }
 
@@ -1097,7 +1097,7 @@ final class HistoryPage {
             box("fillx, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 12, 0, 0, isWide ? 14 : 0))
             .add("growx, wmin 0",
-                label("WHEN IT SAVES BY ITSELF")
+                label(words.viewAsString(Lang.HistoryPage::WHEN_IT_SAVES_BY_ITSELF))
                 .group(Skin.SECTION)
                 .withStyle(Themed.of(changeable, theme), (themed, it) -> {
                     var can = themed.item();
@@ -1111,25 +1111,24 @@ final class HistoryPage {
                 .add("span 2, growx, wmin 0",
                     ViewPartsUtil.wrapped(theme, settingsLocked, Palette::BRASS, changeable.viewAs(Boolean.class, it -> !it))
                 )
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it wakes", 13, 1f, Palette::TEXT))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AS_IT_WAKES), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::waking, History.Autosave::withWaking, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, "After it went to sleep", 13, 1f, Palette::TEXT))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AFTER_IT_WENT_TO_SLEEP), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::sleeping, History.Autosave::withSleeping, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it begins on a question or a job", 13, 1f, Palette::TEXT))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::beforeRun, History.Autosave::withBeforeRun, changeable))
-                .add("growx, wmin 0", ViewPartsUtil.words(theme, "As it answers, or ends a job", 13, 1f, Palette::TEXT))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, words.viewAsString(Lang.HistoryPage::AS_IT_ANSWERS_OR_ENDS_A_JOB), 13, 1f, Palette::TEXT))
                 .add("top, right", autosaveSwitch(History.Autosave::afterRun, History.Autosave::withAfterRun, changeable))
                 .add("span 2, growx, wmin 0",
                     ViewPartsUtil.note(
                         theme,
-                        "A job is told what its last runs said and changed from "
-                        + "what was saved as they ended. Saving by hand works whatever these say.",
+                        words.viewAsString(Lang.HistoryPage::A_JOB_IS_TOLD_WHAT_ITS_LAST_RUNS_SAID_AND_CHANGED),
                         Val.of(true)
                     )
                 )
             )
             .add("growx, wmin 0, gaptop 8",
-                label("HOW LARGE IT MAY GROW")
+                label(words.viewAsString(Lang.HistoryPage::HOW_LARGE_IT_MAY_GROW))
                 .group(Skin.SECTION)
                 .withStyle(Themed.of(changeable, theme), (themed, it) -> {
                     var can = themed.item();
@@ -1138,16 +1137,15 @@ final class HistoryPage {
                 })
             )
             .add("growx, wmin 0", sizeTile(changeable))
-            .add("growx, wmin 0, gaptop 8", label("WHAT A MOMENT HOLDS").group(Skin.SECTION))
+            .add("growx, wmin 0, gaptop 8", label(words.viewAsString(Lang.HistoryPage::WHAT_A_MOMENT_HOLDS)).group(Skin.SECTION))
             .add("growx, wmin 0",
                 panel("fill, wrap 1, gap 8", "[grow]")
                 .group(Skin.TILE)
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        genie.viewAsString(it ->
-                            it.name() + "'s home: the files it made, its notes and its conversations, "
-                            + "and the settings of its lamp. Going back brings all of these back together."
+                        Viewable.of(String.class, genie, words, (it, page) ->
+                            page.ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS().of(it.name())
                         ),
                         Palette::TEXT,
                         Val.of(true)
@@ -1156,9 +1154,16 @@ final class HistoryPage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Val.of(
-                            "Its schedule stays as it is, and so does everything "
-                            + "on this computer outside the genie's lamp."
+                        words.viewAsString(Lang.HistoryPage::ITS_SCHEDULE_STAYS_AS_IT_IS),
+                        Palette::SUBTEXT,
+                        Val.of(true)
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        theme,
+                        Viewable.of(String.class, genie, words, (it, page) ->
+                            page.A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN().of(it.name())
                         ),
                         Palette::SUBTEXT,
                         Val.of(true)
@@ -1167,21 +1172,7 @@ final class HistoryPage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        genie.viewAsString(it ->
-                            "A branch is a line of moments with a home of its own, schedule and settings "
-                            + "included, to try something without losing the rest. " + it.name() + " lives on one at a time."
-                        ),
-                        Palette::SUBTEXT,
-                        Val.of(true)
-                    )
-                )
-                .add("growx, wmin 0",
-                    ViewPartsUtil.wrapped(
-                        theme,
-                        Val.of(
-                            "Save by hand before something you might want to undo, "
-                            + "such as a big change to a project."
-                        ),
+                        words.viewAsString(Lang.HistoryPage::SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO),
                         Palette::SUBTEXT,
                         Val.of(true)
                     )
