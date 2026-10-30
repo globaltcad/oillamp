@@ -1489,10 +1489,10 @@ public final class GeniesView extends JPanel {
                 )
             )
             .add("growx, wmin 0",
-                button("New conversation").group(Skin.FLAME_BUTTON)
+                button(chatWords.viewAsString(Lang.Chat::NEW_CONVERSATION)).group(Skin.FLAME_BUTTON)
                 .isVisibleIf(Viewable.of(Boolean.class, awake, overview, (on, home) -> on && home))
                 .isEnabledIf(phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY))
-                .withTooltip("Start a new conversation, or select a conversation in the tree to return to it")
+                .withTooltip(chatWords.viewAsString(Lang.Chat::START_A_NEW_CONVERSATION_OR_SELECT_ONE_IN_THE_TREE_TO_RETURN_TO_IT))
                 .onClick(_ -> app.startAfresh(genie.get().id()))
             )
             .add("growx, wmin 0",
@@ -1500,9 +1500,9 @@ public final class GeniesView extends JPanel {
                 .isVisibleIf(awake.viewAs(Boolean.class, it -> !it))
                 .add("growx, wmin 0",
                     waving(
-                        label(genie.viewAsString(it -> switch (it.phase()) {
-                            case WAKING -> "Waking " + it.name() + ": " + it.activity() + "…";
-                            default -> it.name() + " is asleep. Its sandbox is off, its home and conversation are kept.";
+                        label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
+                            case WAKING -> words.WAKING().of(it.name(), it.activity());
+                            default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF().of(it.name());
                         }))
                         .group(Skin.SUBTITLE),
                         genie
@@ -1512,13 +1512,13 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        genie.viewAsString(it -> it.name() + " could not wake: " + it.activity()),
+                        Viewable.of(String.class, genie, chatWords, (it, words) -> words.COULD_NOT_WAKE_BECAUSE().of(it.name(), it.activity())),
                         Palette::TROUBLE,
                         phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
                     )
                 )
                 .add(
-                    button(genie.viewAsString(it -> it.phase() == Genie.Phase.BROKEN ? "Try again" : "✦  Wake"))
+                    button(Viewable.of(String.class, phase, chatWords, (it, words) -> it == Genie.Phase.BROKEN ? words.TRY_AGAIN() : "✦  " + words.WAKE()))
                     .group(Skin.FLAME_BUTTON).isVisibleIf(canWake)
                     .onClick(_ -> app.wake(genie.get().id()))
                 )
