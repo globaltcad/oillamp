@@ -1294,10 +1294,11 @@ final class HistoryPage {
     /// Asks what to remember the moment by, then saves; leaving the words out is fine.
     void save(Component parent) {
         Genie shown = genie.get();
+        Lang.HistoryPage page = words.get();
         Object answer = JOptionPane.showInputDialog(
             parent,
-            "What should this moment be remembered by? You may leave it empty.",
-            "Save " + shown.name() + " as it is now",
+            page.WHAT_SHOULD_THIS_MOMENT_BE_REMEMBERED_BY(),
+            page.SAVE_AS_IT_IS_NOW().of(shown.name()),
             JOptionPane.PLAIN_MESSAGE,
             null,
             null,
@@ -1310,15 +1311,15 @@ final class HistoryPage {
     /// then starts it at `moment`, or at the newest moment of the branch the genie lives on.
     private void startBranch(Component parent, String moment) {
         Genie shown = genie.get();
-        String rules = "Lowercase letters, digits, -, _ and ., such as rust-rewrite.";
+        Lang.HistoryPage page = words.get();
         String name = "";
         String problem = "";
         while (true) {
             Object answer = JOptionPane.showInputDialog(
                 parent,
-                (problem.isEmpty() ? "" : problem + "\n\n") + "What should the new branch be called? " + rules + "\n"
-                + shown.name() + " stays on " + shown.history().lampBranch() + "; you can move it later, while it sleeps.",
-                moment.isEmpty() ? "Start a branch from the newest moment" : "Start a branch from this moment",
+                (problem.isEmpty() ? "" : problem + "\n\n")
+                + page.WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED().of(shown.name(), shown.history().lampBranch()),
+                moment.isEmpty() ? page.START_A_BRANCH_FROM_THE_NEWEST_MOMENT() : page.START_A_BRANCH_FROM_THIS_MOMENT(),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 null,
@@ -1338,14 +1339,14 @@ final class HistoryPage {
     private void confirmGoBack(History.Moment moment) {
         Genie shown = genie.get();
         String when = History.when(moment.at(), shown.schedule().zone(), state.get().localNow());
+        Lang.HistoryPage page = words.get();
         ConfirmAnswer answer =
             UI.confirmation(
-                "Bring " + shown.name() + " back to how it was " + when + "?\n"
-                + "Its files and conversations become what they were then. How it is now is kept, so you can return."
-                + (shown.phase().isAwake() ? "\n" + shown.name() + " sleeps while it goes back, and wakes again after." : "")
+                page.BRING_IT_BACK_TO_HOW_IT_WAS().of(shown.name(), when)
+                + (shown.phase().isAwake() ? "\n" + page.SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER().of(shown.name()) : "")
             )
-            .titled("Go back in time")
-            .yesOption("Go back").noOption("Stay").cancelOption("")
+            .titled(page.GO_BACK_IN_TIME())
+            .yesOption(page.GO_BACK()).noOption(page.STAY()).cancelOption("")
             .show();
         if (answer == ConfirmAnswer.YES) app.goBack(shown.id(), moment.id());
     }
@@ -1354,15 +1355,11 @@ final class HistoryPage {
         Genie shown = genie.get();
         String branch = shown.history().shownLine();
         String from = shown.history().lampBranch();
+        Lang.HistoryPage page = words.get();
         ConfirmAnswer answer =
-            UI.confirmation(
-                "Move " + shown.name() + " to " + branch + "?\n"
-                + "Its files and conversations become those of the newest moment on " + branch
-                + ", and every save goes to " + branch + " from now on.\n"
-                + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost."
-            )
-            .titled("Move to another branch")
-            .yesOption("Move").noOption("Stay").cancelOption("")
+            UI.confirmation(page.MOVE_IT_TO_ANOTHER_BRANCH().of(shown.name(), branch, from))
+            .titled(page.MOVE_TO_ANOTHER_BRANCH())
+            .yesOption(page.MOVE()).noOption(page.STAY()).cancelOption("")
             .show();
         if (answer == ConfirmAnswer.YES) app.switchBranch(shown.id(), branch);
     }
