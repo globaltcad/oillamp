@@ -102,7 +102,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             var chatted = app.state().get().find(jafar).orElseThrow().history().moments().first()
             var now = LocalDateTime.ofInstant(NOW, BERLIN)
             app.state().get().find(jafar).orElseThrow().history().title(chatted, app.state().get().find(jafar).orElseThrow(), now, Lang.ENGLISH) == 'Talked: Plot the sales figures'
-            chatted.detail() == 'Saved once the chat had gone quiet'
+            chatted.detail(Lang.ENGLISH) == 'Saved once the chat had gone quiet'
 
         when: 'the user saves with nothing changed'
             SwingUtilities.invokeAndWait { app.save(jafar, 'before the big refactor') }
@@ -236,7 +236,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'the page shows that a new lamp saves around its runs only'
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP && app.state().get().find(jafar).orElseThrow().history().autosave().isPresent() }
             app.state().get().find(jafar).orElseThrow().history().autosave().get() == new History.Autosave(false, false, true, true)
-            app.state().get().find(jafar).orElseThrow().history().autosave().get().when() == 'answers'
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'answers'
 
         when: 'the user switches on saving as it wakes'
             SwingUtilities.invokeAndWait { app.autosave(jafar, app.state().get().find(jafar).orElseThrow().history().autosave().get().withWaking(true)) }
@@ -244,7 +244,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'the lamp\'s file has it'
             waitUntil { Lamp.at(app.lampOf(jafar)).autosave().startup() }
             waitUntil { app.state().get().find(jafar).orElseThrow().history().autosave().get().waking() }
-            app.state().get().find(jafar).orElseThrow().history().autosave().get().when() == 'wakes or answers'
+            app.state().get().find(jafar).orElseThrow().history().autosave().get().when(Lang.ENGLISH) == 'wakes or answers'
             app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
 
         when: 'the genie wakes again'
