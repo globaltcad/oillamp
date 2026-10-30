@@ -4,6 +4,7 @@ import dev.gui.Genies
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.Lang
 import dev.gui.model.JobDraft
 import dev.gui.model.Schedule
 import dev.gui.model.Settings
@@ -108,7 +109,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs().size() == 1 && app.state().get().find(jafar).orElseThrow().schedule().draft().isEmpty() }
             with(app.state().get().find(jafar).orElseThrow().schedule().jobs().first()) {
                 id() == 'job-1'
-                repeats().get().describe() == 'Every weekday at 09:00'
+                repeats().get().describe(Lang.ENGLISH) == 'Every weekday at 09:00'
                 prompt() == 'Check the build'
                 upcoming().size() == 5
             }
@@ -172,7 +173,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
 
         then:
             waitUntil { app.state().get().find(jafar).orElseThrow().schedule().jobs()*.id() == ['job-2'] && app.state().get().find(jafar).orElseThrow().schedule().draft().isEmpty() }
-            app.state().get().find(jafar).orElseThrow().schedule().jobs().first().repeats().get().describe() == 'Every day at 07:00'
+            app.state().get().find(jafar).orElseThrow().schedule().jobs().first().repeats().get().describe(Lang.ENGLISH) == 'Every day at 07:00'
     }
 
     def 'A job that wakes the genie shows as running, then as a run with what the genie said'() {

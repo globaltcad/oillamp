@@ -65,8 +65,18 @@ public record Lang(
         Dates.ENGLISH
     );
 
+    /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
+    private static String listedInEnglish(List<String> names) {
+        return names.size() < 2
+            ? String.join("", names)
+            : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
+    }
+
     /// A text that says how many there are of something.
     public interface Counted { String of(int count); }
+
+    /// Something that happens every so many `hours`, at a `minute` past the hour.
+    public interface EveryHours { String of(int hours, String minute); }
 
     /// A text about something named, such as a genie or a window it shows.
     public interface About { String of(String what); }
@@ -837,7 +847,17 @@ public record Lang(
         String THE_MONTH_AFTER,
         OfMonth MONTH_AND_YEAR,
         OfWeekday WEEKDAY_IN_TWO_LETTERS,
-        OfWeekday WEEKDAY
+        OfWeekday WEEKDAY,
+        Listed DAYS_LISTED,
+        String EVERY_HOUR_ON_THE_HOUR,
+        About EVERY_HOUR_AT_PAST,
+        About EVERY_DAY_AT,
+        About EVERY_WEEKDAY_AT,
+        DayAndTime EVERY_DAYS_AT,
+        Counted EVERY_MINUTES,
+        Counted EVERY_HOURS_ON_THE_HOUR,
+        EveryHours EVERY_HOURS_AT_PAST,
+        About ON_THE_CRON_SCHEDULE
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -921,7 +941,17 @@ public record Lang(
             "The month after",
             month -> month.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.getYear(),
             day -> day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2),
-            day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+            day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH),
+            Lang::listedInEnglish,
+            "Every hour, on the hour",
+            minute -> "Every hour at " + minute + " past",
+            time -> "Every day at " + time,
+            time -> "Every weekday at " + time,
+            (days, time) -> "Every " + days + " at " + time,
+            count -> "Every " + count + " minutes",
+            count -> "Every " + count + " hours, on the hour",
+            (count, minute) -> "Every " + count + " hours, at " + minute + " past",
+            cron -> "On the cron schedule “" + cron + "”"
         );
     }
 
@@ -1046,7 +1076,7 @@ public record Lang(
             "How it was before is kept, so you can return to it.",
             "Undo",
             "Go back to how it was before",
-            HistoryPage::listed,
+            Lang::listedInEnglish,
             "then",
             genie -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.",
             (branch, when) -> "Reset " + branch + " to how it was " + when + "?",
@@ -1086,7 +1116,7 @@ public record Lang(
             genie -> "(" + genie + " lives here)",
             count -> "and " + count + " more",
             "Click a line to show it here",
-            branches -> listed(branches) + (branches.size() == 1 ? " stands here" : " stand here"),
+            branches -> listedInEnglish(branches) + (branches.size() == 1 ? " stands here" : " stand here"),
             "Click again to close",
             "Click to go back to this moment, start a branch from it, or open its conversation",
             "Go back to this moment…",
@@ -1158,13 +1188,6 @@ public record Lang(
             "Move to another branch",
             "Move"
         );
-
-        /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
-        private static String listed(List<String> names) {
-            return names.size() < 2
-                ? String.join("", names)
-                : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
-        }
     }
 
     /// Days and spans of time, as the pages say them; [DateWordingUtil] says which of them fits.

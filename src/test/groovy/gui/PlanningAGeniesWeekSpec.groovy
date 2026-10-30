@@ -48,7 +48,7 @@ class PlanningAGeniesWeekSpec extends Specification {
         """
         expect: 'the way of repeating in the row below gives that cron expression and those words, and back'
             RECURRENCES[picked].cron() == cron
-            RECURRENCES[picked].describe() == words
+            RECURRENCES[picked].describe(Lang.ENGLISH) == words
             Recurrence.of(cron) == RECURRENCES[picked]
 
         where:
@@ -70,7 +70,7 @@ class PlanningAGeniesWeekSpec extends Specification {
             Recurrence.of('0 9 * * mon-fri') == new Recurrence.Weekdays(LocalTime.of(9, 0))
             Recurrence.of('0 9 * * 0-6') == new Recurrence.Daily(LocalTime.of(9, 0))
             Recurrence.of('@hourly') == new Recurrence.Hourly(0)
-            Recurrence.of('*/30 * * * *').describe() == 'Every 30 minutes'
+            Recurrence.of('*/30 * * * *').describe(Lang.ENGLISH) == 'Every 30 minutes'
     }
 
     def 'The editor says what stands in the way of adding a job, and what the job comes to'() {

@@ -111,7 +111,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
             for (Instant time : job.upcoming())
                 byDay.computeIfAbsent(LocalDateTime.ofInstant(time, schedule.zone()).toLocalDate(), _ -> new ArrayList<>())
                      .add(LocalDateTime.ofInstant(time, schedule.zone()));
-            String how = job.repeats().map(Recurrence::describe).orElse("Once");
+            String how = job.repeats().map(it -> it.describe(lang)).orElse("Once");
             for (List<LocalDateTime> times : byDay.values()) {
                 if (times.size() >= FOLD_FROM) {
                     LocalDateTime first = times.getFirst();
