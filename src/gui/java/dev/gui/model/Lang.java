@@ -91,6 +91,9 @@ public record Lang(
     /// A job that runs once: on a `day`, at a `time`, which is `fromNow` so far off.
     public interface OnceAt { String of(String day, String time, String fromNow); }
 
+    /// A computer's `memory`, and its graphics `card`, which has `cardMemory` of its own.
+    public interface Computer { String of(String memory, String card, String cardMemory); }
+
     /// How many `times` a job runs on a day, from the `first` to the `last`.
     public interface TimesFromTo { String of(int times, String first, String last); }
 
@@ -712,7 +715,23 @@ public record Lang(
         String NAME_THE_MODEL_AS_THE_MODEL_SERVER_LISTS_IT,
         String THE_ADDRESS_SHOULD_LOOK_LIKE_AN_ADDRESS_OF_A_MODEL_SERVER,
         String THE_ADDRESS_SHOULD_BE_A_SCHEME_A_HOST_AND_PERHAPS_A_PORT_AND_A_PATH,
-        String THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS
+        String THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS,
+        About INSTALL_OLLAMA_AND_GET,
+        About GET,
+        About USE_MODEL,
+        String GENIES_IS_LOOKING_WHETHER_OLLAMA_IS_ON_THIS_COMPUTER,
+        About OLLAMA_RUNS_ON_THIS_COMPUTER,
+        String OLLAMA_IS_INSTALLED_GENIES_STARTS_IT_WHEN_THE_GENIES_NEED_IT,
+        String OLLAMA_IS_NOT_INSTALLED_YET_GENIES_INSTALLS_IT_FOR_YOU,
+        String GENIES_COULD_NOT_READ_HOW_MUCH_MEMORY_THIS_COMPUTER_HAS,
+        About MEMORY_AND_NO_GRAPHICS_CARD_A_MODEL_CAN_RUN_ON,
+        Computer MEMORY_AND_THE_GRAPHICS_CARD,
+        About ABOUT_SO_MUCH_TO_DOWNLOAD,
+        String ITS_NAME_DOES_NOT_SAY_HOW_LARGE_IT_IS,
+        String IT_RUNS_ON_THE_GRAPHICS_CARD_SO_IT_ANSWERS_QUICKLY,
+        String IT_RUNS_ON_THE_PROCESSOR_AT_A_FAIR_PACE,
+        String IT_RUNS_ON_THE_PROCESSOR_SO_IT_ANSWERS_SLOWLY,
+        About RUNNING_IT_NEEDS_MORE_MEMORY_THAN_THIS_COMPUTER_CAN_SPARE
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -783,7 +802,24 @@ public record Lang(
             "Name the model, as the model server lists it; Look up shows its list.",
             "The address should look like https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
             "The address should be a scheme, a host, and perhaps a port and a path, such as https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
-            "The key is sent to the server, so it must use https:// (http:// only on this computer)."
+            "The key is sent to the server, so it must use https:// (http:// only on this computer).",
+            wanted -> "Install Ollama and get " + wanted,
+            wanted -> "Get " + wanted,
+            wanted -> "Use " + wanted,
+            "Genies is looking whether Ollama is on this computer…",
+            version -> "Ollama " + version + " runs on this computer.",
+            "Ollama is installed; Genies starts it when the genies need it.",
+            "Ollama is not installed yet. Genies installs it for you, for you alone: no password, "
+            + "nothing changes outside its own folder. It is a download of about 1.4 GB.",
+            "Genies could not read how much memory this computer has.",
+            memory -> memory + " of memory, and no graphics card a model can run on.",
+            (memory, card, cardMemory) -> memory + " of memory, and the graphics card " + card + " with " + cardMemory + ".",
+            size -> "About " + size + " to download.",
+            "Its name does not say how large it is, so Genies cannot tell how well it runs here.",
+            "It runs on the graphics card, so it answers quickly.",
+            "It runs on the processor, at a fair pace.",
+            "It runs on the processor, so it answers slowly.",
+            need -> "Running, it needs about " + need + " of memory, more than this computer can spare: it may not load, or be very slow."
         );
     }
 

@@ -303,17 +303,17 @@ final class SettingsPage {
                         .add(FIELD,
                             ViewPartsUtil.wrapped(
                                 theme,
-                                Viewable.of(String.class, ollama, words, (it, page) ->
-                                    it.step() == OllamaSetup.Step.LOOKING
-                                        ? page.GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS()
-                                        : it.found().hardware().words()
+                                state.viewAsString(it ->
+                                    it.ollama().step() == OllamaSetup.Step.LOOKING
+                                        ? it.lang().SETTINGS_PAGE().GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS()
+                                        : it.ollama().found().hardware().words(it.lang())
                                 ),
                                 Palette::TEXT,
                                 Val.of(true)
                             )
                         )
                         .add(LABEL, label(words.viewAsString(Lang.SettingsPage::OLLAMA)))
-                        .add(FIELD, ViewPartsUtil.wrapped(theme, ollama.viewAsString(OllamaSetup::words), Palette::TEXT, Val.of(true)))
+                        .add(FIELD, ViewPartsUtil.wrapped(theme, state.viewAsString(it -> it.ollama().words(it.lang())), Palette::TEXT, Val.of(true)))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -328,7 +328,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    ollama.viewAsString(it -> it.found().hardware().words(it.wanted())),
+                                    state.viewAsString(it -> it.ollama().found().hardware().words(it.ollama().wanted(), it.lang())),
                                     Palette::TEXT,
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())
                                 )
@@ -345,7 +345,7 @@ final class SettingsPage {
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 6, hidemode 3")
                             .add(
-                                button(ollama.viewAsString(OllamaSetup::todo)).group(Skin.FLAME_BUTTON)
+                                button(state.viewAsString(it -> it.ollama().todo(it.lang()))).group(Skin.FLAME_BUTTON)
                                 .isVisibleIf(state.viewAs(Boolean.class, it ->
                                     !it.ollama().step().isBusy() &&
                                     it.ollama().step() != OllamaSetup.Step.LOOKING &&
