@@ -158,32 +158,33 @@ public record Settings(Place place, EdenAi edenAi, Elsewhere elsewhere, OnThisMa
         return keyFrom(environmentKey).filter(key -> !key.equals(NO_KEY_NEEDED));
     }
 
-    /// Why a genie could not reach its model with these settings, or nothing when it can.
-    public Optional<String> problem(Optional<String> environmentKey) {
+    /// Why a genie could not reach its model with these settings, in `words`, or nothing when it
+    /// can.
+    public Optional<String> problem(Optional<String> environmentKey, Lang.SettingsPage words) {
         if (!model().isBlank() && !model().strip().matches(MODEL_NAME))
-            return Optional.of("A model's name has no spaces and only plain letters, digits and signs, such as azure/gpt-6.1-sol.");
+            return Optional.of(words.A_MODELS_NAME_HAS_NO_SPACES_AND_ONLY_PLAIN_LETTERS_DIGITS_AND_SIGNS());
         return switch (place) {
             case EDEN_AI -> {
-                if (edenAi.model().isBlank()) yield Optional.of("Name the model the genies should use; Look up shows Eden AI's list.");
+                if (edenAi.model().isBlank()) yield Optional.of(words.NAME_THE_MODEL_THE_GENIES_SHOULD_USE_LOOK_UP_SHOWS_EDEN_AIS_LIST());
                 if (keyFrom(environmentKey).isPresent()) yield Optional.empty();
                 yield Optional.of(edenAi.keySource() == KeySource.ENTERED
-                        ? "Enter a key, or use the one in " + KEY_VARIABLE + "."
-                        : KEY_VARIABLE + " is not set where Genies was started. Enter a key in the settings, or set it and start Genies again.");
+                        ? words.ENTER_A_KEY_OR_USE_THE_ONE_IN().of(KEY_VARIABLE)
+                        : words.IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS().of(KEY_VARIABLE));
             }
             case ELSEWHERE -> {
                 if (elsewhere.address().isBlank())
-                    yield Optional.of("Enter the server's address, such as https://ollama.example.com/v1.");
-                Optional<String> wrongAddress = serviceProblem(elsewhere.address());
+                    yield Optional.of(words.ENTER_THE_SERVERS_ADDRESS());
+                Optional<String> wrongAddress = serviceProblem(elsewhere.address(), words);
                 if (wrongAddress.isPresent()) yield wrongAddress;
-                if (elsewhere.model().isBlank()) yield Optional.of("Name the model, as the server lists it; Look up shows its list.");
+                if (elsewhere.model().isBlank()) yield Optional.of(words.NAME_THE_MODEL_AS_THE_SERVER_LISTS_IT());
                 yield Optional.empty();
             }
             case THIS_MACHINE -> {
-                Optional<String> wrongAddress = serviceProblem(local.address());
+                Optional<String> wrongAddress = serviceProblem(local.address(), words);
                 if (wrongAddress.isPresent()) yield wrongAddress;
                 if (!isOnThisMachine(local.address()))
-                    yield Optional.of("A model server on this computer is reached at 127.0.0.1 or localhost, such as http://127.0.0.1:11434/v1.");
-                if (local.model().isBlank()) yield Optional.of("Name the model, as the model server lists it; Look up shows its list.");
+                    yield Optional.of(words.A_MODEL_SERVER_ON_THIS_COMPUTER_IS_REACHED_AT_127_0_0_1_OR_LOCALHOST());
+                if (local.model().isBlank()) yield Optional.of(words.NAME_THE_MODEL_AS_THE_MODEL_SERVER_LISTS_IT());
                 yield Optional.empty();
             }
         };
@@ -192,21 +193,21 @@ public record Settings(Place place, EdenAi edenAi, Elsewhere elsewhere, OnThisMa
     /// The same rules the lamp's engine applies: the key travels to this service, so it must be
     /// `https`, except on this machine's loopback; a path is allowed, for an API that lives under
     /// one; a user, query or fragment is not.
-    static Optional<String> serviceProblem(String text) {
+    static Optional<String> serviceProblem(String text, Lang.SettingsPage words) {
         URI uri;
         try {
             uri = new URI(text.strip());
         } catch (URISyntaxException e) {
-            return Optional.of("The address should look like https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.");
+            return Optional.of(words.THE_ADDRESS_SHOULD_LOOK_LIKE_AN_ADDRESS_OF_A_MODEL_SERVER());
         }
         String host = Optional.ofNullable(uri.getHost()).orElse("");
         String scheme = Optional.ofNullable(uri.getScheme()).orElse("");
         if (host.isEmpty() || !scheme.matches("https?") || uri.getUserInfo() != null
                 || uri.getQuery() != null || uri.getFragment() != null
                 || !Optional.ofNullable(uri.getRawPath()).orElse("").matches("(/[A-Za-z0-9._~-]+)*/?"))
-            return Optional.of("The address should be a scheme, a host, and perhaps a port and a path, such as https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.");
+            return Optional.of(words.THE_ADDRESS_SHOULD_BE_A_SCHEME_A_HOST_AND_PERHAPS_A_PORT_AND_A_PATH());
         if (scheme.equals("http") && !isLoopback(host))
-            return Optional.of("The key is sent to the server, so it must use https:// (http:// only on this computer).");
+            return Optional.of(words.THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS());
         return Optional.empty();
     }
 

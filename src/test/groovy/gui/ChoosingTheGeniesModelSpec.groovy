@@ -6,6 +6,7 @@ import dev.gui.genie.LampLighter
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.Lang
 import dev.gui.model.Settings
 import dev.gui.model.Transcript
 import dev.gui.pi.PiEvent
@@ -323,7 +324,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             wakes with it.
         """
         expect: 'the settings point at the name the row below describes, or not'
-            Settings.defaults().withModel(NAMES[name]).problem(Optional.of('sk-key')).orElse('').contains("A model's name has no spaces") == pointedOut
+            Settings.defaults().withModel(NAMES[name]).problem(Optional.of('sk-key'), Lang.ENGLISH.SETTINGS_PAGE()).orElse('').contains("A model's name has no spaces") == pointedOut
 
         where:
             name                                       || pointedOut
