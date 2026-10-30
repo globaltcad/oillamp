@@ -136,7 +136,7 @@ final class ActionsPage {
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     theme,
-                    Viewable.of(String.class, name, words, (it, page) -> page.WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE().of(it)),
+                    Viewable.of(String.class, name, words, (it, page) -> page.WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE(it)),
                     Palette::SUBTEXT,
                     Val.of(true)
                 )
@@ -226,7 +226,7 @@ final class ActionsPage {
             SignSvgUtil.NEW,
             Palette::TEXT,
             words.viewAsString(Lang.ActionsPage::NEW_CONVERSATION),
-            Viewable.of(String.class, name, words, (it, page) -> page.START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT().of(it)),
+            Viewable.of(String.class, name, words, (it, page) -> page.START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT(it)),
             big(button(words.viewAsString(Lang.ActionsPage::START_A_NEW_CONVERSATION)).group(Skin.QUIET_BUTTON))
             .isEnabledIf(idle)
             .onClick(_ -> app.startAfresh(selected()))
@@ -238,7 +238,7 @@ final class ActionsPage {
             SignSvgUtil.HISTORY,
             Palette::TEXT,
             words.viewAsString(Lang.ActionsPage::SAVE_NOW),
-            Viewable.of(String.class, name, words, (it, page) -> page.SAVE_ITS_HOME_AS_IT_IS_NOW().of(it)),
+            Viewable.of(String.class, name, words, (it, page) -> page.SAVE_ITS_HOME_AS_IT_IS_NOW(it)),
             big(button(words.viewAsString(Lang.ActionsPage::SAVE_NOW_ELLIPSIS)).group(Skin.QUIET_BUTTON))
             .isEnabledIf(genie.viewAs(Boolean.class, it -> it.history().busy().isEmpty()))
             .onClick(_ -> saveNow.run())
@@ -252,12 +252,12 @@ final class ActionsPage {
             Palette::TEXT,
             Viewable.of(String.class, phase, words, (it, page) -> it.isAwake() ? page.SLEEP() : page.WAKE()),
             Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
-                case ASLEEP -> page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX().of(it.name());
-                case WAKING -> page.IS_WAKING().of(it.name());
-                case BROKEN -> page.DID_NOT_WAKE_ITS_HOME_IS_KEPT().of(it.name());
+                case ASLEEP -> page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX(it.name());
+                case WAKING -> page.IS_WAKING(it.name());
+                case BROKEN -> page.DID_NOT_WAKE_ITS_HOME_IS_KEPT(it.name());
                 default -> it.fromElsewhere()
-                    ? page.END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO().of(it.name())
-                    : page.END_ITS_SANDBOX().of(it.name());
+                    ? page.END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO(it.name())
+                    : page.END_ITS_SANDBOX(it.name());
             }),
             big(button(Viewable.of(String.class, phase, words, (it, page) -> switch (it) {
                 case ASLEEP -> page.WAKE();
@@ -286,12 +286,12 @@ final class ActionsPage {
             Viewable.of(String.class, genie, words, (it, page) -> it.fromElsewhere() ? page.REMOVE() : page.DELETE()),
             Viewable.of(String.class, genie, words, (it, page) ->
                 it.fromElsewhere()
-                    ? page.REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE().of(it.name())
-                    : page.DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST().of(it.name())
+                    ? page.REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE(it.name())
+                    : page.DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST(it.name())
             ),
             big(
                 button(Viewable.of(String.class, genie, words, (it, page) ->
-                    it.fromElsewhere() ? page.REMOVE_FROM_GENIES_ELLIPSIS() : page.DELETE_GENIE_ELLIPSIS().of(it.name())
+                    it.fromElsewhere() ? page.REMOVE_FROM_GENIES_ELLIPSIS() : page.DELETE_GENIE_ELLIPSIS(it.name())
                 ))
                 .group(Skin.QUIET_BUTTON)
             )
