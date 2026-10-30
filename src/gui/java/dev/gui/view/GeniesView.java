@@ -904,7 +904,7 @@ public final class GeniesView extends JPanel {
             .add("cell 3 0",
                 box("ins 0, gap 10, hidemode 3, aligny center")
                 .add(
-                    label(Viewable.of(String.class, genie, headerWords, (it, words) -> words.TOKENS().of(it.tokens())))
+                    label(Viewable.of(String.class, genie, headerWords, (it, words) -> words.TOKENS(it.tokens())))
                     .group(Skin.META)
                     .isVisibleIf(wide)
                     .withTooltip(headerWords.viewAsString(Lang.Header::TOKENS_THE_MODEL_COUNTED_FOR_THIS_GENIE_SINCE_GENIES_STARTED))
@@ -954,7 +954,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, state, request, (s, what) -> s.lang().HEADER().ASKS_YOU_TO_ALLOW().of(s.genie().name(), what)),
+                        Viewable.of(String.class, state, request, (s, what) -> s.lang().HEADER().ASKS_YOU_TO_ALLOW(s.genie().name(), what)),
                         Palette::TEXT,
                         Val.of(true)
                     )
