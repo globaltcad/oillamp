@@ -1084,7 +1084,7 @@ final class HistoryPage {
     // ─── beside the moments: when it saves, how large it grows, and what a moment holds ────
 
     /// What a lamp's file has unless it says otherwise.
-    private static final History.Autosave UNLESS_SAID = new History.Autosave(false, false, true, true);
+    private static final History.Autosave UNLESS_SAID = new History.Autosave(false, false, true, true, 10);
 
     private static String settingsLocked(Genie genie, Lang.HistoryPage words) {
         if (genie.history().autosave().isEmpty())
