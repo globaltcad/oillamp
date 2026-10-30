@@ -19,6 +19,7 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.Val;
@@ -167,16 +168,22 @@ final class ViewPartsUtil {
 
     /// A switch of two parts, No and Yes, as the one between a genie's pages in the header. The
     /// chosen part is lit; both are greyed while it cannot be changed.
-    static UIForAnySwing<?, ?> yesOrNo(Val<Theme> theme, Val<Boolean> yes, Val<Boolean> changeable, Consumer<Boolean> choose) {
-        return eitherOr(theme, "No", "Yes", yes, changeable, choose);
+    static UIForAnySwing<?, ?> yesOrNo(
+        final Val<Theme> theme,
+        final Val<Lang.Parts> words,
+        final Val<Boolean> yes,
+        final Val<Boolean> changeable,
+        final Consumer<Boolean> choose
+    ) {
+        return eitherOr(theme, words.viewAsString(Lang.Parts::NO), words.viewAsString(Lang.Parts::YES), yes, changeable, choose);
     }
 
     /// A switch of two parts, `first` and `second`, such as No and Yes: `second` is chosen while
     /// `chosen` holds, and choosing a part says whether it was the second.
     static UIForAnySwing<?, ?> eitherOr(
         final Val<Theme> theme,
-        final String first,
-        final String second,
+        final Val<String> first,
+        final Val<String> second,
         final Val<Boolean> chosen,
         final Val<Boolean> changeable,
         final Consumer<Boolean> choose
@@ -195,7 +202,7 @@ final class ViewPartsUtil {
     private record Part(boolean chosen, boolean changeable) {}
 
     /// One part of a switch: lit while chosen, and greyed, chosen or not, while it cannot be changed.
-    private static UIForButton<JButton> part(Val<Theme> theme, String text, Val<Boolean> chosen, Val<Boolean> changeable, Runnable choose) {
+    private static UIForButton<JButton> part(Val<Theme> theme, Val<String> text, Val<Boolean> chosen, Val<Boolean> changeable, Runnable choose) {
         Val<Part> looks = Viewable.of(Part.class, chosen, changeable, Part::new);
         return
             button(text).group(Skin.ICON_BUTTON)
