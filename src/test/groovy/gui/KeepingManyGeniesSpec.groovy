@@ -3,6 +3,7 @@ package gui
 import dev.gui.model.Fold
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.Lang
 import dev.gui.model.Settings
 import spock.lang.Specification
 import sprouts.Tuple
@@ -220,10 +221,10 @@ class KeepingManyGeniesSpec extends Specification {
 
         then:
             own.keyFrom(Optional.of('sk-env')) == Optional.of('sk-mine')
-            own.problem(Optional.of('sk-env')).isEmpty()
+            own.problem(Optional.of('sk-env'), Lang.ENGLISH.SETTINGS_PAGE()).isEmpty()
 
         and: 'an entered key that is empty is a problem, even with one in the environment'
-            own.withEdenAi(own.edenAi().withKey('')).problem(Optional.of('sk-env')).get().contains('Enter a key')
+            own.withEdenAi(own.edenAi().withKey('')).problem(Optional.of('sk-env'), Lang.ENGLISH.SETTINGS_PAGE()).get().contains('Enter a key')
     }
 
     def 'A model server elsewhere is reached at its address, with its key if it asks for one'() {
@@ -242,17 +243,17 @@ class KeepingManyGeniesSpec extends Specification {
             remote.model() == 'qwen2.5:7b'
             remote.keyFrom(Optional.empty()) == Optional.of('sk-server')
             remote.listingKeyFrom(Optional.empty()) == Optional.of('sk-server')
-            remote.problem(Optional.empty()).isEmpty()
+            remote.problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).isEmpty()
 
         and: 'without a key, a stand-in goes with its requests, and nothing with the question for its models'
             var open = remote.withElsewhere(remote.elsewhere().withKey(''))
             open.keyFrom(Optional.empty()).isPresent()
             open.listingKeyFrom(Optional.empty()).isEmpty()
-            open.problem(Optional.empty()).isEmpty()
+            open.problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).isEmpty()
 
         and: 'without an address or a model, it is not ready'
-            Settings.defaults().withPlace(Settings.Place.ELSEWHERE).problem(Optional.empty()).get().contains('Enter the server\'s address')
-            remote.withModel('').problem(Optional.empty()).get().contains('Name the model')
+            Settings.defaults().withPlace(Settings.Place.ELSEWHERE).problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).get().contains('Enter the server\'s address')
+            remote.withModel('').problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).get().contains('Name the model')
     }
 
     def 'A server the key must not be sent to is refused in the settings already'() {
@@ -262,7 +263,7 @@ class KeepingManyGeniesSpec extends Specification {
             while the user types, not when a genie fails to wake.
         """
         expect:
-            elsewhereAt(address).problem(Optional.empty()).isPresent() == refused
+            elsewhereAt(address).problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).isPresent() == refused
 
         where:
             address                              || refused
@@ -286,15 +287,15 @@ class KeepingManyGeniesSpec extends Specification {
             var local = Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
 
         expect: 'with a model named, it is ready, without any key'
-            local.withModel('qwen2.5:7b').problem(Optional.empty()).isEmpty()
+            local.withModel('qwen2.5:7b').problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).isEmpty()
             local.keyFrom(Optional.empty()).isPresent()
             local.listingKeyFrom(Optional.of('sk-env')).isEmpty()
             local.withModel('qwen2.5:7b').service() == 'http://127.0.0.1:11434/v1'
 
         and: 'without a model, or somewhere else, it is not'
-            local.problem(Optional.empty()).get().contains('Name the model')
+            local.problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).get().contains('Name the model')
             local.withModel('m').withLocal(new Settings.OnThisMachine('https://llm.example.com/v1', 'm'))
-                 .problem(Optional.empty()).get().contains('on this computer')
+                 .problem(Optional.empty(), Lang.ENGLISH.SETTINGS_PAGE()).get().contains('on this computer')
     }
 
     def 'Switching between the places loses none of their settings'() {
