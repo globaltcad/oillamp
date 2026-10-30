@@ -1,0 +1,733 @@
+package dev.gui.genie;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
+
+import dev.gui.desktop.Desktop;
+import dev.gui.model.Conversation;
+import dev.gui.model.Conversations;
+import dev.gui.model.Genie;
+import dev.gui.model.Handout;
+import dev.gui.model.History;
+import dev.gui.model.Settings;
+import dev.gui.pi.PiEvent;
+import dev.lamp.Lamp;
+import dev.lamp.LampEvent;
+import dev.lamp.LampAgentProgress;
+import dev.lamp.LampConversation;
+import dev.lamp.LampDirectory;
+import dev.lamp.LampFailedException;
+import dev.lamp.LampPrompt;
+import dev.lamp.LampRun;
+import dev.lamp.LampRunOutcome;
+
+import sprouts.Tuple;
+
+/// Keeps one genie alive: lights its lamp, asks its agent through the lamp's session, and passes
+/// files.
+///
+/// The genie's agent is the pi that the lamp's session holds. Everything goes through the Lamp
+/// API: a message is sent with [Lamp#send], the answer comes back as the session's run events,
+/// and the conversations are read from the lamp with [Lamp#conversations], awake or asleep.
+///
+/// It decides nothing about what the window shows. Everything that happens becomes a change to
+/// the genie, `UnaryOperator<Genie>`, handed to `changes`; the app applies it to its state.
+///
+/// Waking and sleeping take long, so they run one after the other on a thread of the runner's
+/// own; the calls return at once.
+public final class GenieRunner {
+
+    private final Path directory;
+    private final LampLighter lighter;
+    private final Consumer<UnaryOperator<Genie>> changes;
+    private final ExecutorService work = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("genie").factory());
+    /// One reading after the other, so that an older reading never arrives after a newer one.
+    private final ExecutorService conversationReader = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("conversations").factory());
+    private volatile Optional<LampLighter.Lit> lamp = Optional.empty();
+    /// What the lit lamp was lit with; empty while it is out, and for a lamp that was joined,
+    /// whose service and key Genies cannot know.
+    private volatile Optional<LitWith> litWith = Optional.empty();
+    private volatile boolean sleeping;
+    /// How many lamps were put out. Each lamp's events are heard with the number it was lit or
+    /// joined under, and only while no lamp was put out since: a lamp's last events, such as its
+    /// session stopping, can arrive after it was put out and the genie woke again, and must not
+    /// break the genie that lives on.
+    private final AtomicLong lampsPutOut = new AtomicLong();
+
+    /// Where the next message goes: the conversation's file, relative to the genie's home, and
+    /// the entry it continues after. Both empty for a new conversation.
+    private volatile Conversations.Here where = Conversations.Here.UNKNOWN;
+    /// Other runs, such as a scheduled job's, change only the tree of conversations.
+    private final Set<String> runsOfThisChat = ConcurrentHashMap.newKeySet();
+    /// Even a failed answer counts.
+    private final Set<String> runsThatAnswered = ConcurrentHashMap.newKeySet();
+    /// Until [Lamp#send] returns. The run's first events can come before that, and are
+    /// recognised by it.
+    private volatile Optional<String> promptBeingSent = Optional.empty();
+    /// The one the stop button stops.
+    private volatile Optional<String> runInProgress = Optional.empty();
+    /// As [#where] named it when they were asked: empty for a new one. The chat follows them
+    /// only while it shows that conversation.
+    private volatile String conversationOfRuns = "";
+    private final ScheduleKeeper schedule;
+    private final HistoryKeeper history;
+    private final HostAccessKeeper hostAccess;
+    /// The events of a lamp being joined, until the catch-up ends with the agent's status, so
+    /// that the chat is set up before the run in progress is replayed into it. Empty otherwise.
+    private volatile Optional<List<LampEvent>> heldWhileCatchingUp = Optional.empty();
+    /// Where the chat goes on joining, when the genie is not answering a question of the user's.
+    private volatile Conversations.Here rejoinAt = Conversations.Here.UNKNOWN;
+    /// Whether the lamp was left running as the app closes. What it reports after that is for
+    /// the app that joins it next.
+    private volatile boolean leftRunning;
+    /// Whether someone made the lamp elsewhere, with `oillamp at`, not Genies. See the constructor.
+    private final boolean fromElsewhere;
+
+    public GenieRunner(Path directory, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
+        this(directory, false, lighter, changes);
+    }
+
+    /// @param fromElsewhere whether someone made the lamp elsewhere, with `oillamp at`: Genies
+    ///                      joins it when it is lit, and lights it as it is when it is not
+    public GenieRunner(Path directory, boolean fromElsewhere, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
+        this.directory = directory;
+        this.fromElsewhere = fromElsewhere;
+        this.lighter = lighter;
+        this.changes = changes;
+        this.schedule = new ScheduleKeeper(lighter.unlit(directory), changes);
+        this.history = new HistoryKeeper(directory, lighter.unlit(directory), changes);
+        this.hostAccess = new HostAccessKeeper(directory, lighter.unlit(directory), changes);
+    }
+
+    /// The genie's schedule, which can be read and changed awake or asleep.
+    public ScheduleKeeper schedule() { return schedule; }
+
+    /// The genie's history, which can be read and saved to awake or asleep.
+    public HistoryKeeper history() { return history; }
+
+    /// The genie's host access, which can be read awake or asleep, and changed asleep.
+    public HostAccessKeeper hostAccess() { return hostAccess; }
+
+    /// The genie's lamp directory.
+    public Path directory() { return directory; }
+
+    /// Lights the lamp, and shows the genie's most recent conversation.
+    ///
+    /// @param key the model key, from the settings or the environment; the lamp's engine keeps it
+    public void wake(String name, Settings settings, String key) {
+        wake(name, settings, key, "", "");
+    }
+
+    /// Wakes the genie in one of its conversations.
+    ///
+    /// @param conversation the conversation's file relative to the genie's home, or empty for
+    ///                     its most recent one
+    /// @param leaf         the entry to continue after, or empty for where the conversation stands
+    public void wake(String name, Settings settings, String key, String conversation, String leaf) {
+        work.execute(() -> {
+            if (lamp.isPresent()) return;
+            // Lit elsewhere, it is joined: lighting it again would find it taken.
+            if (fromElsewhere && lighter.isLit(directory)) {
+                join(conversation, leaf);
+                return;
+            }
+            sleeping = false;
+            changes.accept(Genie::waking);
+            try {
+                LampLighter.Lit lit = fromElsewhere
+                        ? lighter.lightAsItIs(directory, settings, key,
+                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp())
+                        : lighter.light(directory, name, settings, key,
+                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp());
+                lamp = Optional.of(lit);
+                litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
+                changes.accept(genie -> genie.lampSays("waking the genie"));
+                GenieFileTransferUtil.makeDirectories(lit);
+                showConversation(fileOrMostRecent(conversation), leaf);
+                var files = GenieFileTransferUtil.list(lit);
+                changes.accept(genie -> genie.withHandouts(files).awake());
+                reloadConversations();
+            } catch (IOException | RuntimeException failed) {
+                putOutLamp();
+                changes.accept(genie -> genie.broken(reasonOf(failed)));
+            } catch (InterruptedException interrupted) {
+                putOutLamp();
+                changes.accept(Genie::asleep);
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// Sends the user's message, to where the chat is. While the genie still works on another
+    /// run, it waits its turn. Finding where the chat is reads files, so it happens on the
+    /// conversation reader's thread, not the caller's.
+    public void sendMessage(String text) {
+        conversationReader.execute(() -> sendQuestion(questionWhereTheChatIs(text)));
+    }
+
+    /// Stops the run that answers this chat. What the genie did until then stays, and is saved.
+    public void stopAnswering() {
+        runInProgress.ifPresent(this::stopRun);
+    }
+
+    /// Stops `run`, such as a job's. What the genie did until then stays, and is saved.
+    public void stopRun(String run) {
+        Optional<LampLighter.Lit> lit = lamp;
+        if (lit.isEmpty()) return;
+        Thread.ofVirtual().name("stop").start(() -> {
+            try {
+                lit.get().cancel(run);
+            } catch (IOException | LampFailedException failed) {
+                showProblem("The genie could not be stopped: " + reasonOf(failed));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
+    public void decidePermission(String request, boolean allowed) {
+        Optional<LampLighter.Lit> lit = lamp;
+        changes.accept(genie -> genie.withHostAccess(genie.hostAccess().permissionDecided(request)));
+        if (lit.isEmpty()) return;
+        Thread.ofVirtual().name("permission").start(() -> {
+            try {
+                lit.get().decidePermission(request, allowed);
+            } catch (IOException | LampFailedException failed) {
+                showProblem("The decision did not reach the genie's lamp: " + reasonOf(failed));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    // ─── its conversations ─────────────────────────────────────────────────────────────────
+
+    /// Shows a conversation, from its start to the entry `leaf`. The next message continues from
+    /// there. Works while the genie sleeps, and while it answers in another conversation.
+    ///
+    /// @param conversation its file relative to the genie's home
+    /// @param leaf         the entry to continue after, or empty for where the conversation stands
+    public void goToConversation(String conversation, String leaf) {
+        work.execute(() -> showConversation(conversation, leaf));
+    }
+
+    /// Shows the conversation pi knows by `id`, where it stands, such as the one a job's run had.
+    public void openConversation(String id) {
+        work.execute(() -> Lamp.conversation(directory, id).ifPresentOrElse(conversation -> showConversation(conversation.file(), ""),
+                () -> showProblem("That conversation is not there any more.")));
+    }
+
+    /// Starts a new conversation: the chat empties, and the next message begins it. The others stay.
+    public void startAfresh() {
+        work.execute(() -> showConversation("", ""));
+    }
+
+    /// Asks `text` instead of the user's question `id`. The question and what followed it stay
+    /// in the conversation, as a branch of their own.
+    public void askInstead(String id, String text) {
+        conversationReader.execute(() -> {
+            Optional<LampConversation> conversation = conversationIn(where.file());
+            if (conversation.isEmpty()) {
+                showProblem("The conversation of that question is not there any more.");
+                return;
+            }
+            sendQuestion(LampPrompt.insteadOf(conversation.get().id(), id, text));
+        });
+    }
+
+    /// Deletes a conversation for good. Deleting the one the chat shows starts a new one.
+    ///
+    /// @param conversation its file relative to the genie's home
+    public void forgetConversation(String conversation) {
+        work.execute(() -> {
+            try {
+                Optional<LampConversation> doomed = conversationIn(conversation);
+                if (doomed.isEmpty()) throw new IOException("it is not there any more");
+                if (where.file().equals(conversation)) showConversation("", "");
+                Lamp.forget(directory, doomed.get().id());
+            } catch (IOException failed) {
+                showProblem("The conversation could not be deleted: " + reasonOf(failed));
+            }
+            reloadConversations();
+        });
+    }
+
+    /// Reads the genie's conversations from its lamp again, awake or asleep.
+    public void reloadConversations() {
+        conversationReader.execute(() -> {
+            Tuple<Conversation> all = Tuple.of(Conversation.class);
+            for (LampConversation conversation : Lamp.conversations(directory)) all = all.add(LampApiConversionUtil.conversation(conversation));
+            Tuple<Conversation> read = all;
+            changes.accept(genie -> genie.withConversations(genie.conversations().withAll(read)));
+        });
+    }
+
+    /// Makes the chat show `file` up to `leaf`, and the next message go there. Empty `file` for a
+    /// new conversation.
+    private void showConversation(String file, String leaf) {
+        Optional<LampConversation> conversation = conversationIn(file);
+        if (conversation.isEmpty()) {
+            where = Conversations.Here.UNKNOWN;
+            changes.accept(genie -> genie.shows("", new PiEvent.History(Tuple.of(PiEvent.History.Line.class), "")));
+            return;
+        }
+        String at = conversation.get().entry(leaf).isPresent() ? leaf : conversation.get().leaf().orElse("");
+        where = new Conversations.Here(file, at);
+        PiEvent.History history = LampApiConversionUtil.history(conversation.get(), at);
+        changes.accept(genie -> genie.shows(file, history));
+    }
+
+    /// The conversation kept in `file`, relative to the genie's home.
+    private Optional<LampConversation> conversationIn(String file) {
+        if (file.isEmpty()) return Optional.empty();
+        return Lamp.conversations(directory).stream().filter(c -> c.file().equals(file)).findFirst();
+    }
+
+    /// The next message's place: after the entry the chat shows, in the conversation it shows.
+    private LampPrompt questionWhereTheChatIs(String text) {
+        Conversations.Here here = where;
+        Optional<LampConversation> conversation = conversationIn(here.file());
+        if (conversation.isEmpty()) return LampPrompt.fresh(text);
+        String id = conversation.get().id();
+        if (here.leaf().isEmpty() || conversation.get().leaf().filter(here.leaf()::equals).isPresent())
+            return LampPrompt.in(id, text);
+        boolean aQuestion = conversation.get().entry(here.leaf())
+                .filter(entry -> entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT).isPresent();
+        return aQuestion ? LampPrompt.insteadOf(id, here.leaf(), text) : LampPrompt.after(id, here.leaf(), text);
+    }
+
+    // ─── a lamp left running ───────────────────────────────────────────────────────────────
+
+    /// Joins the genie's lamp, if it was left running when the app last closed. The chat shows
+    /// the answer the genie is writing, if it answers one of the user's questions; otherwise the
+    /// conversation given.
+    ///
+    /// @param conversation the conversation's file relative to the genie's home, or empty for
+    ///                     its most recent one
+    /// @param leaf         the entry to continue after, or empty for where the conversation stands
+    public void rejoin(String conversation, String leaf) {
+        work.execute(() -> {
+            if (lamp.isPresent() || !lighter.isLit(directory)) return;
+            join(conversation, leaf);
+        });
+    }
+
+    /// Joins the lamp, which is lit, on the worker's thread. A lamp that cannot be joined, or
+    /// that fails as it is joined, is let go of, never put out: its session goes on, whoever
+    /// started it. One from elsewhere then says that it is lit, but not joined, rather than
+    /// seeming asleep, which Wake would take at its word.
+    private void join(String conversation, String leaf) {
+        sleeping = false;
+        rejoinAt = new Conversations.Here(conversation, leaf);
+        heldWhileCatchingUp = Optional.of(new ArrayList<>());
+        changes.accept(genie -> genie.waking().withActivity(fromElsewhere ? "joining its lamp, lit elsewhere"
+                                                                          : "joining its lamp, which was left running"));
+        try {
+            Optional<LampLighter.Lit> lit = lighter.join(directory, heardFromThisLamp());
+            if (lit.isEmpty()) {
+                heldWhileCatchingUp = Optional.empty();
+                if (fromElsewhere && lighter.isLit(directory))
+                    changes.accept(genie -> genie.broken("Its lamp is lit, but Genies could not join it. It goes on as it is; "
+                            + "an oillamp of another version may have lit it."));
+                else changes.accept(Genie::asleep);
+                return;
+            }
+            lamp = lit;
+            var files = GenieFileTransferUtil.list(lit.get());
+            changes.accept(genie -> genie.withHandouts(files).awake());
+            reloadConversations();
+        } catch (IOException | RuntimeException failed) {
+            heldWhileCatchingUp = Optional.empty();
+            letGo();
+            changes.accept(genie -> genie.broken(reasonOf(failed).replaceAll("[.\\s]+$", "") + ". Its lamp goes on as it is."));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /// Stops following the lamp, and leaves its session running. What it reports after that is
+    /// not this genie's to hear.
+    private void letGo() {
+        schedule.wentOut();
+        sleeping = true;
+        lamp.ifPresent(LampLighter.Lit::leaveRunning);
+        lamp = Optional.empty();
+        lampsPutOut.incrementAndGet();
+        litWith = Optional.empty();
+        history.wentOut();
+        hostAccess.wentOut();
+    }
+
+    /// The catch-up of a lamp being joined has ended. A question of the user's that the genie
+    /// answers becomes this chat's run again, and the chat shows it; then what was held back is
+    /// heard, in order.
+    private void caughtUp(LampEvent.AgentStatus status, List<LampEvent> held) {
+        Optional<LampRun> answering = status.current().filter(run -> run.job().isEmpty());
+        if (answering.isPresent()) {
+            runsOfThisChat.add(answering.get().id());
+            showAnswering(answering.get());
+        } else {
+            showConversation(fileOrMostRecent(rejoinAt.file()), rejoinAt.leaf());
+        }
+        held.forEach(this::onLampEvent);
+    }
+
+    /// `file`, if the genie still has that conversation; otherwise the user's most recent one.
+    /// A job's run is not the user's: it is listed with the scheduled runs, and the user's next
+    /// message must not land in it unasked. So with only job runs, the chat starts empty.
+    private String fileOrMostRecent(String file) {
+        List<LampConversation> all = Lamp.conversations(directory);
+        if (all.stream().anyMatch(conversation -> conversation.file().equals(file))) return file;
+        return all.stream().filter(conversation -> conversation.job().isEmpty()).findFirst()
+                  .map(LampConversation::file).orElse("");
+    }
+
+    /// Shows the conversation `run` answers in, as it stood before its question.
+    private void showAnswering(LampRun run) {
+        Optional<LampConversation> conversation = run.conversation().flatMap(id -> Lamp.conversation(directory, id));
+        String file = conversation.map(LampConversation::file).orElse("");
+        String before = conversation.map(it -> entryBefore(it, run.prompt())).orElse("");
+        where = conversation.isPresent() ? new Conversations.Here(file, before) : Conversations.Here.UNKNOWN;
+        conversationOfRuns = where.file();
+        PiEvent.History history = conversation.map(it -> LampApiConversionUtil.history(it, before))
+                .orElseGet(() -> new PiEvent.History(Tuple.of(PiEvent.History.Line.class), ""));
+        changes.accept(genie -> genie.answering(file, history, run.prompt()));
+    }
+
+    /// The entry the question `prompt` follows in `conversation`: the one before it, once pi has
+    /// written the question down, otherwise where the conversation stands. What pi wrote after
+    /// the question is the run's, which is heard again.
+    private static String entryBefore(LampConversation conversation, String prompt) {
+        Tuple<LampConversation.Entry> line = conversation.line();
+        for (int i = line.size() - 1; i >= 0; i--) {
+            LampConversation.Entry entry = line.get(i);
+            if (entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT && entry.text().strip().equals(prompt.strip()))
+                return entry.parent().orElse("");
+        }
+        return conversation.leaf().orElse("");
+    }
+
+    /// Leaves the lamp running as the app closes, and waits until it is told.
+    public void leaveRunningAndWait(long seconds) throws InterruptedException {
+        if (work.isShutdown()) return;
+        work.execute(() -> {
+            sleeping = true;
+            leftRunning = true;
+            lamp.ifPresent(LampLighter.Lit::leaveRunning);
+            lamp = Optional.empty();
+        });
+        work.shutdown();
+        work.awaitTermination(seconds, TimeUnit.SECONDS);
+    }
+
+    /// Hands a question to the lamp's session, on a thread of its own: it starts a short-lived
+    /// engine process, which takes a moment.
+    private void sendQuestion(LampPrompt question) {
+        Optional<LampLighter.Lit> lit = lamp;
+        if (lit.isEmpty()) {
+            showProblem("The genie is asleep; wake it first.");
+            return;
+        }
+        promptBeingSent = Optional.of(question.prompt());
+        conversationOfRuns = where.file();
+        Thread.ofVirtual().name("send").start(() -> {
+            try {
+                runsOfThisChat.add(lit.get().send(question).id());
+            } catch (IOException | LampFailedException failed) {
+                changes.accept(genie -> genie.hear(new PiEvent.Refused("prompt", reasonOf(failed))));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                promptBeingSent = Optional.empty();
+            }
+        });
+    }
+
+    // ─── what the lamp reports ─────────────────────────────────────────────────────────────
+
+    /// Hears the events of the lamp lit or joined now, until it is put out.
+    private Consumer<LampEvent> heardFromThisLamp() {
+        long lampNumber = lampsPutOut.get();
+        return event -> {
+            if (lampNumber == lampsPutOut.get()) onLampEvent(event);
+        };
+    }
+
+    /// Every event of the lamp's session, on the thread that reads them.
+    private void onLampEvent(LampEvent event) {
+        if (leftRunning) return;
+        Optional<List<LampEvent>> held = heldWhileCatchingUp;
+        if (held.isPresent()) {
+            if (event instanceof LampEvent.AgentStatus status) {
+                heldWhileCatchingUp = Optional.empty();
+                caughtUp(status, held.get());
+            } else {
+                held.get().add(event);
+            }
+            return;
+        }
+        schedule.onLampEvent(event, Instant.now());
+        history.onLampEvent(event);
+        hostAccess.onLampEvent(event, Instant.now());
+        switch (event) {
+            case LampEvent.RunStarted started -> {
+                LampRun run = started.run();
+                if (run.job().isEmpty() && promptBeingSent.filter(run.prompt()::equals).isPresent()) runsOfThisChat.add(run.id());
+                if (runsOfThisChat.contains(run.id())) runInProgress = Optional.of(run.id());
+            }
+            case LampEvent.RunProgress progress when runsOfThisChat.contains(progress.run()) -> {
+                if (progress.progress() instanceof LampAgentProgress.Answered) runsThatAnswered.add(progress.run());
+                LampApiConversionUtil.chatEventFor(progress.progress()).ifPresent(heard -> changes.accept(genie -> genie.hear(heard)));
+            }
+            case LampEvent.RunFinished finished when runsOfThisChat.contains(finished.run().id()) -> chatRunFinished(finished);
+            // Another run, such as a scheduled job's, may have added to the conversations.
+            case LampEvent.RunFinished _ -> reloadConversations();
+            case LampEvent.LookAtDesktop look -> changes.accept(genie -> genie.shows(look.what()));
+            case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
+                lamp = Optional.empty();
+                schedule.wentOut();
+                hostAccess.wentOut();
+                changes.accept(genie -> genie.broken("The genie's sandbox stopped: " + changed.status().detail()));
+            }
+            default -> { }
+        }
+    }
+
+    /// A run of this chat ended: the chat learns where the conversation now stands, and pi's ids
+    /// for what was said, and the genie is ready.
+    private void chatRunFinished(LampEvent.RunFinished finished) {
+        String run = finished.run().id();
+        runInProgress = Optional.empty();
+        runsOfThisChat.remove(run);
+        if (!runsThatAnswered.remove(run) && finished.outcome() != LampRunOutcome.FINISHED && !finished.answer().isBlank())
+            showProblem(finished.answer());
+        changes.accept(genie -> genie.hear(new PiEvent.Settled()));
+        Optional<LampConversation> conversation = finished.conversation().flatMap(id -> Lamp.conversation(directory, id));
+        if (conversation.isPresent()) {
+            String file = conversation.get().file();
+            String leaf = conversation.get().leaf().orElse("");
+            // The user may be reading another conversation; they stay there.
+            if (where.file().equals(conversationOfRuns)) where = new Conversations.Here(file, leaf);
+            PiEvent.History history = LampApiConversionUtil.history(conversation.get(), leaf);
+            changes.accept(genie -> genie.finishedIn(file, history));
+        } else {
+            changes.accept(genie -> genie.withConversations(genie.conversations().withAside(Optional.empty())));
+        }
+        checkOutbox();
+        reloadConversations();
+    }
+
+    /// What a lamp was lit with: the model service, the key and the model. The key stays in
+    /// memory, as it does in the lamp's engine, and is never shown.
+    private record LitWith(String service, String key, String model) {
+        LitWith withModel(String model) { return new LitWith(service, key, model); }
+        @Override public String toString() { return "LitWith[service=" + service + ", model=" + model + "]"; }
+    }
+
+    /// Has the genie answer with the model `settings` name from its next message on, without
+    /// putting its lamp out: whatever runs on its desktop goes on. A job that runs next uses it
+    /// too, and so does a conversation the genie starts.
+    ///
+    /// Only when the lamp reaches its model the way `settings` say, with `key`: its relay sends
+    /// every request to the service and with the key it was lit with, which may not know a
+    /// model from another place at all. Otherwise, and for a lamp that was joined, whose service
+    /// and key are not known, the genie keeps its model until it next wakes, with all the new
+    /// settings. Nothing happens while the genie sleeps either, nor ever for a lamp from
+    /// elsewhere, whose own configuration names its model.
+    ///
+    /// @param key the key `settings` give, or empty when they give none
+    public void useModel(Settings settings, String key) {
+        work.execute(() -> {
+            String wanted = settings.model().strip();
+            Optional<LampLighter.Lit> lit = lamp;
+            Optional<LitWith> was = litWith;
+            // A lamp from elsewhere answers with the model its own configuration names.
+            if (fromElsewhere || lit.isEmpty() || was.isEmpty() || wanted.isEmpty() || wanted.equals(was.get().model())) return;
+            if (!was.get().service().equals(settings.service().strip()) || !was.get().key().equals(key)) return;
+            try {
+                lit.get().useModel(wanted);
+                litWith = Optional.of(was.get().withModel(wanted));
+            } catch (IOException | LampFailedException | IllegalArgumentException failed) {
+                String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
+                showProblem("The genie keeps answering with " + was.get().model() + " until it wakes again: " + why);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    private void showProblem(String problem) {
+        changes.accept(genie -> genie.withTranscript(genie.transcript().problem(problem)));
+    }
+
+    // ─── sleeping ──────────────────────────────────────────────────────────────────────────
+
+    /// Puts the lamp out. The genie's home, and with it the conversations, stays.
+    public void sleep() {
+        work.execute(() -> {
+            putOutLamp();
+            changes.accept(Genie::asleep);
+            reloadConversations();
+        });
+    }
+
+    /// Sleeps and waits until the lamp is out, as when the app closes. Once is enough: after
+    /// that, and after [#leaveRunningAndWait], it does nothing.
+    public void sleepAndWait(long seconds) throws InterruptedException {
+        if (work.isShutdown()) return;
+        sleep();
+        work.shutdown();
+        work.awaitTermination(seconds, TimeUnit.SECONDS);
+    }
+
+    public boolean isAwake() { return lamp.isPresent(); }
+
+    /// The desktop, while the lamp is lit.
+    public Optional<Desktop> desktop() { return lamp.map(LampLighter.Lit::desktop); }
+
+    private void putOutLamp() {
+        schedule.wentOut();
+        sleeping = true;
+        lamp.ifPresent(LampLighter.Lit::close);
+        lamp = Optional.empty();
+        lampsPutOut.incrementAndGet();
+        litWith = Optional.empty();
+        history.wentOut();
+        hostAccess.wentOut();
+    }
+
+    // ─── going back in time, and other branches ───────────────────────────────────────────
+
+    /// Brings the genie's home back to how it was at `moment`, conversations included. oillamp
+    /// refuses while the sandbox runs, so a lit lamp is put out first, and the genie is left
+    /// asleep. oillamp saves the home before it goes back, so this can be undone. The chat stays
+    /// in its conversation if that is still there, and goes to the most recent one otherwise.
+    public void goBackTo(History.Moment moment) {
+        work.execute(() -> {
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Going back…").withNote("").withProblem("")));
+            if (lamp.isPresent()) {
+                putOutLamp();
+                changes.accept(Genie::asleep);
+            }
+            changeHome("go back", lamp -> lamp.restore(moment.id()));
+        });
+    }
+
+    /// Moves the genie to the branch `branch`: its home becomes that branch's newest moment, and
+    /// every save goes there from now on. oillamp saves what changed on the branch it leaves
+    /// first. Only while the genie sleeps, which the app makes sure of; a lamp lit meanwhile is
+    /// refused by oillamp, and the page says why.
+    public void switchTo(String branch) {
+        work.execute(() -> {
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Moving to " + branch + "…")
+                    .withNote("").withProblem("").withPlan(Optional.empty())));
+            changeHome("move to " + branch, lamp -> lamp.switchTo(branch));
+        });
+    }
+
+    /// Resets the branch the genie lives on back to `moment`, as the user confirmed: the moments
+    /// after it leave the branch, and changes no moment holds are thrown away. Nothing is saved
+    /// first, so this cannot be undone. Only while the genie sleeps, as [#switchTo].
+    public void reset(String moment) {
+        work.execute(() -> {
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Resetting…")
+                    .withNote("").withProblem("").withPlan(Optional.empty())));
+            changeHome("reset", lamp -> lamp.reset(moment));
+        });
+    }
+
+    /// A change to the genie's home, with its lamp out, through the history's keeper.
+    @FunctionalInterface
+    private interface HomeChange {
+        void change(LampDirectory lamp) throws IOException, InterruptedException, LampFailedException;
+    }
+
+    /// Makes `change` to the genie's asleep home, then reads what came of it: the home, its lamp's
+    /// file and its schedule are another moment's now, so the chat, the outbox, the history, its
+    /// settings, the schedule and the host access are read again. The chat stays in its
+    /// conversation if that is still there, and goes to the most recent one otherwise.
+    ///
+    /// @param what what the change is, as in "oillamp could not go back"
+    private void changeHome(String what, HomeChange change) {
+        try {
+            change.change(history.lamp());
+            showConversation(fileOrMostRecent(where.file()), where.leaf());
+            // The outbox changed too; it is looked into again when the genie wakes.
+            changes.accept(genie -> genie.withHandouts(Tuple.of(Handout.class))
+                    .withHistory(genie.history().withBusy("").withPicked("")));
+        } catch (IOException | LampFailedException failed) {
+            String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy("").withProblem("oillamp could not " + what + ": " + why)));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        reloadConversations();
+        history.read();
+        history.readSettings();
+        schedule.read();
+        hostAccess.read();
+    }
+
+    // ─── files ─────────────────────────────────────────────────────────────────────────────
+
+    /// Looks into the outbox, and announces what is new.
+    public void checkOutbox() {
+        lamp.ifPresent(lit -> Thread.ofVirtual().name("outbox").start(() -> {
+            try {
+                var files = GenieFileTransferUtil.list(lit);
+                changes.accept(genie -> genie.outbox(files));
+            } catch (IOException | InterruptedException stillThere) {
+                // Looked for again after the next answer.
+            }
+        }));
+    }
+
+    /// Copies the outbox file `name` to `target`, which the user chose.
+    public void saveOutboxFile(String name, Path target) {
+        transfer("Saved " + name + " to " + target + ".", lit -> GenieFileTransferUtil.fetch(lit, name, target));
+    }
+
+    /// Puts `file` into the genie's inbox, and tells the genie.
+    public void giveFile(Path file) {
+        String name = file.getFileName().toString();
+        transfer("", lit -> {
+            GenieFileTransferUtil.give(lit, file);
+            changes.accept(genie -> genie.gave(name));
+        });
+    }
+
+    private interface Transfer { void run(LampLighter.Lit lit) throws IOException, InterruptedException; }
+
+    private void transfer(String done, Transfer transfer) {
+        Optional<LampLighter.Lit> lit = lamp;
+        if (lit.isEmpty()) {
+            showProblem("The genie is asleep; wake it first.");
+            return;
+        }
+        Thread.ofVirtual().name("transfer").start(() -> {
+            try {
+                transfer.run(lit.get());
+                if (!done.isEmpty()) changes.accept(genie -> genie.withTranscript(genie.transcript().notice(done)));
+            } catch (IOException | InterruptedException failed) {
+                showProblem(reasonOf(failed));
+            }
+        });
+    }
+
+    private static String reasonOf(Exception failed) {
+        return Optional.ofNullable(failed.getMessage()).filter(message -> !message.isBlank()).orElse(failed.toString());
+    }
+}

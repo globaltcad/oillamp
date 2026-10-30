@@ -796,6 +796,98 @@ application and the engine are always the same version, so nothing has to be ins
 *Given up:* a second process per lamp, and the control protocol is no longer only spoken between
 two copies of the command-line tool. *(added on 2026-09-28)*
 
+### Genies, a chat app, is built on `dev.lamp` to prove it
+
+Genies (`src/gui`, package `dev.gui`, [GENIES.md](GENIES.md)) is a desktop chat app whose every
+conversation partner is an agent in a lamp of its own. It is in this repository, as a Gradle source
+set of its own, and uses oillamp only through `dev.lamp`, as any application must.
+
+*Why:* an API that no real application uses is a guess. Building one found two gaps at once: an
+application could neither show a lamp's desktop nor delete a lamp, so `Lamp.desktop()` and
+`Lamp.at(dir).remove()` were added. A separate source set keeps SwingTree and FlatLaf out of the
+oillamp single file.
+
+*Given up:* the repository now holds a second program with its own dependencies.
+*(added on 2026-09-28)*
+
+### A genie's agent is the lamp's pi, reached only through the Lamp API
+
+Genies does not run pi. It asks the lamp's session, which holds the one pi of the lamp, with
+`Lamp.send`, follows the answer on the lamp's run events, stops it with `Lamp.cancel`, and reads
+the conversations with `Lamp.conversations`. It gives the lamp the genie's instructions and the
+model (`LampDirectory.instructions`, `LampDirectory.model`, `Lamp.useModel`), and the lamp's engine
+puts them where pi reads them; Genies never writes into the genie's home itself. The
+conversations are kept by pi, in the genie's home.
+
+*Why:* a lamp has one agent, so a scheduled job and the chat can never run two pis in one home, and
+every message is saved in the lamp's history like any run. Reading conversations from the lamp's
+files shows them while the genie sleeps. Keeping them in the sandbox gives them one owner, and
+deleting the genie deletes them.
+
+*Given up:* each message starts a short-lived engine process, about a second before the run
+begins. Only pi is supported. *(changed on 2026-09-30; before, Genies ran its own pi over ssh;
+changed on 2026-10-18: before, Genies wrote pi's instructions and default model into the genie's
+home itself)*
+
+### Genies has one model, in its settings, for every genie and every conversation
+
+The model in Genies' settings is given to every genie's lamp, which has every answer written by it,
+in old conversations too. Changed while genies are awake, it reaches them when the settings are
+left, through `Lamp.useModel`, without their lamps going out, but only those lit with the service
+and key the settings now give. A changed place, address or key reaches an awake genie only at its
+next wake, the model with it, and so does everything for a genie Genies joined when it opened,
+whose service and key it cannot know. The settings say so in one line while genies are awake. The model of each answer shows only as a tooltip on the answer.
+
+*Why:* a user who chooses a model expects their genies to answer with it, in the chat they are in.
+Before, the model reached only pi's default, so an old conversation stayed on the model it began
+with, even when the service had stopped accepting it. Re-lighting a lamp to apply new settings
+would end whatever the genie had open on its desktop; a model can change without that, the service
+and key cannot, so Genies applies the one and leaves the other for the next wake rather than
+re-light a lamp by itself, even an idle one: a genie that is idle in the chat may still have a
+program running on its desktop for the user. A new model is held back with a new service or key,
+because the lamp's relay would send it to the old service, which may not know it, and the next
+message would fail with an error that explains nothing. Which model wrote an answer matters when something
+went wrong or the model changed, not while reading, so it is there on hover and nowhere else.
+
+*Given up:* an awake genie keeps its old service and key until it sleeps and wakes. *(added on
+2026-10-18)*
+
+### Genies lights every lamp with its schedule on
+
+Genies starts each lamp with `enableScheduling()`, so the jobs on a genie's schedule wake it while
+it is awake. Its schedule page reads and changes the jobs through `LampDirectory`, awake or asleep.
+
+*Why:* in Genies the schedule is a page of its own, and a user who adds a job there means it to run.
+Asking them to also edit the lamp's `oillamp.toml` would be a step with no choice in it.
+
+*Given up:* a genie's jobs cost model tokens whenever it is awake; a user who wants them held
+pauses the schedule on its page. *(added on 2026-09-30)*
+
+### Files pass between a genie and its user through `~/outbox` and `~/inbox`, over ssh
+
+A genie hands over a file by putting it in `~/outbox`; the user saves it where they choose in a
+file dialog. A file the user gives a genie is written to `~/inbox`. Both travel as a command's
+output or input over the lamp's ssh command.
+
+*Why:* no new mount, socket or host directory is shared with the sandbox, so the agent gains no way
+to write to the host. The user decides every place a file of the agent's lands. Two plain
+directories are something any agent understands from one sentence of instructions.
+
+*Given up:* a file is copied, not shared; the user sees a change to it only by saving it again.
+*(added on 2026-09-28)*
+
+### Genies draws the desktop with a small VNC client of its own
+
+`RfbConnection` speaks RFB 3.8 to wayvnc's Unix socket, asking for raw 32-bit pixels, and draws
+them in a Swing component.
+
+*Why:* the Java VNC libraries connect over TCP, and a TCP port on the host would expose the desktop
+to every local user. Over a local socket, the raw encoding costs nothing, and without compression
+the whole client is about 250 lines, tested byte by byte against a stand-in server.
+
+*Given up:* no compressed encodings, so it is only suited to a local socket, which is the only way
+it is used. *(added on 2026-09-28)*
+
 ### Libraries: Jackson 2 for TOML and JSON, Sprouts for collections, no CLI library
 
 *Why:* Jackson 3 has no TOML module. Sprouts provides immutable collections that fit records.
@@ -826,6 +918,16 @@ runtime and the program attached. It unpacks itself into your cache directory on
 *Why:* a `.deb` must be installed as root and only suits Debian-family systems. The goal was a file
 you can copy to a colleague and run. The original reason for bundling a runtime, "no JDK needed on
 the host", still holds. *(D-21, changed during implementation)*
+
+### Genies in oillamp's single file: `oillamp genies`
+
+The single file holds Genies too, and `oillamp genies` opens it. Genies is built on oillamp's
+embedding API, `dev.lamp`. The engine starts Genies by its class name, in a process of its own, on
+its own Java runtime and classpath, the same way Genies starts the engine.
+
+*Why:* both are small, and one file gives a colleague both the command and the app. The engine
+still never depends on Genies' code, which `TheShapeOfTheCodeSpec` checks. The single file grew
+from 42 MB to 52 MB. Genies' own packages, the AppImage, .deb, snap and flatpak, are unchanged.
 
 ### No `oillamp image` command
 
