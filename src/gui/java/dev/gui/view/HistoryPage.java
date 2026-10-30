@@ -249,7 +249,7 @@ final class HistoryPage {
         Palette p = state.palette();
         Lang.HistoryPage words = state.lang().HISTORY_PAGE();
         if (!genie.history().busy().isEmpty()) return new Status(p.BRASS(), genie.history().busy());
-        String when = genie.history().autosave().orElse(UNLESS_SAID).when();
+        String when = genie.history().autosave().orElse(UNLESS_SAID).when(state.lang());
         String saved =
             (
                 when.isEmpty()
@@ -875,7 +875,7 @@ final class HistoryPage {
             moment.outcome()
             .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
             .isPresent();
-        String detail = moment.detail();
+        Val<String> detail = wording.viewAsString(it -> moment.detail(it.lang()));
         Val<String> standsHere = words.viewAsString(it -> "⑂  " + it.STAND_HERE().of(shown.newestOf().toList()));
         Val<String> title = wording.viewAsString(it -> it.title(moment));
         Val<Boolean> canOpen = genie.viewAs(Boolean.class, it ->
@@ -934,7 +934,7 @@ final class HistoryPage {
             )
             .add("growx, wmin 0, hidemode 3",
                 ViewPartsUtil.words(theme, detail, 12, 1f, p -> failed ? p.TROUBLE() : p.SUBTEXT())
-                .isVisibleIf(!detail.isEmpty())
+                .isVisibleIf(detail.viewAs(Boolean.class, it -> !it.isEmpty()))
             )
             .add("growx, wmin 0, hidemode 3",
                 ViewPartsUtil.words(theme, standsHere, 11, 1f, Palette::SUBTEXT)

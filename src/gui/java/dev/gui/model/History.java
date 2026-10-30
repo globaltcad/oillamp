@@ -74,14 +74,14 @@ public record History(
 
         /// When it saves, as the end of a sentence such as "Saved whenever Jafar …": "wakes,
         /// answers or sleeps", or "answers"; empty when it never saves by itself.
-        public String when() {
+        public String when(Lang lang) {
+            Lang.HistoryPage words = lang.HISTORY_PAGE();
             List<String> moments = new ArrayList<>();
-            if (waking) moments.add("wakes");
-            if (afterRun) moments.add("answers");
-            else if (beforeRun) moments.add("begins to answer");
-            if (sleeping) moments.add("sleeps");
-            if (moments.size() < 2) return String.join("", moments);
-            return String.join(", ", moments.subList(0, moments.size() - 1)) + " or " + moments.getLast();
+            if (waking) moments.add(words.WAKES());
+            if (afterRun) moments.add(words.ANSWERS());
+            else if (beforeRun) moments.add(words.BEGINS_TO_ANSWER());
+            if (sleeping) moments.add(words.SLEEPS());
+            return words.ONE_OR_ANOTHER().of(moments);
         }
     }
 
@@ -119,23 +119,24 @@ public record History(
         }
 
         /// More about it, on one line; empty when there is nothing more to say.
-        public String detail() {
+        public String detail(Lang lang) {
+            Lang.HistoryPage words = lang.HISTORY_PAGE();
             String said = Schedule.firstLine(said(), 160);
             return switch (kind) {
-                case WOKE -> "Saved as its sandbox started";
-                case SLEPT -> "Saved after its sandbox stopped";
-                case SAVED -> message.isBlank() ? "" : "Saved by hand";
-                case BEFORE_RUN -> "Saved as it began on a question or a job";
-                case CHATTED -> "Saved once the chat had gone quiet";
+                case WOKE -> words.SAVED_AS_ITS_SANDBOX_STARTED();
+                case SLEPT -> words.SAVED_AFTER_ITS_SANDBOX_STOPPED();
+                case SAVED -> message.isBlank() ? "" : words.SAVED_BY_HAND();
+                case BEFORE_RUN -> words.SAVED_AS_IT_BEGAN_ON_A_QUESTION_OR_A_JOB();
+                case CHATTED -> words.SAVED_ONCE_THE_CHAT_HAD_GONE_QUIET();
                 case RAN -> switch (outcome.orElse(Schedule.Outcome.FAILED)) {
                     case FINISHED -> said;
-                    case STOPPED -> "Stopped. " + said;
-                    case FAILED -> "Failed. " + said;
-                    case TIMED_OUT -> "Ran out of time. " + said;
+                    case STOPPED -> words.STOPPED_AND_SAID().of(said);
+                    case FAILED -> words.FAILED_AND_SAID().of(said);
+                    case TIMED_OUT -> words.RAN_OUT_OF_TIME_AND_SAID().of(said);
                 };
-                case BEFORE_GOING_BACK -> "Kept so that going back can be undone";
+                case BEFORE_GOING_BACK -> words.KEPT_SO_THAT_GOING_BACK_CAN_BE_UNDONE();
                 case WENT_BACK -> "";
-                case BEFORE_SWITCHING -> "Kept as it was when it moved to another branch";
+                case BEFORE_SWITCHING -> words.KEPT_AS_IT_WAS_WHEN_IT_MOVED_TO_ANOTHER_BRANCH();
             };
         }
 
@@ -336,23 +337,24 @@ public record History(
     /// What `moment` is about, as [#title(Moment, Genie, LocalDateTime, Lang)] says it, from only
     /// what that reads: the genie's conversations and its schedule.
     public String title(Moment moment, Conversations conversations, Schedule schedule, LocalDateTime now, Lang lang) {
+        Lang.HistoryPage words = lang.HISTORY_PAGE();
         return switch (moment.kind()) {
-            case WOKE -> "Woke up";
-            case SLEPT -> "Went to sleep";
-            case SAVED -> moment.message().isBlank() ? "Saved by hand" : Schedule.firstLine(moment.message(), 90);
-            case BEFORE_RUN -> "Before it went to work";
+            case WOKE -> words.WOKE_UP();
+            case SLEPT -> words.WENT_TO_SLEEP();
+            case SAVED -> moment.message().isBlank() ? words.SAVED_BY_HAND() : Schedule.firstLine(moment.message(), 90);
+            case BEFORE_RUN -> words.BEFORE_IT_WENT_TO_WORK();
             case RAN -> !moment.job().isEmpty()
-                ? schedule.job(moment.job()).map(job -> "Did the job: " + job.title()).orElse("Did a scheduled job")
-                : conversations.find(moment.conversation()).map(it -> "Answered: " + it.title()).orElse("Answered a question");
-            case CHATTED -> conversations.find(moment.conversation()).map(it -> "Talked: " + it.title()).orElse("Talked with you");
-            case BEFORE_GOING_BACK -> "Before going back";
+                ? schedule.job(moment.job()).map(job -> words.DID_THE_JOB().of(job.title())).orElse(words.DID_A_SCHEDULED_JOB())
+                : conversations.find(moment.conversation()).map(it -> words.ANSWERED().of(it.title())).orElse(words.ANSWERED_A_QUESTION());
+            case CHATTED -> conversations.find(moment.conversation()).map(it -> words.TALKED().of(it.title())).orElse(words.TALKED_WITH_YOU());
+            case BEFORE_GOING_BACK -> words.BEFORE_GOING_BACK();
             case WENT_BACK ->
                 undid(moment)
                 .flatMap(this::wentBackTo)
-                .map(it -> "Undid going back to how it was " + when(it.at(), schedule.zone(), now, lang))
-                .or(() -> wentBackTo(moment).map(it -> "Went back to how it was " + when(it.at(), schedule.zone(), now, lang)))
-                .orElse("Went back to an earlier moment");
-            case BEFORE_SWITCHING -> "Before it moved to another branch";
+                .map(it -> words.UNDID_GOING_BACK_TO_HOW_IT_WAS().of(when(it.at(), schedule.zone(), now, lang)))
+                .or(() -> wentBackTo(moment).map(it -> words.WENT_BACK_TO_HOW_IT_WAS().of(when(it.at(), schedule.zone(), now, lang))))
+                .orElse(words.WENT_BACK_TO_AN_EARLIER_MOMENT());
+            case BEFORE_SWITCHING -> words.BEFORE_IT_MOVED_TO_ANOTHER_BRANCH();
         };
     }
 
@@ -409,7 +411,7 @@ public record History(
     /// "today at 14:05", "yesterday at 09:30", "on Thursday 1 October at 18:00".
     public static String when(Instant at, ZoneId zone, LocalDateTime now, Lang lang) {
         LocalDateTime then = LocalDateTime.ofInstant(at, zone);
-        return DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate(), lang.DATES()) + " at " + Recurrence.clock(then.toLocalTime());
+        return lang.DATES().AT().of(DateWordingUtil.dayInSentence(then.toLocalDate(), now.toLocalDate(), lang.DATES()), Recurrence.clock(then.toLocalTime()));
     }
 
     /// The day `at` was on, on `zone`'s clock.
