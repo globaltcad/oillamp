@@ -70,6 +70,8 @@ public final class GeniesView extends JPanel {
     private final Val<Lang.Header> headerWords;
     /// The words of a genie's desktop.
     private final Val<Lang.Desktop> desktopWords;
+    /// The words of a genie's chat.
+    private final Val<Lang.Chat> chatWords;
     private final Look look;
     private final DesktopScreen desktop;
 
@@ -112,6 +114,7 @@ public final class GeniesView extends JPanel {
         windowWords = Theme.langOf(state).viewAs(Lang.Window.class, Lang::WINDOW);
         headerWords = Theme.langOf(state).viewAs(Lang.Header.class, Lang::HEADER);
         desktopWords = Theme.langOf(state).viewAs(Lang.Desktop.class, Lang::DESKTOP);
+        chatWords = Theme.langOf(state).viewAs(Lang.Chat.class, Lang::CHAT);
         look    = new Look(theme);
         desktop = new DesktopScreen(palette, desktopWords);
         // What the style sheet does not paint follows the theme too: the look-and-feel is set up
@@ -1365,21 +1368,21 @@ public final class GeniesView extends JPanel {
                 .isVisibleIf(pictureShown)
                 .add("growx, wmin 0", wakePicture.view(livePicture))
                 .add("growx, wmin 0",
-                    label(genie.viewAsString(it -> switch (it.phase()) {
-                        case READY, WORKING -> it.name() + " is listening.";
-                        case WAKING -> it.name() + " is waking.";
-                        case ASLEEP -> it.name() + " is in the lamp.";
-                        case BROKEN -> it.name() + " could not wake.";
+                    label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
+                        case READY, WORKING -> words.IS_LISTENING().of(it.name());
+                        case WAKING -> words.IS_WAKING().of(it.name());
+                        case ASLEEP -> words.IS_IN_THE_LAMP().of(it.name());
+                        case BROKEN -> words.COULD_NOT_WAKE().of(it.name());
                     }))
                     .group(Skin.EMPTY_TITLE)
                     .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
                 )
                 .add("growx, wmin 0",
-                    html(genie.viewAsString(it -> switch (it.phase()) {
-                        case READY, WORKING -> "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.";
-                        case WAKING -> "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.";
-                        case ASLEEP -> "Wake it to talk. It keeps its own desktop, safely away from yours.";
-                        case BROKEN -> "What went wrong is said below. Try again once that is sorted out.";
+                    html(Viewable.of(String.class, phase, chatWords, (it, words) -> switch (it) {
+                        case READY, WORKING -> words.ASK_FOR_ANYTHING_IT_HAS_A_DESKTOP_AND_A_SHELL_OF_ITS_OWN();
+                        case WAKING -> words.ITS_SANDBOX_IS_STARTING_THE_VERY_FIRST_TIME_IT_IS_MADE();
+                        case ASLEEP -> words.WAKE_IT_TO_TALK_IT_KEEPS_ITS_OWN_DESKTOP();
+                        case BROKEN -> words.WHAT_WENT_WRONG_IS_SAID_BELOW_TRY_AGAIN_ONCE_THAT_IS_SORTED_OUT();
                     }))
                     .group(Skin.EMPTY_TEXT)
                     .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
@@ -1392,12 +1395,12 @@ public final class GeniesView extends JPanel {
         return
             box("fill, ins 4 18 4 18, gap 8, hidemode 3", "[][grow]")
             .isVisibleIf(handouts.viewAs(Boolean.class, it -> !it.isEmpty()))
-            .add("top, gaptop 6", label("OUTBOX").group(Skin.SECTION))
+            .add("top, gaptop 6", label(chatWords.viewAsString(Lang.Chat::OUTBOX)).group(Skin.SECTION))
             .add("growx, wmin 0",
                 box("ins 0, gap 6").withMinSize(0, 0)
                 .addAll(handouts, file -> UI.of(UI.use(look, () ->
                     button("⤓ " + file.name() + "  ·  " + file.readableSize()).group(Skin.QUIET_BUTTON)
-                    .withTooltip("Save " + file.name() + " somewhere on this computer")
+                    .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER().of(file.name())))
                     .onClick(_ -> saveHandout(file.name()))
                     .get(JButton.class)
                 )))
@@ -1418,7 +1421,7 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0, gapbottom 6",
                 ViewPartsUtil.wrapped(
                     theme,
-                    genie.viewAsString(it -> it.name() + " is answering in another conversation. Write here once it is done."),
+                    Viewable.of(String.class, name, chatWords, (who, words) -> words.IS_ANSWERING_IN_ANOTHER_CONVERSATION().of(who)),
                     Palette::SUBTEXT,
                     answeringElsewhere
                 )
@@ -1426,7 +1429,7 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0",
                 panel("fill, ins 0, gap 8", "[][grow][]", "[bottom]").group(Skin.COMPOSER).isVisibleIf(composing)
                 .add(
-                    button("＋").group(Skin.ICON_BUTTON).withTooltip("Give the genie a file; it lands in ~/inbox")
+                    button("＋").group(Skin.ICON_BUTTON).withTooltip(chatWords.viewAsString(Lang.Chat::GIVE_THE_GENIE_A_FILE_IT_LANDS_IN_INBOX))
                     .onClick(_ -> giveFile())
                 )
                 .add("growx, wmin 0, hmin 36, hmax 160",
@@ -1452,7 +1455,7 @@ public final class GeniesView extends JPanel {
                         })
                         // The composer is the box; the text in it needs no second one.
                         .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).border(0, p.TRANSPARENT()))
-                        .withTooltip("Return sends; Shift and Return starts a new line")
+                        .withTooltip(chatWords.viewAsString(Lang.Chat::RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE))
                         // Swing stops laying out at the scroll pane, so the composer never learns
                         // that the text grew or shrank; told here, it grows up to its hmax, then scrolls.
                         .onTextChange(it ->
@@ -1470,7 +1473,7 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add(
-                    button("Send  ➤").group(Skin.FLAME_BUTTON).isEnabledIf(canSend)
+                    button(chatWords.viewAsString(it -> it.SEND() + "  ➤")).group(Skin.FLAME_BUTTON).isEnabledIf(canSend)
                     // With nothing to send, it steps back rather than glowing half-lit.
                     .withStyle(Themed.of(canSend, theme), (themed, it) -> {
                         var on = themed.item();
