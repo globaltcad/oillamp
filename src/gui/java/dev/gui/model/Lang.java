@@ -1157,7 +1157,12 @@ public record Lang(
         String ANSWERS,
         String BEGINS_TO_ANSWER,
         String SLEEPS,
-        Listed ONE_OR_ANOTHER
+        Listed ONE_OR_ANOTHER,
+        String A_BRANCH_NEEDS_A_NAME,
+        Counted A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG,
+        String A_BRANCHS_NAME_IS_MADE_OF_LOWERCASE_LETTERS_DIGITS_AND_SIGNS,
+        String A_BRANCHS_NAME_CANNOT_HOLD_TWO_DOTS_OR_END_IN_A_DOT_OR_LOCK,
+        About THERE_IS_A_BRANCH_CALLED_IT_ALREADY
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1318,7 +1323,12 @@ public record Lang(
             "answers",
             "begins to answer",
             "sleeps",
-            Lang::eitherInEnglish
+            Lang::eitherInEnglish,
+            "A branch needs a name, such as rust-rewrite.",
+            most -> "A branch's name is at most " + most + " characters long.",
+            "A branch's name is made of lowercase letters, digits, -, _ and ., and begins with a letter or a digit, such as rust-rewrite.",
+            "A branch's name cannot hold .., or end in . or .lock.",
+            branch -> "There is a branch called " + branch + " already."
         );
     }
 
