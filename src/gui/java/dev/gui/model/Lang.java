@@ -666,7 +666,8 @@ public record Lang(
         String WELCOME_TO_GENIES,
         String A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN,
         String GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED,
-        String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU
+        String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU,
+        String GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -723,7 +724,10 @@ public record Lang(
             + "where it can browse the web, run programs and make files, without ever touching yours.",
             "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
             + "Or have Genies set up a model on this computer instead: the simple way, below.",
-            "To think, genies need a model. Genies can set one up for you, right here on this computer."
+            "To think, genies need a model. Genies can set one up for you, right here on this computer.",
+            "Genies that are awake answer with a new model from their next message on. "
+            + "A new place, address or key reaches them when they next wake, and so does "
+            + "everything for a genie that kept running while Genies was closed."
         );
     }
 
