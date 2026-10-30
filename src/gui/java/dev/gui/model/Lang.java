@@ -108,6 +108,10 @@ public record Lang(
     /// on another, its `home`.
     public interface Looking { String of(String shown, String genie, String home); }
 
+    /// What oillamp deleted the last time a history grew too large: how many `moments`, how much
+    /// that `freed`, and how much the history has `taken` now of the `most` it may.
+    public interface Pruned { String of(int moments, String freed, String taken, String most); }
+
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
         String NEW_GENIE,
@@ -964,7 +968,13 @@ public record Lang(
         About ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS,
         String ITS_SCHEDULE_STAYS_AS_IT_IS,
         About A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN,
-        String SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO
+        String SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO,
+        About NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END,
+        WhoAndWhat ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT,
+        Pruned THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS,
+        String TIDY_UP_NOW_ELLIPSIS,
+        String DELETE_WHAT_DOES_NOT_FIT_NOW_RATHER_THAN_AT_THE_NEXT_SAVE,
+        String NEVER_DELETE
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1064,7 +1074,18 @@ public record Lang(
             genie ->
                 "A branch is a line of moments with a home of its own, schedule and settings "
                 + "included, to try something without losing the rest. " + genie + " lives on one at a time.",
-            "Save by hand before something you might want to undo, such as a big change to a project."
+            "Save by hand before something you might want to undo, such as a big change to a project.",
+            genie -> "Nothing is ever deleted: " + genie + "'s history may grow without end.",
+            (genie, size) ->
+                genie + "'s history may grow " + size + " beyond its first moment, on all branches "
+                + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest.",
+            (count, freed, taken, most) ->
+                "The last time, oillamp deleted " + (count == 1 ? "one old moment" : count + " old moments")
+                + " to stay within it, which freed " + freed + ". The history now takes "
+                + taken + " of the " + most + " it may, its first moment included.",
+            "Tidy up now…",
+            "Delete what does not fit now, rather than at the next save. You are told first what that is",
+            "Never delete"
         );
 
         /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
