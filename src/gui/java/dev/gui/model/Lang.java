@@ -16,18 +16,21 @@ package dev.gui.model;
 /// @param HEADER the header above a genie's pages, and what its lamp asks the user to allow
 /// @param DESKTOP a genie's desktop, beside its chat
 /// @param CHAT    a genie's chat: the conversation, and the composer under it
+/// @param DIALOGS the dialogs the window asks and tells the user things in
 public record Lang(
     Window WINDOW,
     Header HEADER,
     Desktop DESKTOP,
-    Chat CHAT
+    Chat CHAT,
+    Dialogs DIALOGS
 ) {
 
     public static final Lang ENGLISH = new Lang(
         Window.ENGLISH,
         Header.ENGLISH,
         Desktop.ENGLISH,
-        Chat.ENGLISH
+        Chat.ENGLISH,
+        Dialogs.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -47,6 +50,10 @@ public record Lang(
     /// A text about something a genie does: `who` is the genie's name, and `what` what it does
     /// it with, such as a request it asks the user to allow, or a window it shows.
     public interface WhoAndWhat { String of(String who, String what); }
+
+    /// Where a genie's folder was linked: the genie's name, whether the link was made `now` or
+    /// was there `already`, the folder it is in, and the link's own name there.
+    public interface Linked { String of(String genie, boolean now, String folder, String link); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
@@ -332,6 +339,43 @@ public record Lang(
             "failed",
             "Click to see what it printed",
             "Save…"
+        );
+    }
+
+    /// The words of the dialogs the window asks and tells the user things in.
+    public record Dialogs(
+        About DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES,
+        String DELETE_A_CONVERSATION,
+        String DELETE,
+        String KEEP,
+        About A_NEW_NAME_FOR,
+        String RENAME_A_GENIE,
+        Linked WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY,
+        String LINKED,
+        String COULD_NOT_LINK,
+        Counted THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT,
+        String WHAT_WENT_WRONG,
+        About GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN,
+        String CLOSE
+    ) {
+        public static final Dialogs ENGLISH = new Dialogs(
+            title -> "Delete the conversation \"" + title + "\" for good, with all its branches?",
+            "Delete a conversation",
+            "Delete",
+            "Keep",
+            name -> "A new name for " + name + ":",
+            "Rename a genie",
+            (genie, now, folder, link) ->
+                genie + "'s workspace " + (now ? "is" : "was") + " in your " + folder + (now ? " now" : " already")
+                + ", as \"" + link + "\".\nIt is a link, not a copy: " + genie + " sees what you change there.",
+            "Linked",
+            "Could not link",
+            count -> count == 1
+                ? "Something went wrong that Genies did not expect."
+                : count + " things went wrong that Genies did not expect.",
+            "What went wrong",
+            log -> "Genies carried on. All of it is kept in " + log + ", which helps whoever fixes it.",
+            "Close"
         );
     }
 }

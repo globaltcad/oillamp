@@ -826,10 +826,11 @@ public final class GeniesView extends JPanel {
 
     private void confirmForget(UUID id) {
         state.get().find(id).flatMap(genie -> genie.conversations().current()).ifPresent(doomed -> {
+            Lang.Dialogs words = state.get().lang().DIALOGS();
             ConfirmAnswer answer =
-                UI.confirmation("Delete the conversation \"" + doomed.title() + "\" for good, with all its branches?")
-                .titled("Delete a conversation")
-                .yesOption("Delete").noOption("Keep").cancelOption("")
+                UI.confirmation(words.DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES().of(doomed.title()))
+                .titled(words.DELETE_A_CONVERSATION())
+                .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
                 .show();
             if (answer == ConfirmAnswer.YES) app.forget(id, doomed.file());
         });
@@ -1712,10 +1713,11 @@ public final class GeniesView extends JPanel {
 
     private void rename(UUID id) {
         state.get().find(id).ifPresent(named -> {
+            Lang.Dialogs words = state.get().lang().DIALOGS();
             Object answer = JOptionPane.showInputDialog(
                 this,
-                "A new name for " + named.name() + ":",
-                "Rename a genie",
+                words.A_NEW_NAME_FOR().of(named.name()),
+                words.RENAME_A_GENIE(),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 null,
@@ -1730,19 +1732,22 @@ public final class GeniesView extends JPanel {
     /// unless the user names it, and says where the link is, or why there is none.
     private void linkWorkspace(UUID id) {
         state.get().find(id).ifPresent(genie -> {
+            Lang.Dialogs words = state.get().lang().DIALOGS();
             try {
                 Home.Link link = app.link(id, Home.WORKSPACE, app.documents(), Home.linkName(genie.name(), Home.WORKSPACE));
                 JOptionPane.showMessageDialog(
                     this,
-                    genie.name() + "'s workspace " + (link.madeNow() ? "is" : "was")
-                    + " in your " + app.documents().getFileName() + (link.madeNow() ? " now" : " already")
-                    + ", as \"" + link.at().getFileName() + "\".\nIt is a link, not a copy: " + genie.name()
-                    + " sees what you change there.",
-                    "Linked",
+                    words.WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY().of(
+                        genie.name(),
+                        link.madeNow(),
+                        String.valueOf(app.documents().getFileName()),
+                        String.valueOf(link.at().getFileName())
+                    ),
+                    words.LINKED(),
                     JOptionPane.INFORMATION_MESSAGE
                 );
             } catch (IOException failed) {
-                JOptionPane.showMessageDialog(this, failed.getMessage(), "Could not link", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, failed.getMessage(), words.COULD_NOT_LINK(), JOptionPane.WARNING_MESSAGE);
             }
         });
     }
@@ -1754,17 +1759,16 @@ public final class GeniesView extends JPanel {
         if (seen.isEmpty()) return;
         StringBuilder details = new StringBuilder();
         for (int i = seen.size() - 1; i >= 0; i--) details.append(seen.get(i).details()).append('\n');
-        String what = seen.size() == 1
-            ? "Something went wrong that Genies did not expect."
-            : seen.size() + " things went wrong that Genies did not expect.";
-        UI.dialog(SwingUtilities.getWindowAncestor(this), "What went wrong")
+        Lang.Dialogs words = state.get().lang().DIALOGS();
+        String what = words.THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT().of(seen.size());
+        UI.dialog(SwingUtilities.getWindowAncestor(this), words.WHAT_WENT_WRONG())
             .withOnCloseOperation(UI.OnWindowClose.DISPOSE)
             .onClosed(_ -> state.update(From.VIEW, now -> now.withoutTroubles(seen)))
             .add(UI.use(look, () ->
                 panel("fill, wrap 1, ins 16 18 16 18, gap 10", "[grow]", "[][][grow][]").group(Skin.FRAME)
                 .add("growx, wmin 0", label(what).group(Skin.TITLE))
                 .add("growx, wmin 0",
-                    label("Genies carried on. All of it is kept in " + app.errorLog() + ", which helps whoever fixes it.")
+                    label(words.GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN().of(app.errorLog().toString()))
                     .group(Skin.META)
                 )
                 .add("grow, push, w 760, h 380",
@@ -1776,7 +1780,7 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add("right",
-                    button("Close").group(Skin.QUIET_BUTTON)
+                    button(words.CLOSE()).group(Skin.QUIET_BUTTON)
                     .onClick(it -> SwingUtilities.getWindowAncestor(it.getComponent()).dispose())
                 )
                 .get(JPanel.class)
