@@ -16,6 +16,9 @@ import java.util.Locale;
 /// after what it says in English, such as `YOUR_GENIES()`, which says it in that language. A text
 /// assembled from something else, such as a count, takes that as its parameters, as languages
 /// differ in how they assemble one.
+///
+/// A language is added as a constant here. Every text then switches over it without saying it in
+/// that language yet, and the compiler lists each of them, until all are.
 public enum Lang {
     ENGLISH;
 
@@ -97,79 +100,6 @@ public enum Lang {
             ? String.join("", names)
             : String.join(", ", names.subList(0, names.size() - 1)) + " or " + names.getLast();
     }
-
-    /// A text that says how many there are of something.
-    public interface Counted { String of(int count); }
-
-    /// Something that happens every so many `hours`, at a `minute` past the hour.
-    public interface EveryHours { String of(int hours, String minute); }
-
-    /// A text that is longer than it may be: at `most` so many characters, where it `has` more.
-    public interface TooLong { String of(int most, int has); }
-
-    /// A job that runs once: on a `day`, at a `time`, which is `fromNow` so far off.
-    public interface OnceAt { String of(String day, String time, String fromNow); }
-
-    /// A computer's `memory`, and its graphics `card`, which has `cardMemory` of its own.
-    public interface Computer { String of(String memory, String card, String cardMemory); }
-
-    /// How many `times` a job runs on a day, from the `first` to the `last`.
-    public interface TimesFromTo { String of(int times, String first, String last); }
-
-    /// A text about something named, such as a genie or a window it shows.
-    public interface About { String of(String what); }
-
-    /// What a genie's card says of it when the pointer rests on it: its name, its status, and the
-    /// window it shows, which is empty while it shows none.
-    public interface GenieTip { String of(String name, String status, String showing); }
-
-    /// How long a conversation, or a branch of one, is: how many `questions` were asked in it,
-    /// and how many times one of them was then asked `differently`.
-    public interface Questions { String of(int questions, int differently); }
-
-    /// A text about something a genie does: `who` is the genie's name, and `what` what it does
-    /// it with, such as a request it asks the user to allow, or a window it shows.
-    public interface WhoAndWhat { String of(String who, String what); }
-
-    /// Where a genie's folder was linked: the genie's name, whether the link was made `now` or
-    /// was there `already`, the folder it is in, and the link's own name there.
-    public interface Linked { String of(String genie, boolean now, String folder, String link); }
-
-    /// A moment, by its `day`, such as "tomorrow", and its `time` on the clock.
-    public interface DayAndTime { String of(String day, String time); }
-
-    /// A month of a year, by name.
-    public interface OfMonth { String of(YearMonth month); }
-
-    /// A day of the week, by name.
-    public interface OfWeekday { String of(DayOfWeek day); }
-
-    /// A day of a month, written out.
-    public interface OfDate { String of(LocalDate day); }
-
-    /// Names as a sentence lists them, such as "a, b and c".
-    public interface Listed { String of(List<String> names); }
-
-    /// A text about a `branch` of a genie's history, and `what` it says of it, such as a time.
-    public interface OnBranch { String of(String branch, String what); }
-
-    /// A text about how many `moments` of a genie's history are on a `branch`.
-    public interface CountedOnBranch { String of(int moments, String branch); }
-
-    /// Why the oldest `moments` of a history would be deleted: the `branches` they are on, as a
-    /// list, or empty when that goes without saying, and how much deleting them `frees`.
-    public interface OldestMoments { String of(int moments, String branches, String frees); }
-
-    /// What the user looks at in a genie's history: the `shown` branch, while the `genie` lives
-    /// on another, its `home`.
-    public interface Looking { String of(String shown, String genie, String home); }
-
-    /// What oillamp deleted the last time a history grew too large: how many `moments`, how much
-    /// that `freed`, and how much the history has `taken` now of the `most` it may.
-    public interface Pruned { String of(int moments, String freed, String taken, String most); }
-
-    /// Moving a `genie` to the branch `to`, from the branch `from` it lives on.
-    public interface Moving { String of(String genie, String to, String from); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(Lang lang) {
