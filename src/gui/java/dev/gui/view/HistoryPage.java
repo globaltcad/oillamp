@@ -184,29 +184,32 @@ final class HistoryPage {
         zone = genie.viewAs(ZoneId.class, it -> it.schedule().zone());
         lines = Viewable.of(Lines.class, history, zone, History::lines);
         wording = Viewable.of(Wording.class, genie, state, (it, s) ->
-            new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate(), s.lang().HISTORY_PAGE())
+            new Wording(it.name(), it.history(), it.conversations(), it.schedule(), s.localNow().toLocalDate(), s.lang())
         );
         shownLine = history.viewAsString(History::shownLine);
     }
 
     /// What the words of moments are made of: the genie's name, its history, its conversations
     /// and jobs, which give runs their titles, the day, against which "today" is said, and the
-    /// words of the page.
+    /// words to say them in.
     private record Wording(
         String name,
         History history,
         Conversations conversations,
         Schedule schedule,
         LocalDate today,
-        Lang.HistoryPage words
+        Lang lang
     ) {
 
+        /// The words of the page.
+        Lang.HistoryPage words() { return lang.HISTORY_PAGE(); }
+
         String title(History.Moment moment) {
-            return history.title(moment, conversations, schedule, today.atStartOfDay());
+            return history.title(moment, conversations, schedule, today.atStartOfDay(), lang);
         }
 
         String when(History.Moment moment) {
-            return History.when(moment.at(), schedule.zone(), today.atStartOfDay());
+            return History.when(moment.at(), schedule.zone(), today.atStartOfDay(), lang);
         }
     }
 
@@ -644,14 +647,16 @@ final class HistoryPage {
 
     private UIForPanel<JPanel> dayRow(Tuple<Lines.Lane> lanes, Lines.Row.Day day) {
         LocalDate today = state.get().localNow().toLocalDate();
-        String label = DateWordingUtil.day(day.date(), today);
-        boolean near = label.equals("Today") || label.equals("Yesterday");
+        Val<String> label = state.viewAsString(it ->
+            DateWordingUtil.day(day.date(), today, it.lang().DATES())
+            + (DateWordingUtil.near(day.date(), today) ? "  ·  " + DateWordingUtil.shortDay(day.date(), it.lang().DATES()) : "")
+        );
         return
             panel("fill, ins 0, gap 0", columns(lanes))
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("skip 1, growy, w " + railsWidth(lanes) + "!", rails(lanes, day, 34, day.date().equals(today)))
             .add("growx, wmin 0, gapleft 8, gaptop 12, gapbottom 4",
-                ViewPartsUtil.words(theme, label + (near ? "  ·  " + DateWordingUtil.shortDay(day.date()) : ""), 13, 2f, Palette::TEXT)
+                ViewPartsUtil.words(theme, label, 13, 2f, Palette::TEXT)
             );
     }
 
@@ -1338,7 +1343,7 @@ final class HistoryPage {
 
     private void confirmGoBack(History.Moment moment) {
         Genie shown = genie.get();
-        String when = History.when(moment.at(), shown.schedule().zone(), state.get().localNow());
+        String when = History.when(moment.at(), shown.schedule().zone(), state.get().localNow(), state.get().lang());
         Lang.HistoryPage page = words.get();
         ConfirmAnswer answer =
             UI.confirmation(
