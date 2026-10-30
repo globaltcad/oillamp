@@ -12,10 +12,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -761,12 +759,12 @@ final class SchedulePage {
             .add("growx, wmin 0",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 6, 6).isVisibleIf(once)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
-                .add(quickPick("In an hour", now ->
+                .add(quickPick(Lang.SchedulePage::IN_AN_HOUR, now ->
                     now.plusHours(1).withSecond(0).withNano(0).withMinute((now.getMinute() / 5) * 5)
                 ))
-                .add(quickPick("This evening", now -> now.toLocalDate().atTime(now.getHour() >= 18 ? 21 : 18, 0)))
-                .add(quickPick("Tomorrow morning", now -> now.toLocalDate().plusDays(1).atTime(9, 0)))
-                .add(quickPick("Monday morning", now ->
+                .add(quickPick(Lang.SchedulePage::THIS_EVENING, now -> now.toLocalDate().atTime(now.getHour() >= 18 ? 21 : 18, 0)))
+                .add(quickPick(Lang.SchedulePage::TOMORROW_MORNING, now -> now.toLocalDate().plusDays(1).atTime(9, 0)))
+                .add(quickPick(Lang.SchedulePage::MONDAY_MORNING, now ->
                     now.toLocalDate().with(TemporalAdjusters.next(DayOfWeek.MONDAY)).atTime(9, 0)
                 ))
             )
@@ -793,9 +791,9 @@ final class SchedulePage {
                 .isVisibleIf(Viewable.of(Boolean.class, repeats, repeat, (isRepeating, how) ->
                     isRepeating && how == JobDraft.Repeat.HOURLY
                 ))
-                .add(label("At"))
-                .add("growx", textField(minute).group(Skin.INPUT).withTooltip("A number from 0 to 59"))
-                .add("wmin 0", label("minutes past each hour").group(Skin.META))
+                .add(label(words.viewAsString(Lang.SchedulePage::AT)))
+                .add("growx", textField(minute).group(Skin.INPUT).withTooltip(words.viewAsString(Lang.SchedulePage::A_NUMBER_FROM_0_TO_59)))
+                .add("wmin 0", label(words.viewAsString(Lang.SchedulePage::MINUTES_PAST_EACH_HOUR)).group(Skin.META))
             )
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 4, hidemode 3")
@@ -809,8 +807,7 @@ final class SchedulePage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.note(
                         theme,
-                        "Five fields, as cron has them: minute, hour, day of the month, month, "
-                        + "day of the week. 0 9 1 * * is nine on the first of each month; */30 * * * * every half hour.",
+                        words.viewAsString(Lang.SchedulePage::FIVE_FIELDS_AS_CRON_HAS_THEM),
                         Val.of(true)
                     )
                 )
@@ -820,9 +817,9 @@ final class SchedulePage {
             .add("growx, wmin 0",
                 box("fill, ins 0, gap 8, hidemode 3", "[][90!][grow]")
                 .isVisibleIf(clocked)
-                .add(label("At"))
+                .add(label(words.viewAsString(Lang.SchedulePage::AT)))
                 .add("growx",
-                    textField(time).group(Skin.INPUT).withTooltip("Such as 09:00, or 9.30")
+                    textField(time).group(Skin.INPUT).withTooltip(words.viewAsString(Lang.SchedulePage::SUCH_AS_09_00_OR_9_30))
                     .withStyle(Themed.of(draft.viewAs(Boolean.class, it -> it.clock().isPresent()), theme), (themed, it) -> {
                         var readable = themed.item();
                         Palette p = themed.palette();
@@ -840,17 +837,17 @@ final class SchedulePage {
             // ── until when ──
             .add("growx, wmin 0",
                 box("ins 0, gap 6, hidemode 3").isVisibleIf(repeats)
-                .add(label("Ends").withStyle(it -> it.padding(0, 0, 0, 0)))
+                .add(label(words.viewAsString(Lang.SchedulePage::ENDS)).withStyle(it -> it.padding(0, 0, 0, 0)))
                 .add(
                     chip(
-                        Val.of("Never"),
+                        words.viewAsString(Lang.SchedulePage::NEVER),
                         draft.viewAs(Boolean.class, it -> it.endsOn().isEmpty()),
                         () -> draft.update(From.VIEW, it -> it.withEndsOn(Optional.empty()))
                     )
                 )
                 .add(
                     chip(
-                        Val.of("On a day"),
+                        words.viewAsString(Lang.SchedulePage::ON_A_DAY),
                         draft.viewAs(Boolean.class, it -> it.endsOn().isPresent()),
                         () -> draft.update(From.VIEW, it ->
                             it.endsOn().isPresent()
@@ -893,7 +890,7 @@ final class SchedulePage {
 
     /// A month of days, seven to a row, Monday first.
     private UIForPanel<JPanel> calendar(Month month) {
-        String title = month.month().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.month().getYear();
+        Val<String> title = words.viewAsString(it -> it.MONTH_AND_YEAR().of(month.month()));
         var grid =
             panel("wrap 7, ins 10 10 8 10, gap 3 3", "[34!][34!][34!][34!][34!][34!][34!]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).border(1, p.BORDER()).borderRadius(12))
@@ -901,17 +898,17 @@ final class SchedulePage {
                 box("fill, ins 0 2 4 0, gap 2", "[grow][][]")
                 .add("growx, wmin 0", ViewPartsUtil.words(theme, title, 13, 2f, Palette::TEXT))
                 .add(
-                    button("‹").group(Skin.ICON_BUTTON).withTooltip("The month before")
+                    button("‹").group(Skin.ICON_BUTTON).withTooltip(words.viewAsString(Lang.SchedulePage::THE_MONTH_BEFORE))
                     .isEnabledIf(month.month().isAfter(YearMonth.from(month.today())))
                     .onClick(_ -> draft.update(From.VIEW, d -> d.withMonth(d.month().minusMonths(1))))
                 )
                 .add(
-                    button("›").group(Skin.ICON_BUTTON).withTooltip("The month after")
+                    button("›").group(Skin.ICON_BUTTON).withTooltip(words.viewAsString(Lang.SchedulePage::THE_MONTH_AFTER))
                     .onClick(_ -> draft.update(From.VIEW, d -> d.withMonth(d.month().plusMonths(1))))
                 )
             );
         for (DayOfWeek day : DayOfWeek.values())
-            grid = grid.add("center", label(day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2)).group(Skin.META));
+            grid = grid.add("center", label(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS().of(day))).group(Skin.META));
         int blank = month.month().atDay(1).getDayOfWeek().getValue() - 1;
         for (int i = 0; i < blank; i++) grid = grid.add(box());
         for (int number = 1; number <= month.month().lengthOfMonth(); number++)
@@ -949,8 +946,8 @@ final class SchedulePage {
         for (DayOfWeek day : DayOfWeek.values()) {
             Val<Boolean> on = draft.viewAs(Boolean.class, it -> it.days().contains(day));
             row = row.add("w 36!, h 36!",
-                button(day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2)).group(Skin.DAY)
-                .withTooltip(day.getDisplayName(TextStyle.FULL, Locale.ENGLISH))
+                button(words.viewAsString(it -> it.WEEKDAY_IN_TWO_LETTERS().of(day))).group(Skin.DAY)
+                .withTooltip(words.viewAsString(it -> it.WEEKDAY().of(day)))
                 .withStyle(Themed.of(on, theme), (themed, it) -> {
                     var isOn = themed.item();
                     Palette p = themed.palette();
@@ -987,9 +984,9 @@ final class SchedulePage {
     }
 
     /// A chip that sets the day and the time of a job that runs once, from now.
-    private UIForButton<JButton> quickPick(String text, UnaryOperator<LocalDateTime> from) {
+    private UIForButton<JButton> quickPick(Function<Lang.SchedulePage, String> text, UnaryOperator<LocalDateTime> from) {
         return
-            button(text).group(Skin.CHIP)
+            button(words.viewAsString(text)).group(Skin.CHIP)
             .onClick(_ -> {
                 LocalDateTime at = from.apply(state.get().localNow());
                 draft.update(From.VIEW, d ->

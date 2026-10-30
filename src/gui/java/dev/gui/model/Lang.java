@@ -1,5 +1,10 @@
 package dev.gui.model;
 
+import java.time.DayOfWeek;
+import java.time.YearMonth;
+import java.time.format.TextStyle;
+import java.util.Locale;
+
 /// The words of Genies: every text the window shows, in one language. A value, as [Palette] is,
 /// so that Genies can be shown in another language as it can in other colours.
 ///
@@ -75,6 +80,12 @@ public record Lang(
 
     /// A moment, by its `day`, such as "tomorrow", and its `time` on the clock.
     public interface DayAndTime { String of(String day, String time); }
+
+    /// A month of a year, by name.
+    public interface OfMonth { String of(YearMonth month); }
+
+    /// A day of the week, by name.
+    public interface OfWeekday { String of(DayOfWeek day); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
@@ -747,7 +758,24 @@ public record Lang(
         String BRIEF_IT_AS_YOU_WOULD_A_COLLEAGUE,
         String WHEN,
         String ONCE,
-        String AGAIN_AND_AGAIN
+        String AGAIN_AND_AGAIN,
+        String IN_AN_HOUR,
+        String THIS_EVENING,
+        String TOMORROW_MORNING,
+        String MONDAY_MORNING,
+        String AT,
+        String A_NUMBER_FROM_0_TO_59,
+        String MINUTES_PAST_EACH_HOUR,
+        String FIVE_FIELDS_AS_CRON_HAS_THEM,
+        String SUCH_AS_09_00_OR_9_30,
+        String ENDS,
+        String NEVER,
+        String ON_A_DAY,
+        String THE_MONTH_BEFORE,
+        String THE_MONTH_AFTER,
+        OfMonth MONTH_AND_YEAR,
+        OfWeekday WEEKDAY_IN_TWO_LETTERS,
+        OfWeekday WEEKDAY
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -813,7 +841,25 @@ public record Lang(
             + "keeps notes in ~/workspace/NOTES.md.",
             "WHEN",
             "Once",
-            "Again and again"
+            "Again and again",
+            "In an hour",
+            "This evening",
+            "Tomorrow morning",
+            "Monday morning",
+            "At",
+            "A number from 0 to 59",
+            "minutes past each hour",
+            "Five fields, as cron has them: minute, hour, day of the month, month, "
+            + "day of the week. 0 9 1 * * is nine on the first of each month; */30 * * * * every half hour.",
+            "Such as 09:00, or 9.30",
+            "Ends",
+            "Never",
+            "On a day",
+            "The month before",
+            "The month after",
+            month -> month.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.getYear(),
+            day -> day.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).substring(0, 2),
+            day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
         );
     }
 
