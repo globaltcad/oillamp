@@ -307,7 +307,7 @@ public record GeniesState(
 
     /// The selected genie's schedule, laid out around [#now].
     public Timeline timeline() {
-        return Timeline.of(genie().schedule(), now);
+        return Timeline.of(genie().schedule(), now, lang);
     }
 
     /// [#now] on the clock of the selected genie's schedule.

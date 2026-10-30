@@ -1,6 +1,7 @@
 package gui
 
 import dev.gui.model.JobDraft
+import dev.gui.model.Lang
 import dev.gui.model.Recurrence
 import dev.gui.model.Schedule
 import dev.gui.model.Timeline
@@ -85,7 +86,7 @@ class PlanningAGeniesWeekSpec extends Specification {
             !draft.repeats()
             draft.once() == Optional.of(LocalDateTime.of(2026, 9, 29, 16, 0))
             draft.problem(NOW) == Optional.of('Write what the genie should do.')
-            draft.summary(NOW) == 'Once, today at 16:00 — in 1 hour.'
+            draft.summary(NOW, Lang.ENGLISH) == 'Once, today at 16:00 — in 1 hour.'
 
         and: 'a time is read the ways people write it, and one that has passed is refused'
             draft.withTime('9.30').clock() == Optional.of(LocalTime.of(9, 30))
@@ -100,7 +101,7 @@ class PlanningAGeniesWeekSpec extends Specification {
                        .withEndsOn(Optional.of(NOW.toLocalDate().plusDays(20)))) {
                 problem(NOW).isEmpty()
                 recurrence().get().cron() == '30 8 * * 1,4'
-                summary(NOW) == 'Every Monday and Thursday at 08:30, first on Thursday 1 October at 08:30, until Monday 19 October.'
+                summary(NOW, Lang.ENGLISH) == 'Every Monday and Thursday at 08:30, first on Thursday 1 October at 08:30, until Monday 19 October.'
                 ends() == Optional.of(LocalDateTime.of(2026, 10, 20, 0, 0))
             }
     }
@@ -146,7 +147,7 @@ class PlanningAGeniesWeekSpec extends Specification {
             var schedule = Schedule.unread(BERLIN).readAs(false, BERLIN, Tuple.of(Schedule.Job, daily, hourly), Tuple.of(Schedule.Run, ran))
 
         when:
-            var timeline = Timeline.of(schedule, at(NOW))
+            var timeline = Timeline.of(schedule, at(NOW), Lang.ENGLISH)
 
         then: 'yesterday, today and tomorrow'
             timeline.days()*.label() == ['Yesterday', 'Today', 'Tomorrow']
@@ -171,7 +172,7 @@ class PlanningAGeniesWeekSpec extends Specification {
             timeline.days()[2].moments()*.clock() == ['09:00']
 
         when: 'the user picks the hourly job'
-            var picked = Timeline.of(schedule.pick('job-2'), at(NOW))
+            var picked = Timeline.of(schedule.pick('job-2'), at(NOW), Lang.ENGLISH)
 
         then: 'its times stand forward, and the rest step back'
             picked.days()[1].moments()[1].emphasis() == Timeline.Emphasis.PICKED
@@ -192,7 +193,7 @@ class PlanningAGeniesWeekSpec extends Specification {
             var schedule = Schedule.unread(BERLIN).readAs(false, BERLIN, Tuple.of(Schedule.Job, often), Tuple.of(Schedule.Run))
 
         expect:
-            with(Timeline.of(schedule, at(NOW)).days()[1].moments().first()) {
+            with(Timeline.of(schedule, at(NOW), Lang.ENGLISH).days()[1].moments().first()) {
                 kind() == Timeline.Kind.REPEATING
                 clock() == '96×'
                 detail() == 'Every 15 minutes · 96 times, 00:00 to 23:45'
@@ -210,6 +211,6 @@ class PlanningAGeniesWeekSpec extends Specification {
             var schedule = Schedule.unread(BERLIN).readAs(false, BERLIN, Tuple.of(Schedule.Job, missed), Tuple.of(Schedule.Run))
 
         expect:
-            Timeline.of(schedule, at(NOW)).days()[0].moments()*.kind() == [Timeline.Kind.NOW, Timeline.Kind.DUE]
+            Timeline.of(schedule, at(NOW), Lang.ENGLISH).days()[0].moments()*.kind() == [Timeline.Kind.NOW, Timeline.Kind.DUE]
     }
 }

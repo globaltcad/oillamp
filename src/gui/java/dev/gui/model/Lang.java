@@ -1,7 +1,9 @@
 package dev.gui.model;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
@@ -30,6 +32,7 @@ import java.util.Locale;
 /// @param SCHEDULE_PAGE when jobs wake a genie, and what they did
 /// @param HISTORY_PAGE the moments a genie's home was saved at, and going back to one
 /// @param PARTS   the parts of the window that several pages share
+/// @param DATES   days and spans of time, as the pages say them
 public record Lang(
     Window WINDOW,
     Header HEADER,
@@ -42,7 +45,8 @@ public record Lang(
     SettingsPage SETTINGS_PAGE,
     SchedulePage SCHEDULE_PAGE,
     HistoryPage HISTORY_PAGE,
-    Parts PARTS
+    Parts PARTS,
+    Dates DATES
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -57,7 +61,8 @@ public record Lang(
         SettingsPage.ENGLISH,
         SchedulePage.ENGLISH,
         HistoryPage.ENGLISH,
-        Parts.ENGLISH
+        Parts.ENGLISH,
+        Dates.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -90,6 +95,9 @@ public record Lang(
 
     /// A day of the week, by name.
     public interface OfWeekday { String of(DayOfWeek day); }
+
+    /// A day of a month, written out.
+    public interface OfDate { String of(LocalDate day); }
 
     /// Names as a sentence lists them, such as "a, b and c".
     public interface Listed { String of(List<String> names); }
@@ -1157,6 +1165,47 @@ public record Lang(
                 ? String.join("", names)
                 : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
         }
+    }
+
+    /// Days and spans of time, as the pages say them; [DateWordingUtil] says which of them fits.
+    public record Dates(
+        String TODAY,
+        String TOMORROW,
+        String YESTERDAY,
+        OfDate DAY,
+        String TODAY_IN_A_SENTENCE,
+        String TOMORROW_IN_A_SENTENCE,
+        String YESTERDAY_IN_A_SENTENCE,
+        About ON_DAY,
+        OfDate SHORT_DAY,
+        String NOW,
+        Counted IN_MINUTES,
+        Counted IN_HOURS,
+        Counted IN_DAYS,
+        String JUST_NOW,
+        Counted MINUTES_AGO,
+        Counted HOURS_AGO,
+        Counted DAYS_AGO
+    ) {
+        public static final Dates ENGLISH = new Dates(
+            "Today",
+            "Tomorrow",
+            "Yesterday",
+            DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)::format,
+            "today",
+            "tomorrow",
+            "yesterday",
+            date -> "on " + date,
+            DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)::format,
+            "now",
+            count -> "in " + count + (count == 1 ? " minute" : " minutes"),
+            count -> "in " + count + (count == 1 ? " hour" : " hours"),
+            count -> "in " + count + (count == 1 ? " day" : " days"),
+            "just now",
+            count -> count + (count == 1 ? " minute ago" : " minutes ago"),
+            count -> count + (count == 1 ? " hour ago" : " hours ago"),
+            count -> count + (count == 1 ? " day ago" : " days ago")
+        );
     }
 
     /// The words of the parts of the window that several pages share.
