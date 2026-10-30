@@ -72,6 +72,7 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
     public static Timeline of(Schedule schedule, Instant now, Lang lang) {
         LocalDateTime present = LocalDateTime.ofInstant(now, schedule.zone());
         LocalDate today = present.toLocalDate();
+        Lang.SchedulePage words = lang.SCHEDULE_PAGE();
         // Each moment with when it is and its rank among moments at the same time: what ran,
         // then now, then what is due, then what is planned.
         record Placed(LocalDateTime at, int rank, Moment moment) {}
@@ -86,39 +87,38 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
             Optional<Schedule.Job> job = schedule.job(run.job());
             String said = Schedule.firstLine(run.said(), 140);
             placed.add(new Placed(at, 0, moment(schedule, Kind.RAN, Recurrence.clock(at.toLocalTime()),
-                    job.map(Schedule.Job::title).orElse(said.isEmpty() ? "A job that has run" : said),
-                    outcomeWords(run.outcome()) + (job.isPresent() && !said.isEmpty() ? " · " + said : ""),
+                    job.map(Schedule.Job::title).orElse(said.isEmpty() ? words.A_JOB_THAT_HAS_RUN() : said),
+                    outcomeWords(run.outcome(), words) + (job.isPresent() && !said.isEmpty() ? " · " + said : ""),
                     run.job(), run.id(), run.conversation(), Optional.of(run.outcome()), job.map(Schedule.Job::byGenie).orElse(false))));
         }
 
         String clockNow = Recurrence.clock(present.toLocalTime());
         placed.add(new Placed(present, 1, schedule.running()
                 .map(running -> moment(schedule, Kind.WORKING, clockNow,
-                        schedule.job(running.job()).map(Schedule.Job::title).orElse("A job"),
-                        "working on it, since " + Recurrence.clock(LocalDateTime.ofInstant(running.since(), schedule.zone()).toLocalTime()),
+                        schedule.job(running.job()).map(Schedule.Job::title).orElse(words.A_JOB()),
+                        words.WORKING_ON_IT_SINCE().of(Recurrence.clock(LocalDateTime.ofInstant(running.since(), schedule.zone()).toLocalTime())),
                         running.job(), running.run(), Optional.empty(), Optional.empty(),
                         schedule.job(running.job()).map(Schedule.Job::byGenie).orElse(false)))
-                .orElseGet(() -> new Moment(Kind.NOW, clockNow, "Now", "", "", "", Optional.empty(), Optional.empty(),
+                .orElseGet(() -> new Moment(Kind.NOW, clockNow, words.NOW_ON_THE_TIMELINE(), "", "", "", Optional.empty(), Optional.empty(),
                         false, Emphasis.PLAIN))));
 
         for (Schedule.Job job : schedule.jobs()) {
             boolean runningNow = schedule.running().filter(running -> running.job().equals(job.id())).isPresent();
             if (job.next().filter(next -> !next.isAfter(now)).isPresent() && !runningNow)
                 placed.add(new Placed(present, 2, moment(schedule, Kind.DUE, clockNow, job.title(),
-                        "its time came; it runs as soon as the genie is awake and free", job.id(), "",
+                        words.ITS_TIME_CAME_IT_RUNS_AS_SOON_AS_THE_GENIE_IS_AWAKE_AND_FREE(), job.id(), "",
                         Optional.empty(), Optional.empty(), job.byGenie())));
             Map<LocalDate, List<LocalDateTime>> byDay = new TreeMap<>();
             for (Instant time : job.upcoming())
                 byDay.computeIfAbsent(LocalDateTime.ofInstant(time, schedule.zone()).toLocalDate(), _ -> new ArrayList<>())
                      .add(LocalDateTime.ofInstant(time, schedule.zone()));
-            String how = job.repeats().map(it -> it.describe(lang)).orElse("Once");
+            String how = job.repeats().map(it -> it.describe(lang)).orElse(words.ONCE_WITHOUT_A_TIME());
             for (List<LocalDateTime> times : byDay.values()) {
                 if (times.size() >= FOLD_FROM) {
                     LocalDateTime first = times.getFirst();
                     String which = times.size() <= LISTED_TIMES
                             ? String.join(", ", times.stream().map(time -> Recurrence.clock(time.toLocalTime())).toList())
-                            : times.size() + " times, " + Recurrence.clock(first.toLocalTime()) + " to "
-                              + Recurrence.clock(times.getLast().toLocalTime());
+                            : words.TIMES_FROM_TO().of(times.size(), Recurrence.clock(first.toLocalTime()), Recurrence.clock(times.getLast().toLocalTime()));
                     placed.add(new Placed(first, 3, moment(schedule, Kind.REPEATING, times.size() + "×",
                             job.title(), how + " · " + which, job.id(), "",
                             Optional.empty(), Optional.empty(), job.byGenie())));
@@ -160,12 +160,12 @@ public record Timeline(Tuple<Day> days, int hiddenRuns) {
     }
 
     /// How a run ended, in a word or two.
-    public static String outcomeWords(Schedule.Outcome outcome) {
+    static String outcomeWords(Schedule.Outcome outcome, Lang.SchedulePage words) {
         return switch (outcome) {
-            case FINISHED  -> "Done";
-            case FAILED    -> "Failed";
-            case TIMED_OUT -> "Ran out of time";
-            case STOPPED   -> "Stopped";
+            case FINISHED  -> words.DONE();
+            case FAILED    -> words.FAILED();
+            case TIMED_OUT -> words.RAN_OUT_OF_TIME();
+            case STOPPED   -> words.STOPPED();
         };
     }
 }
