@@ -493,7 +493,7 @@ class TravellingBackInTimeSpec extends Specification {
     def 'An application switches the saves on and off, and only those lines of the file change'() {
         reportInfo """
             An application, a program built on oillamp's Java API, has a settings page that shows
-            when the lamp saves itself, and changes it. It reads and writes the four values under
+            when the lamp saves itself, and changes it. It reads and writes the five values under
             [autosave] with `LampDirectory.autosave`, which runs `oillamp history <dir> autosave`. The file is
             also the user's, so their comments and the alignment of the values stay.
         """
@@ -501,37 +501,52 @@ class TravellingBackInTimeSpec extends Specification {
             var lamp = aLampThatHasRun()
             var settings = Lamp.at(lamp).launchedBy(host.launcher)
 
-        expect: 'the defaults: no saves at the start or end of a session, but around every run'
-            settings.autosave() == new Lamp.Autosave(false, false, true, true)
+        expect: 'the defaults: no saves at the start or end of a session, but around every job\'s run, and a chat once quiet for ten minutes'
+            settings.autosave() == new Lamp.Autosave(false, false, true, true, 10)
 
         when: 'the application switches every one of them the other way'
-            var written = settings.autosave(new Lamp.Autosave(true, true, false, false))
+            var written = settings.autosave(new Lamp.Autosave(true, true, false, false, 30))
 
         then: 'the file says it, with the comments it had'
-            written == new Lamp.Autosave(true, true, false, false)
+            written == new Lamp.Autosave(true, true, false, false, 30)
             settings.autosave() == written
             var file = Files.readString(lamp.resolve('oillamp.toml'))
             file.contains('startup    = true   # as a session starts, before the sandbox runs\n')
             file.contains('after_run  = false    # as a run ends, with the agent\'s last message\n')
+            file.contains('chat_quiet_minutes = 30\n')
 
         and: 'the command line says the same'
             var shown = host.oillamp.run('history', lamp.toString(), 'autosave')
             shown.succeeded()
-            shown.console().contains('startup on, shutdown on, before a run off, after a run off')
+            shown.console().contains('startup on, shutdown on, before a job\'s run off, after a job\'s run off, a chat once quiet for 30 minutes')
 
         when: 'one moment is switched on the command line'
             var one = host.oillamp.run('history', lamp.toString(), 'autosave', 'after-run', 'on')
 
         then: 'only that one changed'
             one.succeeded()
-            settings.autosave() == new Lamp.Autosave(true, true, false, true)
+            settings.autosave() == new Lamp.Autosave(true, true, false, true, 30)
+
+        when: 'every question is to be saved by itself, on the command line'
+            var each = host.oillamp.run('history', lamp.toString(), 'autosave', 'chat-quiet-minutes', '0')
+
+        then:
+            each.succeeded()
+            settings.autosave() == new Lamp.Autosave(true, true, false, true, 0)
+
+        when: 'a chat is to wait longer than a day'
+            var tooLong = host.oillamp.run('history', lamp.toString(), 'autosave', 'chat-quiet-minutes', '1441')
+
+        then: 'oillamp refuses, and says how long it may be'
+            tooLong.status() == LampExitStatus.USAGE
+            tooLong.console().contains('chat-quiet-minutes needs a number of minutes from 0 to 1440')
 
         when: 'a moment oillamp does not know is given'
             var wrong = host.oillamp.run('history', lamp.toString(), 'autosave', 'lunch', 'on')
 
         then:
             wrong.status() == LampExitStatus.USAGE
-            wrong.console().contains('expected startup, shutdown, before-run or after-run')
+            wrong.console().contains('expected startup, shutdown, before-run, after-run or chat-quiet-minutes')
     }
 
     def 'LampDirectory.autosave refuses to change the saves while a session runs'() {
@@ -546,12 +561,12 @@ class TravellingBackInTimeSpec extends Specification {
             startASession(lamp)
 
         when:
-            settings.autosave(new Lamp.Autosave(true, true, true, true))
+            settings.autosave(new Lamp.Autosave(true, true, true, true, 10))
 
         then:
             var busy = thrown(LampFailedException)
             busy.status() == LampExitStatus.LAMP_BUSY
-            settings.autosave() == new Lamp.Autosave(false, false, true, true)
+            settings.autosave() == new Lamp.Autosave(false, false, true, true, 10)
     }
 
     @IgnoreIf({ !['/usr/bin/git', '/bin/git', '/usr/local/bin/git'].any { Files.isExecutable(Path.of(it)) } })

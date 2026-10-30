@@ -209,9 +209,9 @@ public final class Lamp implements AutoCloseable {
         ran.orThrow();
         for (LampEvent event : ran.events())
             if (event instanceof LampEvent.AutosaveSettings(
-                    boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun
+                    boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun, int chatQuietMinutes
             ))
-                return new Autosave(startup, shutdown, beforeRun, afterRun);
+                return new Autosave(startup, shutdown, beforeRun, afterRun, chatQuietMinutes);
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no autosave settings"));
     }
 
@@ -271,12 +271,17 @@ public final class Lamp implements AutoCloseable {
     ///
     /// @param startup   as a session starts, before the sandbox runs. Off unless switched on
     /// @param shutdown  as a session ends, after the sandbox has stopped. Off unless switched on
-    /// @param beforeRun just before a run wakes the agent, so that what the person changed and
-    ///                  what the run changed are separate snapshots. On unless switched off
-    /// @param afterRun  as a run ends, with the agent's last message. A job's prompt tells the
-    ///                  agent what its last runs said and changed from these, so without them it
-    ///                  is told nothing about them. On unless switched off
-    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun) {}
+    /// @param beforeRun just before a job's run wakes the agent, so that what the person changed
+    ///                  and what the run changed are separate snapshots. On unless switched off
+    /// @param afterRun  as a job's run ends, with the agent's last message. A job's prompt tells
+    ///                  the agent what its last runs said and changed from these, so without them
+    ///                  it is told nothing about them. On unless switched off
+    /// @param chatQuietMinutes how long a chat must have been quiet before its questions are
+    ///                  saved, together. They are saved too as a job's run begins, and as the
+    ///                  session ends, whatever `shutdown` says. 0 saves around each question as
+    ///                  `beforeRun` and `afterRun` say for a job's run instead. 10 unless changed,
+    ///                  and at most a day, 1440
+    public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {}
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 

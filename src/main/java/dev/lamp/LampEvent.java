@@ -290,8 +290,10 @@ public sealed interface LampEvent {
     /// @param shutdown  as a session ends
     /// @param beforeRun just before a run wakes the agent
     /// @param afterRun  as a run ends
-    record AutosaveSettings(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun)
-            implements LampEvent {}
+    /// @param chatQuietMinutes how long a chat is quiet before it is saved; 0 saves around each
+    ///                  question as around a job's run
+    record AutosaveSettings(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun,
+                            int chatQuietMinutes) implements LampEvent {}
 
     /// The value of `max_growth_gb` under `[history]` in a lamp's `oillamp.toml`: how far, in GB of
     /// 1024³ bytes, the history may grow beyond its first snapshot, on all branches together,

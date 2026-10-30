@@ -456,7 +456,7 @@ Oillamp-Session: 20260929-181200
 | `before-switch` | `oillamp history <dir> switch`, on the branch it leaves, just before it changes anything, if anything changed |
 | `before-run` | `AgentRunner`, just before the agent is woken for a job, if anything changed since the last snapshot, which is always so, because the job was just marked as run in the schedule. Before a question too, with `autosave.chat_quiet_minutes = 0` |
 | `run` | `AgentRunner`, as a job's run ends, always, even when nothing changed: its message holds the agent's last message. As a question's run ends too, with `autosave.chat_quiet_minutes = 0` |
-| `chat` | `AgentRunner`, for the questions answered since the last snapshot, together: on the `oillamp-runs` thread once no run has begun for `autosave.chat_quiet_minutes`, or as the session ends. Always, even when nothing changed, so that its `Oillamp-Run`, the last question's, is counted |
+| `chat` | `AgentRunner`, for the questions answered since the last snapshot, together: on the `oillamp-runs` thread once no run has begun for `autosave.chat_quiet_minutes`, or just before a job's run begins, or as the session ends. Always, even when nothing changed, so that its `Oillamp-Run`, the last question's, is counted |
 
 A run's snapshots carry more trailers: `Oillamp-Run` (`run-12`; what the next run's number is
 counted from, see "Runs and the schedule"), and on the `run` snapshot
@@ -1092,6 +1092,9 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
 
 **A run**, on the `oillamp-runs` thread, one at a time:
 
+0. For a job's run, the `chat` save of the questions not yet saved, if there are any, so that
+   they keep their own snapshot, with their conversation, and the job's snapshots hold only what
+   the job did.
 1. A job's `last_run` is set to now (a `once` job is removed instead), so it is not due again.
 2. `before-run` save, for a job's run, if anything changed and `autosave.before_run` is on. Off, and
    for a question, the run's `Oillamp-Base` is the newest snapshot there is.
@@ -1106,8 +1109,9 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
 5. `run` save, for a job's run, always while `autosave.after_run` is on, with the answer (cut at
    16 KB) and the trailers above. A question's run is not saved by itself, unless
    `autosave.chat_quiet_minutes` is 0: it waits for the `chat` save, which the thread makes once
-   no run has begun for that many minutes, or `AgentRunner.stop` as the session ends. A job's run
-   in between saves what the questions changed in its own snapshots.
+   no run has begun for that many minutes, or step 0 as a job's run begins, or `AgentRunner.stop`
+   as the session ends. Only when the save of step 0 failed do a job's snapshots hold what the
+   questions changed.
 6. `RunFinished` is reported, with the conversation it happened in, and handed to `oillamp ask`
    if it asked and waits.
 
@@ -1874,7 +1878,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `autosave.shutdown` | false | save the lamp as a session ends, after the sandbox has stopped | yes |
 | `autosave.before_run` | true | save the lamp just before a run wakes the agent | yes |
 | `autosave.after_run` | true | save the lamp as a run ends; the next job's prompt reads the runs from these | yes |
-| `autosave.chat_quiet_minutes` | 10 | save the questions asked together, once no run began for this long, and as the session ends; `before_run` and `after_run` then apply to jobs' runs. 0 saves around each question too (0–1440) | yes |
+| `autosave.chat_quiet_minutes` | 10 | save the questions asked together, once no run began for this long, as a job's run begins, and as the session ends; `before_run` and `after_run` then apply to jobs' runs. 0 saves around each question too (0–1440) | yes |
 | `history.max_growth_gb` | 2 | how far the history may grow beyond its first snapshot, in GB, on all branches together; 0 never deletes a snapshot (0–10000) | yes |
 
 `oillamp config <dir> check` validates, `show-effective` prints a summary of the merged result,

@@ -631,15 +631,63 @@ class WakingTheAgentSpec extends Specification {
             newest.conversation() == finished.last().conversation()
     }
 
+    def 'A chat a job interrupts keeps a snapshot of its own, #saves'() {
+        reportInfo """
+            Let's consider a person who asks the agent to write a plan, and a job that comes due a
+            moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`. Oillamp
+            saves the chat first, in a `chat save` of its own, which names the question's run and
+            conversation, and only then begins the job's run. So the history says that the person
+            asked for the plan, and the job's snapshots hold only what the job did, also when
+            there is no save just before the job's run.
+
+            The session runs on a clock sixty times faster than it should, so the job, due a
+            minute after it is added, runs a second later.
+        """
+        given: 'an agent that writes a file of its own for every prompt'
+            var lamp = aLampThatHasRun("[schedule]\nenabled = true\n[autosave]\nbefore_run = ${beforeRun}\n")
+            int prompts = 0
+            anAgent { prompt ->
+                Files.writeString(home(lamp).resolve("workspace/prompt-${++prompts}.md"), prompt)
+                'Done.'
+            }
+            host.machine { it.clockRunsFaster(60) }
+            startASession(lamp)
+
+        when: 'a person asks a question, and a job comes due at once'
+            assert host.oillamp.run('ask', lamp.toString(), 'Make a plan').succeeded()
+            var asked = reported.find { it instanceof LampEvent.RunFinished }
+            assert host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Tidy up').succeeded()
+            var job = waitFor(LampEvent.RunFinished) { it.run().job().isPresent() }
+
+        then: 'the newest snapshots are the job\'s, and before them the chat\'s'
+            var snapshots = host.oillamp.run('history', lamp.toString()).events()
+                    .find { it instanceof LampEvent.History }.snapshots()
+            snapshots.take(kinds.size())*.kind() == kinds
+            var chat = snapshots.find { it.kind() == LampSaveKind.CHAT }
+            chat.run() == Optional.of('run-1')
+            chat.message() == 'run-1 (asked)'
+            chat.conversation() == asked.conversation()
+
+        and: 'the job\'s run is counted from the chat\'s snapshot on'
+            job.snapshot().isPresent()
+            snapshots.first().id() == job.snapshot().get().id()
+
+        where:
+            beforeRun || kinds
+            true      || [LampSaveKind.RUN, LampSaveKind.BEFORE_RUN, LampSaveKind.CHAT]
+            false     || [LampSaveKind.RUN, LampSaveKind.CHAT]
+            saves = beforeRun ? 'with a save just before the job\'s run' : 'without a save just before the job\'s run'
+    }
+
     def 'Oillamp still saves a chat when the saves of a job\'s run after it fail'() {
         reportInfo """
             Let's consider a person who asks the agent a question, and a job that comes due a
             moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`. The
-            job's run is saved just before and as it ends, and those snapshots hold what the
-            question changed too, so the chat need not be saved again. But only if they were
-            made: in the rare case that the lamp's history, `.oillamp/history`, cannot be written
-            while the job runs, here because it is read-only, both saves fail, and the chat must
-            still be saved later, at the latest as the session ends.
+            chat is saved as the job's run begins, and when that fails, the job's snapshots hold
+            what the question changed too. But only if they were made: in the rare case that the
+            lamp's history, `.oillamp/history`, cannot be written while the job runs, here because
+            it is read-only, all three saves fail, and the chat must still be saved later, at the
+            latest as the session ends.
 
             The session runs on a clock sixty times faster than it should, so the job, due a
             minute after it is added, runs a second later.

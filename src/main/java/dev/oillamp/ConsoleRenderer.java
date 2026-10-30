@@ -363,7 +363,9 @@ final class ConsoleRenderer {
                     + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));
             case LampEvent.AutosaveSettings settings -> printLine(area("autosave")
                     + "startup " + onOff(settings.startup()) + ", shutdown " + onOff(settings.shutdown())
-                    + ", before a run " + onOff(settings.beforeRun()) + ", after a run " + onOff(settings.afterRun()));
+                    + ", before a job's run " + onOff(settings.beforeRun()) + ", after a job's run " + onOff(settings.afterRun())
+                    + (settings.chatQuietMinutes() == 0 ? ", and around each question too"
+                       : ", a chat once quiet for " + settings.chatQuietMinutes() + " minutes"));
             case LampEvent.HistoryGrowthLimit limit -> printLine(area("history")
                     + (limit.maxGrowthGb() == 0 ? "max_growth_gb 0: no snapshot is ever deleted"
                        : "may grow " + java.math.BigDecimal.valueOf(limit.maxGrowthGb()).stripTrailingZeros().toPlainString()

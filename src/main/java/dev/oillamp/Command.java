@@ -65,10 +65,11 @@ sealed interface Command {
             /// `confirmed` is `--yes`; without it, the action only says what would be lost.
             record Reset(String snapshot, boolean confirmed) implements History.Action {}
             record Prune(boolean confirmed) implements History.Action {}
-            /// The moments to switch on or off, each on or off; with none, the action only says
-            /// what the lamp's file has.
+            /// The moments to switch on or off, each on or off, and how long a chat must be quiet
+            /// before it is saved; with none, the action only says what the lamp's file has.
             record Autosave(Optional<Boolean> startup, Optional<Boolean> shutdown,
-                            Optional<Boolean> beforeRun, Optional<Boolean> afterRun) implements History.Action {}
+                            Optional<Boolean> beforeRun, Optional<Boolean> afterRun,
+                            Optional<Integer> chatQuietMinutes) implements History.Action {}
             /// The new `[history].max_growth_gb`, in GB; without one, the action only says what
             /// the lamp's file has.
             record MaxGrowth(Optional<Double> gb) implements History.Action {}
@@ -484,15 +485,26 @@ sealed interface Command {
         };
     }
 
-    /// `oillamp history <dir> autosave [<moment> (on | off)]...`, from the words after `autosave`.
+    /// `oillamp history <dir> autosave [<moment> (on | off) | chat-quiet-minutes <minutes>]...`,
+    /// from the words after `autosave`.
     private static Result<Command> autosave(Path lamp, Tuple<String> words, Context.Options options) {
         String usage = usageOf("history <dir> autosave");
         java.util.Map<String, Boolean> moments = new java.util.HashMap<>();
+        Optional<Integer> quiet = Optional.empty();
         for (int i = 0; i < words.size(); i += 2) {
             String moment = words.get(i);
+            if (moment.equals(CHAT_QUIET_MINUTES)) {
+                String written = i + 1 < words.size() ? words.get(i + 1) : "";
+                if (!written.matches("[0-9]{1,4}") || Integer.parseInt(written) > LampConfig.Autosave.MOST_QUIET_MINUTES)
+                    return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> autosave` " + CHAT_QUIET_MINUTES
+                            + " needs a number of minutes from 0 to " + LampConfig.Autosave.MOST_QUIET_MINUTES
+                            + " after it; 0 saves around each question", usage));
+                quiet = Optional.of(Integer.parseInt(written));
+                continue;
+            }
             if (!AUTOSAVE_MOMENTS.contains(moment))
                 return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> autosave` \"" + moment
-                        + "\": expected startup, shutdown, before-run or after-run", usage));
+                        + "\": expected startup, shutdown, before-run, after-run or " + CHAT_QUIET_MINUTES, usage));
             String switched = i + 1 < words.size() ? words.get(i + 1) : "";
             if (!switched.equals("on") && !switched.equals("off"))
                 return Result.err(ProblemCatalogUtil.usage("`oillamp history <dir> autosave` " + moment
@@ -501,7 +513,7 @@ sealed interface Command {
         }
         return Result.ok(new History(lamp, new History.Action.Autosave(
                 Optional.ofNullable(moments.get("startup")), Optional.ofNullable(moments.get("shutdown")),
-                Optional.ofNullable(moments.get("before-run")), Optional.ofNullable(moments.get("after-run"))),
+                Optional.ofNullable(moments.get("before-run")), Optional.ofNullable(moments.get("after-run")), quiet),
                 options));
     }
 
@@ -569,6 +581,10 @@ sealed interface Command {
     /// What `oillamp history <dir> autosave` switches: the moments oillamp saves a lamp by itself.
     ValueSet<String> AUTOSAVE_MOMENTS = ValueSet.of("startup", "shutdown", "before-run", "after-run");
 
+    /// What `oillamp history <dir> autosave` takes, followed by minutes, for how long a chat must
+    /// be quiet before oillamp saves it.
+    String CHAT_QUIET_MINUTES = "chat-quiet-minutes";
+
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
@@ -584,7 +600,8 @@ sealed interface Command {
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("schedule", 3).put("ask", 2)
                 .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
-                .put("history", 2 + 2 * AUTOSAVE_MOMENTS.size())
+                // The lamp, `autosave`, and each moment and chat-quiet-minutes with its value.
+                .put("history", 2 + 2 * (AUTOSAVE_MOMENTS.size() + 1))
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
 
     /// The lines of [#usage] that describe `command`, such as `oillamp stop <dir>`, or the four
@@ -707,10 +724,13 @@ sealed interface Command {
                     `git reset --hard` does: the snapshots after it leave the branch, and
                     changes not yet saved are thrown away. Nothing is saved first. Without
                     --yes it only says what would be lost. The session must be stopped.
-              history <dir> autosave [(startup | shutdown | before-run | after-run) (on | off)]...
+              history <dir> autosave [(startup | shutdown | before-run | after-run) (on | off)
+                                     | chat-quiet-minutes <minutes>]...
                     Say when oillamp saves the lamp by itself: [autosave] in oillamp.toml.
-                    With moments and on or off, write those there, and change nothing else
-                    in the file. Writing needs the session to be stopped.
+                    With moments and on or off, or minutes, write those there, and change
+                    nothing else in the file. before-run and after-run are around a job's
+                    run; questions are saved together, once the chat was quiet that many
+                    minutes (0 saves around each). Writing needs the session to be stopped.
               history <dir> prune [--yes]
                     Say which snapshots would be deleted to keep the history within
                     [history].max_growth_gb, or delete them with --yes. Every save also does

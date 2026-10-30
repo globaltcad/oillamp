@@ -33,8 +33,8 @@ import sprouts.Tuple;
 /// runs did in front of it. The lamp is saved before a job's run if anything changed, and after it
 /// always, so the history keeps what the user did apart from what the agent did. The questions
 /// someone asks are saved together instead, once the chat has been quiet for
-/// `autosave.chat_quiet_minutes`, or as the session ends: saving a large lamp takes a while, and
-/// a chat would wait for it twice with every question. A run is stopped after
+/// `autosave.chat_quiet_minutes`, as a job's run begins, or as the session ends: saving a large
+/// lamp takes a while, and a chat would wait for it twice with every question. A run is stopped after
 /// `schedule.max_run_minutes`.
 ///
 /// Due jobs are queued only while `schedule.enabled` is on, and only while they are late by no more
@@ -385,6 +385,11 @@ final class AgentRunner {
 
     private LampEvent.RunFinished perform(Pending pending) {
         LampRun run = pending.run();
+        // The questions a job interrupts keep a snapshot of their own, rather than going into the
+        // job's: there they would lose their conversation, and count as what the job changed.
+        // Before the job is marked as run, so that the schedule's change is the job's. When the
+        // save fails, the job's snapshots hold them, as below.
+        if (pending.job().isPresent()) saveChat();
         Instant started = machine.now();
         ZoneId zone = machine.zone();
         pending.job().ifPresent(job -> startedJob(job, started, zone));
@@ -459,8 +464,9 @@ final class AgentRunner {
                 context.sinkAcceptProblems(saved.problems().map(ProblemCatalogUtil::asWarning));
             }
         }
-        // A snapshot of a job's run holds what the chat before it changed too. One that failed
-        // does not, and the chat waits for its own save.
+        // A snapshot of a job's run holds what the chat before it changed too, when the chat
+        // could not be saved by itself before the run. One that failed does not, and the chat
+        // waits for its own save.
         if (heldTheChat) unsavedQuestions.clear();
         return new LampEvent.RunFinished(run, answer.outcome(), answer.text().strip(),
                 snapshot, Duration.between(started, ended), conversation);

@@ -355,8 +355,9 @@ class UsingTheCommandLineSpec extends Specification {
         and: 'it completes the history actions after the lamp, and the moments and on or off after autosave'
             !complete(script, 'oillamp', 'history', '').contains('save')
             complete(script, 'oillamp', 'history', '/x', '') == ['list', 'save', 'restore', 'autosave', 'branches', 'branch', 'switch', 'reset', 'prune', 'max-growth']
-            complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run']
+            complete(script, 'oillamp', 'history', '/x', 'autosave', '') == ['startup', 'shutdown', 'before-run', 'after-run', 'chat-quiet-minutes']
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', '') == ['on', 'off']
+            complete(script, 'oillamp', 'history', '/x', 'autosave', 'chat-quiet-minutes', '') == []
             complete(script, 'oillamp', 'history', '/x', 'autosave', 'startup', 'on', 'a') == ['after-run']
             complete(script, 'oillamp', 'history', '/x', 'save', '--m') == ['--message']
             complete(script, 'oillamp', 'history', '/x', 'list', '--a') == ['--all']

@@ -270,10 +270,13 @@ final class GeneratedFileTextUtil {
                     return
                 fi
 
-                # `oillamp history <dir> autosave startup on`: moments, each followed by on or off.
+                # `oillamp history <dir> autosave startup on`: moments, each followed by on or off,
+                # and chat-quiet-minutes, followed by minutes, which are not completed.
                 if [ "$command" = history ] && [ "${COMP_WORDS[at+2]}" = autosave ] && [ "$COMP_CWORD" -gt $((at + 2)) ]; then
                     if [ $(( (COMP_CWORD - at - 3) % 2 )) -eq 0 ]; then
-                        COMPREPLY=($(compgen -W 'startup shutdown before-run after-run' -- "$current"))
+                        COMPREPLY=($(compgen -W 'startup shutdown before-run after-run chat-quiet-minutes' -- "$current"))
+                    elif [ "${COMP_WORDS[COMP_CWORD-1]}" = chat-quiet-minutes ]; then
+                        COMPREPLY=()
                     else
                         COMPREPLY=($(compgen -W 'on off' -- "$current"))
                     fi

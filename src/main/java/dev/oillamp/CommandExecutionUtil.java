@@ -1376,19 +1376,20 @@ final class CommandExecutionUtil {
         }
         LampConfig.Autosave now = ((Result.Ok<LampConfig>) before).value().autosave();
         if (asked.startup().isEmpty() && asked.shutdown().isEmpty()
-                && asked.beforeRun().isEmpty() && asked.afterRun().isEmpty()) {
+                && asked.beforeRun().isEmpty() && asked.afterRun().isEmpty() && asked.chatQuietMinutes().isEmpty()) {
             context.sink().accept(autosaveSettings(now));
             return LampExitStatus.SUCCESS;
         }
 
         LampConfig.Autosave wanted = new LampConfig.Autosave(asked.startup().orElse(now.startup()),
                 asked.shutdown().orElse(now.shutdown()), asked.beforeRun().orElse(now.beforeRun()),
-                asked.afterRun().orElse(now.afterRun()), now.chatQuietMinutes());
+                asked.afterRun().orElse(now.afterRun()), asked.chatQuietMinutes().orElse(now.chatQuietMinutes()));
         java.util.SequencedMap<String, String> values = new java.util.LinkedHashMap<>();
         asked.startup().ifPresent(on -> values.put("startup", on.toString()));
         asked.shutdown().ifPresent(on -> values.put("shutdown", on.toString()));
         asked.beforeRun().ifPresent(on -> values.put("before_run", on.toString()));
         asked.afterRun().ifPresent(on -> values.put("after_run", on.toString()));
+        asked.chatQuietMinutes().ifPresent(minutes -> values.put("chat_quiet_minutes", minutes.toString()));
         return changeConfig(machine, context, layout, "[autosave]",
                 file -> ConfigFileEditUtil.withValues(file, "autosave", values),
                 ((Result.Ok<LampConfig>) before).value().withAutosave(wanted),
@@ -1427,7 +1428,7 @@ final class CommandExecutionUtil {
 
     private static LampEvent.AutosaveSettings autosaveSettings(LampConfig.Autosave autosave) {
         return new LampEvent.AutosaveSettings(autosave.startup(), autosave.shutdown(),
-                                              autosave.beforeRun(), autosave.afterRun());
+                                              autosave.beforeRun(), autosave.afterRun(), autosave.chatQuietMinutes());
     }
 
     /// Writes `edit` of a lamp's `oillamp.toml`, while no session runs, and then reports.

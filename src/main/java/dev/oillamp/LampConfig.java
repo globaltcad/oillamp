@@ -243,7 +243,7 @@ record LampConfig(
     ///                  only. 0 saves around each question as around a job's run
     public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {
         /// The longest a chat can be left unsaved: a day.
-        static final int MOST_QUIET_MINUTES = 24 * 60;
+        public static final int MOST_QUIET_MINUTES = 24 * 60;
 
         public Autosave {
             if (chatQuietMinutes < 0 || chatQuietMinutes > MOST_QUIET_MINUTES)

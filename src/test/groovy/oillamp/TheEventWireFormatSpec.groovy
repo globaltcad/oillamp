@@ -169,7 +169,7 @@ class TheEventWireFormatSpec extends Specification {
             new LampEvent.HostAccessRefused('run-12', 'host_read_file', 'that path is outside the lamp\'s roots'),
             new LampEvent.HostAccessAsked('run-12', 'host_run', 'run `inkscape report.svg`, in ~/Documents'),
             new LampEvent.HostAccessSettings(true, '{"may_read": ["~/Documents"]}\nAnd nothing private.'),
-            new LampEvent.AutosaveSettings(false, true, true, false),
+            new LampEvent.AutosaveSettings(false, true, true, false, 10),
             new LampEvent.HistoryGrowthLimit(0.00003),
             new LampEvent.HistoryGrowthLimit(2),
             new LampEvent.Warning(PROBLEM.withFix(LampProblem.Fix.of('another'))),

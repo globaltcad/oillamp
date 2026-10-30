@@ -266,7 +266,8 @@ system prompt in every conversation. A session started without it leaves that fi
 Every job's run is saved just before and just after, so `oillamp history <dir>` reads as a log of
 what the agent did, and `oillamp history <dir> restore` undoes any run. The questions you ask are
 saved together instead, once you have asked nothing for ten minutes (`chat_quiet_minutes` under
-`[autosave]`; 0 saves around each question too), and as the session ends.
+`[autosave]`, or `oillamp history <dir> autosave chat-quiet-minutes 30`; 0 saves around each
+question too), before a job's run begins, and as the session ends.
 `oillamp history <dir> autosave before-run off after-run off` switches the saves around runs off;
 the agent's next prompt then says nothing about its earlier runs:
 

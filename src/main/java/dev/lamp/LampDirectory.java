@@ -502,11 +502,11 @@ public final class LampDirectory {
         return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "autosave"));
     }
 
-    /// Sets when oillamp saves this lamp by itself: all four values in the `[autosave]` table
+    /// Sets when oillamp saves this lamp by itself: all five values in the `[autosave]` table
     /// of its `oillamp.toml`. Returns them as the file now has them.
     ///
     /// Runs `oillamp history <dir> autosave startup on|off shutdown on|off before-run on|off
-    /// after-run on|off` as a short-lived engine process. The engine replaces only those
+    /// after-run on|off chat-quiet-minutes <minutes>` as a short-lived engine process. The engine replaces only those
     /// keys and keeps every other line of the file, comments included.
     ///
     /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
@@ -518,7 +518,8 @@ public final class LampDirectory {
     public Lamp.Autosave autosave(Lamp.Autosave wanted) throws IOException, InterruptedException, LampFailedException {
         return Lamp.autosaveOf(Lamp.runToEnd(launcher, listeners, "history", directory.toString(), "autosave",
                 "startup", Lamp.onOff(wanted.startup()), "shutdown", Lamp.onOff(wanted.shutdown()),
-                "before-run", Lamp.onOff(wanted.beforeRun()), "after-run", Lamp.onOff(wanted.afterRun())));
+                "before-run", Lamp.onOff(wanted.beforeRun()), "after-run", Lamp.onOff(wanted.afterRun()),
+                "chat-quiet-minutes", Integer.toString(wanted.chatQuietMinutes())));
     }
 
     /// Reads how far this lamp's history may grow beyond its first snapshot, its baseline, in GB

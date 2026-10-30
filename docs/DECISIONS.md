@@ -264,7 +264,9 @@ A job's run is saved just before and as it ends. The questions a person asks are
 instead, in one `chat` snapshot, once no run has begun for `autosave.chat_quiet_minutes` (10), or
 as the session ends, whatever `autosave.shutdown` says. The snapshot names the last question's run
 in `Oillamp-Run`, so run numbers stay unique beyond the session. 0 saves around each question, as
-before.
+before. A job that begins while the chat is not yet quiet saves it first, so that the questions
+keep their own snapshot and conversation, and do not count as what the job changed *(added on
+2026-10-30)*.
 
 *Why:* a save reads the whole agent directory. On a lamp of 36 GB that took close to a minute, and
 a chat waited for it twice with every question, with no word of why. The history is for going back
