@@ -355,7 +355,7 @@ final class SettingsPage {
                                 .onClick(_ -> app.setUpOllama())
                             )
                             .add("growx, wmin 0",
-                                label(Viewable.of(String.class, ollama, words, (it, page) -> "✓  " + page.YOUR_GENIES_USE().of(it.wanted().strip())))
+                                label(Viewable.of(String.class, ollama, words, (it, page) -> "✓  " + page.YOUR_GENIES_USE(it.wanted().strip())))
                                 .group(Skin.FINE)
                                 .isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working))
                             )
@@ -389,8 +389,8 @@ final class SettingsPage {
                                     theme,
                                     Viewable.of(String.class, settings, words, (it, page) -> switch (it.place()) {
                                         case EDEN_AI -> page.UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI();
-                                        case ELSEWHERE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT().of(it.elsewhere().address().strip());
-                                        case THIS_MACHINE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT().of(it.local().address().strip());
+                                        case ELSEWHERE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT(it.elsewhere().address().strip());
+                                        case THIS_MACHINE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT(it.local().address().strip());
                                     }),
                                     Palette::SUBTEXT,
                                     state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())
@@ -437,7 +437,7 @@ final class SettingsPage {
                             box("fill, wrap 1, ins 0, gap 6").isVisibleIf(isEdenAi)
                             .add("wmin 0",
                                 radioButton("", Settings.KeySource.ENVIRONMENT, source)
-                                .withText(words.viewAsString(it -> it.USE().of(Settings.KEY_VARIABLE)))
+                                .withText(words.viewAsString(it -> it.USE(Settings.KEY_VARIABLE)))
                             )
                             .add("growx, wmin 0, gapleft 24",
                                 ViewPartsUtil.note(

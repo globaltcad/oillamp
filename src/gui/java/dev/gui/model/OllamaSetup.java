@@ -86,16 +86,16 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
     public String todo(Lang lang) {
         Lang.SettingsPage words = lang.SETTINGS_PAGE();
         String model = wanted.strip();
-        return !found.isInstalled() && !found.isRunning() ? words.INSTALL_OLLAMA_AND_GET().of(model)
-             : !found.has(model) ? words.GET().of(model)
-             : words.USE_MODEL().of(model);
+        return !found.isInstalled() && !found.isRunning() ? words.INSTALL_OLLAMA_AND_GET(model)
+             : !found.has(model) ? words.GET(model)
+             : words.USE_MODEL(model);
     }
 
     /// Ollama, in a sentence: whether it is installed, and whether it runs.
     public String words(Lang lang) {
         Lang.SettingsPage words = lang.SETTINGS_PAGE();
         return step == Step.LOOKING ? words.GENIES_IS_LOOKING_WHETHER_OLLAMA_IS_ON_THIS_COMPUTER()
-             : found.isRunning() ? words.OLLAMA_RUNS_ON_THIS_COMPUTER().of(found.version())
+             : found.isRunning() ? words.OLLAMA_RUNS_ON_THIS_COMPUTER(found.version())
              : found.isInstalled() ? words.OLLAMA_IS_INSTALLED_GENIES_STARTS_IT_WHEN_THE_GENIES_NEED_IT()
              : words.OLLAMA_IS_NOT_INSTALLED_YET_GENIES_INSTALLS_IT_FOR_YOU();
     }
