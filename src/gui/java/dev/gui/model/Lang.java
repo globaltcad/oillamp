@@ -667,7 +667,18 @@ public record Lang(
         String A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN,
         String GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED,
         String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU,
-        String GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON
+        String GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON,
+        String A_MODELS_NAME_HAS_NO_SPACES_AND_ONLY_PLAIN_LETTERS_DIGITS_AND_SIGNS,
+        String NAME_THE_MODEL_THE_GENIES_SHOULD_USE_LOOK_UP_SHOWS_EDEN_AIS_LIST,
+        About ENTER_A_KEY_OR_USE_THE_ONE_IN,
+        About IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS,
+        String ENTER_THE_SERVERS_ADDRESS,
+        String NAME_THE_MODEL_AS_THE_SERVER_LISTS_IT,
+        String A_MODEL_SERVER_ON_THIS_COMPUTER_IS_REACHED_AT_127_0_0_1_OR_LOCALHOST,
+        String NAME_THE_MODEL_AS_THE_MODEL_SERVER_LISTS_IT,
+        String THE_ADDRESS_SHOULD_LOOK_LIKE_AN_ADDRESS_OF_A_MODEL_SERVER,
+        String THE_ADDRESS_SHOULD_BE_A_SCHEME_A_HOST_AND_PERHAPS_A_PORT_AND_A_PATH,
+        String THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS
     ) {
         public static final SettingsPage ENGLISH = new SettingsPage(
             "Your genies' model",
@@ -727,7 +738,18 @@ public record Lang(
             "To think, genies need a model. Genies can set one up for you, right here on this computer.",
             "Genies that are awake answer with a new model from their next message on. "
             + "A new place, address or key reaches them when they next wake, and so does "
-            + "everything for a genie that kept running while Genies was closed."
+            + "everything for a genie that kept running while Genies was closed.",
+            "A model's name has no spaces and only plain letters, digits and signs, such as azure/gpt-6.1-sol.",
+            "Name the model the genies should use; Look up shows Eden AI's list.",
+            variable -> "Enter a key, or use the one in " + variable + ".",
+            variable -> variable + " is not set where Genies was started. Enter a key in the settings, or set it and start Genies again.",
+            "Enter the server's address, such as https://ollama.example.com/v1.",
+            "Name the model, as the server lists it; Look up shows its list.",
+            "A model server on this computer is reached at 127.0.0.1 or localhost, such as http://127.0.0.1:11434/v1.",
+            "Name the model, as the model server lists it; Look up shows its list.",
+            "The address should look like https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
+            "The address should be a scheme, a host, and perhaps a port and a path, such as https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
+            "The key is sent to the server, so it must use https:// (http:// only on this computer)."
         );
     }
 
