@@ -13,6 +13,7 @@ import javax.swing.SwingUtilities;
 import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -67,6 +68,7 @@ final class ActionsPage {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang.ActionsPage> words;
     private final Genies app;
     private final Runnable saveNow;
     private final Consumer<UUID> delete;
@@ -90,6 +92,7 @@ final class ActionsPage {
         this.state = state;
         theme = Theme.of(state);
         palette = Theme.paletteOf(state);
+        words = Theme.langOf(state).viewAs(Lang.ActionsPage.class, Lang::ACTIONS_PAGE);
         this.app = app;
         this.saveNow = saveNow;
         this.delete = delete;
@@ -129,14 +132,11 @@ final class ActionsPage {
     private UIForAnySwing<?, ?> top() {
         return
             box("fill, wrap 1, ins 0, gap 8", "[grow]")
-            .add(label("Actions").group(Skin.EMPTY_TITLE))
+            .add(label(words.viewAsString(Lang.ActionsPage::ACTIONS)).group(Skin.EMPTY_TITLE))
             .add("growx, wmin 0",
                 ViewPartsUtil.wrapped(
                     theme,
-                    genie.viewAsString(it ->
-                        "What can be done with " + it.name()
-                        + " as a whole. A right-click on its card in your list offers the same."
-                    ),
+                    Viewable.of(String.class, name, words, (it, page) -> page.WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE().of(it)),
                     Palette::SUBTEXT,
                     Val.of(true)
                 )
@@ -150,9 +150,9 @@ final class ActionsPage {
         return tile(
             SignSvgUtil.RENAME,
             Palette::TEXT,
-            Val.of("Name"),
-            renaming.viewAsString(on ->
-                on ? "Enter keeps the new name, Escape the one it had." : "What it is called in your list and above its chat."
+            words.viewAsString(Lang.ActionsPage::NAME),
+            Viewable.of(String.class, renaming, words, (on, page) ->
+                on ? page.ENTER_KEEPS_THE_NEW_NAME_ESCAPE_THE_ONE_IT_HAD() : page.WHAT_IT_IS_CALLED_IN_YOUR_LIST_AND_ABOVE_ITS_CHAT()
             ),
             box("fill, ins 0, gap 8, hidemode 3", "[grow][][]")
             .add("growx, wmin 0",
@@ -174,17 +174,17 @@ final class ActionsPage {
                 .onPressed(Keyboard.Key.ESCAPE, _ -> stopRenaming())
             )
             .add(
-                big(button("Rename").group(Skin.QUIET_BUTTON))
+                big(button(words.viewAsString(Lang.ActionsPage::RENAME)).group(Skin.QUIET_BUTTON))
                 .isVisibleIfNot(renaming)
                 .onClick(_ -> startRenaming())
             )
             .add(
-                big(button("Cancel").group(Skin.QUIET_BUTTON))
+                big(button(words.viewAsString(Lang.ActionsPage::CANCEL)).group(Skin.QUIET_BUTTON))
                 .isVisibleIf(renaming)
                 .onClick(_ -> stopRenaming())
             )
             .add(
-                big(button("Save").group(Skin.FLAME_BUTTON))
+                big(button(words.viewAsString(Lang.ActionsPage::SAVE)).group(Skin.FLAME_BUTTON))
                 .isVisibleIf(renaming)
                 .isEnabledIf(keepable)
                 .onClick(_ -> keepName())
@@ -225,12 +225,9 @@ final class ActionsPage {
         return tile(
             SignSvgUtil.NEW,
             Palette::TEXT,
-            Val.of("New conversation"),
-            genie.viewAsString(it ->
-                "Start afresh with " + it.name() + ", waking it first if it sleeps. "
-                + "This conversation is kept, to go back to."
-            ),
-            big(button("Start a new conversation").group(Skin.QUIET_BUTTON))
+            words.viewAsString(Lang.ActionsPage::NEW_CONVERSATION),
+            Viewable.of(String.class, name, words, (it, page) -> page.START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT().of(it)),
+            big(button(words.viewAsString(Lang.ActionsPage::START_A_NEW_CONVERSATION)).group(Skin.QUIET_BUTTON))
             .isEnabledIf(idle)
             .onClick(_ -> app.startAfresh(selected()))
         );
@@ -240,9 +237,9 @@ final class ActionsPage {
         return tile(
             SignSvgUtil.HISTORY,
             Palette::TEXT,
-            Val.of("Save now"),
-            genie.viewAsString(it -> "Save " + it.name() + "'s home as it is now: a moment in its history to go back to."),
-            big(button("Save now…").group(Skin.QUIET_BUTTON))
+            words.viewAsString(Lang.ActionsPage::SAVE_NOW),
+            Viewable.of(String.class, name, words, (it, page) -> page.SAVE_ITS_HOME_AS_IT_IS_NOW().of(it)),
+            big(button(words.viewAsString(Lang.ActionsPage::SAVE_NOW_ELLIPSIS)).group(Skin.QUIET_BUTTON))
             .isEnabledIf(genie.viewAs(Boolean.class, it -> it.history().busy().isEmpty()))
             .onClick(_ -> saveNow.run())
         );
