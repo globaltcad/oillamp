@@ -548,7 +548,7 @@ final class SchedulePage {
                     words(Viewable.of(Words.class, when, on, Words::new), 13, 2f)
                 )
                 .add("top",
-                    button("").group(Skin.ICON_BUTTON).withTooltip("Change, switch off or remove this job")
+                    button("").group(Skin.ICON_BUTTON).withTooltip(words.viewAsString(Lang.SchedulePage::CHANGE_SWITCH_OFF_OR_REMOVE_THIS_JOB))
                     .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.MORE, p.SUBTEXT())))
                     .onMousePress(it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> menu(id)))
                     .onPressed(Keyboard.Key.SPACE, it -> ViewPartsUtil.toggleBelow(it.getEvent(), () -> menu(id)))
@@ -559,15 +559,15 @@ final class SchedulePage {
                 box("ins 0, gap 6, hidemode 3")
                 .add(ViewPartsUtil.tag(theme, next).isVisibleIf(next.viewAs(Boolean.class, it -> !it.isEmpty())))
                 .add(
-                    ViewPartsUtil.tag(theme, job.viewAsString(it ->
+                    ViewPartsUtil.tag(theme, Viewable.of(String.class, job, words, (it, page) ->
                         it.expires()
-                        .map(end -> "until " + DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate()))
+                        .map(end -> page.UNTIL().of(DateWordingUtil.shortDay(end.minusSeconds(1).atZone(schedule.get().zone()).toLocalDate())))
                         .orElse("")
                     ))
                     .isVisibleIf(job.viewAs(Boolean.class, it -> it.expires().isPresent()))
                 )
                 .add(
-                    ViewPartsUtil.tag(theme, genie.viewAsString(it -> "added by " + it.name()))
+                    ViewPartsUtil.tag(theme, Viewable.of(String.class, genie, words, (it, page) -> page.ADDED_BY().of(it.name())))
                     .isVisibleIf(job.viewAs(Boolean.class, Schedule.Job::byGenie))
                 )
             );
@@ -576,30 +576,32 @@ final class SchedulePage {
     /// When a job runs next, in a few words, for its tile.
     /// Empty for a job that runs once, whose time its heading says already.
     private static String nextWords(Schedule.Job job, GeniesState state) {
-        if (!job.enabled()) return "switched off";
-        if (job.next().isEmpty()) return "will not run again";
+        Lang.SchedulePage words = state.lang().SCHEDULE_PAGE();
+        if (!job.enabled()) return words.SWITCHED_OFF();
+        if (job.next().isEmpty()) return words.WILL_NOT_RUN_AGAIN();
         Instant next = job.next().get();
-        if (!next.isAfter(state.now())) return "due now";
+        if (!next.isAfter(state.now())) return words.DUE_NOW();
         if (job.repeats().isEmpty()) return "";
         LocalDateTime at = LocalDateTime.ofInstant(next, state.genie().schedule().zone());
         LocalDate today = state.localNow().toLocalDate();
         String day =
             at.toLocalDate().equals(today)
-                ? "today"
+                ? words.TODAY()
                 : at.toLocalDate().equals(today.plusDays(1))
-                    ? "tomorrow"
+                    ? words.TOMORROW()
                     : DateWordingUtil.shortDay(at.toLocalDate());
-        return "next: " + day + ", " + Recurrence.clock(at.toLocalTime());
+        return words.NEXT().of(day, Recurrence.clock(at.toLocalTime()));
     }
 
     private JPopupMenu menu(String id) {
         JPopupMenu menu = new JPopupMenu();
         schedule.get().job(id).ifPresent(job -> {
-            menu.add(ViewPartsUtil.item("Change…", true, () -> schedule.update(From.VIEW, s -> s.change(id, state.get().localNow()))));
-            menu.add(ViewPartsUtil.item(job.enabled() ? "Switch off" : "Switch on", true, () -> app.switchJob(selected(), id, !job.enabled())));
+            // The menu is built as it opens, in the words and the palette of that moment.
+            Lang.SchedulePage page = words.get();
+            menu.add(ViewPartsUtil.item(page.CHANGE_ELLIPSIS(), true, () -> schedule.update(From.VIEW, s -> s.change(id, state.get().localNow()))));
+            menu.add(ViewPartsUtil.item(job.enabled() ? page.SWITCH_OFF() : page.SWITCH_ON(), true, () -> app.switchJob(selected(), id, !job.enabled())));
             menu.addSeparator();
-            JMenuItem remove = ViewPartsUtil.item("Remove…", true, () -> confirmRemove(job));
-            // The menu is built as it opens, in the palette of that moment.
+            JMenuItem remove = ViewPartsUtil.item(page.REMOVE_ELLIPSIS(), true, () -> confirmRemove(job));
             remove.setForeground(palette.get().TROUBLE());
             menu.add(remove);
         });
@@ -607,10 +609,11 @@ final class SchedulePage {
     }
 
     private void confirmRemove(Schedule.Job job) {
+        Lang.SchedulePage page = words.get();
         ConfirmAnswer answer =
-            UI.confirmation("Take \"" + job.title() + "\" off the schedule? What its runs did stays in the history.")
-            .titled("Remove a job")
-            .yesOption("Remove").noOption("Keep").cancelOption("")
+            UI.confirmation(page.TAKE_IT_OFF_THE_SCHEDULE_WHAT_ITS_RUNS_DID_STAYS_IN_THE_HISTORY().of(job.title()))
+            .titled(page.REMOVE_A_JOB())
+            .yesOption(page.REMOVE()).noOption(page.KEEP()).cancelOption("")
             .show();
         if (answer == ConfirmAnswer.YES) app.removeJob(selected(), job.id());
     }
@@ -1005,8 +1008,8 @@ final class SchedulePage {
         return
             box().withPrefSize(34, 20).withMinSize(34, 20).withMaxSize(34, 20)
             .withCursor(UI.Cursor.HAND)
-            .withTooltip(on.viewAsString(it ->
-                it ? "On: click to switch it off, keeping it on the schedule" : "Off: click to switch it on"
+            .withTooltip(Viewable.of(String.class, on, words, (it, page) ->
+                it ? page.ON_CLICK_TO_SWITCH_IT_OFF_KEEPING_IT_ON_THE_SCHEDULE() : page.OFF_CLICK_TO_SWITCH_IT_ON()
             ))
             // Read as the style is gathered, as on a card of the timeline.
             .withTransitionalStyle(on, LifeTime.of(0.18, TimeUnit.SECONDS), (status, it) -> {
