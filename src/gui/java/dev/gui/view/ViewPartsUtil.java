@@ -134,12 +134,18 @@ final class ViewPartsUtil {
     /// Text painted by the style engine, wrapped to the width it gets, in the `colour` of the
     /// theme's palette.
     static UIForBox<JBox> words(Val<Theme> theme, String text, int size, float weight, Function<Palette, Color> colour) {
+        return words(theme, Val.of(text), size, weight, colour);
+    }
+
+    /// Text that changes, such as with the language, painted by the style engine, wrapped to the
+    /// width it gets, in the `colour` of the theme's palette.
+    static UIForBox<JBox> words(Val<Theme> theme, Val<String> text, int size, float weight, Function<Palette, Color> colour) {
         return
             box().withMinSize(0, 0)
-            .withStyle(theme, (now, it) ->
+            .withStyle(Themed.of(text, theme), (now, it) ->
                 it.padding(1, 0, 1, 0)
                 .text(t ->
-                    t.content(StyledString.of(f -> f.family(now.fonts().FONT()).size(size).weight(weight).color(colour.apply(now.palette())), text))
+                    t.content(StyledString.of(f -> f.family(now.fonts().FONT()).size(size).weight(weight).color(colour.apply(now.palette())), now.item()))
                     .placement(UI.Placement.TOP_LEFT)
                     .wrapLines(true)
                     .autoPreferredHeight(true)
