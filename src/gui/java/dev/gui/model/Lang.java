@@ -401,7 +401,8 @@ public record Lang(
         String CLICK_TO_SEE_WHAT_IT_PRINTED,
         String SAVE_ELLIPSIS,
         WhoAndWhat IS_DOING_A_SCHEDULED_JOB_FIRST,
-        About IS_THINKING
+        About IS_THINKING,
+        About WRITTEN_BY
     ) {
         public static final Chat ENGLISH = new Chat(
             name -> name + " is listening.",
@@ -441,7 +442,8 @@ public record Lang(
             "Click to see what it printed",
             "Save…",
             (name, job) -> name + " is doing a scheduled job first: " + job,
-            name -> name + " is thinking"
+            name -> name + " is thinking",
+            model -> "Written by " + model
         );
     }
 
@@ -633,7 +635,9 @@ public record Lang(
         String UNDO_CHANGES,
         String SAVE,
         String SAVING,
-        String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP
+        String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP,
+        About IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS,
+        String NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST
     ) {
         public static final HostAccessPage ENGLISH = new HostAccessPage(
             "Host access",
@@ -654,7 +658,9 @@ public record Lang(
             "Undo changes",
             "Save",
             "Saving…",
-            "Write these rules into the genie's lamp"
+            "Write these rules into the genie's lamp",
+            folder -> "\"" + folder + "\" is not a path. The model that judges reads it as words, so make sure they say what you mean.",
+            "Nothing is listed, so the model that judges will refuse every request."
         );
     }
 
