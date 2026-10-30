@@ -106,13 +106,13 @@ public record HostAccess(
         /// What the user may want to look at before saving; empty when nothing stands out. Only a
         /// warning: the model that judges reads words too, so "everything" is a rule it
         /// understands, and these rules save whatever they say.
-        public Optional<String> warning() {
+        public Optional<String> warning(Lang lang) {
+            Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
             for (String folder : folders(mayRead + "\n" + mayChange))
                 if (!folder.startsWith("/") && !folder.startsWith("~"))
-                    return Optional.of("\"" + folder + "\" is not a path. The model that judges reads it as words, "
-                            + "so make sure they say what you mean.");
+                    return Optional.of(words.IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS().of(folder));
             if (on && empty())
-                return Optional.of("Nothing is listed, so the model that judges will refuse every request.");
+                return Optional.of(words.NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST());
             return Optional.empty();
         }
 
