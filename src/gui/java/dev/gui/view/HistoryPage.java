@@ -728,7 +728,7 @@ final class HistoryPage {
         List<String> said = new ArrayList<>();
         for (int l = 0; l < lanes.size(); l++) {
             Lines.Strand strand = row.strands().get(l);
-            String branch = lanes.get(l).branch() + (lanes.get(l).lampIsOn() ? " (" + wording.name() + " lives here)" : "");
+            String branch = lanes.get(l).branch() + (lanes.get(l).lampIsOn() ? " " + wording.words().LIVES_HERE().of(wording.name()) : "");
             if (strand.dots().isEmpty() && !strand.isEmpty()) said.add(branch);
             for (Lines.Dot dot : strand.dots())
                 said.add(branch + ": " + wording.title(dot.moment()) + ", " + wording.when(dot.moment()));
@@ -736,8 +736,8 @@ final class HistoryPage {
         if (said.isEmpty()) return "";
         return
             String.join("\n", said.subList(0, Math.min(8, said.size())))
-            + (said.size() > 8 ? "\nand " + (said.size() - 8) + " more" : "")
-            + "\nClick a line to show it here";
+            + (said.size() > 8 ? "\n" + wording.words().AND_MORE().of(said.size() - 8) : "")
+            + "\n" + wording.words().CLICK_A_LINE_TO_SHOW_IT_HERE();
     }
 
     private static double spacing(int slots) {
@@ -871,9 +871,7 @@ final class HistoryPage {
             .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
             .isPresent();
         String detail = moment.detail();
-        String standsHere = shown.newestOf().isEmpty()
-            ? ""
-            : "⑂  " + words(shown.newestOf()) + (shown.newestOf().size() == 1 ? " stands here" : " stand here");
+        Val<String> standsHere = words.viewAsString(it -> "⑂  " + it.STAND_HERE().of(shown.newestOf().toList()));
         Val<String> title = wording.viewAsString(it -> it.title(moment));
         Val<Boolean> canOpen = genie.viewAs(Boolean.class, it ->
             !moment.conversation().isEmpty() &&
@@ -883,8 +881,8 @@ final class HistoryPage {
         Val<Boolean> whereItLives = history.viewAs(Boolean.class, it -> moment.isOn(it.lampBranch()));
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
         Val<Boolean> hot = Viewable.of(Boolean.class, picked, hovered, (isPicked, isHovered) -> isPicked || isHovered);
-        Val<String> tooltipText = picked.viewAsString(it ->
-            it ? "Click again to close" : "Click to go back to this moment, start a branch from it, or open its conversation"
+        Val<String> tooltipText = Viewable.of(String.class, picked, words, (it, page) ->
+            it ? page.CLICK_AGAIN_TO_CLOSE() : page.CLICK_TO_GO_BACK_TO_THIS_MOMENT_START_A_BRANCH_FROM_IT_OR_OPEN_ITS_CONVERSATION()
         );
         return
             panel("fill, wrap 1, ins 6 10 8 10, gap 2, hidemode 3", "[grow]")
@@ -935,14 +933,14 @@ final class HistoryPage {
             )
             .add("growx, wmin 0, hidemode 3",
                 ViewPartsUtil.words(theme, standsHere, 11, 1f, Palette::SUBTEXT)
-                .isVisibleIf(!standsHere.isEmpty())
+                .isVisibleIf(!shown.newestOf().isEmpty())
             )
             .add("growx, wmin 0, gaptop 4, hidemode 3",
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 10, 4)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .isVisibleIf(picked)
                 .add(
-                    button("↺  Go back to this moment…")
+                    button(words.viewAsString(it -> "↺  " + it.GO_BACK_TO_THIS_MOMENT_ELLIPSIS()))
                     .group(Skin.QUIET_BUTTON)
                     .isVisibleIf(whereItLives)
                     .isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
@@ -953,23 +951,20 @@ final class HistoryPage {
                         Palette p = themed.palette();
                         return why.isEmpty() ? it : it.backgroundColor(p.SMOKE()).cursor(UI.Cursor.DEFAULT);
                     })
-                    .withTooltip(notNow.viewAsString(it ->
-                        it.isEmpty() ? "Bring its files and conversations back to how they were then" : it
+                    .withTooltip(Viewable.of(String.class, notNow, words, (it, page) ->
+                        it.isEmpty() ? page.BRING_ITS_FILES_AND_CONVERSATIONS_BACK_TO_HOW_THEY_WERE_THEN() : it
                     ))
                     .onClick(_ -> confirmGoBack(moment))
                 )
                 .add(
-                    button("⑂  Start a branch here…")
+                    button(words.viewAsString(it -> "⑂  " + it.START_A_BRANCH_HERE_ELLIPSIS()))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(idle)
-                    .withTooltip(genie.viewAsString(it ->
-                        "Keep this moment as a branch of its own, to try something "
-                        + "else from here. " + it.name() + " stays where it lives"
-                    ))
+                    .withTooltip(Viewable.of(String.class, genie, words, (it, page) -> page.KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN().of(it.name())))
                     .onClick(it -> startBranch(it.getComponent(), moment.id()))
                 )
                 .add(
-                    button("Reset to here…")
+                    button(words.viewAsString(Lang.HistoryPage::RESET_TO_HERE_ELLIPSIS))
                     .group(Skin.QUIET_BUTTON)
                     .isVisibleIf(whereItLives)
                     .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
@@ -978,13 +973,13 @@ final class HistoryPage {
                         Palette p = themed.palette();
                         return why.isEmpty() ? it : it.backgroundColor(p.SMOKE()).cursor(UI.Cursor.DEFAULT);
                     })
-                    .withTooltip(homeLocked.viewAsString(it ->
-                        it.isEmpty() ? "Take every moment after this one off the branch, for good. You are asked first" : it
+                    .withTooltip(Viewable.of(String.class, homeLocked, words, (it, page) ->
+                        it.isEmpty() ? page.TAKE_EVERY_MOMENT_AFTER_THIS_ONE_OFF_THE_BRANCH_FOR_GOOD() : it
                     ))
                     .onClick(_ -> app.planReset(selected(), moment.id()))
                 )
                 .add(
-                    ViewPartsUtil.link(theme, Val.of("Open the conversation  →"))
+                    ViewPartsUtil.link(theme, words.viewAsString(it -> it.OPEN_THE_CONVERSATION() + "  →"))
                     .isVisibleIf(canOpen)
                     .onClick(_ -> app.openConversation(selected(), moment.conversation()))
                 )
@@ -1288,12 +1283,6 @@ final class HistoryPage {
         }
         String number = unit == 0 || size >= 10 ? String.valueOf(Math.round(size)) : String.format(Locale.ROOT, "%.1f", size);
         return number + " " + units[unit];
-    }
-
-    /// Names as a sentence lists them: "main", "main and docs", "a, b and c".
-    private static String words(Tuple<String> names) {
-        if (names.size() < 2) return String.join("", names);
-        return String.join(", ", names.slice(0, names.size() - 1)) + " and " + names.last();
     }
 
     /// The switch for one of the moments oillamp saves at by itself, which it writes into the
