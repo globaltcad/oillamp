@@ -217,7 +217,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
 
         and: 'its conversation is among the scheduled runs, not the user\'s conversations'
             waitUntil { app.state().get().find(jafar).orElseThrow().conversations().jobCount() == 1 }
-            app.state().get().find(jafar).orElseThrow().conversations().jobRuns()*.id() == [app.state().get().find(jafar).orElseThrow().schedule().runs().first().conversation().get()]
+            app.state().get().find(jafar).orElseThrow().conversations().jobRuns(Lang.ENGLISH)*.id() == [app.state().get().find(jafar).orElseThrow().schedule().runs().first().conversation().get()]
             app.state().get().find(jafar).orElseThrow().conversations().chatCount() == 0
 
         when: 'the user opens the run\'s conversation'

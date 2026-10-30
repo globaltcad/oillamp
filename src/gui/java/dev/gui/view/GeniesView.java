@@ -575,7 +575,7 @@ public final class GeniesView extends JPanel {
                     Viewable.of(String.class, conversations, windowWords, (it, words) -> words.SCHEDULED_RUNS().of(it.jobCount())),
                     windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_THE_CONVERSATIONS_OF_SCHEDULED_JOBS),
                     conversations.viewAs(Boolean.class, it -> it.jobCount() > 0),
-                    conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::jobRuns),
+                    Viewable.of(Tuple.classTyped(Talk.class), conversations, lang, Conversations::jobRuns),
                     browsable,
                     Optional.empty()
                 )
@@ -587,7 +587,7 @@ public final class GeniesView extends JPanel {
                     Viewable.of(String.class, conversations, windowWords, (it, words) -> words.CONVERSATIONS().of(it.chatCount())),
                     windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_YOUR_CONVERSATIONS_WITH_THIS_GENIE),
                     Val.of(true),
-                    conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::chats),
+                    Viewable.of(Tuple.classTyped(Talk.class), conversations, lang, Conversations::chats),
                     browsable,
                     Optional.of(
                         button("").group(Skin.ICON_BUTTON).isVisibleIf(awake).isEnabledIf(idle)
@@ -830,7 +830,7 @@ public final class GeniesView extends JPanel {
         state.get().find(id).flatMap(genie -> genie.conversations().current()).ifPresent(doomed -> {
             Lang.Dialogs words = state.get().lang().DIALOGS();
             ConfirmAnswer answer =
-                UI.confirmation(words.DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES().of(doomed.title()))
+                UI.confirmation(words.DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES().of(doomed.title(state.get().lang())))
                 .titled(words.DELETE_A_CONVERSATION())
                 .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
                 .show();
