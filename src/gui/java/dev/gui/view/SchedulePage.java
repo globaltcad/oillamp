@@ -32,6 +32,7 @@ import dev.gui.model.DateWordingUtil;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.JobDraft;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 import dev.gui.model.Recurrence;
 import dev.gui.model.Schedule;
@@ -108,6 +109,7 @@ final class SchedulePage {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang.SchedulePage> words;
     private final Genies app;
     private final Look look;
 
@@ -131,6 +133,7 @@ final class SchedulePage {
         this.state = state;
         theme = Theme.of(state);
         palette = Theme.paletteOf(state);
+        words = Theme.langOf(state).viewAs(Lang.SchedulePage.class, Lang::SCHEDULE_PAGE);
         this.app = app;
         this.look = look;
         genie    = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
@@ -177,23 +180,22 @@ final class SchedulePage {
     /// Whether the schedule runs, as a coloured dot and a sentence.
     private record Status(Color colour, String words) {}
 
-    private static Status status(Genie genie, Palette p) {
-        Schedule schedule = genie.schedule();
-        if (schedule.paused())
-            return new Status(p.BRASS(), "Paused. No job runs until you resume the schedule.");
+    /// The status of the selected genie's schedule, in the colours and the words of `state`.
+    private static Status status(GeniesState state) {
+        Genie genie = state.genie();
+        Palette p = state.palette();
+        Lang.SchedulePage words = state.lang().SCHEDULE_PAGE();
+        if (genie.schedule().paused())
+            return new Status(p.BRASS(), words.PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE());
         return switch (genie.phase()) {
-            case READY, WORKING -> new Status(p.CONTENT(), "On. Jobs wake " + genie.name() + " at their times, one after the other.");
-            case WAKING -> new Status(p.BRASS(), genie.name() + " is waking. Jobs run once it is awake.");
-            case ASLEEP, BROKEN -> new Status(
-                p.SUBTEXT(),
-                genie.name() + " is asleep. Jobs run only while it is awake; "
-                + "one whose time came meanwhile runs as soon as it wakes."
-            );
+            case READY, WORKING -> new Status(p.CONTENT(), words.ON_JOBS_WAKE_IT_AT_THEIR_TIMES().of(genie.name()));
+            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE().of(genie.name()));
+            case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), words.IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE().of(genie.name()));
         };
     }
 
     private UIForAnySwing<?, ?> top() {
-        Val<Status> status = Viewable.of(Status.class, genie, palette, SchedulePage::status);
+        Val<Status> status = state.viewAs(Status.class, SchedulePage::status);
         Val<Boolean> paused = schedule.viewAs(Boolean.class, Schedule::paused);
         Val<Boolean> asleep = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN);
         Val<String> problem = schedule.viewAsString(it -> it.draft().isPresent() ? "" : it.problem());
@@ -204,7 +206,7 @@ final class SchedulePage {
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add(SAYING,
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3", "[grow]")
-                .add(label("Schedule").group(Skin.EMPTY_TITLE))
+                .add(label(words.viewAsString(Lang.SchedulePage::SCHEDULE)).group(Skin.EMPTY_TITLE))
                 .add("growx, wmin 0",
                     box("fill, ins 0, gap 8", "[10!][grow]")
                     .add("top, gaptop 5", ViewPartsUtil.dot(status.viewAs(Color.class, Status::colour), 8))
@@ -223,20 +225,21 @@ final class SchedulePage {
                     return it.backgroundColor(p.TRANSPARENT()).padding(isWide ? 4 : 0, 0, 0, 0);
                 })
                 .add(
-                    button("✦  Wake").group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
-                    .withTooltip("Jobs run only while the genie is awake")
+                    button(words.viewAsString(it -> "✦  " + it.WAKE())).group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
+                    .withTooltip(words.viewAsString(Lang.SchedulePage::JOBS_RUN_ONLY_WHILE_THE_GENIE_IS_AWAKE))
                     .onClick(_ -> app.wake(selected()))
                 )
                 .add(
-                    button(paused.viewAsString(it -> it ? "▶  Resume" : "❚❚  Pause")).group(Skin.QUIET_BUTTON)
+                    button(Viewable.of(String.class, paused, words, (it, page) -> it ? "▶  " + page.RESUME() : "❚❚  " + page.PAUSE()))
+                    .group(Skin.QUIET_BUTTON)
                     .isVisibleIf(schedule.viewAs(Boolean.class, it -> it.paused() || !it.jobs().isEmpty()))
-                    .withTooltip(paused.viewAsString(it ->
-                        it ? "Let the jobs run again" : "Hold every job until you resume; nothing is lost"
+                    .withTooltip(Viewable.of(String.class, paused, words, (it, page) ->
+                        it ? page.LET_THE_JOBS_RUN_AGAIN() : page.HOLD_EVERY_JOB_UNTIL_YOU_RESUME_NOTHING_IS_LOST()
                     ))
                     .onClick(_ -> app.pauseSchedule(selected(), !schedule.get().paused()))
                 )
                 .add(
-                    button("＋  New job").group(Skin.FLAME_BUTTON)
+                    button(words.viewAsString(it -> "＋  " + it.NEW_JOB())).group(Skin.FLAME_BUTTON)
                     .onClick(_ -> schedule.update(From.VIEW, s -> s.writeNew(state.get().localNow())))
                 )
             );
