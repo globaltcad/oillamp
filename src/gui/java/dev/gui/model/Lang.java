@@ -21,9 +21,7 @@ public enum Lang {
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public Window WINDOW() {
-        return switch (this) {
-            case ENGLISH -> Window.ENGLISH;
-        };
+        return new Window(this);
     }
 
     /// The words of the header above a genie's pages, and what its lamp asks the user to allow.
@@ -33,16 +31,12 @@ public enum Lang {
 
     /// The words of a genie's desktop, beside its chat.
     public Desktop DESKTOP() {
-        return switch (this) {
-            case ENGLISH -> Desktop.ENGLISH;
-        };
+        return new Desktop(this);
     }
 
     /// The words of a genie's chat: the conversation, and the composer under it.
     public Chat CHAT() {
-        return switch (this) {
-            case ENGLISH -> Chat.ENGLISH;
-        };
+        return new Chat(this);
     }
 
     /// The words of the dialogs the window asks and tells the user things in.
@@ -52,9 +46,7 @@ public enum Lang {
 
     /// The words of what can be done with a genie as a whole.
     public ActionsPage ACTIONS_PAGE() {
-        return switch (this) {
-            case ENGLISH -> ActionsPage.ENGLISH;
-        };
+        return new ActionsPage(this);
     }
 
     /// The words of a genie's home, and linking its folders into the user's.
@@ -180,94 +172,254 @@ public enum Lang {
     public interface Moving { String of(String genie, String to, String from); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
-    public record Window(
-        String NEW_GENIE,
-        String A_NEW_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN,
-        String SETTINGS,
-        String SETTINGS_THE_MODEL_EVERY_GENIE_USES,
-        String YOUR_GENIES,
-        String DRAG_TO_SEE_MORE_OF_YOUR_GENIES,
-        String ADD_A_LAMP_FROM_ELSEWHERE,
-        String SHOW_A_LAMP_YOU_MADE_WITH_OILLAMP_AT_HERE_TOO,
-        Counted THINGS_WENT_WRONG,
-        String GENIES_CARRIED_ON_CLICK_TO_SEE_WHAT_HAPPENED,
-        String LAMPS_FROM_ELSEWHERE,
-        String LAMPS_SOMEONE_LIT_WITH_OILLAMP_AT_OUTSIDE_GENIES,
-        GenieTip GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE,
-        String ASKS_YOU_TO_ALLOW_SOMETHING,
-        String MAY_REACH_THIS_COMPUTER,
-        About SHOWS_YOU,
-        String SHOW_THIS_GENIES_CONVERSATIONS,
-        String FOLD_THIS_GENIES_CONVERSATIONS_AWAY,
-        Counted SCHEDULED_RUNS,
-        String SHOW_OR_HIDE_THE_CONVERSATIONS_OF_SCHEDULED_JOBS,
-        Counted CONVERSATIONS,
-        String SHOW_OR_HIDE_YOUR_CONVERSATIONS_WITH_THIS_GENIE,
-        String START_A_NEW_CONVERSATION_WITH_THIS_GENIE,
-        String DELETE_ELLIPSIS,
-        String DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN,
-        String ITS_FIRST_QUESTION_WAS_ASKED_DIFFERENTLY,
-        Questions QUESTIONS_THEN_ASKED_DIFFERENTLY,
-        String DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER,
-        String HIDE_YOUR_GENIES,
-        String SHOW_YOUR_GENIES,
-        String RENAME_ELLIPSIS,
-        String NEW_CONVERSATION,
-        String SAVE_NOW_ELLIPSIS,
-        About LINK_ITS_WORKSPACE_INTO,
-        String SLEEP,
-        String WAKE,
-        String TRY_WAKING_AGAIN,
-        String REMOVE_FROM_GENIES_ELLIPSIS,
-        About DELETE_GENIE_ELLIPSIS,
-        String DOING_A_SCHEDULED_JOB,
-        String A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET
-    ) {
-        public static final Window ENGLISH = new Window(
-            "New genie",
-            "A new genie, with a sandboxed desktop of its own",
-            "Settings",
-            "Settings: the model every genie uses. Pressed again, back to the genie",
-            "YOUR GENIES",
-            "Drag to see more of your genies, or up to fold them away",
-            "Add a lamp from elsewhere…",
-            "Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself",
-            count -> count == 1 ? "Something went wrong" : count + " things went wrong",
-            "Genies carried on. Click to see what happened",
-            "LAMPS FROM ELSEWHERE",
-            "Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are",
-            (name, status, showing) -> name + " — " + status + (showing.isEmpty() ? "" : ". Shows you: " + showing) + ". Right-click for more.",
-            "asks you to allow something",
-            "may reach this computer",
-            showing -> "shows you: " + showing,
-            "Show this genie's conversations",
-            "Fold this genie's conversations away",
-            count -> count == 0 ? "" : count == 1 ? "1 scheduled run" : count + " scheduled runs",
-            "Show or hide the conversations the runs of this genie's scheduled jobs had",
-            count -> count == 0 ? "no conversations yet" : count == 1 ? "1 conversation" : count + " conversations",
-            "Show or hide your conversations with this genie",
-            "Start a new conversation with this genie; the others are kept",
-            "Delete…",
-            "Delete the conversation this genie is in, with all its branches",
-            "its first question was asked differently",
-            (questions, differently) ->
-                (questions == 1 ? "one question" : questions + " questions")
-                + (differently == 0 ? "" : ", then asked differently " + (differently == 1 ? "once" : differently + " times")),
-            "Drag to make this list taller or shorter",
-            "Hide your genies",
-            "Show your genies",
-            "Rename…",
-            "New conversation",
-            "Save now…",
-            folder -> "Link its workspace into " + folder,
-            "Sleep",
-            "Wake",
-            "Try waking again",
-            "Remove from Genies…",
-            name -> "Delete " + name + "…",
-            "doing a scheduled job",
-            "New conversation"
-        );
+    public record Window(Lang lang) {
+        public String NEW_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "New genie";
+            };
+        }
+
+        public String A_NEW_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN() {
+            return switch (lang) {
+                case ENGLISH -> "A new genie, with a sandboxed desktop of its own";
+            };
+        }
+
+        public String SETTINGS() {
+            return switch (lang) {
+                case ENGLISH -> "Settings";
+            };
+        }
+
+        public String SETTINGS_THE_MODEL_EVERY_GENIE_USES() {
+            return switch (lang) {
+                case ENGLISH -> "Settings: the model every genie uses. Pressed again, back to the genie";
+            };
+        }
+
+        public String YOUR_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "YOUR GENIES";
+            };
+        }
+
+        public String DRAG_TO_SEE_MORE_OF_YOUR_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Drag to see more of your genies, or up to fold them away";
+            };
+        }
+
+        public String ADD_A_LAMP_FROM_ELSEWHERE() {
+            return switch (lang) {
+                case ENGLISH -> "Add a lamp from elsewhere…";
+            };
+        }
+
+        public String SHOW_A_LAMP_YOU_MADE_WITH_OILLAMP_AT_HERE_TOO() {
+            return switch (lang) {
+                case ENGLISH -> "Show a lamp you made with `oillamp at` here too. Genies finds those that are lit by itself";
+            };
+        }
+
+        public String THINGS_WENT_WRONG(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 1 ? "Something went wrong" : count + " things went wrong";
+            };
+        }
+
+        public String GENIES_CARRIED_ON_CLICK_TO_SEE_WHAT_HAPPENED() {
+            return switch (lang) {
+                case ENGLISH -> "Genies carried on. Click to see what happened";
+            };
+        }
+
+        public String LAMPS_FROM_ELSEWHERE() {
+            return switch (lang) {
+                case ENGLISH -> "LAMPS FROM ELSEWHERE";
+            };
+        }
+
+        public String LAMPS_SOMEONE_LIT_WITH_OILLAMP_AT_OUTSIDE_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Lamps someone lit with `oillamp at`, outside Genies. Genies leaves them as they are";
+            };
+        }
+
+        public String GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE(String name, String status, String showing) {
+            return switch (lang) {
+                case ENGLISH -> name + " — " + status + (showing.isEmpty() ? "" : ". Shows you: " + showing) + ". Right-click for more.";
+            };
+        }
+
+        public String ASKS_YOU_TO_ALLOW_SOMETHING() {
+            return switch (lang) {
+                case ENGLISH -> "asks you to allow something";
+            };
+        }
+
+        public String MAY_REACH_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "may reach this computer";
+            };
+        }
+
+        public String SHOWS_YOU(String showing) {
+            return switch (lang) {
+                case ENGLISH -> "shows you: " + showing;
+            };
+        }
+
+        public String SHOW_THIS_GENIES_CONVERSATIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Show this genie's conversations";
+            };
+        }
+
+        public String FOLD_THIS_GENIES_CONVERSATIONS_AWAY() {
+            return switch (lang) {
+                case ENGLISH -> "Fold this genie's conversations away";
+            };
+        }
+
+        public String SCHEDULED_RUNS(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 0 ? "" : count == 1 ? "1 scheduled run" : count + " scheduled runs";
+            };
+        }
+
+        public String SHOW_OR_HIDE_THE_CONVERSATIONS_OF_SCHEDULED_JOBS() {
+            return switch (lang) {
+                case ENGLISH -> "Show or hide the conversations the runs of this genie's scheduled jobs had";
+            };
+        }
+
+        public String CONVERSATIONS(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 0 ? "no conversations yet" : count == 1 ? "1 conversation" : count + " conversations";
+            };
+        }
+
+        public String SHOW_OR_HIDE_YOUR_CONVERSATIONS_WITH_THIS_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Show or hide your conversations with this genie";
+            };
+        }
+
+        public String START_A_NEW_CONVERSATION_WITH_THIS_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Start a new conversation with this genie; the others are kept";
+            };
+        }
+
+        public String DELETE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Delete…";
+            };
+        }
+
+        public String DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN() {
+            return switch (lang) {
+                case ENGLISH -> "Delete the conversation this genie is in, with all its branches";
+            };
+        }
+
+        public String ITS_FIRST_QUESTION_WAS_ASKED_DIFFERENTLY() {
+            return switch (lang) {
+                case ENGLISH -> "its first question was asked differently";
+            };
+        }
+
+        public String QUESTIONS_THEN_ASKED_DIFFERENTLY(int questions, int differently) {
+            return switch (lang) {
+                case ENGLISH ->
+                    (questions == 1 ? "one question" : questions + " questions")
+                    + (differently == 0 ? "" : ", then asked differently " + (differently == 1 ? "once" : differently + " times"));
+            };
+        }
+
+        public String DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER() {
+            return switch (lang) {
+                case ENGLISH -> "Drag to make this list taller or shorter";
+            };
+        }
+
+        public String HIDE_YOUR_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Hide your genies";
+            };
+        }
+
+        public String SHOW_YOUR_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Show your genies";
+            };
+        }
+
+        public String RENAME_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Rename…";
+            };
+        }
+
+        public String NEW_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "New conversation";
+            };
+        }
+
+        public String SAVE_NOW_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Save now…";
+            };
+        }
+
+        public String LINK_ITS_WORKSPACE_INTO(String folder) {
+            return switch (lang) {
+                case ENGLISH -> "Link its workspace into " + folder;
+            };
+        }
+
+        public String SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Sleep";
+            };
+        }
+
+        public String WAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Wake";
+            };
+        }
+
+        public String TRY_WAKING_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Try waking again";
+            };
+        }
+
+        public String REMOVE_FROM_GENIES_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Remove from Genies…";
+            };
+        }
+
+        public String DELETE_GENIE_ELLIPSIS(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + name + "…";
+            };
+        }
+
+        public String DOING_A_SCHEDULED_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "doing a scheduled job";
+            };
+        }
+
+        public String A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET() {
+            return switch (lang) {
+                case ENGLISH -> "New conversation";
+            };
+        }
     }
 
     /// The words of the header above a genie's pages, and of what its lamp asks the user to allow
@@ -427,150 +579,404 @@ public enum Lang {
     }
 
     /// The words of a genie's desktop, beside its chat, and of how it is shown.
-    public record Desktop(
-        String DRAG_TO_SHARE_THE_ROOM_BETWEEN_THE_CHAT_AND_THE_DESKTOP,
-        String FITTED,
-        String RECORDED_SO_IT_KEEPS_ITS_OWN_SIZE,
-        String CLICK_THE_DESKTOP_TO_USE_IT,
-        WhoAndWhat SHOWS_YOU,
-        String FIT,
-        String GIVE_THE_DESKTOP_THE_SIZE_OF_THIS_PANEL,
-        String FIXED,
-        String SHOW_THE_WHOLE_DESKTOP_AT_ITS_OWN_SIZE,
-        String SMALLER_OR_CTRL_AND_THE_MOUSE_WHEEL,
-        String LARGER_OR_CTRL_AND_THE_MOUSE_WHEEL,
-        String KEYS,
-        String THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN,
-        String KEYS_FOR_THE_DESKTOP,
-        String CLICK_A_WINDOW_FIRST_SO_THAT_IT_HAS_THE_KEYBOARD,
-        String FULLSCREEN_AND_BACK,
-        String CLOSE_THE_WINDOW,
-        String MINIMIZE_THE_WINDOW,
-        String BRING_EVERY_MINIMIZED_WINDOW_BACK,
-        String SUPER_IS_THE_KEY_WITH_THE_WINDOWS_LOGO,
-        String CTRL,
-        String SUPER,
-        String THE_DESKTOP_SHOWS_HERE_WHILE_THE_GENIE_IS_AWAKE,
-        String CONNECTING_TO_THE_DESKTOP,
-        About THE_DESKTOP_WENT_AWAY,
-        About COULD_NOT_SHOW_THE_DESKTOP
-    ) {
-        public static final Desktop ENGLISH = new Desktop(
-            "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
-            + " Double-click to let Genies share it",
-            "fitted",
-            "Recorded, so it keeps its own size",
-            "Click the desktop to use it",
-            (who, what) -> who + " shows you: " + what,
-            "Fit",
-            "Give the desktop the size of this panel, so what the genie shows fills it."
-            + " It gets its own size back when you close it.",
-            "Fixed",
-            "Show the whole desktop at its own size, shrunk into this panel",
-            "Smaller (or Ctrl and the mouse wheel on the desktop)",
-            "Larger (or Ctrl and the mouse wheel on the desktop)",
-            "Keys",
-            "The keys that make a window on the desktop fullscreen, close it or minimize it",
-            "Keys for the desktop",
-            "Click a window first, so that it has the keyboard.",
-            "Fullscreen, and back",
-            "Close the window",
-            "Minimize the window",
-            "Bring every minimized window back",
-            "Super is the key with the Windows logo.",
-            "Ctrl",
-            "Super",
-            "The desktop shows here while the genie is awake.",
-            "Connecting to the desktop…",
-            why -> "The desktop went away: " + why,
-            why -> "Could not show the desktop: " + why
-        );
+    public record Desktop(Lang lang) {
+        public String DRAG_TO_SHARE_THE_ROOM_BETWEEN_THE_CHAT_AND_THE_DESKTOP() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Drag to share the room between the chat and the desktop, or all the way to close the desktop."
+                    + " Double-click to let Genies share it";
+            };
+        }
+
+        public String FITTED() {
+            return switch (lang) {
+                case ENGLISH -> "fitted";
+            };
+        }
+
+        public String RECORDED_SO_IT_KEEPS_ITS_OWN_SIZE() {
+            return switch (lang) {
+                case ENGLISH -> "Recorded, so it keeps its own size";
+            };
+        }
+
+        public String CLICK_THE_DESKTOP_TO_USE_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Click the desktop to use it";
+            };
+        }
+
+        public String SHOWS_YOU(String who, String what) {
+            return switch (lang) {
+                case ENGLISH -> who + " shows you: " + what;
+            };
+        }
+
+        public String FIT() {
+            return switch (lang) {
+                case ENGLISH -> "Fit";
+            };
+        }
+
+        public String GIVE_THE_DESKTOP_THE_SIZE_OF_THIS_PANEL() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Give the desktop the size of this panel, so what the genie shows fills it."
+                    + " It gets its own size back when you close it.";
+            };
+        }
+
+        public String FIXED() {
+            return switch (lang) {
+                case ENGLISH -> "Fixed";
+            };
+        }
+
+        public String SHOW_THE_WHOLE_DESKTOP_AT_ITS_OWN_SIZE() {
+            return switch (lang) {
+                case ENGLISH -> "Show the whole desktop at its own size, shrunk into this panel";
+            };
+        }
+
+        public String SMALLER_OR_CTRL_AND_THE_MOUSE_WHEEL() {
+            return switch (lang) {
+                case ENGLISH -> "Smaller (or Ctrl and the mouse wheel on the desktop)";
+            };
+        }
+
+        public String LARGER_OR_CTRL_AND_THE_MOUSE_WHEEL() {
+            return switch (lang) {
+                case ENGLISH -> "Larger (or Ctrl and the mouse wheel on the desktop)";
+            };
+        }
+
+        public String KEYS() {
+            return switch (lang) {
+                case ENGLISH -> "Keys";
+            };
+        }
+
+        public String THE_KEYS_THAT_MAKE_A_WINDOW_ON_THE_DESKTOP_FULLSCREEN() {
+            return switch (lang) {
+                case ENGLISH -> "The keys that make a window on the desktop fullscreen, close it or minimize it";
+            };
+        }
+
+        public String KEYS_FOR_THE_DESKTOP() {
+            return switch (lang) {
+                case ENGLISH -> "Keys for the desktop";
+            };
+        }
+
+        public String CLICK_A_WINDOW_FIRST_SO_THAT_IT_HAS_THE_KEYBOARD() {
+            return switch (lang) {
+                case ENGLISH -> "Click a window first, so that it has the keyboard.";
+            };
+        }
+
+        public String FULLSCREEN_AND_BACK() {
+            return switch (lang) {
+                case ENGLISH -> "Fullscreen, and back";
+            };
+        }
+
+        public String CLOSE_THE_WINDOW() {
+            return switch (lang) {
+                case ENGLISH -> "Close the window";
+            };
+        }
+
+        public String MINIMIZE_THE_WINDOW() {
+            return switch (lang) {
+                case ENGLISH -> "Minimize the window";
+            };
+        }
+
+        public String BRING_EVERY_MINIMIZED_WINDOW_BACK() {
+            return switch (lang) {
+                case ENGLISH -> "Bring every minimized window back";
+            };
+        }
+
+        public String SUPER_IS_THE_KEY_WITH_THE_WINDOWS_LOGO() {
+            return switch (lang) {
+                case ENGLISH -> "Super is the key with the Windows logo.";
+            };
+        }
+
+        public String CTRL() {
+            return switch (lang) {
+                case ENGLISH -> "Ctrl";
+            };
+        }
+
+        public String SUPER() {
+            return switch (lang) {
+                case ENGLISH -> "Super";
+            };
+        }
+
+        public String THE_DESKTOP_SHOWS_HERE_WHILE_THE_GENIE_IS_AWAKE() {
+            return switch (lang) {
+                case ENGLISH -> "The desktop shows here while the genie is awake.";
+            };
+        }
+
+        public String CONNECTING_TO_THE_DESKTOP() {
+            return switch (lang) {
+                case ENGLISH -> "Connecting to the desktop…";
+            };
+        }
+
+        public String THE_DESKTOP_WENT_AWAY(String why) {
+            return switch (lang) {
+                case ENGLISH -> "The desktop went away: " + why;
+            };
+        }
+
+        public String COULD_NOT_SHOW_THE_DESKTOP(String why) {
+            return switch (lang) {
+                case ENGLISH -> "Could not show the desktop: " + why;
+            };
+        }
     }
 
     /// The words of a genie's chat: the conversation, the files the genie hands out, and the
     /// composer under it.
-    public record Chat(
-        About IS_LISTENING,
-        About IS_WAKING,
-        About IS_IN_THE_LAMP,
-        About COULD_NOT_WAKE,
-        String ASK_FOR_ANYTHING_IT_HAS_A_DESKTOP_AND_A_SHELL_OF_ITS_OWN,
-        String ITS_SANDBOX_IS_STARTING_THE_VERY_FIRST_TIME_IT_IS_MADE,
-        String WAKE_IT_TO_TALK_IT_KEEPS_ITS_OWN_DESKTOP,
-        String WHAT_WENT_WRONG_IS_SAID_BELOW_TRY_AGAIN_ONCE_THAT_IS_SORTED_OUT,
-        String OUTBOX,
-        About SAVE_SOMEWHERE_ON_THIS_COMPUTER,
-        About IS_ANSWERING_IN_ANOTHER_CONVERSATION,
-        String GIVE_THE_GENIE_A_FILE_IT_LANDS_IN_INBOX,
-        String RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE,
-        String SEND,
-        String NEW_CONVERSATION,
-        String START_A_NEW_CONVERSATION_OR_SELECT_ONE_IN_THE_TREE_TO_RETURN_TO_IT,
-        WhoAndWhat WAKING,
-        About IS_ASLEEP_ITS_SANDBOX_IS_OFF,
-        WhoAndWhat COULD_NOT_WAKE_BECAUSE,
-        String TRY_AGAIN,
-        String WAKE,
-        String EDIT,
-        String ASK_THIS_DIFFERENTLY_WHAT_FOLLOWED_IS_KEPT_AS_A_BRANCH,
-        String PREVIOUS_CONVERSATION_VERSION,
-        String NEXT_CONVERSATION_VERSION,
-        String COPY,
-        String COPY_THE_ANSWER_AS_THE_GENIE_WROTE_IT,
-        String THINKING,
-        String THOUGHT,
-        String CLICK_TO_FOLD_THE_THOUGHTS_AWAY,
-        String CLICK_TO_SEE_WHAT_THE_GENIE_THINKS,
-        About YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE,
-        String RUNNING,
-        String FAILED,
-        String CLICK_TO_SEE_WHAT_IT_PRINTED,
-        String SAVE_ELLIPSIS,
-        WhoAndWhat IS_DOING_A_SCHEDULED_JOB_FIRST,
-        About IS_THINKING,
-        About WRITTEN_BY
-    ) {
-        public static final Chat ENGLISH = new Chat(
-            name -> name + " is listening.",
-            name -> name + " is waking.",
-            name -> name + " is in the lamp.",
-            name -> name + " could not wake.",
-            "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.",
-            "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.",
-            "Wake it to talk. It keeps its own desktop, safely away from yours.",
-            "What went wrong is said below. Try again once that is sorted out.",
-            "OUTBOX",
-            file -> "Save " + file + " somewhere on this computer",
-            name -> name + " is answering in another conversation. Write here once it is done.",
-            "Give the genie a file; it lands in ~/inbox",
-            "Return sends; Shift and Return starts a new line",
-            "Send",
-            "New conversation",
-            "Start a new conversation, or select a conversation in the tree to return to it",
-            (name, doing) -> "Waking " + name + ": " + doing + "…",
-            name -> name + " is asleep. Its sandbox is off, its home and conversation are kept.",
-            (name, why) -> name + " could not wake: " + why,
-            "Try again",
-            "Wake",
-            "Edit",
-            "Ask this differently. What followed is kept, as a branch in the genie's conversations.",
-            "Previous conversation version",
-            "Next conversation version",
-            "Copy",
-            "Copy the answer, as the genie wrote it",
-            "thinking",
-            "thought",
-            "Click to fold the thoughts away",
-            "Click to see what the genie thinks",
-            job -> job + ". The genie does one thing at a time, so your message waits until this job is done.",
-            "running…",
-            "failed",
-            "Click to see what it printed",
-            "Save…",
-            (name, job) -> name + " is doing a scheduled job first: " + job,
-            name -> name + " is thinking",
-            model -> "Written by " + model
-        );
+    public record Chat(Lang lang) {
+        public String IS_LISTENING(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is listening.";
+            };
+        }
+
+        public String IS_WAKING(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is waking.";
+            };
+        }
+
+        public String IS_IN_THE_LAMP(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is in the lamp.";
+            };
+        }
+
+        public String COULD_NOT_WAKE(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " could not wake.";
+            };
+        }
+
+        public String ASK_FOR_ANYTHING_IT_HAS_A_DESKTOP_AND_A_SHELL_OF_ITS_OWN() {
+            return switch (lang) {
+                case ENGLISH -> "Ask for anything. It has a desktop and a shell of its own, and hands you files it makes.";
+            };
+        }
+
+        public String ITS_SANDBOX_IS_STARTING_THE_VERY_FIRST_TIME_IT_IS_MADE() {
+            return switch (lang) {
+                case ENGLISH -> "Its sandbox is starting. The very first time, the sandbox is made, which takes several minutes.";
+            };
+        }
+
+        public String WAKE_IT_TO_TALK_IT_KEEPS_ITS_OWN_DESKTOP() {
+            return switch (lang) {
+                case ENGLISH -> "Wake it to talk. It keeps its own desktop, safely away from yours.";
+            };
+        }
+
+        public String WHAT_WENT_WRONG_IS_SAID_BELOW_TRY_AGAIN_ONCE_THAT_IS_SORTED_OUT() {
+            return switch (lang) {
+                case ENGLISH -> "What went wrong is said below. Try again once that is sorted out.";
+            };
+        }
+
+        public String OUTBOX() {
+            return switch (lang) {
+                case ENGLISH -> "OUTBOX";
+            };
+        }
+
+        public String SAVE_SOMEWHERE_ON_THIS_COMPUTER(String file) {
+            return switch (lang) {
+                case ENGLISH -> "Save " + file + " somewhere on this computer";
+            };
+        }
+
+        public String IS_ANSWERING_IN_ANOTHER_CONVERSATION(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is answering in another conversation. Write here once it is done.";
+            };
+        }
+
+        public String GIVE_THE_GENIE_A_FILE_IT_LANDS_IN_INBOX() {
+            return switch (lang) {
+                case ENGLISH -> "Give the genie a file; it lands in ~/inbox";
+            };
+        }
+
+        public String RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE() {
+            return switch (lang) {
+                case ENGLISH -> "Return sends; Shift and Return starts a new line";
+            };
+        }
+
+        public String SEND() {
+            return switch (lang) {
+                case ENGLISH -> "Send";
+            };
+        }
+
+        public String NEW_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "New conversation";
+            };
+        }
+
+        public String START_A_NEW_CONVERSATION_OR_SELECT_ONE_IN_THE_TREE_TO_RETURN_TO_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Start a new conversation, or select a conversation in the tree to return to it";
+            };
+        }
+
+        public String WAKING(String name, String doing) {
+            return switch (lang) {
+                case ENGLISH -> "Waking " + name + ": " + doing + "…";
+            };
+        }
+
+        public String IS_ASLEEP_ITS_SANDBOX_IS_OFF(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is asleep. Its sandbox is off, its home and conversation are kept.";
+            };
+        }
+
+        public String COULD_NOT_WAKE_BECAUSE(String name, String why) {
+            return switch (lang) {
+                case ENGLISH -> name + " could not wake: " + why;
+            };
+        }
+
+        public String TRY_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Try again";
+            };
+        }
+
+        public String WAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Wake";
+            };
+        }
+
+        public String EDIT() {
+            return switch (lang) {
+                case ENGLISH -> "Edit";
+            };
+        }
+
+        public String ASK_THIS_DIFFERENTLY_WHAT_FOLLOWED_IS_KEPT_AS_A_BRANCH() {
+            return switch (lang) {
+                case ENGLISH -> "Ask this differently. What followed is kept, as a branch in the genie's conversations.";
+            };
+        }
+
+        public String PREVIOUS_CONVERSATION_VERSION() {
+            return switch (lang) {
+                case ENGLISH -> "Previous conversation version";
+            };
+        }
+
+        public String NEXT_CONVERSATION_VERSION() {
+            return switch (lang) {
+                case ENGLISH -> "Next conversation version";
+            };
+        }
+
+        public String COPY() {
+            return switch (lang) {
+                case ENGLISH -> "Copy";
+            };
+        }
+
+        public String COPY_THE_ANSWER_AS_THE_GENIE_WROTE_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Copy the answer, as the genie wrote it";
+            };
+        }
+
+        public String THINKING() {
+            return switch (lang) {
+                case ENGLISH -> "thinking";
+            };
+        }
+
+        public String THOUGHT() {
+            return switch (lang) {
+                case ENGLISH -> "thought";
+            };
+        }
+
+        public String CLICK_TO_FOLD_THE_THOUGHTS_AWAY() {
+            return switch (lang) {
+                case ENGLISH -> "Click to fold the thoughts away";
+            };
+        }
+
+        public String CLICK_TO_SEE_WHAT_THE_GENIE_THINKS() {
+            return switch (lang) {
+                case ENGLISH -> "Click to see what the genie thinks";
+            };
+        }
+
+        public String YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE(String job) {
+            return switch (lang) {
+                case ENGLISH -> job + ". The genie does one thing at a time, so your message waits until this job is done.";
+            };
+        }
+
+        public String RUNNING() {
+            return switch (lang) {
+                case ENGLISH -> "running…";
+            };
+        }
+
+        public String FAILED() {
+            return switch (lang) {
+                case ENGLISH -> "failed";
+            };
+        }
+
+        public String CLICK_TO_SEE_WHAT_IT_PRINTED() {
+            return switch (lang) {
+                case ENGLISH -> "Click to see what it printed";
+            };
+        }
+
+        public String SAVE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Save…";
+            };
+        }
+
+        public String IS_DOING_A_SCHEDULED_JOB_FIRST(String name, String job) {
+            return switch (lang) {
+                case ENGLISH -> name + " is doing a scheduled job first: " + job;
+            };
+        }
+
+        public String IS_THINKING(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is thinking";
+            };
+        }
+
+        public String WRITTEN_BY(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Written by " + model;
+            };
+        }
     }
 
     /// The words of the dialogs the window asks and tells the user things in.
@@ -728,74 +1134,190 @@ public enum Lang {
     }
 
     /// The words of a genie's Actions page: what can be done with the genie as a whole.
-    public record ActionsPage(
-        String ACTIONS,
-        About WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE,
-        String NAME,
-        String ENTER_KEEPS_THE_NEW_NAME_ESCAPE_THE_ONE_IT_HAD,
-        String WHAT_IT_IS_CALLED_IN_YOUR_LIST_AND_ABOVE_ITS_CHAT,
-        String RENAME,
-        String CANCEL,
-        String SAVE,
-        String NEW_CONVERSATION,
-        About START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT,
-        String START_A_NEW_CONVERSATION,
-        String SAVE_NOW,
-        About SAVE_ITS_HOME_AS_IT_IS_NOW,
-        String SAVE_NOW_ELLIPSIS,
-        String SLEEP,
-        String WAKE,
-        About IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX,
-        About IS_WAKING,
-        About DID_NOT_WAKE_ITS_HOME_IS_KEPT,
-        About END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO,
-        About END_ITS_SANDBOX,
-        String WAKING,
-        String TRY_WAKING_AGAIN,
-        String FOLDERS,
-        String REMOVE,
-        String DELETE,
-        About REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE,
-        About DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST,
-        String REMOVE_FROM_GENIES_ELLIPSIS,
-        About DELETE_GENIE_ELLIPSIS
-    ) {
-        public static final ActionsPage ENGLISH = new ActionsPage(
-            "Actions",
-            genie -> "What can be done with " + genie + " as a whole. A right-click on its card in your list offers the same.",
-            "Name",
-            "Enter keeps the new name, Escape the one it had.",
-            "What it is called in your list and above its chat.",
-            "Rename",
-            "Cancel",
-            "Save",
-            "New conversation",
-            genie -> "Start afresh with " + genie + ", waking it first if it sleeps. This conversation is kept, to go back to.",
-            "Start a new conversation",
-            "Save now",
-            genie -> "Save " + genie + "'s home as it is now: a moment in its history to go back to.",
-            "Save now…",
-            "Sleep",
-            "Wake",
-            genie -> genie + " is in the lamp. Waking it starts its sandbox, with its home as it left it.",
-            genie -> genie + " is waking…",
-            genie -> genie + " did not wake. Its home is kept, so it can try again.",
-            genie -> "End " + genie + "'s sandbox, for whoever lit it with `oillamp at` too. Its home and this conversation are kept.",
-            genie -> "End " + genie + "'s sandbox. Its home and this conversation are kept.",
-            "Waking…",
-            "Try waking again",
-            "Folders",
-            "Remove",
-            "Delete",
-            genie ->
-                "Remove " + genie + " from Genies. Its lamp was made elsewhere, with `oillamp at`, and stays "
-                + "where it is, as it is, running if it runs. You are asked first.",
-            genie ->
-                "Delete " + genie + " for good: its home, everything it made and your "
-                + "conversations with it. You are asked first.",
-            "Remove from Genies…",
-            genie -> "Delete " + genie + "…"
-        );
+    public record ActionsPage(Lang lang) {
+        public String ACTIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Actions";
+            };
+        }
+
+        public String WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "What can be done with " + genie + " as a whole. A right-click on its card in your list offers the same.";
+            };
+        }
+
+        public String NAME() {
+            return switch (lang) {
+                case ENGLISH -> "Name";
+            };
+        }
+
+        public String ENTER_KEEPS_THE_NEW_NAME_ESCAPE_THE_ONE_IT_HAD() {
+            return switch (lang) {
+                case ENGLISH -> "Enter keeps the new name, Escape the one it had.";
+            };
+        }
+
+        public String WHAT_IT_IS_CALLED_IN_YOUR_LIST_AND_ABOVE_ITS_CHAT() {
+            return switch (lang) {
+                case ENGLISH -> "What it is called in your list and above its chat.";
+            };
+        }
+
+        public String RENAME() {
+            return switch (lang) {
+                case ENGLISH -> "Rename";
+            };
+        }
+
+        public String CANCEL() {
+            return switch (lang) {
+                case ENGLISH -> "Cancel";
+            };
+        }
+
+        public String SAVE() {
+            return switch (lang) {
+                case ENGLISH -> "Save";
+            };
+        }
+
+        public String NEW_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "New conversation";
+            };
+        }
+
+        public String START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Start afresh with " + genie + ", waking it first if it sleeps. This conversation is kept, to go back to.";
+            };
+        }
+
+        public String START_A_NEW_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "Start a new conversation";
+            };
+        }
+
+        public String SAVE_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "Save now";
+            };
+        }
+
+        public String SAVE_ITS_HOME_AS_IT_IS_NOW(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Save " + genie + "'s home as it is now: a moment in its history to go back to.";
+            };
+        }
+
+        public String SAVE_NOW_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Save now…";
+            };
+        }
+
+        public String SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Sleep";
+            };
+        }
+
+        public String WAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Wake";
+            };
+        }
+
+        public String IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is in the lamp. Waking it starts its sandbox, with its home as it left it.";
+            };
+        }
+
+        public String IS_WAKING(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is waking…";
+            };
+        }
+
+        public String DID_NOT_WAKE_ITS_HOME_IS_KEPT(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " did not wake. Its home is kept, so it can try again.";
+            };
+        }
+
+        public String END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "End " + genie + "'s sandbox, for whoever lit it with `oillamp at` too. Its home and this conversation are kept.";
+            };
+        }
+
+        public String END_ITS_SANDBOX(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "End " + genie + "'s sandbox. Its home and this conversation are kept.";
+            };
+        }
+
+        public String WAKING() {
+            return switch (lang) {
+                case ENGLISH -> "Waking…";
+            };
+        }
+
+        public String TRY_WAKING_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Try waking again";
+            };
+        }
+
+        public String FOLDERS() {
+            return switch (lang) {
+                case ENGLISH -> "Folders";
+            };
+        }
+
+        public String REMOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Remove";
+            };
+        }
+
+        public String DELETE() {
+            return switch (lang) {
+                case ENGLISH -> "Delete";
+            };
+        }
+
+        public String REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Remove " + genie + " from Genies. Its lamp was made elsewhere, with `oillamp at`, and stays "
+                    + "where it is, as it is, running if it runs. You are asked first.";
+            };
+        }
+
+        public String DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Delete " + genie + " for good: its home, everything it made and your "
+                    + "conversations with it. You are asked first.";
+            };
+        }
+
+        public String REMOVE_FROM_GENIES_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Remove from Genies…";
+            };
+        }
+
+        public String DELETE_GENIE_ELLIPSIS(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + genie + "…";
+            };
+        }
     }
 
     /// The words of a genie's home on its Actions page, and of linking its folders into the
