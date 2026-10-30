@@ -319,11 +319,7 @@ public record GeniesState(
     /// now, and which only when they next wake. Nothing when every genie sleeps.
     public Optional<String> noteForAwakeGenies() {
         if (!genies.any(genie -> genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) return Optional.empty();
-        return Optional.of(
-            "Genies that are awake answer with a new model from their next message on. "
-            + "A new place, address or key reaches them when they next wake, and so does "
-            + "everything for a genie that kept running while Genies was closed."
-        );
+        return Optional.of(lang.SETTINGS_PAGE().GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON());
     }
 
     /// The settings are asking the service they name for its models.
