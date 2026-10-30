@@ -5,6 +5,7 @@ import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.LampLighter
 import dev.gui.model.Conversations
+import dev.gui.model.Lang
 import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.Settings
@@ -315,7 +316,7 @@ class KeepingAGenieAliveSpec extends Specification {
             waitUntil { said() == ['hello', 'You said: hello'] }
 
         then: 'the new one has a row of its own at the top'
-            var rows = genie.conversations().chats()
+            var rows = genie.conversations().chats(Lang.ENGLISH)
             rows.first().id() == Conversations.ASIDE
             rows.first().title() == 'New conversation'
             genie.conversations().fileOf(Conversations.ASIDE) == Optional.of('')
@@ -331,7 +332,7 @@ class KeepingAGenieAliveSpec extends Specification {
 
         then: 'the answer arrives, and the chat is in the conversation pi saved it in'
             waitUntil { genie.phase() == Genie.Phase.READY && said() == ['take your time', 'You said: take your time'] }
-            waitUntil { genie.conversations().current().map { it.title() } == Optional.of('take your time') }
+            waitUntil { genie.conversations().current().map { it.title(Lang.ENGLISH) } == Optional.of('take your time') }
     }
 
     def 'Stopping the genie stops the run it works on, and it is ready again'() {

@@ -57,21 +57,32 @@ public record Conversation(String id, String file, String name, String modified,
     /// What a row of a conversation shows at most, in characters.
     static final int TITLE_LENGTH = 60;
 
-    /// Its name, or its first question.
-    public String title() {
-        if (!name.isBlank()) return oneLine(name);
-        for (Step step : steps) if (step.asked()) return oneLine(step.text());
-        return "New conversation";
+    /// Its name, or its first question; in `lang`, what a conversation is called in which
+    /// nothing was asked yet.
+    public String title(Lang lang) {
+        return title(lang.WINDOW().A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET());
     }
 
-    /// The conversation as a row of the tree, with its branches below it.
-    public Talk.Chat talk(Conversations.Here here) {
+    /// Its name, or its first question, or `untitled`.
+    String title(String untitled) {
+        if (!name.isBlank()) return oneLine(name);
+        for (Step step : steps) if (step.asked()) return oneLine(step.text());
+        return untitled;
+    }
+
+    /// The conversation as a row of the tree, with its branches below it, its title in `lang`.
+    public Talk.Chat talk(Conversations.Here here, Lang lang) {
+        return talk(here, lang.WINDOW().A_CONVERSATION_IN_WHICH_NOTHING_WAS_ASKED_YET());
+    }
+
+    /// The same, with `untitled` the title of a conversation in which nothing was asked yet.
+    Talk.Chat talk(Conversations.Here here, String untitled) {
         boolean inHere = here.file().equals(file);
         Shape shape = new Shape(steps);
         Tuple<Talk.Branch> starts = shape.branches(shape.firstQuestions(), inHere ? here.leaf() : "");
-        if (starts.size() != 1) return new Talk.Chat(id, title(), 0, "", inHere, starts);
+        if (starts.size() != 1) return new Talk.Chat(id, title(untitled), 0, "", inHere, starts);
         Talk.Branch start = starts.first();
-        return new Talk.Chat(id, title(), start.turns(), start.leaf(), inHere, start.forks());
+        return new Talk.Chat(id, title(untitled), start.turns(), start.leaf(), inHere, start.forks());
     }
 
     /// The conversation versions at the user message `question`: one per user message with the
