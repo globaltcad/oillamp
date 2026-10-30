@@ -306,7 +306,7 @@ public final class GeniesView extends JPanel {
                     .onClick(_ -> addLamp())
                 )
                 .add("growx",
-                    button(state.viewAsString(it -> it.lang().WINDOW().THINGS_WENT_WRONG().of(it.troubles().size()))).group(Skin.QUIET_BUTTON)
+                    button(state.viewAsString(it -> "⚠  " + it.lang().WINDOW().THINGS_WENT_WRONG().of(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(palette, (p, it) -> it
                         .backgroundColor(p.TROUBLE_WASH())
                         .border(1, p.TROUBLE())
@@ -431,14 +431,8 @@ public final class GeniesView extends JPanel {
             )
             .withCursor(UI.Cursor.HAND)
             .withTooltip(
-                shown.viewAsString(it ->
-                    it.name() + " — " + it.status() +
-                    (
-                        it.showing().isEmpty()
-                            ? ""
-                            : ". Shows you: " + it.showing()
-                    ) +
-                    ". Right-click for more."
+                Viewable.of(String.class, shown, windowWords, (it, words) ->
+                    words.GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE().of(it.name(), it.status(), it.showing())
                 )
             )
             .onMousePress(it -> {
@@ -484,9 +478,11 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     html(
                         Viewable.of(String.class, shown, state, (it, s) ->
-                            !it.hostAccess().waitingAt(s.now()).isEmpty()
-                                ? "⌂  asks you to allow something"
-                                : "⌂  may reach this computer"
+                            "⌂  " + (
+                                !it.hostAccess().waitingAt(s.now()).isEmpty()
+                                    ? s.lang().WINDOW().ASKS_YOU_TO_ALLOW_SOMETHING()
+                                    : s.lang().WINDOW().MAY_REACH_THIS_COMPUTER()
+                            )
                         )
                     )
                     .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
@@ -501,7 +497,7 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add("growx, wmin 0",
-                    label(shown.viewAsString(it -> "▣  shows you: " + it.showing()))
+                    label(Viewable.of(String.class, shown, windowWords, (it, words) -> "▣  " + words.SHOWS_YOU().of(it.showing())))
                     .isVisibleIf(showsElsewhere)
                     .withStyle(theme, (now, it) -> it
                         .componentFont(f -> f
@@ -522,7 +518,9 @@ public final class GeniesView extends JPanel {
                         .icon(SignSvgUtil.sign(on ? SignSvgUtil.UNFOLD : SignSvgUtil.FOLD, p.SUBTEXT()))
                         .padding(3, 5, 3, 5);
                 })
-                .withTooltip(folded.viewAsString(on -> on ? "Show this genie's conversations" : "Fold this genie's conversations away"))
+                .withTooltip(Viewable.of(String.class, folded, windowWords, (on, words) ->
+                    on ? words.SHOW_THIS_GENIES_CONVERSATIONS() : words.FOLD_THIS_GENIES_CONVERSATIONS_AWAY()
+                ))
                 .onClick(_ -> folded.update(From.VIEW, on -> !on))
             )
             // On a line of its own, whether the arrow is there or not.
@@ -562,10 +560,8 @@ public final class GeniesView extends JPanel {
                 tree(
                     id,
                     jobs,
-                    conversations.viewAsString(it ->
-                        howMany(it.jobCount(), "scheduled run", "")
-                    ),
-                    "Show or hide the conversations the runs of this genie's scheduled jobs had",
+                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.SCHEDULED_RUNS().of(it.jobCount())),
+                    windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_THE_CONVERSATIONS_OF_SCHEDULED_JOBS),
                     conversations.viewAs(Boolean.class, it -> it.jobCount() > 0),
                     conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::jobRuns),
                     browsable,
@@ -576,10 +572,8 @@ public final class GeniesView extends JPanel {
                 tree(
                     id,
                     chats,
-                    conversations.viewAsString(it ->
-                        howMany(it.chatCount(), "conversation", "no conversations yet")
-                    ),
-                    "Show or hide your conversations with this genie",
+                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.CONVERSATIONS().of(it.chatCount())),
+                    windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_YOUR_CONVERSATIONS_WITH_THIS_GENIE),
                     Val.of(true),
                     conversations.viewAs(Tuple.classTyped(Talk.class), Conversations::chats),
                     browsable,
@@ -589,16 +583,16 @@ public final class GeniesView extends JPanel {
                             .icon(SignSvgUtil.sign(SignSvgUtil.NEW, p.SUBTEXT()))
                             .padding(1, 6, 1, 6)
                         )
-                        .withTooltip("Start a new conversation with this genie; the others are kept")
+                        .withTooltip(windowWords.viewAsString(Lang.Window::START_A_NEW_CONVERSATION_WITH_THIS_GENIE))
                         .onClick(_ -> app.startAfresh(id))
                     )
                 )
             )
             .add("left, gaptop 2",
-                button("Delete…").group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
+                button(windowWords.viewAsString(Lang.Window::DELETE_ELLIPSIS)).group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
                 .isVisibleIf(eitherOpen)
                 .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, p.SUBTEXT())))
-                .withTooltip("Delete the conversation this genie is in, with all its branches")
+                .withTooltip(windowWords.viewAsString(Lang.Window::DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN))
                 .onClick(_ -> confirmForget(id))
             );
     }
@@ -612,7 +606,7 @@ public final class GeniesView extends JPanel {
         final UUID id,
         final Var<Fold> fold,
         final Val<String> count,
-        final String tip,
+        final Val<String> tip,
         final Val<Boolean> present,
         final Val<Tuple<Talk>> rows,
         final Val<Boolean> browsable,
@@ -683,7 +677,7 @@ public final class GeniesView extends JPanel {
                                 .toolTip(chat ->
                                     chat.title() + " — " + (
                                         chat.turns() == 0
-                                            ? "its first question was asked differently"
+                                            ? windowWords.get().ITS_FIRST_QUESTION_WAS_ASKED_DIFFERENTLY()
                                             : questions(chat.turns(), chat.branches())
                                     )
                                 )
@@ -742,7 +736,7 @@ public final class GeniesView extends JPanel {
                 )
             )
             .add("growx, wmin 0, h 9!",
-                grip(fold, () -> UI.unscale(area[0].getHeight()), open, Val.of("Drag to make this list taller or shorter"))
+                grip(fold, () -> UI.unscale(area[0].getHeight()), open, windowWords.viewAsString(Lang.Window::DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER))
             );
     }
 
@@ -795,21 +789,10 @@ public final class GeniesView extends JPanel {
         g.fillRoundRect(length / 2 - 14, middle - 1, 28, 3, 3, 3);
     }
 
-    private static String questions(int turns, Tuple<Talk.Branch> forks) {
-        return (turns == 1 ? "one question" : turns + " questions") + (
-            forks.isEmpty()
-                ? ""
-                : ", then asked differently " + (forks.size() == 2 ? "once" : forks.size() - 1 + " times")
-        );
-    }
-
-    /// "no conversations yet", "1 conversation", "3 conversations", and so on.
-    private static String howMany(int count, String one, String none) {
-        return switch (count) {
-            case 0 -> none;
-            case 1 -> "1 " + one;
-            default -> count + " " + one + "s";
-        };
+    /// How long a conversation or a branch is, with `forks` the branches it splits into: the
+    /// first of them is the one it goes on in, every other one a question asked differently.
+    private String questions(int turns, Tuple<Talk.Branch> forks) {
+        return windowWords.get().QUESTIONS_THEN_ASKED_DIFFERENTLY().of(turns, Math.max(0, forks.size() - 1));
     }
 
     /// The user clicked a row of a genie's tree, and goes to the row's last entry. The row the
