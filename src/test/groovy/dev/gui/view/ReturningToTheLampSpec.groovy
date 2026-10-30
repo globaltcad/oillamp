@@ -130,7 +130,7 @@ class ReturningToTheLampSpec extends Specification {
                 var file = home.resolve(conversation.file())
                 Files.createDirectories(file.parent)
                 Files.writeString(file, """{"type":"session","version":3,"id":"${conversation.id()}","timestamp":"2026-10-26T12:00:00Z","cwd":"/home/agent"}
-{"type":"message","id":"q1","parentId":null,"timestamp":"2026-10-26T12:00:01Z","message":{"role":"user","content":[{"type":"text","text":"${conversation.title()}"}]}}
+{"type":"message","id":"q1","parentId":null,"timestamp":"2026-10-26T12:00:01Z","message":{"role":"user","content":[{"type":"text","text":"${conversation.title(Lang.ENGLISH)}"}]}}
 """)
             }
             SwingUtilities.invokeAndWait { app.sleep(genie.id()) }
@@ -151,7 +151,7 @@ class ReturningToTheLampSpec extends Specification {
         then: 'the run stays selected after the user tree clears'
             !state.get().genie().conversations().overview()
             state.get().genie().conversations().here().file() == job.file()
-            state.get().genie().transcript().entries().first().text() == job.title()
+            state.get().genie().transcript().entries().first().text() == job.title(Lang.ENGLISH)
             chats.selectionCount == 0
             jobs.selectionCount == 1
 
@@ -163,7 +163,7 @@ class ReturningToTheLampSpec extends Specification {
         then: 'their conversation stays selected after the run tree clears'
             !state.get().genie().conversations().overview()
             state.get().genie().conversations().here().file() == mine.file()
-            state.get().genie().transcript().entries().first().text() == mine.title()
+            state.get().genie().transcript().entries().first().text() == mine.title(Lang.ENGLISH)
             chats.selectionCount == 1
             jobs.selectionCount == 0
     }
@@ -189,7 +189,7 @@ class ReturningToTheLampSpec extends Specification {
             heard.phase() == Genie.Phase.WORKING
             heard.transcript().entries().last().text() == 'Hello back'
             heard.conversations().overview()
-            heard.conversations().selectionIn(heard.conversations().chats()).isEmpty()
+            heard.conversations().selectionIn(heard.conversations().chats(Lang.ENGLISH)).isEmpty()
     }
 
     def 'An already awake genie keeps living on the welcome timeline without another emergence'() {
