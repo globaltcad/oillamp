@@ -349,7 +349,7 @@ final class ChatRows {
                     .withTooltip(Viewable.of(String.class, waiting, words, (it, chat) ->
                         it.time().isEmpty()
                             ? it.what()
-                            : chat.YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE().of(it.what())
+                            : chat.YOUR_MESSAGE_WAITS_UNTIL_THIS_JOB_IS_DONE(it.what())
                     ))
                 )
             )

@@ -190,10 +190,10 @@ public record Genie(
         return schedule.running().map(job -> {
             long seconds = Math.max(0, Duration.between(job.since(), now).toSeconds());
             return new Waiting(
-                lang.CHAT().IS_DOING_A_SCHEDULED_JOB_FIRST().of(name, job.title()),
+                lang.CHAT().IS_DOING_A_SCHEDULED_JOB_FIRST(name, job.title()),
                 String.format("%d:%02d", seconds / 60, seconds % 60)
             );
-        }).orElse(new Waiting(lang.CHAT().IS_THINKING().of(name), ""));
+        }).orElse(new Waiting(lang.CHAT().IS_THINKING(name), ""));
     }
 
     // ─── the conversation ──────────────────────────────────────────────────────────────────
