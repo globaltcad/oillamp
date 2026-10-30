@@ -3,6 +3,7 @@ package dev.gui.model;
 import java.time.DayOfWeek;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
+import java.util.List;
 import java.util.Locale;
 
 /// The words of Genies: every text the window shows, in one language. A value, as [Palette] is,
@@ -89,6 +90,19 @@ public record Lang(
 
     /// A day of the week, by name.
     public interface OfWeekday { String of(DayOfWeek day); }
+
+    /// Names as a sentence lists them, such as "a, b and c".
+    public interface Listed { String of(List<String> names); }
+
+    /// A text about a `branch` of a genie's history, and `what` it says of it, such as a time.
+    public interface OnBranch { String of(String branch, String what); }
+
+    /// A text about how many `moments` of a genie's history are on a `branch`.
+    public interface CountedOnBranch { String of(int moments, String branch); }
+
+    /// Why the oldest `moments` of a history would be deleted: the `branches` they are on, as a
+    /// list, or empty when that goes without saying, and how much deleting them `frees`.
+    public interface OldestMoments { String of(int moments, String branches, String frees); }
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
@@ -885,7 +899,23 @@ public record Lang(
         String KEEP_HOW_THE_GENIE_IS_NOW_AS_A_MOMENT_TO_COME_BACK_TO,
         String HOW_IT_WAS_BEFORE_IS_KEPT_SO_YOU_CAN_RETURN_TO_IT,
         String UNDO,
-        String GO_BACK_TO_HOW_IT_WAS_BEFORE
+        String GO_BACK_TO_HOW_IT_WAS_BEFORE,
+        Listed NAMES_LISTED,
+        String THEN,
+        About WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST,
+        OnBranch RESET_TO_HOW_IT_WAS,
+        CountedOnBranch MOMENTS_AFTER_IT_LEAVE,
+        String A_RESET_KEEPS_NO_COPY_SO_IT_CANNOT_BE_UNDONE,
+        About RESET,
+        About DELETE_THE_BRANCH,
+        CountedOnBranch MOMENTS_ON_IT_ALONE_GO_WITH_IT,
+        About DELETE,
+        Counted DELETE_THE_OLDEST_MOMENTS,
+        OldestMoments THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW,
+        Counted DELETE_THEM,
+        String CANCEL,
+        String GO_BACK_INSTEAD,
+        String BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -906,7 +936,37 @@ public record Lang(
             "Keep how the genie is now as a moment to come back to, such as before a big change",
             "How it was before is kept, so you can return to it.",
             "Undo",
-            "Go back to how it was before"
+            "Go back to how it was before",
+            names ->
+                names.size() < 2
+                    ? String.join("", names)
+                    : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast(),
+            "then",
+            genie -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.",
+            (branch, when) -> "Reset " + branch + " to how it was " + when + "?",
+            (moments, branch) ->
+                moments == 0 ? "No moment comes after it on " + branch + "."
+                : moments == 1 ? "The moment after it leaves " + branch + "."
+                : "The " + moments + " moments after it leave " + branch + ".",
+            "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
+            + "Going back instead keeps how it is now as a moment of its own.",
+            branch -> "Reset " + branch,
+            branch -> "Delete the branch " + branch + "?",
+            (moments, branch) ->
+                moments == 0 ? "Every moment on it is on another branch too, so no moment is lost."
+                : moments == 1 ? "One moment is on " + branch + " alone, and goes with it."
+                : moments + " moments are on " + branch + " alone, and go with it.",
+            branch -> "Delete " + branch,
+            moments -> "Delete the " + (moments == 1 ? "oldest moment" : moments + " oldest moments") + "?",
+            (moments, branches, frees) ->
+                (moments == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
+                + (branches.isEmpty() ? "" : ", on " + branches) + ". Deleting "
+                + (moments == 1 ? "it" : "them") + " frees " + frees
+                + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
+            moments -> "Delete " + (moments == 1 ? "it" : "them"),
+            "Cancel",
+            "Go back instead",
+            "Bring it back to that moment, and keep how it is now as a moment you can return to"
         );
     }
 
