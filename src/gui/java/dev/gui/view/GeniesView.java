@@ -318,7 +318,7 @@ public final class GeniesView extends JPanel {
                     .onClick(_ -> addLamp())
                 )
                 .add("growx",
-                    button(state.viewAsString(it -> "⚠  " + it.lang().WINDOW().THINGS_WENT_WRONG().of(it.troubles().size()))).group(Skin.QUIET_BUTTON)
+                    button(state.viewAsString(it -> "⚠  " + it.lang().WINDOW().THINGS_WENT_WRONG(it.troubles().size()))).group(Skin.QUIET_BUTTON)
                     .withStyle(palette, (p, it) -> it
                         .backgroundColor(p.TROUBLE_WASH())
                         .border(1, p.TROUBLE())
@@ -444,7 +444,7 @@ public final class GeniesView extends JPanel {
             .withCursor(UI.Cursor.HAND)
             .withTooltip(
                 Viewable.of(String.class, shown, lang, (it, words) ->
-                    words.WINDOW().GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE().of(it.name(), it.status(words), it.showing())
+                    words.WINDOW().GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE(it.name(), it.status(words), it.showing())
                 )
             )
             .onMousePress(it -> {
@@ -509,7 +509,7 @@ public final class GeniesView extends JPanel {
                     )
                 )
                 .add("growx, wmin 0",
-                    label(Viewable.of(String.class, shown, windowWords, (it, words) -> "▣  " + words.SHOWS_YOU().of(it.showing())))
+                    label(Viewable.of(String.class, shown, windowWords, (it, words) -> "▣  " + words.SHOWS_YOU(it.showing())))
                     .isVisibleIf(showsElsewhere)
                     .withStyle(theme, (now, it) -> it
                         .componentFont(f -> f
@@ -572,7 +572,7 @@ public final class GeniesView extends JPanel {
                 tree(
                     id,
                     jobs,
-                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.SCHEDULED_RUNS().of(it.jobCount())),
+                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.SCHEDULED_RUNS(it.jobCount())),
                     windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_THE_CONVERSATIONS_OF_SCHEDULED_JOBS),
                     conversations.viewAs(Boolean.class, it -> it.jobCount() > 0),
                     Viewable.of(Tuple.classTyped(Talk.class), conversations, lang, Conversations::jobRuns),
@@ -584,7 +584,7 @@ public final class GeniesView extends JPanel {
                 tree(
                     id,
                     chats,
-                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.CONVERSATIONS().of(it.chatCount())),
+                    Viewable.of(String.class, conversations, windowWords, (it, words) -> words.CONVERSATIONS(it.chatCount())),
                     windowWords.viewAsString(Lang.Window::SHOW_OR_HIDE_YOUR_CONVERSATIONS_WITH_THIS_GENIE),
                     Val.of(true),
                     Viewable.of(Tuple.classTyped(Talk.class), conversations, lang, Conversations::chats),
@@ -804,7 +804,7 @@ public final class GeniesView extends JPanel {
     /// How long a conversation or a branch is, with `forks` the branches it splits into: the
     /// first of them is the one it goes on in, every other one a question asked differently.
     private String questions(int turns, Tuple<Talk.Branch> forks) {
-        return windowWords.get().QUESTIONS_THEN_ASKED_DIFFERENTLY().of(turns, Math.max(0, forks.size() - 1));
+        return windowWords.get().QUESTIONS_THEN_ASKED_DIFFERENTLY(turns, Math.max(0, forks.size() - 1));
     }
 
     /// The user clicked a row of a genie's tree, and goes to the row's last entry. The row the
@@ -1221,7 +1221,7 @@ public final class GeniesView extends JPanel {
             .withMinSize(0, 0)
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("growx, wmin 0",
-                label(Viewable.of(String.class, genie, desktopWords, (it, words) -> "✦  " + words.SHOWS_YOU().of(it.name(), it.showing())))
+                label(Viewable.of(String.class, genie, desktopWords, (it, words) -> "✦  " + words.SHOWS_YOU(it.name(), it.showing())))
                 .isVisibleIf(showing)
                 .withTooltip(genie.viewAsString(Genie::showing))
                 .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(13).weight(2f).color(now.palette().FLAME())))
@@ -1374,10 +1374,10 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0", wakePicture.view(livePicture))
                 .add("growx, wmin 0",
                     label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
-                        case READY, WORKING -> words.IS_LISTENING().of(it.name());
-                        case WAKING -> words.IS_WAKING().of(it.name());
-                        case ASLEEP -> words.IS_IN_THE_LAMP().of(it.name());
-                        case BROKEN -> words.COULD_NOT_WAKE().of(it.name());
+                        case READY, WORKING -> words.IS_LISTENING(it.name());
+                        case WAKING -> words.IS_WAKING(it.name());
+                        case ASLEEP -> words.IS_IN_THE_LAMP(it.name());
+                        case BROKEN -> words.COULD_NOT_WAKE(it.name());
                     }))
                     .group(Skin.EMPTY_TITLE)
                     .withHorizontalAlignment(UI.HorizontalAlignment.CENTER)
@@ -1405,7 +1405,7 @@ public final class GeniesView extends JPanel {
                 box("ins 0, gap 6").withMinSize(0, 0)
                 .addAll(handouts, file -> UI.of(UI.use(look, () ->
                     button("⤓ " + file.name() + "  ·  " + file.readableSize()).group(Skin.QUIET_BUTTON)
-                    .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER().of(file.name())))
+                    .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER(file.name())))
                     .onClick(_ -> saveHandout(file.name()))
                     .get(JButton.class)
                 )))
@@ -1426,7 +1426,7 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0, gapbottom 6",
                 ViewPartsUtil.wrapped(
                     theme,
-                    Viewable.of(String.class, name, chatWords, (who, words) -> words.IS_ANSWERING_IN_ANOTHER_CONVERSATION().of(who)),
+                    Viewable.of(String.class, name, chatWords, (who, words) -> words.IS_ANSWERING_IN_ANOTHER_CONVERSATION(who)),
                     Palette::SUBTEXT,
                     answeringElsewhere
                 )
@@ -1506,8 +1506,8 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     waving(
                         label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
-                            case WAKING -> words.WAKING().of(it.name(), it.activity());
-                            default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF().of(it.name());
+                            case WAKING -> words.WAKING(it.name(), it.activity());
+                            default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF(it.name());
                         }))
                         .group(Skin.SUBTITLE),
                         genie
@@ -1517,7 +1517,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, genie, chatWords, (it, words) -> words.COULD_NOT_WAKE_BECAUSE().of(it.name(), it.activity())),
+                        Viewable.of(String.class, genie, chatWords, (it, words) -> words.COULD_NOT_WAKE_BECAUSE(it.name(), it.activity())),
                         Palette::TROUBLE,
                         phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
                     )
@@ -1691,12 +1691,12 @@ public final class GeniesView extends JPanel {
                 // The menu is built as it opens, in the words of that moment.
                 Lang.Window words = windowWords.get();
                 String wake = now == Genie.Phase.BROKEN ? words.TRY_WAKING_AGAIN() : words.WAKE();
-                String delete = shown.fromElsewhere() ? words.REMOVE_FROM_GENIES_ELLIPSIS() : words.DELETE_GENIE_ELLIPSIS().of(shown.name());
+                String delete = shown.fromElsewhere() ? words.REMOVE_FROM_GENIES_ELLIPSIS() : words.DELETE_GENIE_ELLIPSIS(shown.name());
                 ui
                 .add(ViewPartsUtil.item(words.RENAME_ELLIPSIS(), true, () -> rename(id)))
                 .add(ViewPartsUtil.item(words.NEW_CONVERSATION(), idle, () -> app.startAfresh(id)))
                 .add(ViewPartsUtil.item(words.SAVE_NOW_ELLIPSIS(), shown.history().busy().isEmpty(), () -> historyPage.save(this)))
-                .add(ViewPartsUtil.item(words.LINK_ITS_WORKSPACE_INTO().of(String.valueOf(app.documents().getFileName())), true, () -> linkWorkspace(id)))
+                .add(ViewPartsUtil.item(words.LINK_ITS_WORKSPACE_INTO(String.valueOf(app.documents().getFileName())), true, () -> linkWorkspace(id)))
                 .peek(JPopupMenu::addSeparator)
                 .applyIf(now.isAwake(), ui1 -> ui1
                     .add(ViewPartsUtil.item(words.SLEEP(), true, () -> app.sleep(id)))
