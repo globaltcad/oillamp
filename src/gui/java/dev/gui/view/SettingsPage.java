@@ -11,6 +11,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
+
+import org.jspecify.annotations.Nullable;
 
 import dev.gui.Genies;
 import dev.gui.model.GeniesState;
@@ -109,6 +112,21 @@ final class SettingsPage {
         )
         .withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""));
 
+    /// The palette's switch and the language's box: side by side, or one under the other on a
+    /// card too narrow for both, as [#fitInARow] says.
+    private static final Layout CONTROLS_IN_A_ROW =
+        Layout.mig(
+            LayoutConstraint.of("ins 0, gap 12"),
+            LayoutConstraint.of(""),
+            LayoutConstraint.of("[center]")
+        );
+    private static final Layout CONTROLS_IN_A_COLUMN =
+        Layout.mig(
+            LayoutConstraint.of("ins 0, wrap 1, gap 0 12"),
+            LayoutConstraint.of(""),
+            LayoutConstraint.of("")
+        );
+
     /*
      *  The welcome on a grid of its own, its words and the room for its picture:
      *
@@ -171,6 +189,16 @@ final class SettingsPage {
             it -> !it.palette().isDark(),
             (it, on) -> it.withPalette(on ? Palette.LIGHT : Palette.DARK)
         );
+        // The language every text of the window is said in.
+        Var<Lang> lang = state.zoomTo(GeniesState::lang, GeniesState::withLang);
+        // Whether the personalization card is wide enough for its switch and box side by side,
+        // which the card asks as it is resized, and as the words in the switch change with the
+        // language.
+        Var<Boolean> controlsInARow = Var.of(true);
+        AtomicReference<JComponent> personalization = new AtomicReference<>();
+        AtomicReference<JComponent> controls = new AtomicReference<>();
+        Runnable arrangeControls = () -> controlsInARow.set(fitInARow(personalization.get(), controls.get()));
+        Viewable.cast(lang).onChange(From.ALL, _ -> SwingUtilities.invokeLater(arrangeControls));
         Var<Settings> settings = state.zoomTo(GeniesState::settings, GeniesState::withSettings);
         // Lenses all the way down: settings → Eden AI → its key, and so on. Each field
         // edits one value of the one GeniesState, and nothing else.
@@ -545,29 +573,52 @@ final class SettingsPage {
                         )
                     )
                 )
-                // How the window looks, which takes effect at once, and is kept as it changes.
+                // How the window looks and the language it speaks, which take effect at once, and
+                // are kept as they change.
                 .add(CARD,
                     panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 12).group(Skin.CARD)
                     .withMinSize(0, 0).withPrefSize(CARD_REFERENCE, 0)
                     .isVisibleIf(cardsShown)
+                    .peek(personalization::set)
+                    .onResize(_ -> arrangeControls.run())
                     .add(WHOLE,
                         box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
                         .add(
                             box("fill, wrap 1, ins 0, gap 12")
-                            .add("growx, wmin 0", label(words.viewAsString(Lang.SettingsPage::APPEARANCE)).group(Skin.EMPTY_TITLE))
+                            .add("growx, wmin 0", label(words.viewAsString(Lang.SettingsPage::PERSONALIZATION)).group(Skin.EMPTY_TITLE))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    words.viewAsString(Lang.SettingsPage::THE_LAMP_AT_NIGHT_OR_BY_DAY),
+                                    words.viewAsString(Lang.SettingsPage::ITS_LIGHT_AND_ITS_LANGUAGE),
                                     Palette::SUBTEXT,
                                     Val.of(true)
                                 )
                             )
                         )
-                        .add(ViewPartsUtil.eitherOr(theme, words.viewAsString(Lang.SettingsPage::DARK), words.viewAsString(Lang.SettingsPage::LIGHT), light, Val.of(true), light::set))
+                        // The palette's switch, and beside it the language, each named in itself.
+                        .add(
+                            box(controlsInARow.viewAs(Layout.class, row -> row ? CONTROLS_IN_A_ROW : CONTROLS_IN_A_COLUMN))
+                            .peek(controls::set)
+                            .add(ViewPartsUtil.eitherOr(theme, words.viewAsString(Lang.SettingsPage::DARK), words.viewAsString(Lang.SettingsPage::LIGHT), light, Val.of(true), light::set))
+                            .add(
+                                comboBox(lang, Lang::NAME_IN_ITSELF)
+                                .withTooltip(words.viewAsString(Lang.SettingsPage::THE_LANGUAGE_GENIES_SPEAKS))
+                            )
+                        )
                     )
                 )
             );
+    }
+
+    /// Whether the `controls` of the `card`, side by side with the gap of [#CONTROLS_IN_A_ROW]
+    /// between them, fit within its padding and the gaps of its flow at its edges. Their widths
+    /// do not depend on how they are arranged, so the answer settles at once.
+    private static boolean fitInARow(@Nullable JComponent card, @Nullable JComponent controls) {
+        if (card == null || controls == null) return true;
+        int needed = UI.scale(12) * (controls.getComponentCount() - 1);
+        for (java.awt.Component control : controls.getComponents()) needed += control.getPreferredSize().width;
+        java.awt.Insets padding = card.getInsets();
+        return card.getWidth() - padding.left - padding.right - 2 * UI.scale(14) >= needed;
     }
 
     /// The welcome, above the settings while there are no genies: its picture, and its words. In

@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 import dev.gui.model.Settings;
 
@@ -28,8 +30,9 @@ import sprouts.Tuple;
 ///   did not make, but found lit elsewhere or was given;
 /// - `removed-lamps.json`: the lamps from elsewhere the user removed, not to be taken in again;
 /// - `settings.json`: the model settings, readable by this user only, because it can hold a key;
-/// - `look.json`: how the window looks: the palette the user picked, dark or light; until they
-///   pick one, there is none, and the window follows the desktop ([SystemLook]);
+/// - `look.json`: how the window looks: the palette the user picked, dark or light, and the
+///   language they picked; until they pick either, it is not there, and the window follows the
+///   desktop ([SystemLook]);
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
 /// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it.
 ///
@@ -118,7 +121,22 @@ public final class Shelf {
     }
 
     public void keep(Palette palette) throws IOException {
-        write("look.json", JSON.createObjectNode().put("palette", palette.isDark() ? "DARK" : "LIGHT"));
+        write("look.json", look().put("palette", palette.isDark() ? "DARK" : "LIGHT"));
+    }
+
+    /// The language the user last picked, or none, before they ever did.
+    public Optional<Lang> lang() {
+        String name = read("look.json").path("lang").asText();
+        return Arrays.stream(Lang.values()).filter(it -> it.name().equals(name)).findFirst();
+    }
+
+    public void keep(Lang lang) throws IOException {
+        write("look.json", look().put("lang", lang.name()));
+    }
+
+    /// What `look.json` holds, so that keeping the palette keeps the language, and the other way round.
+    private ObjectNode look() {
+        return read("look.json") instanceof ObjectNode look ? look : JSON.createObjectNode();
     }
 
     /// The settings as last kept, or the defaults.
