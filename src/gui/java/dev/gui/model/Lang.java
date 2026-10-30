@@ -78,6 +78,12 @@ public record Lang(
     /// Something that happens every so many `hours`, at a `minute` past the hour.
     public interface EveryHours { String of(int hours, String minute); }
 
+    /// A text that is longer than it may be: at `most` so many characters, where it `has` more.
+    public interface TooLong { String of(int most, int has); }
+
+    /// A job that runs once: on a `day`, at a `time`, which is `fromNow` so far off.
+    public interface OnceAt { String of(String day, String time, String fromNow); }
+
     /// A text about something named, such as a genie or a window it shows.
     public interface About { String of(String what); }
 
@@ -857,7 +863,26 @@ public record Lang(
         Counted EVERY_MINUTES,
         Counted EVERY_HOURS_ON_THE_HOUR,
         EveryHours EVERY_HOURS_AT_PAST,
-        About ON_THE_CRON_SCHEDULE
+        About ON_THE_CRON_SCHEDULE,
+        String EVERY_HOUR,
+        String EVERY_DAY,
+        String WEEKDAYS,
+        String SOME_DAYS,
+        String CUSTOM,
+        String WRITE_WHAT_THE_GENIE_SHOULD_DO,
+        TooLong A_TASK_CAN_BE_AT_MOST,
+        String THAT_TIME_HAS_PASSED_PICK_A_LATER_ONE,
+        String THE_MINUTE_PAST_THE_HOUR_IS_A_NUMBER_FROM_0_TO_59,
+        String PICK_AT_LEAST_ONE_DAY,
+        String WRITE_A_CRON_EXPRESSION,
+        String THE_LAST_DAY_HAS_PASSED,
+        String WRITE_THE_TIME_AS_HOURS_AND_MINUTES,
+        OnceAt ONCE_AT_FROM_NOW,
+        DayAndTime FIRST_AT,
+        String BUT_NOT_BEFORE_ITS_LAST_DAY,
+        String OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB,
+        DayAndTime ONCE_AT,
+        String ONCE_WITHOUT_A_TIME
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -951,7 +976,26 @@ public record Lang(
             count -> "Every " + count + " minutes",
             count -> "Every " + count + " hours, on the hour",
             (count, minute) -> "Every " + count + " hours, at " + minute + " past",
-            cron -> "On the cron schedule “" + cron + "”"
+            cron -> "On the cron schedule “" + cron + "”",
+            "Every hour",
+            "Every day",
+            "Weekdays",
+            "Some days",
+            "Custom",
+            "Write what the genie should do.",
+            (most, has) -> "A task can be at most " + String.format("%,d", most) + " characters; this one has " + String.format("%,d", has) + ".",
+            "That time has passed. Pick a later one.",
+            "The minute past the hour is a number from 0 to 59.",
+            "Pick at least one day.",
+            "Write a cron expression, such as 0 9 * * 1-5.",
+            "The last day has passed.",
+            "Write the time as hours and minutes, such as 09:00.",
+            (day, time, fromNow) -> "Once, " + day + " at " + time + " — " + fromNow + ".",
+            (day, time) -> "first " + day + " at " + time,
+            "but not before its last day",
+            "oillamp reads the expression when you save the job.",
+            (day, time) -> "Once, " + day + " at " + time,
+            "Once"
         );
     }
 
