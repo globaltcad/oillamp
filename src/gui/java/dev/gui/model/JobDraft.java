@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,15 +45,7 @@ public record JobDraft(
 ) {
 
     /// The ways a job can repeat, as the page offers them.
-    public enum Repeat {
-        HOURLY("Every hour"), DAILY("Every day"), WEEKDAYS("Weekdays"), WEEKLY("Some days"), CUSTOM("Custom");
-
-        private final String label;
-
-        Repeat(String label) { this.label = label; }
-
-        public String label() { return label; }
-    }
+    public enum Repeat { HOURLY, DAILY, WEEKDAYS, WEEKLY, CUSTOM }
 
     /// The longest prompt a job may have, as oillamp allows it.
     public static final int MOST_PROMPT = 4000;
@@ -155,62 +148,77 @@ public record JobDraft(
 
     /// What stands in the way of adding it, in a sentence; empty when nothing does. A custom
     /// expression is only checked by oillamp, as it is added.
-    public Optional<String> problem(LocalDateTime now) {
-        if (prompt.isBlank()) return Optional.of("Write what the genie should do.");
-        if (prompt.strip().length() > MOST_PROMPT)
-            return Optional.of(
-                "A task can be at most " + String.format("%,d", MOST_PROMPT) + " characters; this one has "
-                + String.format("%,d", prompt.strip().length()) + "."
-            );
-        return timingProblem(now);
+    public Optional<String> problem(LocalDateTime now, Lang lang) {
+        return hindrance(now).map(it -> it.apply(lang.SCHEDULE_PAGE()));
+    }
+
+    /// Whether nothing stands in the way of adding it.
+    public boolean ready(LocalDateTime now) {
+        return hindrance(now).isEmpty();
     }
 
     /// What stands in the way of the time it runs being read, whatever the prompt.
-    public Optional<String> timingProblem(LocalDateTime now) {
+    public Optional<String> timingProblem(LocalDateTime now, Lang lang) {
+        return timingHindrance(now).map(it -> it.apply(lang.SCHEDULE_PAGE()));
+    }
+
+    /// What stands in the way of adding it, as the words that say it.
+    private Optional<Function<Lang.SchedulePage, String>> hindrance(LocalDateTime now) {
+        if (prompt.isBlank()) return Optional.of(Lang.SchedulePage::WRITE_WHAT_THE_GENIE_SHOULD_DO);
+        int length = prompt.strip().length();
+        if (length > MOST_PROMPT) return Optional.of(words -> words.A_TASK_CAN_BE_AT_MOST().of(MOST_PROMPT, length));
+        return timingHindrance(now);
+    }
+
+    /// What stands in the way of the time it runs being read, as the words that say it.
+    private Optional<Function<Lang.SchedulePage, String>> timingHindrance(LocalDateTime now) {
         if (!repeats) {
             if (clock().isEmpty()) return Optional.of(TIME_HINT);
-            if (!once().orElseThrow().isAfter(now)) return Optional.of("That time has passed. Pick a later one.");
+            if (!once().orElseThrow().isAfter(now)) return Optional.of(Lang.SchedulePage::THAT_TIME_HAS_PASSED_PICK_A_LATER_ONE);
             return Optional.empty();
         }
-        Optional<String> problem = switch (repeat) {
-            case HOURLY -> minuteOfHour().isEmpty() ? Optional.of("The minute past the hour is a number from 0 to 59.") : Optional.empty();
+        Optional<Function<Lang.SchedulePage, String>> problem = switch (repeat) {
+            case HOURLY -> minuteOfHour().isEmpty() ? Optional.of(Lang.SchedulePage::THE_MINUTE_PAST_THE_HOUR_IS_A_NUMBER_FROM_0_TO_59) : Optional.empty();
             case DAILY, WEEKDAYS -> clock().isEmpty() ? Optional.of(TIME_HINT) : Optional.empty();
             case WEEKLY ->
-                days.isEmpty() ? Optional.of("Pick at least one day.")
+                days.isEmpty() ? Optional.of(Lang.SchedulePage::PICK_AT_LEAST_ONE_DAY)
                 : clock().isEmpty() ? Optional.of(TIME_HINT)
                 : Optional.empty();
-            case CUSTOM -> cron.isBlank() ? Optional.of("Write a cron expression, such as 0 9 * * 1-5.") : Optional.empty();
+            case CUSTOM -> cron.isBlank() ? Optional.of(Lang.SchedulePage::WRITE_A_CRON_EXPRESSION) : Optional.empty();
         };
         if (problem.isPresent()) return problem;
-        if (ends().filter(end -> !end.isAfter(now)).isPresent()) return Optional.of("The last day has passed.");
+        if (ends().filter(end -> !end.isAfter(now)).isPresent()) return Optional.of(Lang.SchedulePage::THE_LAST_DAY_HAS_PASSED);
         return Optional.empty();
     }
 
-    private static final String TIME_HINT = "Write the time as hours and minutes, such as 09:00.";
+    private static final Function<Lang.SchedulePage, String> TIME_HINT = Lang.SchedulePage::WRITE_THE_TIME_AS_HOURS_AND_MINUTES;
 
     /// When it will run, in a sentence, such as "Every weekday at 09:00, first tomorrow at 09:00."
     /// Empty while [#timingProblem] says what is wrong.
     public String summary(LocalDateTime now, Lang lang) {
-        if (timingProblem(now).isPresent()) return "";
+        if (timingHindrance(now).isPresent()) return "";
+        Lang.SchedulePage words = lang.SCHEDULE_PAGE();
         LocalDate today = now.toLocalDate();
         if (!repeats) {
             LocalDateTime at = once().orElseThrow();
-            return
-                "Once, " + DateWordingUtil.dayInSentence(at.toLocalDate(), today, lang.DATES()) + " at " + Recurrence.clock(at.toLocalTime())
-                + " — " + DateWordingUtil.fromNow(Duration.between(now, at), lang.DATES()) + ".";
+            return words.ONCE_AT_FROM_NOW().of(
+                DateWordingUtil.dayInSentence(at.toLocalDate(), today, lang.DATES()),
+                Recurrence.clock(at.toLocalTime()),
+                DateWordingUtil.fromNow(Duration.between(now, at), lang.DATES())
+            );
         }
         Recurrence recurrence = recurrence().orElseThrow();
         String first =
             recurrence.nextAfter(now)
             .filter(next -> ends().isEmpty() || next.isBefore(ends().get()))
             .map(next ->
-                ", first " + DateWordingUtil.dayInSentence(next.toLocalDate(), today, lang.DATES()) + " at " + Recurrence.clock(next.toLocalTime())
+                ", " + words.FIRST_AT().of(DateWordingUtil.dayInSentence(next.toLocalDate(), today, lang.DATES()), Recurrence.clock(next.toLocalTime()))
             )
-            .orElse(recurrence instanceof Recurrence.Custom ? "" : ", but not before its last day");
-        String last = endsOn.map(day -> ", until " + DateWordingUtil.dayAfterAWord(day, today, lang.DATES())).orElse("");
+            .orElse(recurrence instanceof Recurrence.Custom ? "" : ", " + words.BUT_NOT_BEFORE_ITS_LAST_DAY());
+        String last = endsOn.map(day -> ", " + words.UNTIL().of(DateWordingUtil.dayAfterAWord(day, today, lang.DATES()))).orElse("");
         return
             recurrence.describe(lang) + first + last + "."
-            + (recurrence instanceof Recurrence.Custom ? " oillamp reads the expression when you save the job." : "");
+            + (recurrence instanceof Recurrence.Custom ? " " + words.OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB() : "");
     }
 
     private Optional<Integer> minuteOfHour() {
