@@ -250,20 +250,20 @@ final class ActionsPage {
         return tile(
             phase.viewAs(Boolean.class, Genie.Phase::isAwake),
             Palette::TEXT,
-            phase.viewAsString(it -> it.isAwake() ? "Sleep" : "Wake"),
-            genie.viewAsString(it -> switch (it.phase()) {
-                case ASLEEP -> it.name() + " is in the lamp. Waking it starts its sandbox, with its home as it left it.";
-                case WAKING -> it.name() + " is waking…";
-                case BROKEN -> it.name() + " did not wake. Its home is kept, so it can try again.";
+            Viewable.of(String.class, phase, words, (it, page) -> it.isAwake() ? page.SLEEP() : page.WAKE()),
+            Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
+                case ASLEEP -> page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX().of(it.name());
+                case WAKING -> page.IS_WAKING().of(it.name());
+                case BROKEN -> page.DID_NOT_WAKE_ITS_HOME_IS_KEPT().of(it.name());
                 default -> it.fromElsewhere()
-                    ? "End " + it.name() + "'s sandbox, for whoever lit it with `oillamp at` too. Its home and this conversation are kept."
-                    : "End " + it.name() + "'s sandbox. Its home and this conversation are kept.";
+                    ? page.END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO().of(it.name())
+                    : page.END_ITS_SANDBOX().of(it.name());
             }),
-            big(button(phase.viewAsString(it -> switch (it) {
-                case ASLEEP -> "Wake";
-                case WAKING -> "Waking…";
-                case BROKEN -> "Try waking again";
-                default -> "Sleep";
+            big(button(Viewable.of(String.class, phase, words, (it, page) -> switch (it) {
+                case ASLEEP -> page.WAKE();
+                case WAKING -> page.WAKING();
+                case BROKEN -> page.TRY_WAKING_AGAIN();
+                default -> page.SLEEP();
             })))
             .group(Skin.QUIET_BUTTON)
             .isEnabledIf(phase.viewAs(Boolean.class, it -> it != Genie.Phase.WAKING))
@@ -275,7 +275,7 @@ final class ActionsPage {
     }
 
     private UIForAnySwing<?, ?> folders() {
-        return tile(SignSvgUtil.FOLDER, Palette::TEXT, Val.of("Folders"), folders.says(), folders.view());
+        return tile(SignSvgUtil.FOLDER, Palette::TEXT, words.viewAsString(Lang.ActionsPage::FOLDERS), folders.says(), folders.view());
     }
 
     /// A lamp from elsewhere is not Genies' to delete, so it is only removed from Genies.
@@ -283,16 +283,16 @@ final class ActionsPage {
         return tile(
             SignSvgUtil.DELETE,
             Palette::TROUBLE,
-            genie.viewAsString(it -> it.fromElsewhere() ? "Remove" : "Delete"),
-            genie.viewAsString(it ->
+            Viewable.of(String.class, genie, words, (it, page) -> it.fromElsewhere() ? page.REMOVE() : page.DELETE()),
+            Viewable.of(String.class, genie, words, (it, page) ->
                 it.fromElsewhere()
-                    ? "Remove " + it.name() + " from Genies. Its lamp was made elsewhere, with `oillamp at`, and stays "
-                      + "where it is, as it is, running if it runs. You are asked first."
-                    : "Delete " + it.name() + " for good: its home, everything it made and your "
-                      + "conversations with it. You are asked first."
+                    ? page.REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE().of(it.name())
+                    : page.DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST().of(it.name())
             ),
             big(
-                button(genie.viewAsString(it -> it.fromElsewhere() ? "Remove from Genies…" : "Delete " + it.name() + "…"))
+                button(Viewable.of(String.class, genie, words, (it, page) ->
+                    it.fromElsewhere() ? page.REMOVE_FROM_GENIES_ELLIPSIS() : page.DELETE_GENIE_ELLIPSIS().of(it.name())
+                ))
                 .group(Skin.QUIET_BUTTON)
             )
             .withStyle(palette, (p, it) -> it.border(1, p.TROUBLE()).componentFont(f -> f.color(p.TROUBLE())))

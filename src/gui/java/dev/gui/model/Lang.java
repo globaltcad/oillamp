@@ -421,7 +421,23 @@ public record Lang(
         String START_A_NEW_CONVERSATION,
         String SAVE_NOW,
         About SAVE_ITS_HOME_AS_IT_IS_NOW,
-        String SAVE_NOW_ELLIPSIS
+        String SAVE_NOW_ELLIPSIS,
+        String SLEEP,
+        String WAKE,
+        About IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX,
+        About IS_WAKING,
+        About DID_NOT_WAKE_ITS_HOME_IS_KEPT,
+        About END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO,
+        About END_ITS_SANDBOX,
+        String WAKING,
+        String TRY_WAKING_AGAIN,
+        String FOLDERS,
+        String REMOVE,
+        String DELETE,
+        About REMOVE_FROM_GENIES_ITS_LAMP_WAS_MADE_ELSEWHERE,
+        About DELETE_FOR_GOOD_YOU_ARE_ASKED_FIRST,
+        String REMOVE_FROM_GENIES_ELLIPSIS,
+        About DELETE_GENIE_ELLIPSIS
     ) {
         public static final ActionsPage ENGLISH = new ActionsPage(
             "Actions",
@@ -437,7 +453,27 @@ public record Lang(
             "Start a new conversation",
             "Save now",
             genie -> "Save " + genie + "'s home as it is now: a moment in its history to go back to.",
-            "Save now…"
+            "Save now…",
+            "Sleep",
+            "Wake",
+            genie -> genie + " is in the lamp. Waking it starts its sandbox, with its home as it left it.",
+            genie -> genie + " is waking…",
+            genie -> genie + " did not wake. Its home is kept, so it can try again.",
+            genie -> "End " + genie + "'s sandbox, for whoever lit it with `oillamp at` too. Its home and this conversation are kept.",
+            genie -> "End " + genie + "'s sandbox. Its home and this conversation are kept.",
+            "Waking…",
+            "Try waking again",
+            "Folders",
+            "Remove",
+            "Delete",
+            genie ->
+                "Remove " + genie + " from Genies. Its lamp was made elsewhere, with `oillamp at`, and stays "
+                + "where it is, as it is, running if it runs. You are asked first.",
+            genie ->
+                "Delete " + genie + " for good: its home, everything it made and your "
+                + "conversations with it. You are asked first.",
+            "Remove from Genies…",
+            genie -> "Delete " + genie + "…"
         );
     }
 }
