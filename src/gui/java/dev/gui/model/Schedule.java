@@ -64,7 +64,7 @@ public record Schedule(
 
         /// When it runs, in words, such as "Every weekday at 09:00" or "Once, tomorrow at 09:00".
         public String when(LocalDateTime now, ZoneId zone, Lang lang) {
-            if (repeats.isPresent()) return repeats.get().describe();
+            if (repeats.isPresent()) return repeats.get().describe(lang);
             return at.map(time -> LocalDateTime.ofInstant(time, zone))
                      .map(time -> "Once, " + DateWordingUtil.dayInSentence(time.toLocalDate(), now.toLocalDate(), lang.DATES()) + " at "
                                 + Recurrence.clock(time.toLocalTime()))

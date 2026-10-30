@@ -3,7 +3,6 @@ package dev.gui.model;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.TextStyle;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -49,13 +48,14 @@ public sealed interface Recurrence {
     }
 
     /// In words, such as "Every weekday at 09:00".
-    default String describe() {
+    default String describe(Lang lang) {
+        Lang.SchedulePage words = lang.SCHEDULE_PAGE();
         return switch (this) {
-            case Hourly hourly     -> hourly.minute() == 0 ? "Every hour, on the hour" : "Every hour at " + twoDigits(hourly.minute()) + " past";
-            case Daily daily       -> "Every day at " + clock(daily.at());
-            case Weekdays weekdays -> "Every weekday at " + clock(weekdays.at());
-            case Weekly weekly     -> "Every " + days(weekly.days()) + " at " + clock(weekly.at());
-            case Custom custom     -> describeCustom(custom.cron().strip());
+            case Hourly hourly     -> hourly.minute() == 0 ? words.EVERY_HOUR_ON_THE_HOUR() : words.EVERY_HOUR_AT_PAST().of(twoDigits(hourly.minute()));
+            case Daily daily       -> words.EVERY_DAY_AT().of(clock(daily.at()));
+            case Weekdays weekdays -> words.EVERY_WEEKDAY_AT().of(clock(weekdays.at()));
+            case Weekly weekly     -> words.EVERY_DAYS_AT().of(days(weekly.days(), words), clock(weekly.at()));
+            case Custom custom     -> describeCustom(custom.cron().strip(), words);
         };
     }
 
@@ -123,10 +123,8 @@ public sealed interface Recurrence {
     }
 
     /// "Monday", "Monday and Thursday", "Monday, Wednesday and Friday".
-    private static String days(Tuple<DayOfWeek> days) {
-        Tuple<String> names = days.mapTo(String.class, day -> day.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
-        if (names.size() == 1) return names.first();
-        return String.join(", ", names.removeLast().toList()) + " and " + names.last();
+    private static String days(Tuple<DayOfWeek> days, Lang.SchedulePage words) {
+        return words.DAYS_LISTED().of(days.mapTo(String.class, day -> words.WEEKDAY().of(day)).toList());
     }
 
     private static Optional<LocalDateTime> firstDayFrom(LocalDateTime from, LocalTime at, Tuple<DayOfWeek> days) {
@@ -167,12 +165,15 @@ public sealed interface Recurrence {
         return text.matches("[0-7]") ? Optional.of(Integer.parseInt(text)) : Optional.empty();
     }
 
-    private static String describeCustom(String cron) {
+    private static String describeCustom(String cron, Lang.SchedulePage words) {
         Matcher every = Pattern.compile("\\*/(\\d+) \\* \\* \\* \\*").matcher(cron);
-        if (every.matches()) return "Every " + every.group(1) + " minutes";
+        if (every.matches()) return words.EVERY_MINUTES().of(Integer.parseInt(every.group(1)));
         Matcher hours = Pattern.compile("(\\d{1,2}) \\*/(\\d+) \\* \\* \\*").matcher(cron);
-        if (hours.matches()) return "Every " + hours.group(2) + " hours, "
-                + (Integer.parseInt(hours.group(1)) == 0 ? "on the hour" : "at " + twoDigits(Integer.parseInt(hours.group(1))) + " past");
-        return "On the cron schedule “" + cron + "”";
+        if (hours.matches()) {
+            int count = Integer.parseInt(hours.group(2));
+            int minute = Integer.parseInt(hours.group(1));
+            return minute == 0 ? words.EVERY_HOURS_ON_THE_HOUR().of(count) : words.EVERY_HOURS_AT_PAST().of(count, twoDigits(minute));
+        }
+        return words.ON_THE_CRON_SCHEDULE().of(cron);
     }
 }
