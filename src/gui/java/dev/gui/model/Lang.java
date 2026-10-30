@@ -18,13 +18,15 @@ package dev.gui.model;
 /// @param CHAT    a genie's chat: the conversation, and the composer under it
 /// @param DIALOGS the dialogs the window asks and tells the user things in
 /// @param ACTIONS_PAGE what can be done with a genie as a whole
+/// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
 public record Lang(
     Window WINDOW,
     Header HEADER,
     Desktop DESKTOP,
     Chat CHAT,
     Dialogs DIALOGS,
-    ActionsPage ACTIONS_PAGE
+    ActionsPage ACTIONS_PAGE,
+    HomeFolders HOME_FOLDERS
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -33,7 +35,8 @@ public record Lang(
         Desktop.ENGLISH,
         Chat.ENGLISH,
         Dialogs.ENGLISH,
-        ActionsPage.ENGLISH
+        ActionsPage.ENGLISH,
+        HomeFolders.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -474,6 +477,42 @@ public record Lang(
                 + "conversations with it. You are asked first.",
             "Remove from Genies…",
             genie -> "Delete " + genie + "…"
+        );
+    }
+
+    /// The words of a genie's home on its Actions page, and of linking its folders into the
+    /// user's.
+    public record HomeFolders(
+        About HAS_NO_HOME_YET,
+        About ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS,
+        String ON_THIS_COMPUTER,
+        String OPEN_IN_YOUR_FILE_MANAGER,
+        String THE_LINKS_NAME,
+        About LINK_INTO,
+        String LINK_INTO_ELLIPSIS,
+        About OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER,
+        About WHERE_TO_PUT_THE_LINK,
+        String LINK_HERE,
+        About LINKED,
+        About IT_WAS_LINKED_ALREADY
+    ) {
+        public static final HomeFolders ENGLISH = new HomeFolders(
+            genie -> genie + " has no home yet. It gets one as it first wakes.",
+            genie ->
+                genie + "'s home is a folder on this computer. Link one of its folders into yours, to find what "
+                + genie + " made in your file manager. A link is no copy: a change on either side is one on both.",
+            "ON THIS COMPUTER",
+            "Open in your file manager",
+            "THE LINK'S NAME",
+            folder -> "Link into " + folder,
+            "Link into…",
+            genie ->
+                "Or drag a folder from the tree into your file manager. "
+                + "Deleting " + genie + " leaves its links behind, leading nowhere.",
+            link -> "Where to put the link \"" + link + "\"",
+            "Link here",
+            at -> "Linked: " + at,
+            at -> "It was linked already: " + at
         );
     }
 }
