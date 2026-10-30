@@ -363,7 +363,7 @@ public record GeniesState(
 
     /// Why genies cannot reach their model with the current settings, or nothing.
     public Optional<String> settingsProblem() {
-        return settings.problem(environmentKey);
+        return settings.problem(environmentKey, lang.SETTINGS_PAGE());
     }
 
     /// A name for a new genie that no other genie has yet.
