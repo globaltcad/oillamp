@@ -112,6 +112,9 @@ public record Lang(
     /// that `freed`, and how much the history has `taken` now of the `most` it may.
     public interface Pruned { String of(int moments, String freed, String taken, String most); }
 
+    /// Moving a `genie` to the branch `to`, from the branch `from` it lives on.
+    public interface Moving { String of(String genie, String to, String from); }
+
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(
         String NEW_GENIE,
@@ -974,7 +977,20 @@ public record Lang(
         Pruned THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS,
         String TIDY_UP_NOW_ELLIPSIS,
         String DELETE_WHAT_DOES_NOT_FIT_NOW_RATHER_THAN_AT_THE_NEXT_SAVE,
-        String NEVER_DELETE
+        String NEVER_DELETE,
+        String WHAT_SHOULD_THIS_MOMENT_BE_REMEMBERED_BY,
+        About SAVE_AS_IT_IS_NOW,
+        WhoAndWhat WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED,
+        String START_A_BRANCH_FROM_THE_NEWEST_MOMENT,
+        String START_A_BRANCH_FROM_THIS_MOMENT,
+        WhoAndWhat BRING_IT_BACK_TO_HOW_IT_WAS,
+        About SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER,
+        String GO_BACK_IN_TIME,
+        String GO_BACK,
+        String STAY,
+        Moving MOVE_IT_TO_ANOTHER_BRANCH,
+        String MOVE_TO_ANOTHER_BRANCH,
+        String MOVE
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1085,7 +1101,28 @@ public record Lang(
                 + taken + " of the " + most + " it may, its first moment included.",
             "Tidy up now…",
             "Delete what does not fit now, rather than at the next save. You are told first what that is",
-            "Never delete"
+            "Never delete",
+            "What should this moment be remembered by? You may leave it empty.",
+            genie -> "Save " + genie + " as it is now",
+            (genie, home) ->
+                "What should the new branch be called? Lowercase letters, digits, -, _ and ., such as rust-rewrite.\n"
+                + genie + " stays on " + home + "; you can move it later, while it sleeps.",
+            "Start a branch from the newest moment",
+            "Start a branch from this moment",
+            (genie, when) ->
+                "Bring " + genie + " back to how it was " + when + "?\n"
+                + "Its files and conversations become what they were then. How it is now is kept, so you can return.",
+            genie -> genie + " sleeps while it goes back, and wakes again after.",
+            "Go back in time",
+            "Go back",
+            "Stay",
+            (genie, to, from) ->
+                "Move " + genie + " to " + to + "?\n"
+                + "Its files and conversations become those of the newest moment on " + to
+                + ", and every save goes to " + to + " from now on.\n"
+                + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost.",
+            "Move to another branch",
+            "Move"
         );
 
         /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
