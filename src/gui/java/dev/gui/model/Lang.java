@@ -356,7 +356,18 @@ public record Lang(
         Counted THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT,
         String WHAT_WENT_WRONG,
         About GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN,
-        String CLOSE
+        String CLOSE,
+        WhoAndWhat REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS,
+        String REMOVE_A_LAMP_FROM_GENIES,
+        String REMOVE,
+        About DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT,
+        String DELETE_A_GENIE,
+        String ADD_A_LAMP_MADE_WITH_OILLAMP_AT,
+        String ADD,
+        String NOT_A_LAMP,
+        About ASK_DIFFERENTLY,
+        About GIVE_A_FILE,
+        About SAVE
     ) {
         public static final Dialogs ENGLISH = new Dialogs(
             title -> "Delete the conversation \"" + title + "\" for good, with all its branches?",
@@ -375,7 +386,20 @@ public record Lang(
                 : count + " things went wrong that Genies did not expect.",
             "What went wrong",
             log -> "Genies carried on. All of it is kept in " + log + ", which helps whoever fixes it.",
-            "Close"
+            "Close",
+            (name, where) ->
+                "Remove " + name + " from Genies? Its lamp stays where it is, at "
+                + where + ", as it is, running if it runs.\nAdd it again with \"Add a lamp from elsewhere…\".",
+            "Remove a lamp from Genies",
+            "Remove",
+            name -> "Delete " + name + " for good? Its home, everything it made and your conversations with it are deleted.",
+            "Delete a genie",
+            "Add a lamp made with `oillamp at`",
+            "Add",
+            "Not a lamp",
+            name -> "Ask " + name + " differently",
+            name -> "Give " + name + " a file",
+            file -> "Save " + file
         );
     }
 }
