@@ -3,6 +3,7 @@ package gui
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.Hardware
+import dev.gui.model.Lang
 import dev.gui.model.OllamaSetup
 import dev.gui.model.Settings
 import spock.lang.Specification
@@ -82,12 +83,12 @@ class SettingUpAModelSpec extends Specification {
             def gigabyte = 1L << 30
             def laptop = new Hardware(16 * gigabyte, Optional.empty())
         expect:
-            laptop.words() == '16 GB of memory, and no graphics card a model can run on.'
-            new Hardware(64 * gigabyte, Optional.of(new Hardware.Graphics('NVIDIA GeForce RTX 4090', 24 * gigabyte))).words() ==
+            laptop.words(Lang.ENGLISH) == '16 GB of memory, and no graphics card a model can run on.'
+            new Hardware(64 * gigabyte, Optional.of(new Hardware.Graphics('NVIDIA GeForce RTX 4090', 24 * gigabyte))).words(Lang.ENGLISH) ==
                     '64 GB of memory, and the graphics card NVIDIA GeForce RTX 4090 with 24 GB.'
-            laptop.words('qwen3:8b') == 'About 5.0 GB to download. It runs on the processor, at a fair pace.'
-            laptop.words('qwen3:14b').startsWith('About 8.7 GB to download. Running, it needs about 14 GB of memory')
-            laptop.words('llama3.2') == 'Its name does not say how large it is, so Genies cannot tell how well it runs here.'
+            laptop.words('qwen3:8b', Lang.ENGLISH) == 'About 5.0 GB to download. It runs on the processor, at a fair pace.'
+            laptop.words('qwen3:14b', Lang.ENGLISH).startsWith('About 8.7 GB to download. Running, it needs about 14 GB of memory')
+            laptop.words('llama3.2', Lang.ENGLISH) == 'Its name does not say how large it is, so Genies cannot tell how well it runs here.'
     }
 
     def 'Without genies, the window starts with the settings, and without the list of genies'() {
@@ -148,11 +149,11 @@ class SettingUpAModelSpec extends Specification {
                         new OllamaSetup.Found(installed, version, Tuple.of(String, *models), computer), Settings.defaults())
             }
         expect:
-            setup('', '', []).todo() == 'Install Ollama and get qwen3:8b'
-            setup('', '0.24.0', []).todo() == 'Get qwen3:8b'
-            setup('/usr/bin/ollama', '', []).todo() == 'Get qwen3:8b'
-            setup('/usr/bin/ollama', '0.24.0', ['qwen3:8b']).todo() == 'Use qwen3:8b'
-            setup('/usr/bin/ollama', '0.24.0', ['qwen3:latest']).withWanted('qwen3').todo() == 'Use qwen3'
+            setup('', '', []).todo(Lang.ENGLISH) == 'Install Ollama and get qwen3:8b'
+            setup('', '0.24.0', []).todo(Lang.ENGLISH) == 'Get qwen3:8b'
+            setup('/usr/bin/ollama', '', []).todo(Lang.ENGLISH) == 'Get qwen3:8b'
+            setup('/usr/bin/ollama', '0.24.0', ['qwen3:8b']).todo(Lang.ENGLISH) == 'Use qwen3:8b'
+            setup('/usr/bin/ollama', '0.24.0', ['qwen3:latest']).withWanted('qwen3').todo(Lang.ENGLISH) == 'Use qwen3'
     }
 
     def 'Once set up, the genies use the model as Genies prepared it'() {
