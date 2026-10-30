@@ -147,7 +147,7 @@ public interface Genies {
 
     /// Starts the branch `name` of the genie's history at the moment `moment`, or at the newest
     /// moment of the branch it lives on when `moment` is empty. The genie stays where it lives.
-    /// Awake or asleep. The window checked the name with [History#branchNameProblem].
+    /// Awake or asleep. The window checked the name with [History#branchNameProblem(String, Lang)].
     void startBranch(UUID genie, String name, String moment);
 
     /// Moves the genie to the branch `branch` of its history: its home becomes that branch's.

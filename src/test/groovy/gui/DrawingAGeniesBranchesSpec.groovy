@@ -1,6 +1,7 @@
 package gui
 
 import dev.gui.model.History
+import dev.gui.model.Lang
 import dev.gui.model.Lines
 import spock.lang.Specification
 import sprouts.Tuple
@@ -315,7 +316,7 @@ class DrawingAGeniesBranchesSpec extends Specification {
             var history = History.UNREAD.readAs(1, branches(lampOn('main', moment('m', 60, 'main'))), moments(moment('m', 60, 'main')))
 
         expect:
-            history.branchNameProblem(name).map { it.contains(says) }.orElse(says.isEmpty())
+            history.branchNameProblem(name, Lang.ENGLISH).map { it.contains(says) }.orElse(says.isEmpty())
 
         where:
             name               | says

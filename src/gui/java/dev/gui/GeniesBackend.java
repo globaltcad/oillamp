@@ -539,7 +539,7 @@ public final class GeniesBackend implements Genies {
 
     @Override public void startBranch(UUID id, String name, String moment) {
         Optional<Genie> genie = state.get().find(id);
-        if (genie.isEmpty() || genie.get().history().branchNameProblem(name).isPresent()) return;
+        if (genie.isEmpty() || genie.get().history().branchNameProblem(name, state.get().lang()).isPresent()) return;
         runner(id).history().startBranch(name, moment);
     }
 
