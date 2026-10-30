@@ -85,21 +85,21 @@ class PlanningAGeniesWeekSpec extends Specification {
         expect: 'a new job runs once, a little later today, and needs its task written'
             !draft.repeats()
             draft.once() == Optional.of(LocalDateTime.of(2026, 9, 29, 16, 0))
-            draft.problem(NOW) == Optional.of('Write what the genie should do.')
+            draft.problem(NOW, Lang.ENGLISH) == Optional.of('Write what the genie should do.')
             draft.summary(NOW, Lang.ENGLISH) == 'Once, today at 16:00 — in 1 hour.'
 
         and: 'a time is read the ways people write it, and one that has passed is refused'
             draft.withTime('9.30').clock() == Optional.of(LocalTime.of(9, 30))
             draft.withTime('0930').clock() == Optional.of(LocalTime.of(9, 30))
             draft.withTime('25:00').clock().isEmpty()
-            draft.withPrompt('x').withTime('14:00').problem(NOW) == Optional.of('That time has passed. Pick a later one.')
+            draft.withPrompt('x').withTime('14:00').problem(NOW, Lang.ENGLISH) == Optional.of('That time has passed. Pick a later one.')
 
         and: 'a weekly job needs a day, and says when it first runs and until when'
             var weekly = draft.withPrompt('Triage').withRepeats(true).withRepeat(JobDraft.Repeat.WEEKLY).withTime('8:30')
-            weekly.withDays(Tuple.of(DayOfWeek)).problem(NOW) == Optional.of('Pick at least one day.')
+            weekly.withDays(Tuple.of(DayOfWeek)).problem(NOW, Lang.ENGLISH) == Optional.of('Pick at least one day.')
             with(weekly.withDays(Tuple.of(DayOfWeek, DayOfWeek.MONDAY, DayOfWeek.THURSDAY))
                        .withEndsOn(Optional.of(NOW.toLocalDate().plusDays(20)))) {
-                problem(NOW).isEmpty()
+                problem(NOW, Lang.ENGLISH).isEmpty()
                 recurrence().get().cron() == '30 8 * * 1,4'
                 summary(NOW, Lang.ENGLISH) == 'Every Monday and Thursday at 08:30, first on Thursday 1 October at 08:30, until Monday 19 October.'
                 ends() == Optional.of(LocalDateTime.of(2026, 10, 20, 0, 0))

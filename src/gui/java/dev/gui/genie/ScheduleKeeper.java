@@ -68,7 +68,7 @@ public final class ScheduleKeeper {
     ///
     /// @param now  when the user saved, on the schedule's clock
     public void save(JobDraft draft, LocalDateTime now, ZoneId zone) {
-        if (draft.problem(now).isPresent()) return;
+        if (!draft.ready(now)) return;
         change(it -> it.withBusy(true).withProblem(""));
         work.execute(() -> {
             try {
