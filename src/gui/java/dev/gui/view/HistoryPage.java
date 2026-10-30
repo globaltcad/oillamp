@@ -128,6 +128,7 @@ final class HistoryPage {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
+    private final Val<Lang.HistoryPage> words;
     private final Genies app;
     private final Look look;
 
@@ -159,22 +160,23 @@ final class HistoryPage {
         this.state = state;
         theme = Theme.of(state);
         palette = Theme.paletteOf(state);
+        words = Theme.langOf(state).viewAs(Lang.HistoryPage.class, Lang::HISTORY_PAGE);
         this.app = app;
         this.look = look;
         genie   = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
         history = genie.zoomTo(Genie::history, Genie::withHistory);
         wide    = state.viewAs(Boolean.class, GeniesState::sideBySide);
-        notNow  = genie.viewAsString(it ->
+        notNow  = Viewable.of(String.class, genie, words, (it, page) ->
             !it.history().busy().isEmpty() ? it.history().busy()
-            : it.phase() == Genie.Phase.WAKING ? it.name() + " is waking; go back once it is awake"
-            : it.phase() == Genie.Phase.WORKING ? it.name() + " is working; go back once it is done"
-            : it.schedule().running().isPresent() ? "A job is running; go back once it is done"
+            : it.phase() == Genie.Phase.WAKING ? page.IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE().of(it.name())
+            : it.phase() == Genie.Phase.WORKING ? page.IS_WORKING_GO_BACK_ONCE_IT_IS_DONE().of(it.name())
+            : it.schedule().running().isPresent() ? page.A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE()
             : ""
         );
-        homeLocked = genie.viewAsString(it ->
+        homeLocked = Viewable.of(String.class, genie, words, (it, page) ->
             !it.history().busy().isEmpty() ? it.history().busy()
             : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
-                ? "Send " + it.name() + " to sleep first: its home changes only while it sleeps."
+                ? page.SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS().of(it.name())
             : ""
         );
         autosave = history.viewAs(History.Autosave.class, it -> it.autosave().orElse(UNLESS_SAID));
@@ -230,26 +232,30 @@ final class HistoryPage {
     /// Whether the genie can go back now, as a coloured dot and a sentence.
     private record Status(Color colour, String words) {}
 
-    private static Status status(Genie genie, Palette p) {
+    /// Whether the selected genie can go back now, in the colours and the words of `state`.
+    private static Status status(GeniesState state) {
+        Genie genie = state.genie();
+        Palette p = state.palette();
+        Lang.HistoryPage words = state.lang().HISTORY_PAGE();
         if (!genie.history().busy().isEmpty()) return new Status(p.BRASS(), genie.history().busy());
         String when = genie.history().autosave().orElse(UNLESS_SAID).when();
         String saved =
             (
                 when.isEmpty()
-                    ? genie.name() + " is saved only when you save it by hand. "
-                    : "Saved whenever " + genie.name() + " " + when + ". "
+                    ? words.IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND().of(genie.name())
+                    : words.SAVED_WHENEVER().of(genie.name(), when)
             )
-            + "Going back keeps how it is now, so you can always return.";
+            + " " + words.GOING_BACK_KEEPS_HOW_IT_IS_NOW_SO_YOU_CAN_ALWAYS_RETURN();
         return switch (genie.phase()) {
             case READY -> new Status(p.CONTENT(), saved);
-            case WORKING -> new Status(p.BRASS(), genie.name() + " is working. You can go back once it is done.");
-            case WAKING -> new Status(p.BRASS(), genie.name() + " is waking. You can go back once it is awake.");
+            case WORKING -> new Status(p.BRASS(), words.IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE().of(genie.name()));
+            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE().of(genie.name()));
             case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), saved);
         };
     }
 
     private UIForAnySwing<?, ?> header() {
-        Val<Status> status = Viewable.of(Status.class, genie, palette, HistoryPage::status);
+        Val<Status> status = state.viewAs(Status.class, HistoryPage::status);
         Val<String> problem = history.viewAsString(History::problem);
         Val<String> note = history.viewAsString(History::note);
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
@@ -261,7 +267,7 @@ final class HistoryPage {
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add(SAYING,
                 box("fill, wrap 1, ins 0, gap 6, hidemode 3", "[grow]")
-                .add(label("History").group(Skin.EMPTY_TITLE))
+                .add(label(words.viewAsString(Lang.HistoryPage::HISTORY)).group(Skin.EMPTY_TITLE))
                 .add("growx, wmin 0",
                     box("fill, ins 0, gap 8", "[10!][grow]")
                     .add("top, gaptop 5", ViewPartsUtil.dot(status.viewAs(Color.class, Status::colour), 8))
@@ -289,20 +295,19 @@ final class HistoryPage {
                         .padding(isWide ? 4 : 0, 0, 0, 0);
                 })
                 .add(
-                    button("⑂  New branch…")
+                    button(words.viewAsString(it -> "⑂  " + it.NEW_BRANCH_ELLIPSIS()))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(branchable)
-                    .withTooltip(genie.viewAsString(it ->
-                        "Keep how " + it.name() + " was last saved as a branch of "
-                        + "its own, to try something else from there. " + it.name() + " stays where it lives"
+                    .withTooltip(Viewable.of(String.class, genie, words, (it, page) ->
+                        page.KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN().of(it.name())
                     ))
                     .onClick(it -> startBranch(it.getComponent(), ""))
                 )
                 .add(
-                    button("＋  Save now…")
+                    button(words.viewAsString(it -> "＋  " + it.SAVE_NOW_ELLIPSIS()))
                     .group(Skin.FLAME_BUTTON)
                     .isEnabledIf(idle)
-                    .withTooltip("Keep how the genie is now as a moment to come back to, such as before a big change")
+                    .withTooltip(words.viewAsString(Lang.HistoryPage::KEEP_HOW_THE_GENIE_IS_NOW_AS_A_MOMENT_TO_COME_BACK_TO))
                     .onClick(it -> save(it.getComponent()))
                 )
             );
@@ -338,10 +343,10 @@ final class HistoryPage {
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, wentBack.viewAsString(it -> it + "."), Palette::TEXT, Val.of(true)))
-                .add("growx, wmin 0", ViewPartsUtil.note(theme, "How it was before is kept, so you can return to it.", Val.of(true)))
+                .add("growx, wmin 0", ViewPartsUtil.note(theme, words.viewAsString(Lang.HistoryPage::HOW_IT_WAS_BEFORE_IS_KEPT_SO_YOU_CAN_RETURN_TO_IT), Val.of(true)))
             )
             .add("top",
-                button("↶  Undo")
+                button(words.viewAsString(it -> "↶  " + it.UNDO()))
                 .group(Skin.QUIET_BUTTON)
                 .isEnabledIf(notNow.viewAs(Boolean.class, String::isEmpty))
                 .withStyle(Themed.of(notNow, theme), (themed, it) -> {
@@ -349,7 +354,7 @@ final class HistoryPage {
                     Palette p = themed.palette();
                     return why.isEmpty() ? it : it.backgroundColor(p.SMOKE()).cursor(UI.Cursor.DEFAULT);
                 })
-                .withTooltip(notNow.viewAsString(it -> it.isEmpty() ? "Go back to how it was before" : it))
+                .withTooltip(Viewable.of(String.class, notNow, words, (it, page) -> it.isEmpty() ? page.GO_BACK_TO_HOW_IT_WAS_BEFORE() : it))
                 .onClick(_ -> history.get().undo().ifPresent(before -> app.goBack(selected(), before.id())))
             );
     }
