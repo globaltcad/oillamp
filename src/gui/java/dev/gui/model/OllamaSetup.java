@@ -83,18 +83,20 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
     }
 
     /// What setting up does, as the button that starts it says it.
-    public String todo() {
+    public String todo(Lang lang) {
+        Lang.SettingsPage words = lang.SETTINGS_PAGE();
         String model = wanted.strip();
-        return !found.isInstalled() && !found.isRunning() ? "Install Ollama and get " + model
-             : !found.has(model) ? "Get " + model
-             : "Use " + model;
+        return !found.isInstalled() && !found.isRunning() ? words.INSTALL_OLLAMA_AND_GET().of(model)
+             : !found.has(model) ? words.GET().of(model)
+             : words.USE_MODEL().of(model);
     }
 
     /// Ollama, in a sentence: whether it is installed, and whether it runs.
-    public String words() {
-        return step == Step.LOOKING ? "Genies is looking whether Ollama is on this computer…"
-             : found.isRunning() ? "Ollama " + found.version() + " runs on this computer."
-             : found.isInstalled() ? "Ollama is installed; Genies starts it when the genies need it."
-             : "Ollama is not installed yet. Genies installs it for you, for you alone: no password, nothing changes outside its own folder. It is a download of about 1.4 GB.";
+    public String words(Lang lang) {
+        Lang.SettingsPage words = lang.SETTINGS_PAGE();
+        return step == Step.LOOKING ? words.GENIES_IS_LOOKING_WHETHER_OLLAMA_IS_ON_THIS_COMPUTER()
+             : found.isRunning() ? words.OLLAMA_RUNS_ON_THIS_COMPUTER().of(found.version())
+             : found.isInstalled() ? words.OLLAMA_IS_INSTALLED_GENIES_STARTS_IT_WHEN_THE_GENIES_NEED_IT()
+             : words.OLLAMA_IS_NOT_INSTALLED_YET_GENIES_INSTALLS_IT_FOR_YOU();
     }
 }
