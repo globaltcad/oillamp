@@ -166,7 +166,7 @@ public record JobDraft(
     private Optional<Function<Lang.SchedulePage, String>> hindrance(LocalDateTime now) {
         if (prompt.isBlank()) return Optional.of(Lang.SchedulePage::WRITE_WHAT_THE_GENIE_SHOULD_DO);
         int length = prompt.strip().length();
-        if (length > MOST_PROMPT) return Optional.of(words -> words.A_TASK_CAN_BE_AT_MOST().of(MOST_PROMPT, length));
+        if (length > MOST_PROMPT) return Optional.of(words -> words.A_TASK_CAN_BE_AT_MOST(MOST_PROMPT, length));
         return timingHindrance(now);
     }
 
@@ -201,7 +201,7 @@ public record JobDraft(
         LocalDate today = now.toLocalDate();
         if (!repeats) {
             LocalDateTime at = once().orElseThrow();
-            return words.ONCE_AT_FROM_NOW().of(
+            return words.ONCE_AT_FROM_NOW(
                 DateWordingUtil.dayInSentence(at.toLocalDate(), today, lang.DATES()),
                 Recurrence.clock(at.toLocalTime()),
                 DateWordingUtil.fromNow(Duration.between(now, at), lang.DATES())
@@ -212,10 +212,10 @@ public record JobDraft(
             recurrence.nextAfter(now)
             .filter(next -> ends().isEmpty() || next.isBefore(ends().get()))
             .map(next ->
-                ", " + words.FIRST_AT().of(DateWordingUtil.dayInSentence(next.toLocalDate(), today, lang.DATES()), Recurrence.clock(next.toLocalTime()))
+                ", " + words.FIRST_AT(DateWordingUtil.dayInSentence(next.toLocalDate(), today, lang.DATES()), Recurrence.clock(next.toLocalTime()))
             )
             .orElse(recurrence instanceof Recurrence.Custom ? "" : ", " + words.BUT_NOT_BEFORE_ITS_LAST_DAY());
-        String last = endsOn.map(day -> ", " + words.UNTIL().of(DateWordingUtil.dayAfterAWord(day, today, lang.DATES()))).orElse("");
+        String last = endsOn.map(day -> ", " + words.UNTIL(DateWordingUtil.dayAfterAWord(day, today, lang.DATES()))).orElse("");
         return
             recurrence.describe(lang) + first + last + "."
             + (recurrence instanceof Recurrence.Custom ? " " + words.OILLAMP_READS_THE_EXPRESSION_WHEN_YOU_SAVE_THE_JOB() : "");
