@@ -830,7 +830,7 @@ public final class GeniesView extends JPanel {
         state.get().find(id).flatMap(genie -> genie.conversations().current()).ifPresent(doomed -> {
             Lang.Dialogs words = state.get().lang().DIALOGS();
             ConfirmAnswer answer =
-                UI.confirmation(words.DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES().of(doomed.title(state.get().lang())))
+                UI.confirmation(words.DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES(doomed.title(state.get().lang())))
                 .titled(words.DELETE_A_CONVERSATION())
                 .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
                 .show();
@@ -1719,7 +1719,7 @@ public final class GeniesView extends JPanel {
             Lang.Dialogs words = state.get().lang().DIALOGS();
             Object answer = JOptionPane.showInputDialog(
                 this,
-                words.A_NEW_NAME_FOR().of(named.name()),
+                words.A_NEW_NAME_FOR(named.name()),
                 words.RENAME_A_GENIE(),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
@@ -1740,7 +1740,7 @@ public final class GeniesView extends JPanel {
                 Home.Link link = app.link(id, Home.WORKSPACE, app.documents(), Home.linkName(genie.name(), Home.WORKSPACE));
                 JOptionPane.showMessageDialog(
                     this,
-                    words.WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY().of(
+                    words.WORKSPACE_IS_IN_YOUR_FOLDER_NOW_IT_IS_A_LINK_NOT_A_COPY(
                         genie.name(),
                         link.madeNow(),
                         String.valueOf(app.documents().getFileName()),
@@ -1763,7 +1763,7 @@ public final class GeniesView extends JPanel {
         StringBuilder details = new StringBuilder();
         for (int i = seen.size() - 1; i >= 0; i--) details.append(seen.get(i).details()).append('\n');
         Lang.Dialogs words = state.get().lang().DIALOGS();
-        String what = words.THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT().of(seen.size());
+        String what = words.THINGS_WENT_WRONG_THAT_GENIES_DID_NOT_EXPECT(seen.size());
         UI.dialog(SwingUtilities.getWindowAncestor(this), words.WHAT_WENT_WRONG())
             .withOnCloseOperation(UI.OnWindowClose.DISPOSE)
             .onClosed(_ -> state.update(From.VIEW, now -> now.withoutTroubles(seen)))
@@ -1771,7 +1771,7 @@ public final class GeniesView extends JPanel {
                 panel("fill, wrap 1, ins 16 18 16 18, gap 10", "[grow]", "[][][grow][]").group(Skin.FRAME)
                 .add("growx, wmin 0", label(what).group(Skin.TITLE))
                 .add("growx, wmin 0",
-                    label(words.GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN().of(app.errorLog().toString()))
+                    label(words.GENIES_CARRIED_ON_ALL_OF_IT_IS_KEPT_IN(app.errorLog().toString()))
                     .group(Skin.META)
                 )
                 .add("grow, push, w 760, h 380",
@@ -1797,11 +1797,11 @@ public final class GeniesView extends JPanel {
         state.get().find(id).ifPresent(doomed -> {
             Lang.Dialogs words = state.get().lang().DIALOGS();
             ConfirmAnswer answer = doomed.fromElsewhere()
-                ? UI.confirmation(words.REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS().of(doomed.name(), whereFrom(doomed)))
+                ? UI.confirmation(words.REMOVE_FROM_GENIES_ITS_LAMP_STAYS_WHERE_IT_IS(doomed.name(), whereFrom(doomed)))
                   .titled(words.REMOVE_A_LAMP_FROM_GENIES())
                   .yesOption(words.REMOVE()).noOption(words.KEEP()).cancelOption("")
                   .show()
-                : UI.confirmation(words.DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT().of(doomed.name()))
+                : UI.confirmation(words.DELETE_FOR_GOOD_ITS_HOME_AND_YOUR_CONVERSATIONS_WITH_IT(doomed.name()))
                   .titled(words.DELETE_A_GENIE())
                   .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
                   .show();
@@ -1831,7 +1831,7 @@ public final class GeniesView extends JPanel {
         int answer = JOptionPane.showConfirmDialog(
             this,
             new JScrollPane(text),
-            state.get().lang().DIALOGS().ASK_DIFFERENTLY().of(genie.get().name()),
+            state.get().lang().DIALOGS().ASK_DIFFERENTLY(genie.get().name()),
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE
         );
@@ -1857,14 +1857,14 @@ public final class GeniesView extends JPanel {
 
     private void giveFile() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle(state.get().lang().DIALOGS().GIVE_A_FILE().of(genie.get().name()));
+        chooser.setDialogTitle(state.get().lang().DIALOGS().GIVE_A_FILE(genie.get().name()));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
             app.giveFile(genie.get().id(), chooser.getSelectedFile().toPath());
     }
 
     private void saveHandout(String file) {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle(state.get().lang().DIALOGS().SAVE().of(file));
+        chooser.setDialogTitle(state.get().lang().DIALOGS().SAVE(file));
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), file));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             Path target = chooser.getSelectedFile().toPath();
