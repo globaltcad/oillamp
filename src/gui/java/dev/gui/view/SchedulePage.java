@@ -624,7 +624,7 @@ final class SchedulePage {
 
     private UIForAnySwing<?, ?> editor() {
         Val<Boolean> changing = draft.viewAs(Boolean.class, it -> it.replaces().isPresent());
-        Val<String> blocked = Viewable.of(String.class, draft, state, (it, s) -> it.problem(s.localNow()).orElse(""));
+        Val<String> blocked = Viewable.of(String.class, draft, state, (it, s) -> it.problem(s.localNow(), s.lang()).orElse(""));
         Val<Boolean> busy = schedule.viewAs(Boolean.class, Schedule::busy);
         Val<Boolean> canSave = Viewable.of(Boolean.class, blocked, busy, (problem, isBusy) -> problem.isEmpty() && !isBusy);
         Val<String> refused = schedule.viewAsString(Schedule::problem);
@@ -744,7 +744,7 @@ final class SchedulePage {
         );
         Val<Boolean> calendarShown = draft.viewAs(Boolean.class, it -> !it.repeats() || it.endsOn().isPresent());
         Val<String> summary = Viewable.of(String.class, draft, state, (it, s) -> it.summary(s.localNow(), s.lang()));
-        Val<String> timing = Viewable.of(String.class, draft, state, (it, s) -> it.timingProblem(s.localNow()).orElse(""));
+        Val<String> timing = Viewable.of(String.class, draft, state, (it, s) -> it.timingProblem(s.localNow(), s.lang()).orElse(""));
         return
             box("fill, wrap 1, ins 0, gap 10, hidemode 3", "[grow]")
             .withStyle(wide, (isWide, it) -> it.padding(isWide ? 0 : 6, 0, 0, 0))
@@ -980,7 +980,14 @@ final class SchedulePage {
     }
 
     private UIForButton<JButton> chip(JobDraft.Repeat how) {
-        return chip(Val.of(how.label()), repeat.viewAs(Boolean.class, it -> it == how), () -> repeat.set(From.VIEW, how));
+        Val<String> label = words.viewAsString(it -> switch (how) {
+            case HOURLY -> it.EVERY_HOUR();
+            case DAILY -> it.EVERY_DAY();
+            case WEEKDAYS -> it.WEEKDAYS();
+            case WEEKLY -> it.SOME_DAYS();
+            case CUSTOM -> it.CUSTOM();
+        });
+        return chip(label, repeat.viewAs(Boolean.class, it -> it == how), () -> repeat.set(From.VIEW, how));
     }
 
     /// A chip that sets the day and the time of a job that runs once, from now.
