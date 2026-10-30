@@ -62,11 +62,13 @@ public record History(
     ///
     /// @param waking    as its sandbox starts
     /// @param sleeping  after its sandbox stopped
-    /// @param beforeRun as it begins on a question or a job, when something changed since the last moment
-    /// @param afterRun  as it ends one, with its last words. A job's prompt tells the genie what
+    /// @param beforeRun as it begins a job, when something changed since the last moment
+    /// @param afterRun  as it ends a job, with its last words. A job's prompt tells the genie what
     ///                  its last runs said and changed from these
     /// @param chatQuietMinutes how long a chat must have been quiet before it is saved, once for
-    ///                  all its questions; 0 saves around each question as around a job
+    ///                  all its questions. A chat is saved too as a job begins, and as the genie
+    ///                  goes to sleep, whatever `sleeping` says. 0 saves around each question
+    ///                  instead, as `beforeRun` and `afterRun` say for a job
     public record Autosave(boolean waking, boolean sleeping, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {
 
         public Autosave withWaking(boolean waking)       { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
@@ -75,14 +77,24 @@ public record History(
         public Autosave withAfterRun(boolean afterRun)   { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
         public Autosave withChatQuietMinutes(int chatQuietMinutes) { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
 
+        /// Whether each question is saved by itself, as a job is, rather than with its chat.
+        public boolean savesEachQuestion() { return chatQuietMinutes == 0; }
+
         /// When it saves, as the end of a sentence such as "Saved whenever Jafar …": "wakes,
-        /// answers or sleeps", or "answers"; empty when it never saves by itself.
+        /// finishes a job or was asked nothing for 10 minutes", or "answers or finishes a job";
+        /// empty when it never saves by itself.
         public String when(Lang lang) {
             Lang.HistoryPage words = lang.HISTORY_PAGE();
             List<String> moments = new ArrayList<>();
             if (waking) moments.add(words.WAKES());
-            if (afterRun) moments.add(words.ANSWERS());
-            else if (beforeRun) moments.add(words.BEGINS_TO_ANSWER());
+            if (afterRun) {
+                if (savesEachQuestion()) moments.add(words.ANSWERS());
+                moments.add(words.FINISHES_A_JOB());
+            } else if (beforeRun) {
+                if (savesEachQuestion()) moments.add(words.BEGINS_TO_ANSWER());
+                moments.add(words.BEGINS_A_JOB());
+            }
+            if (!savesEachQuestion()) moments.add(words.WAS_ASKED_NOTHING_FOR(words.SPAN_OF_MINUTES(chatQuietMinutes)));
             if (sleeping) moments.add(words.SLEEPS());
             return words.ONE_OR_ANOTHER(moments);
         }
