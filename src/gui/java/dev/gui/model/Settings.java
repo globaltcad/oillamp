@@ -168,8 +168,8 @@ public record Settings(Place place, EdenAi edenAi, Elsewhere elsewhere, OnThisMa
                 if (edenAi.model().isBlank()) yield Optional.of(words.NAME_THE_MODEL_THE_GENIES_SHOULD_USE_LOOK_UP_SHOWS_EDEN_AIS_LIST());
                 if (keyFrom(environmentKey).isPresent()) yield Optional.empty();
                 yield Optional.of(edenAi.keySource() == KeySource.ENTERED
-                        ? words.ENTER_A_KEY_OR_USE_THE_ONE_IN().of(KEY_VARIABLE)
-                        : words.IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS().of(KEY_VARIABLE));
+                        ? words.ENTER_A_KEY_OR_USE_THE_ONE_IN(KEY_VARIABLE)
+                        : words.IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS(KEY_VARIABLE));
             }
             case ELSEWHERE -> {
                 if (elsewhere.address().isBlank())
