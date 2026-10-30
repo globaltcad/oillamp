@@ -12,6 +12,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
 /// Whether the desktop Genies starts on is dark or light, from a handful of clues, so that the
@@ -32,6 +33,9 @@ import dev.gui.model.Palette;
 /// 6. Windows, which says whether its applications are light.
 ///
 /// None of them, as on a computer without a desktop of these kinds, says nothing.
+///
+/// It also says which language the desktop speaks, so that the first window speaks it too, if
+/// Genies does; again only until the user picks one.
 public final class SystemLook {
 
     private final Function<String, Optional<String>> environment;
@@ -75,6 +79,31 @@ public final class SystemLook {
             .flatMap(Optional::stream)
             .findFirst()
             .map(dark -> dark ? Palette.DARK : Palette.LIGHT);
+    }
+
+    /// The language the desktop speaks, if Genies speaks it: the one of the locale its programs
+    /// are started with, such as `de_DE.UTF-8`, which `LC_ALL`, `LC_MESSAGES` and `LANG` name, the
+    /// first set deciding, as for any other program.
+    public Optional<Lang> lang() {
+        return Stream.of("LC_ALL", "LC_MESSAGES", "LANG")
+            .map(environment)
+            .flatMap(Optional::stream)
+            .filter(it -> !it.isBlank())
+            .findFirst()
+            .flatMap(SystemLook::spoken);
+    }
+
+    /// The language `locale` names by its first part, such as `de` in `de_DE.UTF-8`, if Genies
+    /// speaks it.
+    private static Optional<Lang> spoken(String locale) {
+        return switch (locale.split("[_.@-]", 2)[0].toLowerCase(Locale.ROOT)) {
+            case "en" -> Optional.of(Lang.ENGLISH);
+            case "de" -> Optional.of(Lang.GERMAN);
+            case "es" -> Optional.of(Lang.SPANISH);
+            case "ja" -> Optional.of(Lang.JAPANESE);
+            case "zh" -> Optional.of(Lang.CHINESE);
+            default -> Optional.empty();
+        };
     }
 
     private Optional<Boolean> gtkTheme() {
