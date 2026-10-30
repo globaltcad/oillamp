@@ -64,7 +64,8 @@ public final class GeniesView extends JPanel {
     /// The colours and the fonts of the state, and the colours alone.
     private final Val<Theme> theme;
     private final Val<Palette> palette;
-    /// The words of the window around the genies.
+    /// The words of the state, and those of the window around the genies.
+    private final Val<Lang> lang;
     private final Val<Lang.Window> windowWords;
     /// The words of the header above a genie's pages.
     private final Val<Lang.Header> headerWords;
@@ -111,7 +112,8 @@ public final class GeniesView extends JPanel {
         this.app = app;
         theme   = Theme.of(state);
         palette = Theme.paletteOf(state);
-        windowWords = Theme.langOf(state).viewAs(Lang.Window.class, Lang::WINDOW);
+        lang        = Theme.langOf(state);
+        windowWords = lang.viewAs(Lang.Window.class, Lang::WINDOW);
         headerWords = Theme.langOf(state).viewAs(Lang.Header.class, Lang::HEADER);
         desktopWords = Theme.langOf(state).viewAs(Lang.Desktop.class, Lang::DESKTOP);
         chatWords = Theme.langOf(state).viewAs(Lang.Chat.class, Lang::CHAT);
@@ -441,8 +443,8 @@ public final class GeniesView extends JPanel {
             )
             .withCursor(UI.Cursor.HAND)
             .withTooltip(
-                Viewable.of(String.class, shown, windowWords, (it, words) ->
-                    words.GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE().of(it.name(), it.status(), it.showing())
+                Viewable.of(String.class, shown, lang, (it, words) ->
+                    words.WINDOW().GENIE_STATUS_AND_WHAT_IT_SHOWS_RIGHT_CLICK_FOR_MORE().of(it.name(), it.status(words), it.showing())
                 )
             )
             .onMousePress(it -> {
@@ -469,7 +471,7 @@ public final class GeniesView extends JPanel {
                 )
                 .add("growx, wmin 0",
                     waving(
-                        label(shown.viewAsString(Genie::status)).group(Skin.META),
+                        label(Viewable.of(String.class, shown, lang, Genie::status)).group(Skin.META),
                         shown
                     )
                 )
@@ -893,7 +895,7 @@ public final class GeniesView extends JPanel {
                     .withTooltip(headerWords.viewAsString(Lang.Header::DOUBLE_CLICK_TO_RENAME))
                     .onMouseClick(it -> { if (it.clickCount() == 2) rename(genie.get().id()); })
                 )
-                .add("growx, wmin 0", waving(label(genie.viewAsString(Genie::status)).group(Skin.SUBTITLE), genie))
+                .add("growx, wmin 0", waving(label(Viewable.of(String.class, genie, lang, Genie::status)).group(Skin.SUBTITLE), genie))
             )
             // One group on the right, so buttons that are hidden leave no gap behind. The pages
             // come last, at the edge: the buttons before them come and go with the genie's phase
@@ -1351,7 +1353,8 @@ public final class GeniesView extends JPanel {
             it.conversations().aside().isEmpty() &&
             (it.transcript().isEmpty() || !it.transcript().entries().last().isWriting())
         );
-        Val<Genie.Waiting> waitingOn = Viewable.of(Genie.Waiting.class, genie, pulse, (it, _) -> it.waitingOn(Instant.now()));
+        // Read anew with each beat of the pulse, which moves while the bar is shown.
+        Val<Genie.Waiting> waitingOn = Viewable.of(Genie.Waiting.class, genie, pulse, (it, _) -> it.waitingOn(Instant.now(), lang.get()));
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][]")
             .add("grow, push, wmin 0",

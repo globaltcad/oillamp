@@ -171,8 +171,9 @@ public record Genie(
         return phase.isAwake() || !conversations.folded();
     }
 
-    public String status() {
-        return phase.isAwake() && schedule.running().isPresent() ? "doing a scheduled job" : activity;
+    /// What it does, in a few words, such as "thinking".
+    public String status(Lang lang) {
+        return phase.isAwake() && schedule.running().isPresent() ? lang.WINDOW().DOING_A_SCHEDULED_JOB() : activity;
     }
 
     /// What the user waits for, as the chat's bar says it.
@@ -185,14 +186,14 @@ public record Genie(
     /// has come yet. The genie does one thing at a time: while it does a job of its schedule, the
     /// message waits until the job is done, and this says which job, and how long it has run by
     /// `now`. Otherwise the genie works on the message itself, and thinks.
-    public Waiting waitingOn(Instant now) {
+    public Waiting waitingOn(Instant now, Lang lang) {
         return schedule.running().map(job -> {
             long seconds = Math.max(0, Duration.between(job.since(), now).toSeconds());
             return new Waiting(
-                name + " is doing a scheduled job first: " + job.title(),
+                lang.CHAT().IS_DOING_A_SCHEDULED_JOB_FIRST().of(name, job.title()),
                 String.format("%d:%02d", seconds / 60, seconds % 60)
             );
-        }).orElse(new Waiting(name + " is thinking", ""));
+        }).orElse(new Waiting(lang.CHAT().IS_THINKING().of(name), ""));
     }
 
     // ─── the conversation ──────────────────────────────────────────────────────────────────
