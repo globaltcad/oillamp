@@ -103,9 +103,7 @@ public enum Lang {
 
     /// The words of days and spans of time, as the pages say them.
     public Dates DATES() {
-        return switch (this) {
-            case ENGLISH -> Dates.ENGLISH;
-        };
+        return new Dates(this);
     }
 
     /// Names as an English sentence lists them: "main", "main and docs", "a, b and c".
@@ -1426,46 +1424,114 @@ public enum Lang {
     }
 
     /// Days and spans of time, as the pages say them; [DateWordingUtil] says which of them fits.
-    public record Dates(
-        String TODAY,
-        String TOMORROW,
-        String YESTERDAY,
-        OfDate DAY,
-        String TODAY_IN_A_SENTENCE,
-        String TOMORROW_IN_A_SENTENCE,
-        String YESTERDAY_IN_A_SENTENCE,
-        About ON_DAY,
-        OfDate SHORT_DAY,
-        String NOW,
-        Counted IN_MINUTES,
-        Counted IN_HOURS,
-        Counted IN_DAYS,
-        String JUST_NOW,
-        Counted MINUTES_AGO,
-        Counted HOURS_AGO,
-        Counted DAYS_AGO,
-        DayAndTime AT
-    ) {
-        public static final Dates ENGLISH = new Dates(
-            "Today",
-            "Tomorrow",
-            "Yesterday",
-            DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)::format,
-            "today",
-            "tomorrow",
-            "yesterday",
-            date -> "on " + date,
-            DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)::format,
-            "now",
-            count -> "in " + count + (count == 1 ? " minute" : " minutes"),
-            count -> "in " + count + (count == 1 ? " hour" : " hours"),
-            count -> "in " + count + (count == 1 ? " day" : " days"),
-            "just now",
-            count -> count + (count == 1 ? " minute ago" : " minutes ago"),
-            count -> count + (count == 1 ? " hour ago" : " hours ago"),
-            count -> count + (count == 1 ? " day ago" : " days ago"),
-            (date, time) -> date + " at " + time
-        );
+    public record Dates(Lang lang) {
+        public String TODAY() {
+            return switch (lang) {
+                case ENGLISH -> "Today";
+            };
+        }
+
+        public String TOMORROW() {
+            return switch (lang) {
+                case ENGLISH -> "Tomorrow";
+            };
+        }
+
+        public String YESTERDAY() {
+            return switch (lang) {
+                case ENGLISH -> "Yesterday";
+            };
+        }
+
+        public String DAY(LocalDate day) {
+            return switch (lang) {
+                case ENGLISH -> DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH).format(day);
+            };
+        }
+
+        public String TODAY_IN_A_SENTENCE() {
+            return switch (lang) {
+                case ENGLISH -> "today";
+            };
+        }
+
+        public String TOMORROW_IN_A_SENTENCE() {
+            return switch (lang) {
+                case ENGLISH -> "tomorrow";
+            };
+        }
+
+        public String YESTERDAY_IN_A_SENTENCE() {
+            return switch (lang) {
+                case ENGLISH -> "yesterday";
+            };
+        }
+
+        public String ON_DAY(String date) {
+            return switch (lang) {
+                case ENGLISH -> "on " + date;
+            };
+        }
+
+        public String SHORT_DAY(LocalDate day) {
+            return switch (lang) {
+                case ENGLISH -> DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH).format(day);
+            };
+        }
+
+        public String NOW() {
+            return switch (lang) {
+                case ENGLISH -> "now";
+            };
+        }
+
+        public String IN_MINUTES(int count) {
+            return switch (lang) {
+                case ENGLISH -> "in " + count + (count == 1 ? " minute" : " minutes");
+            };
+        }
+
+        public String IN_HOURS(int count) {
+            return switch (lang) {
+                case ENGLISH -> "in " + count + (count == 1 ? " hour" : " hours");
+            };
+        }
+
+        public String IN_DAYS(int count) {
+            return switch (lang) {
+                case ENGLISH -> "in " + count + (count == 1 ? " day" : " days");
+            };
+        }
+
+        public String JUST_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "just now";
+            };
+        }
+
+        public String MINUTES_AGO(int count) {
+            return switch (lang) {
+                case ENGLISH -> count + (count == 1 ? " minute ago" : " minutes ago");
+            };
+        }
+
+        public String HOURS_AGO(int count) {
+            return switch (lang) {
+                case ENGLISH -> count + (count == 1 ? " hour ago" : " hours ago");
+            };
+        }
+
+        public String DAYS_AGO(int count) {
+            return switch (lang) {
+                case ENGLISH -> count + (count == 1 ? " day ago" : " days ago");
+            };
+        }
+
+        public String AT(String date, String time) {
+            return switch (lang) {
+                case ENGLISH -> date + " at " + time;
+            };
+        }
     }
 
     /// The words of the parts of the window that several pages share.
