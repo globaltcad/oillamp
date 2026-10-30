@@ -71,9 +71,7 @@ public enum Lang {
 
     /// The words of the settings every genie shares, and the welcome above them.
     public SettingsPage SETTINGS_PAGE() {
-        return switch (this) {
-            case ENGLISH -> SettingsPage.ENGLISH;
-        };
+        return new SettingsPage(this);
     }
 
     /// The words of when jobs wake a genie, and what they did.
@@ -937,173 +935,485 @@ public enum Lang {
 
     /// The words of the settings every genie shares, and of the welcome above them while there
     /// are no genies.
-    public record SettingsPage(
-        String YOUR_GENIES_MODEL,
-        String SETTINGS,
-        String WHERE_YOUR_GENIES_MODEL_RUNS_AND_HOW_THEY_REACH_IT,
-        String GENIES_SETS_UP_A_MODEL_ON_THIS_COMPUTER_FOR_YOU_WITH_OLLAMA,
-        String ADVANCED_EDEN_AI_OR_A_MODEL_SERVER_OF_YOUR_OWN,
-        String FOR_A_MODEL_ELSEWHERE_OR_A_MODEL_SERVER_OTHER_THAN_OLLAMA,
-        String BACK_TO_THE_SIMPLE_WAY_OLLAMA_SET_UP_BY_GENIES,
-        String THIS_COMPUTER,
-        String GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS,
-        String OLLAMA,
-        String MODEL,
-        String GENIES_SUGGESTS_THE_BEST_MODEL_THIS_COMPUTER_RUNS_WELL,
-        About YOUR_GENIES_USE,
-        String STOP,
-        String STOP_SETTING_UP_A_MODELS_DOWNLOAD_GOES_ON_THE_NEXT_TIME,
-        String UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI,
-        About UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT,
-        String THE_MODEL_RUNS,
-        String AT_EDEN_AI,
-        String IN_THE_EU_WITH_YOUR_EDEN_AI_KEY,
-        String ON_A_SERVER_ELSEWHERE,
-        String A_MODEL_SERVER_OF_YOUR_OWN_ON_ANOTHER_MACHINE,
-        String ON_THIS_COMPUTER,
-        String A_MODEL_SERVER_SUCH_AS_OLLAMA_LM_STUDIO_OR_LLAMA_CPP,
-        String KEY,
-        About USE,
-        String FOUND_WHERE_GENIES_WAS_STARTED,
-        String NOT_SET_WHERE_GENIES_WAS_STARTED,
-        String USE_THIS_KEY,
-        String THE_KEY_STAYS_ON_THIS_COMPUTER_GENIES_NEVER_SEE_IT,
-        String ADDRESS,
-        String WHERE_THE_SERVERS_API_IS_IT_MUST_BE_HTTPS,
-        String LEAVE_IT_EMPTY_IF_THE_SERVER_ASKS_FOR_NONE,
-        String WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED,
-        String LOOK_UP,
-        String ASK_THE_SERVICE_WHICH_MODELS_IT_OFFERS,
-        String CHANGES_TAKE_EFFECT_WHEN_A_GENIE_WAKES,
-        String YOUR_GENIES_CAN_REACH_THEIR_MODEL,
-        String DONE,
-        String YOUR_FIRST_GENIE,
-        String A_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN_THAT_WAKES_AT_ONCE,
-        String APPEARANCE,
-        String THE_LAMP_AT_NIGHT_OR_BY_DAY,
-        String DARK,
-        String LIGHT,
-        String WELCOME_TO_GENIES,
-        String A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN,
-        String GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED,
-        String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU,
-        String GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON,
-        String A_MODELS_NAME_HAS_NO_SPACES_AND_ONLY_PLAIN_LETTERS_DIGITS_AND_SIGNS,
-        String NAME_THE_MODEL_THE_GENIES_SHOULD_USE_LOOK_UP_SHOWS_EDEN_AIS_LIST,
-        About ENTER_A_KEY_OR_USE_THE_ONE_IN,
-        About IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS,
-        String ENTER_THE_SERVERS_ADDRESS,
-        String NAME_THE_MODEL_AS_THE_SERVER_LISTS_IT,
-        String A_MODEL_SERVER_ON_THIS_COMPUTER_IS_REACHED_AT_127_0_0_1_OR_LOCALHOST,
-        String NAME_THE_MODEL_AS_THE_MODEL_SERVER_LISTS_IT,
-        String THE_ADDRESS_SHOULD_LOOK_LIKE_AN_ADDRESS_OF_A_MODEL_SERVER,
-        String THE_ADDRESS_SHOULD_BE_A_SCHEME_A_HOST_AND_PERHAPS_A_PORT_AND_A_PATH,
-        String THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS,
-        About INSTALL_OLLAMA_AND_GET,
-        About GET,
-        About USE_MODEL,
-        String GENIES_IS_LOOKING_WHETHER_OLLAMA_IS_ON_THIS_COMPUTER,
-        About OLLAMA_RUNS_ON_THIS_COMPUTER,
-        String OLLAMA_IS_INSTALLED_GENIES_STARTS_IT_WHEN_THE_GENIES_NEED_IT,
-        String OLLAMA_IS_NOT_INSTALLED_YET_GENIES_INSTALLS_IT_FOR_YOU,
-        String GENIES_COULD_NOT_READ_HOW_MUCH_MEMORY_THIS_COMPUTER_HAS,
-        About MEMORY_AND_NO_GRAPHICS_CARD_A_MODEL_CAN_RUN_ON,
-        Computer MEMORY_AND_THE_GRAPHICS_CARD,
-        About ABOUT_SO_MUCH_TO_DOWNLOAD,
-        String ITS_NAME_DOES_NOT_SAY_HOW_LARGE_IT_IS,
-        String IT_RUNS_ON_THE_GRAPHICS_CARD_SO_IT_ANSWERS_QUICKLY,
-        String IT_RUNS_ON_THE_PROCESSOR_AT_A_FAIR_PACE,
-        String IT_RUNS_ON_THE_PROCESSOR_SO_IT_ANSWERS_SLOWLY,
-        About RUNNING_IT_NEEDS_MORE_MEMORY_THAN_THIS_COMPUTER_CAN_SPARE
-    ) {
-        public static final SettingsPage ENGLISH = new SettingsPage(
-            "Your genies' model",
-            "Settings",
-            "Where your genies' model runs, and how they reach it.",
-            "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here.",
-            "Advanced: Eden AI, or a model server of your own",
-            "For a model elsewhere, or a model server on this computer other than Ollama",
-            "Back to the simple way: Ollama, set up by Genies",
-            "This computer",
-            "Genies is looking what this computer has…",
-            "Ollama",
-            "Model",
-            "Genies suggests the best model this computer runs well. Any other "
-            + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.",
-            wanted -> "Your genies use " + wanted + ".",
-            "Stop",
-            "Stop setting up. A model's download goes on from where it was the next time",
-            "Until then, your genies use Eden AI.",
-            at -> "Until then, your genies use the model server at " + at + ".",
-            "The model runs",
-            "at Eden AI",
-            "In the EU, with your Eden AI key.",
-            "on a server elsewhere",
-            "A model server of your own on another machine, such as Ollama behind a proxy that asks for a key.",
-            "on this computer",
-            "A model server such as Ollama, LM Studio or llama.cpp.",
-            "Key",
-            variable -> "Use " + variable,
-            "Found where Genies was started.",
-            "Not set where Genies was started.",
-            "Use this key:",
-            "The key stays on this computer. Genies never see it: oillamp adds it to "
-            + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.",
-            "Address",
-            "Where the server's OpenAI-style API is, such as "
-            + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.",
-            "Leave it empty if the server asks for none.",
-            "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
-            + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.",
-            "Look up",
-            "Ask the service which models it offers",
-            "Changes take effect when a genie wakes.",
-            "Your genies can reach their model.",
-            "Done",
-            "Your first genie",
-            "A genie, with a sandboxed desktop of its own, that wakes at once",
-            "Appearance",
-            "The lamp at night, or by day.",
-            "Dark",
-            "Light",
-            "Welcome to Genies",
-            "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
-            + "where it can browse the web, run programs and make files, without ever touching yours.",
-            "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
-            + "Or have Genies set up a model on this computer instead: the simple way, below.",
-            "To think, genies need a model. Genies can set one up for you, right here on this computer.",
-            "Genies that are awake answer with a new model from their next message on. "
-            + "A new place, address or key reaches them when they next wake, and so does "
-            + "everything for a genie that kept running while Genies was closed.",
-            "A model's name has no spaces and only plain letters, digits and signs, such as azure/gpt-6.1-sol.",
-            "Name the model the genies should use; Look up shows Eden AI's list.",
-            variable -> "Enter a key, or use the one in " + variable + ".",
-            variable -> variable + " is not set where Genies was started. Enter a key in the settings, or set it and start Genies again.",
-            "Enter the server's address, such as https://ollama.example.com/v1.",
-            "Name the model, as the server lists it; Look up shows its list.",
-            "A model server on this computer is reached at 127.0.0.1 or localhost, such as http://127.0.0.1:11434/v1.",
-            "Name the model, as the model server lists it; Look up shows its list.",
-            "The address should look like https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
-            "The address should be a scheme, a host, and perhaps a port and a path, such as https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.",
-            "The key is sent to the server, so it must use https:// (http:// only on this computer).",
-            wanted -> "Install Ollama and get " + wanted,
-            wanted -> "Get " + wanted,
-            wanted -> "Use " + wanted,
-            "Genies is looking whether Ollama is on this computer…",
-            version -> "Ollama " + version + " runs on this computer.",
-            "Ollama is installed; Genies starts it when the genies need it.",
-            "Ollama is not installed yet. Genies installs it for you, for you alone: no password, "
-            + "nothing changes outside its own folder. It is a download of about 1.4 GB.",
-            "Genies could not read how much memory this computer has.",
-            memory -> memory + " of memory, and no graphics card a model can run on.",
-            (memory, card, cardMemory) -> memory + " of memory, and the graphics card " + card + " with " + cardMemory + ".",
-            size -> "About " + size + " to download.",
-            "Its name does not say how large it is, so Genies cannot tell how well it runs here.",
-            "It runs on the graphics card, so it answers quickly.",
-            "It runs on the processor, at a fair pace.",
-            "It runs on the processor, so it answers slowly.",
-            need -> "Running, it needs about " + need + " of memory, more than this computer can spare: it may not load, or be very slow."
-        );
+    public record SettingsPage(Lang lang) {
+        public String YOUR_GENIES_MODEL() {
+            return switch (lang) {
+                case ENGLISH -> "Your genies' model";
+            };
+        }
+
+        public String SETTINGS() {
+            return switch (lang) {
+                case ENGLISH -> "Settings";
+            };
+        }
+
+        public String WHERE_YOUR_GENIES_MODEL_RUNS_AND_HOW_THEY_REACH_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Where your genies' model runs, and how they reach it.";
+            };
+        }
+
+        public String GENIES_SETS_UP_A_MODEL_ON_THIS_COMPUTER_FOR_YOU_WITH_OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here.";
+            };
+        }
+
+        public String ADVANCED_EDEN_AI_OR_A_MODEL_SERVER_OF_YOUR_OWN() {
+            return switch (lang) {
+                case ENGLISH -> "Advanced: Eden AI, or a model server of your own";
+            };
+        }
+
+        public String FOR_A_MODEL_ELSEWHERE_OR_A_MODEL_SERVER_OTHER_THAN_OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "For a model elsewhere, or a model server on this computer other than Ollama";
+            };
+        }
+
+        public String BACK_TO_THE_SIMPLE_WAY_OLLAMA_SET_UP_BY_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Back to the simple way: Ollama, set up by Genies";
+            };
+        }
+
+        public String THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "This computer";
+            };
+        }
+
+        public String GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS() {
+            return switch (lang) {
+                case ENGLISH -> "Genies is looking what this computer has…";
+            };
+        }
+
+        public String OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "Ollama";
+            };
+        }
+
+        public String MODEL() {
+            return switch (lang) {
+                case ENGLISH -> "Model";
+            };
+        }
+
+        public String GENIES_SUGGESTS_THE_BEST_MODEL_THIS_COMPUTER_RUNS_WELL() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Genies suggests the best model this computer runs well. Any other "
+                    + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.";
+            };
+        }
+
+        public String YOUR_GENIES_USE(String wanted) {
+            return switch (lang) {
+                case ENGLISH -> "Your genies use " + wanted + ".";
+            };
+        }
+
+        public String STOP() {
+            return switch (lang) {
+                case ENGLISH -> "Stop";
+            };
+        }
+
+        public String STOP_SETTING_UP_A_MODELS_DOWNLOAD_GOES_ON_THE_NEXT_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "Stop setting up. A model's download goes on from where it was the next time";
+            };
+        }
+
+        public String UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI() {
+            return switch (lang) {
+                case ENGLISH -> "Until then, your genies use Eden AI.";
+            };
+        }
+
+        public String UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT(String at) {
+            return switch (lang) {
+                case ENGLISH -> "Until then, your genies use the model server at " + at + ".";
+            };
+        }
+
+        public String THE_MODEL_RUNS() {
+            return switch (lang) {
+                case ENGLISH -> "The model runs";
+            };
+        }
+
+        public String AT_EDEN_AI() {
+            return switch (lang) {
+                case ENGLISH -> "at Eden AI";
+            };
+        }
+
+        public String IN_THE_EU_WITH_YOUR_EDEN_AI_KEY() {
+            return switch (lang) {
+                case ENGLISH -> "In the EU, with your Eden AI key.";
+            };
+        }
+
+        public String ON_A_SERVER_ELSEWHERE() {
+            return switch (lang) {
+                case ENGLISH -> "on a server elsewhere";
+            };
+        }
+
+        public String A_MODEL_SERVER_OF_YOUR_OWN_ON_ANOTHER_MACHINE() {
+            return switch (lang) {
+                case ENGLISH -> "A model server of your own on another machine, such as Ollama behind a proxy that asks for a key.";
+            };
+        }
+
+        public String ON_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "on this computer";
+            };
+        }
+
+        public String A_MODEL_SERVER_SUCH_AS_OLLAMA_LM_STUDIO_OR_LLAMA_CPP() {
+            return switch (lang) {
+                case ENGLISH -> "A model server such as Ollama, LM Studio or llama.cpp.";
+            };
+        }
+
+        public String KEY() {
+            return switch (lang) {
+                case ENGLISH -> "Key";
+            };
+        }
+
+        public String USE(String variable) {
+            return switch (lang) {
+                case ENGLISH -> "Use " + variable;
+            };
+        }
+
+        public String FOUND_WHERE_GENIES_WAS_STARTED() {
+            return switch (lang) {
+                case ENGLISH -> "Found where Genies was started.";
+            };
+        }
+
+        public String NOT_SET_WHERE_GENIES_WAS_STARTED() {
+            return switch (lang) {
+                case ENGLISH -> "Not set where Genies was started.";
+            };
+        }
+
+        public String USE_THIS_KEY() {
+            return switch (lang) {
+                case ENGLISH -> "Use this key:";
+            };
+        }
+
+        public String THE_KEY_STAYS_ON_THIS_COMPUTER_GENIES_NEVER_SEE_IT() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "The key stays on this computer. Genies never see it: oillamp adds it to "
+                    + "their requests as they leave the sandbox. An entered key is kept in a file only you can read.";
+            };
+        }
+
+        public String ADDRESS() {
+            return switch (lang) {
+                case ENGLISH -> "Address";
+            };
+        }
+
+        public String WHERE_THE_SERVERS_API_IS_IT_MUST_BE_HTTPS() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Where the server's OpenAI-style API is, such as "
+                    + "https://ollama.example.com/v1. It must be https://, because the key goes with every request.";
+            };
+        }
+
+        public String LEAVE_IT_EMPTY_IF_THE_SERVER_ASKS_FOR_NONE() {
+            return switch (lang) {
+                case ENGLISH -> "Leave it empty if the server asks for none.";
+            };
+        }
+
+        public String WHERE_THE_SERVERS_API_IS_ON_THIS_COMPUTER_NO_KEY_IS_NEEDED() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Where the server's OpenAI-style API is: http://127.0.0.1:11434/v1 for Ollama, "
+                    + "http://127.0.0.1:1234/v1 for LM Studio, http://127.0.0.1:8080/v1 for llama.cpp. No key is needed.";
+            };
+        }
+
+        public String LOOK_UP() {
+            return switch (lang) {
+                case ENGLISH -> "Look up";
+            };
+        }
+
+        public String ASK_THE_SERVICE_WHICH_MODELS_IT_OFFERS() {
+            return switch (lang) {
+                case ENGLISH -> "Ask the service which models it offers";
+            };
+        }
+
+        public String CHANGES_TAKE_EFFECT_WHEN_A_GENIE_WAKES() {
+            return switch (lang) {
+                case ENGLISH -> "Changes take effect when a genie wakes.";
+            };
+        }
+
+        public String YOUR_GENIES_CAN_REACH_THEIR_MODEL() {
+            return switch (lang) {
+                case ENGLISH -> "Your genies can reach their model.";
+            };
+        }
+
+        public String DONE() {
+            return switch (lang) {
+                case ENGLISH -> "Done";
+            };
+        }
+
+        public String YOUR_FIRST_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Your first genie";
+            };
+        }
+
+        public String A_GENIE_WITH_A_SANDBOXED_DESKTOP_OF_ITS_OWN_THAT_WAKES_AT_ONCE() {
+            return switch (lang) {
+                case ENGLISH -> "A genie, with a sandboxed desktop of its own, that wakes at once";
+            };
+        }
+
+        public String APPEARANCE() {
+            return switch (lang) {
+                case ENGLISH -> "Appearance";
+            };
+        }
+
+        public String THE_LAMP_AT_NIGHT_OR_BY_DAY() {
+            return switch (lang) {
+                case ENGLISH -> "The lamp at night, or by day.";
+            };
+        }
+
+        public String DARK() {
+            return switch (lang) {
+                case ENGLISH -> "Dark";
+            };
+        }
+
+        public String LIGHT() {
+            return switch (lang) {
+                case ENGLISH -> "Light";
+            };
+        }
+
+        public String WELCOME_TO_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Welcome to Genies";
+            };
+        }
+
+        public String A_GENIE_IS_AN_AI_HELPER_WITH_A_COMPUTER_OF_ITS_OWN() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "A genie is an AI helper with a computer of its own: a Linux desktop in a sandbox, "
+                    + "where it can browse the web, run programs and make files, without ever touching yours.";
+            };
+        }
+
+        public String GENIES_FOUND_AN_EDEN_AI_KEY_WHERE_IT_WAS_STARTED() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Genies found an Eden AI key where it was started, so your genies can think at Eden AI right away. "
+                    + "Or have Genies set up a model on this computer instead: the simple way, below.";
+            };
+        }
+
+        public String TO_THINK_GENIES_NEED_A_MODEL_GENIES_CAN_SET_ONE_UP_FOR_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "To think, genies need a model. Genies can set one up for you, right here on this computer.";
+            };
+        }
+
+        public String GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Genies that are awake answer with a new model from their next message on. "
+                    + "A new place, address or key reaches them when they next wake, and so does "
+                    + "everything for a genie that kept running while Genies was closed.";
+            };
+        }
+
+        public String A_MODELS_NAME_HAS_NO_SPACES_AND_ONLY_PLAIN_LETTERS_DIGITS_AND_SIGNS() {
+            return switch (lang) {
+                case ENGLISH -> "A model's name has no spaces and only plain letters, digits and signs, such as azure/gpt-6.1-sol.";
+            };
+        }
+
+        public String NAME_THE_MODEL_THE_GENIES_SHOULD_USE_LOOK_UP_SHOWS_EDEN_AIS_LIST() {
+            return switch (lang) {
+                case ENGLISH -> "Name the model the genies should use; Look up shows Eden AI's list.";
+            };
+        }
+
+        public String ENTER_A_KEY_OR_USE_THE_ONE_IN(String variable) {
+            return switch (lang) {
+                case ENGLISH -> "Enter a key, or use the one in " + variable + ".";
+            };
+        }
+
+        public String IS_NOT_SET_WHERE_GENIES_WAS_STARTED_ENTER_A_KEY_IN_THE_SETTINGS(String variable) {
+            return switch (lang) {
+                case ENGLISH -> variable + " is not set where Genies was started. Enter a key in the settings, or set it and start Genies again.";
+            };
+        }
+
+        public String ENTER_THE_SERVERS_ADDRESS() {
+            return switch (lang) {
+                case ENGLISH -> "Enter the server's address, such as https://ollama.example.com/v1.";
+            };
+        }
+
+        public String NAME_THE_MODEL_AS_THE_SERVER_LISTS_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Name the model, as the server lists it; Look up shows its list.";
+            };
+        }
+
+        public String A_MODEL_SERVER_ON_THIS_COMPUTER_IS_REACHED_AT_127_0_0_1_OR_LOCALHOST() {
+            return switch (lang) {
+                case ENGLISH -> "A model server on this computer is reached at 127.0.0.1 or localhost, such as http://127.0.0.1:11434/v1.";
+            };
+        }
+
+        public String NAME_THE_MODEL_AS_THE_MODEL_SERVER_LISTS_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Name the model, as the model server lists it; Look up shows its list.";
+            };
+        }
+
+        public String THE_ADDRESS_SHOULD_LOOK_LIKE_AN_ADDRESS_OF_A_MODEL_SERVER() {
+            return switch (lang) {
+                case ENGLISH -> "The address should look like https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.";
+            };
+        }
+
+        public String THE_ADDRESS_SHOULD_BE_A_SCHEME_A_HOST_AND_PERHAPS_A_PORT_AND_A_PATH() {
+            return switch (lang) {
+                case ENGLISH -> "The address should be a scheme, a host, and perhaps a port and a path, such as https://ollama.example.com/v1 or http://127.0.0.1:11434/v1.";
+            };
+        }
+
+        public String THE_KEY_IS_SENT_TO_THE_SERVER_SO_IT_MUST_USE_HTTPS() {
+            return switch (lang) {
+                case ENGLISH -> "The key is sent to the server, so it must use https:// (http:// only on this computer).";
+            };
+        }
+
+        public String INSTALL_OLLAMA_AND_GET(String wanted) {
+            return switch (lang) {
+                case ENGLISH -> "Install Ollama and get " + wanted;
+            };
+        }
+
+        public String GET(String wanted) {
+            return switch (lang) {
+                case ENGLISH -> "Get " + wanted;
+            };
+        }
+
+        public String USE_MODEL(String wanted) {
+            return switch (lang) {
+                case ENGLISH -> "Use " + wanted;
+            };
+        }
+
+        public String GENIES_IS_LOOKING_WHETHER_OLLAMA_IS_ON_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "Genies is looking whether Ollama is on this computer…";
+            };
+        }
+
+        public String OLLAMA_RUNS_ON_THIS_COMPUTER(String version) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama " + version + " runs on this computer.";
+            };
+        }
+
+        public String OLLAMA_IS_INSTALLED_GENIES_STARTS_IT_WHEN_THE_GENIES_NEED_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Ollama is installed; Genies starts it when the genies need it.";
+            };
+        }
+
+        public String OLLAMA_IS_NOT_INSTALLED_YET_GENIES_INSTALLS_IT_FOR_YOU() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Ollama is not installed yet. Genies installs it for you, for you alone: no password, "
+                    + "nothing changes outside its own folder. It is a download of about 1.4 GB.";
+            };
+        }
+
+        public String GENIES_COULD_NOT_READ_HOW_MUCH_MEMORY_THIS_COMPUTER_HAS() {
+            return switch (lang) {
+                case ENGLISH -> "Genies could not read how much memory this computer has.";
+            };
+        }
+
+        public String MEMORY_AND_NO_GRAPHICS_CARD_A_MODEL_CAN_RUN_ON(String memory) {
+            return switch (lang) {
+                case ENGLISH -> memory + " of memory, and no graphics card a model can run on.";
+            };
+        }
+
+        public String MEMORY_AND_THE_GRAPHICS_CARD(String memory, String card, String cardMemory) {
+            return switch (lang) {
+                case ENGLISH -> memory + " of memory, and the graphics card " + card + " with " + cardMemory + ".";
+            };
+        }
+
+        public String ABOUT_SO_MUCH_TO_DOWNLOAD(String size) {
+            return switch (lang) {
+                case ENGLISH -> "About " + size + " to download.";
+            };
+        }
+
+        public String ITS_NAME_DOES_NOT_SAY_HOW_LARGE_IT_IS() {
+            return switch (lang) {
+                case ENGLISH -> "Its name does not say how large it is, so Genies cannot tell how well it runs here.";
+            };
+        }
+
+        public String IT_RUNS_ON_THE_GRAPHICS_CARD_SO_IT_ANSWERS_QUICKLY() {
+            return switch (lang) {
+                case ENGLISH -> "It runs on the graphics card, so it answers quickly.";
+            };
+        }
+
+        public String IT_RUNS_ON_THE_PROCESSOR_AT_A_FAIR_PACE() {
+            return switch (lang) {
+                case ENGLISH -> "It runs on the processor, at a fair pace.";
+            };
+        }
+
+        public String IT_RUNS_ON_THE_PROCESSOR_SO_IT_ANSWERS_SLOWLY() {
+            return switch (lang) {
+                case ENGLISH -> "It runs on the processor, so it answers slowly.";
+            };
+        }
+
+        public String RUNNING_IT_NEEDS_MORE_MEMORY_THAN_THIS_COMPUTER_CAN_SPARE(String need) {
+            return switch (lang) {
+                case ENGLISH -> "Running, it needs about " + need + " of memory, more than this computer can spare: it may not load, or be very slow.";
+            };
+        }
     }
 
     /// The words of a genie's Schedule page: when jobs wake the genie, and what they did.
