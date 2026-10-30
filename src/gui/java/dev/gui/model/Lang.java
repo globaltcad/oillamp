@@ -698,7 +698,21 @@ public record Lang(
         String PAUSE,
         String LET_THE_JOBS_RUN_AGAIN,
         String HOLD_EVERY_JOB_UNTIL_YOU_RESUME_NOTHING_IS_LOST,
-        String NEW_JOB
+        String NEW_JOB,
+        String THE_WEEK,
+        String SHOW_ONLY_THE_LAST_RUNS,
+        Counted SHOW_EARLIER_RUNS,
+        String READING_THE_SCHEDULE,
+        String NOTHING_RAN_THIS_WEEK_AND_NOTHING_IS_PLANNED,
+        String CLICK_AGAIN_TO_SEE_EVERY_JOB,
+        String CLICK_TO_BRING_THIS_JOBS_TIMES_FORWARD,
+        About ADDED_BY,
+        String OPEN_THE_CONVERSATION,
+        String STOP,
+        String STOP_THIS_RUN_WHAT_THE_GENIE_DID_SO_FAR_IS_KEPT,
+        Counted JOBS,
+        String NOTHING_ON_THE_SCHEDULE_YET,
+        About GIVE_IT_A_TASK_AND_A_TIME
     ) {
         public static final SchedulePage ENGLISH = new SchedulePage(
             "Paused. No job runs until you resume the schedule.",
@@ -712,7 +726,24 @@ public record Lang(
             "Pause",
             "Let the jobs run again",
             "Hold every job until you resume; nothing is lost",
-            "New job"
+            "New job",
+            "THE WEEK",
+            "Show only the last runs",
+            count -> "Show " + count + " earlier " + (count == 1 ? "run" : "runs"),
+            "Reading the schedule…",
+            "Nothing ran this week, and nothing is planned.",
+            "Click again to see every job",
+            "Click to bring this job's times forward",
+            genie -> "added by " + genie,
+            "Open the conversation",
+            "Stop",
+            "Stop this run; what the genie did so far is kept, and saved",
+            count -> count == 0 ? "JOBS" : "JOBS  ·  " + count,
+            "Nothing on the schedule yet",
+            genie ->
+                "Give " + genie + " a task and a time, "
+                + "once or again and again: a morning check of the build, a weekly report, a reminder "
+                + "to tidy up. It works on it in a conversation of its own, and you can read it here afterwards."
         );
     }
 
