@@ -28,9 +28,7 @@ public enum Lang {
 
     /// The words of the header above a genie's pages, and what its lamp asks the user to allow.
     public Header HEADER() {
-        return switch (this) {
-            case ENGLISH -> Header.ENGLISH;
-        };
+        return new Header(this);
     }
 
     /// The words of a genie's desktop, beside its chat.
@@ -286,61 +284,158 @@ public enum Lang {
 
     /// The words of the header above a genie's pages, and of what its lamp asks the user to allow
     /// under it.
-    public record Header(
-        String SOMETHING_WENT_WRONG_IN_GENIES_NOT_ONLY_IN_THIS_GENIE,
-        String DOUBLE_CLICK_TO_RENAME,
-        Counted TOKENS,
-        String TOKENS_THE_MODEL_COUNTED_FOR_THIS_GENIE_SINCE_GENIES_STARTED,
-        String DESKTOP,
-        String DESKTOP_WATCH_THE_GENIES_DESKTOP_AND_USE_IT,
-        String STOP,
-        String STOP_WHAT_THE_GENIE_IS_DOING,
-        String SLEEP,
-        String SLEEP_END_THE_GENIES_SANDBOX,
-        WhoAndWhat ASKS_YOU_TO_ALLOW,
-        String A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO,
-        String REFUSE,
-        String ALLOW,
-        String MANAGE_THE_GENIES_ACTIONS_SCHEDULE_HISTORY_AND_HOST_ACCESS,
-        String CHAT,
-        String ACTIONS,
-        String SCHEDULE,
-        String HISTORY,
-        String ACCESS,
-        String CHAT_TALK_WITH_THE_GENIE,
-        String ACTIONS_RENAME_SAVE_WAKE_OR_SLEEP_LINK_ITS_FOLDERS_OR_DELETE_THE_GENIE,
-        String SCHEDULE_WHEN_JOBS_WAKE_THE_GENIE_AND_WHAT_THEY_DID,
-        String HISTORY_THE_MOMENTS_THE_GENIES_HOME_WAS_SAVED_AT,
-        String HOST_ACCESS_WHETHER_THE_GENIE_MAY_REACH_THIS_COMPUTER
-    ) {
-        public static final Header ENGLISH = new Header(
-            "Something went wrong in Genies, not only in this genie. Click to see what happened",
-            "Double-click to rename",
-            count -> count == 0 ? "" : String.format("%,d tokens", count),
-            "Tokens the model counted for this genie since Genies started",
-            "Desktop",
-            "Desktop: watch the genie's desktop, and use it",
-            "Stop",
-            "Stop what the genie is doing",
-            "Sleep",
-            "Sleep: end the genie's sandbox. Its home and this conversation are kept.",
-            (who, what) -> who + " asks you to allow: " + what,
-            "A model allowed it already; this one needs you too. "
-            + "Nothing happens until you decide, and after a minute it is refused.",
-            "Refuse",
-            "Allow",
-            "Manage: the genie's actions, schedule, history and host access",
-            "Chat",
-            "Actions",
-            "Schedule",
-            "History",
-            "Access",
-            "Chat: talk with the genie",
-            "Actions: rename, save, wake or sleep, link its folders, or delete the genie",
-            "Schedule: when jobs wake the genie, and what they did",
-            "History: the moments the genie's home was saved at, and going back to one",
-            "Host access: whether the genie may reach this computer, and its rules"
-        );
+    public record Header(Lang lang) {
+        public String SOMETHING_WENT_WRONG_IN_GENIES_NOT_ONLY_IN_THIS_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Something went wrong in Genies, not only in this genie. Click to see what happened";
+            };
+        }
+
+        public String DOUBLE_CLICK_TO_RENAME() {
+            return switch (lang) {
+                case ENGLISH -> "Double-click to rename";
+            };
+        }
+
+        public String TOKENS(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 0 ? "" : String.format("%,d tokens", count);
+            };
+        }
+
+        public String TOKENS_THE_MODEL_COUNTED_FOR_THIS_GENIE_SINCE_GENIES_STARTED() {
+            return switch (lang) {
+                case ENGLISH -> "Tokens the model counted for this genie since Genies started";
+            };
+        }
+
+        public String DESKTOP() {
+            return switch (lang) {
+                case ENGLISH -> "Desktop";
+            };
+        }
+
+        public String DESKTOP_WATCH_THE_GENIES_DESKTOP_AND_USE_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Desktop: watch the genie's desktop, and use it";
+            };
+        }
+
+        public String STOP() {
+            return switch (lang) {
+                case ENGLISH -> "Stop";
+            };
+        }
+
+        public String STOP_WHAT_THE_GENIE_IS_DOING() {
+            return switch (lang) {
+                case ENGLISH -> "Stop what the genie is doing";
+            };
+        }
+
+        public String SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Sleep";
+            };
+        }
+
+        public String SLEEP_END_THE_GENIES_SANDBOX() {
+            return switch (lang) {
+                case ENGLISH -> "Sleep: end the genie's sandbox. Its home and this conversation are kept.";
+            };
+        }
+
+        public String ASKS_YOU_TO_ALLOW(String who, String what) {
+            return switch (lang) {
+                case ENGLISH -> who + " asks you to allow: " + what;
+            };
+        }
+
+        public String A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "A model allowed it already; this one needs you too. "
+                    + "Nothing happens until you decide, and after a minute it is refused.";
+            };
+        }
+
+        public String REFUSE() {
+            return switch (lang) {
+                case ENGLISH -> "Refuse";
+            };
+        }
+
+        public String ALLOW() {
+            return switch (lang) {
+                case ENGLISH -> "Allow";
+            };
+        }
+
+        public String MANAGE_THE_GENIES_ACTIONS_SCHEDULE_HISTORY_AND_HOST_ACCESS() {
+            return switch (lang) {
+                case ENGLISH -> "Manage: the genie's actions, schedule, history and host access";
+            };
+        }
+
+        public String CHAT() {
+            return switch (lang) {
+                case ENGLISH -> "Chat";
+            };
+        }
+
+        public String ACTIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Actions";
+            };
+        }
+
+        public String SCHEDULE() {
+            return switch (lang) {
+                case ENGLISH -> "Schedule";
+            };
+        }
+
+        public String HISTORY() {
+            return switch (lang) {
+                case ENGLISH -> "History";
+            };
+        }
+
+        public String ACCESS() {
+            return switch (lang) {
+                case ENGLISH -> "Access";
+            };
+        }
+
+        public String CHAT_TALK_WITH_THE_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Chat: talk with the genie";
+            };
+        }
+
+        public String ACTIONS_RENAME_SAVE_WAKE_OR_SLEEP_LINK_ITS_FOLDERS_OR_DELETE_THE_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "Actions: rename, save, wake or sleep, link its folders, or delete the genie";
+            };
+        }
+
+        public String SCHEDULE_WHEN_JOBS_WAKE_THE_GENIE_AND_WHAT_THEY_DID() {
+            return switch (lang) {
+                case ENGLISH -> "Schedule: when jobs wake the genie, and what they did";
+            };
+        }
+
+        public String HISTORY_THE_MOMENTS_THE_GENIES_HOME_WAS_SAVED_AT() {
+            return switch (lang) {
+                case ENGLISH -> "History: the moments the genie's home was saved at, and going back to one";
+            };
+        }
+
+        public String HOST_ACCESS_WHETHER_THE_GENIE_MAY_REACH_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "Host access: whether the genie may reach this computer, and its rules";
+            };
+        }
     }
 
     /// The words of a genie's desktop, beside its chat, and of how it is shown.
