@@ -20,6 +20,7 @@ package dev.gui.model;
 /// @param ACTIONS_PAGE what can be done with a genie as a whole
 /// @param HOME_FOLDERS a genie's home, and linking its folders into the user's
 /// @param HOST_ACCESS_PAGE whether a genie may reach this computer, and its rules
+/// @param SETTINGS_PAGE the settings every genie shares, and the welcome above them
 public record Lang(
     Window WINDOW,
     Header HEADER,
@@ -28,7 +29,8 @@ public record Lang(
     Dialogs DIALOGS,
     ActionsPage ACTIONS_PAGE,
     HomeFolders HOME_FOLDERS,
-    HostAccessPage HOST_ACCESS_PAGE
+    HostAccessPage HOST_ACCESS_PAGE,
+    SettingsPage SETTINGS_PAGE
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -39,7 +41,8 @@ public record Lang(
         Dialogs.ENGLISH,
         ActionsPage.ENGLISH,
         HomeFolders.ENGLISH,
-        HostAccessPage.ENGLISH
+        HostAccessPage.ENGLISH,
+        SettingsPage.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -561,6 +564,49 @@ public record Lang(
             "Save",
             "Saving…",
             "Write these rules into the genie's lamp"
+        );
+    }
+
+    /// The words of the settings every genie shares, and of the welcome above them while there
+    /// are no genies.
+    public record SettingsPage(
+        String YOUR_GENIES_MODEL,
+        String SETTINGS,
+        String WHERE_YOUR_GENIES_MODEL_RUNS_AND_HOW_THEY_REACH_IT,
+        String GENIES_SETS_UP_A_MODEL_ON_THIS_COMPUTER_FOR_YOU_WITH_OLLAMA,
+        String ADVANCED_EDEN_AI_OR_A_MODEL_SERVER_OF_YOUR_OWN,
+        String FOR_A_MODEL_ELSEWHERE_OR_A_MODEL_SERVER_OTHER_THAN_OLLAMA,
+        String BACK_TO_THE_SIMPLE_WAY_OLLAMA_SET_UP_BY_GENIES,
+        String THIS_COMPUTER,
+        String GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS,
+        String OLLAMA,
+        String MODEL,
+        String GENIES_SUGGESTS_THE_BEST_MODEL_THIS_COMPUTER_RUNS_WELL,
+        About YOUR_GENIES_USE,
+        String STOP,
+        String STOP_SETTING_UP_A_MODELS_DOWNLOAD_GOES_ON_THE_NEXT_TIME,
+        String UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI,
+        About UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT
+    ) {
+        public static final SettingsPage ENGLISH = new SettingsPage(
+            "Your genies' model",
+            "Settings",
+            "Where your genies' model runs, and how they reach it.",
+            "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here.",
+            "Advanced: Eden AI, or a model server of your own",
+            "For a model elsewhere, or a model server on this computer other than Ollama",
+            "Back to the simple way: Ollama, set up by Genies",
+            "This computer",
+            "Genies is looking what this computer has…",
+            "Ollama",
+            "Model",
+            "Genies suggests the best model this computer runs well. Any other "
+            + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.",
+            wanted -> "Your genies use " + wanted + ".",
+            "Stop",
+            "Stop setting up. A model's download goes on from where it was the next time",
+            "Until then, your genies use Eden AI.",
+            address -> "Until then, your genies use the model server at " + address + "."
         );
     }
 }

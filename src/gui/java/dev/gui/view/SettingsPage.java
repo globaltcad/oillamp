@@ -14,6 +14,7 @@ import javax.swing.JComponent;
 
 import dev.gui.Genies;
 import dev.gui.model.GeniesState;
+import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
 import dev.gui.model.Settings;
@@ -168,6 +169,7 @@ final class SettingsPage {
     static UIForAnySwing<?, ?> of(Var<GeniesState> state, Genies app, Val<Boolean> visible) {
         Val<Theme> theme = Theme.of(state);
         Val<Palette> palette = Theme.paletteOf(state);
+        Val<Lang.SettingsPage> words = Theme.langOf(state).viewAs(Lang.SettingsPage.class, Lang::SETTINGS_PAGE);
         // The window in the light palette, or the dark one.
         Var<Boolean> light = state.zoomTo(
             it -> !it.palette().isDark(),
@@ -268,13 +270,13 @@ final class SettingsPage {
                         box(split.viewAs(Layout.class, beside -> beside ? SWITCH_BESIDE : SWITCH_UNDER))
                         .add(
                             box("fill, wrap 1, ins 0, gap 12")
-                            .add("growx, wmin 0", label(welcome.viewAsString(it -> it ? "Your genies' model" : "Settings")).group(Skin.EMPTY_TITLE))
+                            .add("growx, wmin 0", label(Viewable.of(String.class, welcome, words, (it, page) -> it ? page.YOUR_GENIES_MODEL() : page.SETTINGS())).group(Skin.EMPTY_TITLE))
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    advanced.viewAsString(it -> it
-                                        ? "Where your genies' model runs, and how they reach it."
-                                        : "Genies sets up a model on this computer for you, with Ollama: free, and your conversations stay here."
+                                    Viewable.of(String.class, advanced, words, (it, page) -> it
+                                        ? page.WHERE_YOUR_GENIES_MODEL_RUNS_AND_HOW_THEY_REACH_IT()
+                                        : page.GENIES_SETS_UP_A_MODEL_ON_THIS_COMPUTER_FOR_YOU_WITH_OLLAMA()
                                     ),
                                     Palette::SUBTEXT,
                                     Val.of(true)
@@ -285,12 +287,12 @@ final class SettingsPage {
                         .add(
                             box("ins 0, hidemode 3")
                             .add(
-                                ViewPartsUtil.link(theme, Val.of("Advanced: Eden AI, or a model server of your own  ›")).isVisibleIf(simple)
-                                .withTooltip("For a model elsewhere, or a model server on this computer other than Ollama")
+                                ViewPartsUtil.link(theme, words.viewAsString(it -> it.ADVANCED_EDEN_AI_OR_A_MODEL_SERVER_OF_YOUR_OWN() + "  ›")).isVisibleIf(simple)
+                                .withTooltip(words.viewAsString(Lang.SettingsPage::FOR_A_MODEL_ELSEWHERE_OR_A_MODEL_SERVER_OTHER_THAN_OLLAMA))
                                 .onClick(_ -> advanced.set(From.VIEW, true))
                             )
                             .add(
-                                ViewPartsUtil.link(theme, Val.of("‹  Back to the simple way: Ollama, set up by Genies")).isVisibleIf(advanced)
+                                ViewPartsUtil.link(theme, words.viewAsString(it -> "‹  " + it.BACK_TO_THE_SIMPLE_WAY_OLLAMA_SET_UP_BY_GENIES())).isVisibleIf(advanced)
                                 .onClick(_ -> advanced.set(From.VIEW, false))
                             )
                         )
@@ -301,26 +303,26 @@ final class SettingsPage {
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(simple)
-                        .add(LABEL, label("This computer"))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::THIS_COMPUTER)))
                         .add(FIELD,
                             ViewPartsUtil.wrapped(
                                 theme,
-                                ollama.viewAsString(it ->
+                                Viewable.of(String.class, ollama, words, (it, page) ->
                                     it.step() == OllamaSetup.Step.LOOKING
-                                        ? "Genies is looking what this computer has…"
+                                        ? page.GENIES_IS_LOOKING_WHAT_THIS_COMPUTER_HAS()
                                         : it.found().hardware().words()
                                 ),
                                 Palette::TEXT,
                                 Val.of(true)
                             )
                         )
-                        .add(LABEL, label("Ollama"))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::OLLAMA)))
                         .add(FIELD, ViewPartsUtil.wrapped(theme, ollama.viewAsString(OllamaSetup::words), Palette::TEXT, Val.of(true)))
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
                         .withMinSize(0, 0).withPrefSize(HALF_REFERENCE, 0).isVisibleIf(simple)
-                        .add(LABEL, label("Model"))
+                        .add(LABEL, label(words.viewAsString(Lang.SettingsPage::MODEL)))
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4, hidemode 3")
                             .add("growx, wmin 0",
@@ -338,8 +340,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.note(
                                     theme,
-                                    "Genies suggests the best model this computer runs well. Any other "
-                                    + "Ollama model that can use tools works too: ollama.com/search?c=tools lists them.",
+                                    words.viewAsString(Lang.SettingsPage::GENIES_SUGGESTS_THE_BEST_MODEL_THIS_COMPUTER_RUNS_WELL),
                                     Val.of(true)
                                 )
                             )
@@ -358,7 +359,7 @@ final class SettingsPage {
                                 .onClick(_ -> app.setUpOllama())
                             )
                             .add("growx, wmin 0",
-                                label(ollama.viewAsString(it -> "✓  Your genies use " + it.wanted().strip() + "."))
+                                label(Viewable.of(String.class, ollama, words, (it, page) -> "✓  " + page.YOUR_GENIES_USE().of(it.wanted().strip())))
                                 .group(Skin.FINE)
                                 .isVisibleIf(Viewable.of(Boolean.class, inUse, busy, (yes, working) -> yes && !working))
                             )
@@ -366,8 +367,8 @@ final class SettingsPage {
                                 box("fill, ins 0, gap 10", "[grow][]").isVisibleIf(busy)
                                 .add("growx, wmin 60, h 6!", progress(theme, ollama.viewAs(Double.class, OllamaSetup::progress)))
                                 .add(
-                                    button("Stop").group(Skin.QUIET_BUTTON)
-                                    .withTooltip("Stop setting up. A model's download goes on from where it was the next time")
+                                    button(words.viewAsString(Lang.SettingsPage::STOP)).group(Skin.QUIET_BUTTON)
+                                    .withTooltip(words.viewAsString(Lang.SettingsPage::STOP_SETTING_UP_A_MODELS_DOWNLOAD_GOES_ON_THE_NEXT_TIME))
                                     .onClick(_ -> app.stopSettingUp())
                                 )
                             )
@@ -390,10 +391,10 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    settings.viewAsString(it -> "Until then, your genies use " + switch (it.place()) {
-                                        case EDEN_AI -> "Eden AI.";
-                                        case ELSEWHERE -> "the model server at " + it.elsewhere().address().strip() + ".";
-                                        case THIS_MACHINE -> "the model server at " + it.local().address().strip() + ".";
+                                    Viewable.of(String.class, settings, words, (it, page) -> switch (it.place()) {
+                                        case EDEN_AI -> page.UNTIL_THEN_YOUR_GENIES_USE_EDEN_AI();
+                                        case ELSEWHERE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT().of(it.elsewhere().address().strip());
+                                        case THIS_MACHINE -> page.UNTIL_THEN_YOUR_GENIES_USE_THE_MODEL_SERVER_AT().of(it.local().address().strip());
                                     }),
                                     Palette::SUBTEXT,
                                     state.viewAs(Boolean.class, it -> !it.settings().usesOllama() && it.settingsProblem().isEmpty())
