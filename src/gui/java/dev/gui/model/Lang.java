@@ -17,12 +17,14 @@ package dev.gui.model;
 /// @param DESKTOP a genie's desktop, beside its chat
 /// @param CHAT    a genie's chat: the conversation, and the composer under it
 /// @param DIALOGS the dialogs the window asks and tells the user things in
+/// @param ACTIONS_PAGE what can be done with a genie as a whole
 public record Lang(
     Window WINDOW,
     Header HEADER,
     Desktop DESKTOP,
     Chat CHAT,
-    Dialogs DIALOGS
+    Dialogs DIALOGS,
+    ActionsPage ACTIONS_PAGE
 ) {
 
     public static final Lang ENGLISH = new Lang(
@@ -30,7 +32,8 @@ public record Lang(
         Header.ENGLISH,
         Desktop.ENGLISH,
         Chat.ENGLISH,
-        Dialogs.ENGLISH
+        Dialogs.ENGLISH,
+        ActionsPage.ENGLISH
     );
 
     /// A text that says how many there are of something.
@@ -400,6 +403,41 @@ public record Lang(
             name -> "Ask " + name + " differently",
             name -> "Give " + name + " a file",
             file -> "Save " + file
+        );
+    }
+
+    /// The words of a genie's Actions page: what can be done with the genie as a whole.
+    public record ActionsPage(
+        String ACTIONS,
+        About WHAT_CAN_BE_DONE_WITH_IT_AS_A_WHOLE,
+        String NAME,
+        String ENTER_KEEPS_THE_NEW_NAME_ESCAPE_THE_ONE_IT_HAD,
+        String WHAT_IT_IS_CALLED_IN_YOUR_LIST_AND_ABOVE_ITS_CHAT,
+        String RENAME,
+        String CANCEL,
+        String SAVE,
+        String NEW_CONVERSATION,
+        About START_AFRESH_WITH_IT_THIS_CONVERSATION_IS_KEPT,
+        String START_A_NEW_CONVERSATION,
+        String SAVE_NOW,
+        About SAVE_ITS_HOME_AS_IT_IS_NOW,
+        String SAVE_NOW_ELLIPSIS
+    ) {
+        public static final ActionsPage ENGLISH = new ActionsPage(
+            "Actions",
+            genie -> "What can be done with " + genie + " as a whole. A right-click on its card in your list offers the same.",
+            "Name",
+            "Enter keeps the new name, Escape the one it had.",
+            "What it is called in your list and above its chat.",
+            "Rename",
+            "Cancel",
+            "Save",
+            "New conversation",
+            genie -> "Start afresh with " + genie + ", waking it first if it sleeps. This conversation is kept, to go back to.",
+            "Start a new conversation",
+            "Save now",
+            genie -> "Save " + genie + "'s home as it is now: a moment in its history to go back to.",
+            "Save now…"
         );
     }
 }
