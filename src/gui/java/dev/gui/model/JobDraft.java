@@ -209,7 +209,7 @@ public record JobDraft(
             .orElse(recurrence instanceof Recurrence.Custom ? "" : ", but not before its last day");
         String last = endsOn.map(day -> ", until " + DateWordingUtil.dayAfterAWord(day, today, lang.DATES())).orElse("");
         return
-            recurrence.describe() + first + last + "."
+            recurrence.describe(lang) + first + last + "."
             + (recurrence instanceof Recurrence.Custom ? " oillamp reads the expression when you save the job." : "");
     }
 
