@@ -81,7 +81,7 @@ public record History(
             if (afterRun) moments.add(words.ANSWERS());
             else if (beforeRun) moments.add(words.BEGINS_TO_ANSWER());
             if (sleeping) moments.add(words.SLEEPS());
-            return words.ONE_OR_ANOTHER().of(moments);
+            return words.ONE_OR_ANOTHER(moments);
         }
     }
 
@@ -130,9 +130,9 @@ public record History(
                 case CHATTED -> words.SAVED_ONCE_THE_CHAT_HAD_GONE_QUIET();
                 case RAN -> switch (outcome.orElse(Schedule.Outcome.FAILED)) {
                     case FINISHED -> said;
-                    case STOPPED -> words.STOPPED_AND_SAID().of(said);
-                    case FAILED -> words.FAILED_AND_SAID().of(said);
-                    case TIMED_OUT -> words.RAN_OUT_OF_TIME_AND_SAID().of(said);
+                    case STOPPED -> words.STOPPED_AND_SAID(said);
+                    case FAILED -> words.FAILED_AND_SAID(said);
+                    case TIMED_OUT -> words.RAN_OUT_OF_TIME_AND_SAID(said);
                 };
                 case BEFORE_GOING_BACK -> words.KEPT_SO_THAT_GOING_BACK_CAN_BE_UNDONE();
                 case WENT_BACK -> "";
@@ -344,15 +344,15 @@ public record History(
             case SAVED -> moment.message().isBlank() ? words.SAVED_BY_HAND() : Schedule.firstLine(moment.message(), 90);
             case BEFORE_RUN -> words.BEFORE_IT_WENT_TO_WORK();
             case RAN -> !moment.job().isEmpty()
-                ? schedule.job(moment.job()).map(job -> words.DID_THE_JOB().of(job.title())).orElse(words.DID_A_SCHEDULED_JOB())
-                : conversations.find(moment.conversation()).map(it -> words.ANSWERED().of(it.title(lang))).orElse(words.ANSWERED_A_QUESTION());
-            case CHATTED -> conversations.find(moment.conversation()).map(it -> words.TALKED().of(it.title(lang))).orElse(words.TALKED_WITH_YOU());
+                ? schedule.job(moment.job()).map(job -> words.DID_THE_JOB(job.title())).orElse(words.DID_A_SCHEDULED_JOB())
+                : conversations.find(moment.conversation()).map(it -> words.ANSWERED(it.title(lang))).orElse(words.ANSWERED_A_QUESTION());
+            case CHATTED -> conversations.find(moment.conversation()).map(it -> words.TALKED(it.title(lang))).orElse(words.TALKED_WITH_YOU());
             case BEFORE_GOING_BACK -> words.BEFORE_GOING_BACK();
             case WENT_BACK ->
                 undid(moment)
                 .flatMap(this::wentBackTo)
-                .map(it -> words.UNDID_GOING_BACK_TO_HOW_IT_WAS().of(when(it.at(), schedule.zone(), now, lang)))
-                .or(() -> wentBackTo(moment).map(it -> words.WENT_BACK_TO_HOW_IT_WAS().of(when(it.at(), schedule.zone(), now, lang))))
+                .map(it -> words.UNDID_GOING_BACK_TO_HOW_IT_WAS(when(it.at(), schedule.zone(), now, lang)))
+                .or(() -> wentBackTo(moment).map(it -> words.WENT_BACK_TO_HOW_IT_WAS(when(it.at(), schedule.zone(), now, lang))))
                 .orElse(words.WENT_BACK_TO_AN_EARLIER_MOMENT());
             case BEFORE_SWITCHING -> words.BEFORE_IT_MOVED_TO_ANOTHER_BRANCH();
         };
@@ -399,13 +399,13 @@ public record History(
         if (name.isEmpty())
             return Optional.of(words.A_BRANCH_NEEDS_A_NAME());
         if (name.length() > LONGEST_BRANCH_NAME)
-            return Optional.of(words.A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG().of(LONGEST_BRANCH_NAME));
+            return Optional.of(words.A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG(LONGEST_BRANCH_NAME));
         if (!name.matches("[a-z0-9][a-z0-9._-]*"))
             return Optional.of(words.A_BRANCHS_NAME_IS_MADE_OF_LOWERCASE_LETTERS_DIGITS_AND_SIGNS());
         if (name.contains("..") || name.endsWith(".") || name.endsWith(".lock"))
             return Optional.of(words.A_BRANCHS_NAME_CANNOT_HOLD_TWO_DOTS_OR_END_IN_A_DOT_OR_LOCK());
         if (branches.any(it -> it.name().equals(name)))
-            return Optional.of(words.THERE_IS_A_BRANCH_CALLED_IT_ALREADY().of(name));
+            return Optional.of(words.THERE_IS_A_BRANCH_CALLED_IT_ALREADY(name));
         return Optional.empty();
     }
 

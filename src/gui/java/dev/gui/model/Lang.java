@@ -64,9 +64,7 @@ public enum Lang {
 
     /// The words of whether a genie may reach this computer, and its rules.
     public HostAccessPage HOST_ACCESS_PAGE() {
-        return switch (this) {
-            case ENGLISH -> HostAccessPage.ENGLISH;
-        };
+        return new HostAccessPage(this);
     }
 
     /// The words of the settings every genie shares, and the welcome above them.
@@ -81,9 +79,7 @@ public enum Lang {
 
     /// The words of the moments a genie's home was saved at, and going back to one.
     public HistoryPage HISTORY_PAGE() {
-        return switch (this) {
-            case ENGLISH -> HistoryPage.ENGLISH;
-        };
+        return new HistoryPage(this);
     }
 
     /// The words of the parts of the window that several pages share.
@@ -884,51 +880,128 @@ public enum Lang {
 
     /// The words of a genie's Host access page: whether it may reach this computer, and the
     /// rules a model judges its requests by.
-    public record HostAccessPage(
-        String HOST_ACCESS,
-        About MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST,
-        About CANNOT_REACH_THIS_COMPUTER,
-        String READING_THE_HOST_ACCESS,
-        About WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP,
-        About SEND_IT_TO_SLEEP_TO_CHANGE_THESE,
-        String MAY_IT_REACH_THIS_COMPUTER,
-        String EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA,
-        String FOLDERS_IT_MAY_READ,
-        String ONE_PER_LINE_SUCH_AS_DOCUMENTS,
-        String FOLDERS_IT_MAY_READ_AND_CHANGE,
-        String IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE,
-        String ANYTHING_ELSE_IN_YOUR_OWN_WORDS,
-        String SAY_WHAT_MUST_NOT_HAPPEN,
-        String UNDO_CHANGES,
-        String SAVE,
-        String SAVING,
-        String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP,
-        About IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS,
-        String NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST
-    ) {
-        public static final HostAccessPage ENGLISH = new HostAccessPage(
-            "Host access",
-            genie -> genie + " may ask to reach this computer. A model judges each request against these rules before anything happens.",
-            genie -> genie + " cannot reach this computer.",
-            "Reading the host access…",
-            genie -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.",
-            genie -> "Send " + genie + " to sleep to change these. While it is awake, it keeps the settings it woke with.",
-            "MAY IT REACH THIS COMPUTER?",
-            "Experimental. Never turn this on on a computer with sensitive data. "
-            + "The model that judges reads these rules with every request, and nothing else.",
-            "FOLDERS IT MAY READ",
-            "One per line, such as ~/Documents.",
-            "FOLDERS IT MAY READ AND CHANGE",
-            "It may write files there, and copy what it made there.",
-            "ANYTHING ELSE, IN YOUR OWN WORDS",
-            "Say what must not happen, such as \"never open my tax returns\".",
-            "Undo changes",
-            "Save",
-            "Saving…",
-            "Write these rules into the genie's lamp",
-            folder -> "\"" + folder + "\" is not a path. The model that judges reads it as words, so make sure they say what you mean.",
-            "Nothing is listed, so the model that judges will refuse every request."
-        );
+    public record HostAccessPage(Lang lang) {
+        public String HOST_ACCESS() {
+            return switch (lang) {
+                case ENGLISH -> "Host access";
+            };
+        }
+
+        public String MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " may ask to reach this computer. A model judges each request against these rules before anything happens.";
+            };
+        }
+
+        public String CANNOT_REACH_THIS_COMPUTER(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " cannot reach this computer.";
+            };
+        }
+
+        public String READING_THE_HOST_ACCESS() {
+            return switch (lang) {
+                case ENGLISH -> "Reading the host access…";
+            };
+        }
+
+        public String WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.";
+            };
+        }
+
+        public String SEND_IT_TO_SLEEP_TO_CHANGE_THESE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Send " + genie + " to sleep to change these. While it is awake, it keeps the settings it woke with.";
+            };
+        }
+
+        public String MAY_IT_REACH_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "MAY IT REACH THIS COMPUTER?";
+            };
+        }
+
+        public String EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Experimental. Never turn this on on a computer with sensitive data. "
+                    + "The model that judges reads these rules with every request, and nothing else.";
+            };
+        }
+
+        public String FOLDERS_IT_MAY_READ() {
+            return switch (lang) {
+                case ENGLISH -> "FOLDERS IT MAY READ";
+            };
+        }
+
+        public String ONE_PER_LINE_SUCH_AS_DOCUMENTS() {
+            return switch (lang) {
+                case ENGLISH -> "One per line, such as ~/Documents.";
+            };
+        }
+
+        public String FOLDERS_IT_MAY_READ_AND_CHANGE() {
+            return switch (lang) {
+                case ENGLISH -> "FOLDERS IT MAY READ AND CHANGE";
+            };
+        }
+
+        public String IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE() {
+            return switch (lang) {
+                case ENGLISH -> "It may write files there, and copy what it made there.";
+            };
+        }
+
+        public String ANYTHING_ELSE_IN_YOUR_OWN_WORDS() {
+            return switch (lang) {
+                case ENGLISH -> "ANYTHING ELSE, IN YOUR OWN WORDS";
+            };
+        }
+
+        public String SAY_WHAT_MUST_NOT_HAPPEN() {
+            return switch (lang) {
+                case ENGLISH -> "Say what must not happen, such as \"never open my tax returns\".";
+            };
+        }
+
+        public String UNDO_CHANGES() {
+            return switch (lang) {
+                case ENGLISH -> "Undo changes";
+            };
+        }
+
+        public String SAVE() {
+            return switch (lang) {
+                case ENGLISH -> "Save";
+            };
+        }
+
+        public String SAVING() {
+            return switch (lang) {
+                case ENGLISH -> "Saving…";
+            };
+        }
+
+        public String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "Write these rules into the genie's lamp";
+            };
+        }
+
+        public String IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS(String folder) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + folder + "\" is not a path. The model that judges reads it as words, so make sure they say what you mean.";
+            };
+        }
+
+        public String NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing is listed, so the model that judges will refuse every request.";
+            };
+        }
     }
 
     /// The words of the settings every genie shares, and of the welcome above them while there
@@ -2113,305 +2186,827 @@ public enum Lang {
 
     /// The words of a genie's History page: the moments its home was saved at, its branches, and
     /// going back to a moment.
-    public record HistoryPage(
-        About IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE,
-        About IS_WORKING_GO_BACK_ONCE_IT_IS_DONE,
-        String A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE,
-        About SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS,
-        About IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND,
-        WhoAndWhat SAVED_WHENEVER,
-        String GOING_BACK_KEEPS_HOW_IT_IS_NOW_SO_YOU_CAN_ALWAYS_RETURN,
-        About IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE,
-        About IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE,
-        String HISTORY,
-        String NEW_BRANCH_ELLIPSIS,
-        About KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN,
-        String SAVE_NOW_ELLIPSIS,
-        String KEEP_HOW_THE_GENIE_IS_NOW_AS_A_MOMENT_TO_COME_BACK_TO,
-        String HOW_IT_WAS_BEFORE_IS_KEPT_SO_YOU_CAN_RETURN_TO_IT,
-        String UNDO,
-        String GO_BACK_TO_HOW_IT_WAS_BEFORE,
-        Listed NAMES_LISTED,
-        String THEN,
-        About WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST,
-        OnBranch RESET_TO_HOW_IT_WAS,
-        CountedOnBranch MOMENTS_AFTER_IT_LEAVE,
-        String A_RESET_KEEPS_NO_COPY_SO_IT_CANNOT_BE_UNDONE,
-        About RESET,
-        About DELETE_THE_BRANCH,
-        CountedOnBranch MOMENTS_ON_IT_ALONE_GO_WITH_IT,
-        About DELETE,
-        Counted DELETE_THE_OLDEST_MOMENTS,
-        OldestMoments THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW,
-        Counted DELETE_THEM,
-        String CANCEL,
-        String GO_BACK_INSTEAD,
-        String BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW,
-        String SHOW_ONLY_THE_NEWEST_MOMENTS,
-        Counted SHOW_EARLIER_MOMENTS,
-        String MOMENTS,
-        String READING_THE_HISTORY,
-        String NOTHING_SAVED_YET,
-        About ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES,
-        WhoAndWhat HOW_IT_IS_NOW_ON_BRANCH,
-        String NOW,
-        About LIVES_HERE,
-        Counted AND_MORE,
-        String CLICK_A_LINE_TO_SHOW_IT_HERE,
-        Listed STAND_HERE,
-        String CLICK_AGAIN_TO_CLOSE,
-        String CLICK_TO_GO_BACK_TO_THIS_MOMENT_START_A_BRANCH_FROM_IT_OR_OPEN_ITS_CONVERSATION,
-        String GO_BACK_TO_THIS_MOMENT_ELLIPSIS,
-        String BRING_ITS_FILES_AND_CONVERSATIONS_BACK_TO_HOW_THEY_WERE_THEN,
-        String START_A_BRANCH_HERE_ELLIPSIS,
-        About KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN,
-        String RESET_TO_HERE_ELLIPSIS,
-        String TAKE_EVERY_MOMENT_AFTER_THIS_ONE_OFF_THE_BRANCH_FOR_GOOD,
-        String OPEN_THE_CONVERSATION,
-        WhoAndWhat LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE,
-        Looking YOU_ARE_LOOKING_AT,
-        WhoAndWhat MOVE_TO_ELLIPSIS,
-        String MAKE_THIS_BRANCH_THE_GENIES_HOME,
-        About DELETE_ELLIPSIS,
-        String DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS,
-        About LIVES_ON_THIS_BRANCH,
-        String ITS_LINE_IS_THE_ONE_WITH_WORDS,
-        String CLICK_TO_LOOK_AT_ITS_LINE,
-        About WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP,
-        String READING_ITS_SETTINGS,
-        About SEND_IT_TO_SLEEP_TO_CHANGE_THESE,
-        String WHEN_IT_SAVES_BY_ITSELF,
-        String AS_IT_WAKES,
-        String AFTER_IT_WENT_TO_SLEEP,
-        String AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB,
-        String AS_IT_ANSWERS_OR_ENDS_A_JOB,
-        String A_JOB_IS_TOLD_WHAT_ITS_LAST_RUNS_SAID_AND_CHANGED,
-        String HOW_LARGE_IT_MAY_GROW,
-        String WHAT_A_MOMENT_HOLDS,
-        About ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS,
-        String ITS_SCHEDULE_STAYS_AS_IT_IS,
-        About A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN,
-        String SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO,
-        About NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END,
-        WhoAndWhat ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT,
-        Pruned THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS,
-        String TIDY_UP_NOW_ELLIPSIS,
-        String DELETE_WHAT_DOES_NOT_FIT_NOW_RATHER_THAN_AT_THE_NEXT_SAVE,
-        String NEVER_DELETE,
-        String WHAT_SHOULD_THIS_MOMENT_BE_REMEMBERED_BY,
-        About SAVE_AS_IT_IS_NOW,
-        WhoAndWhat WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED,
-        String START_A_BRANCH_FROM_THE_NEWEST_MOMENT,
-        String START_A_BRANCH_FROM_THIS_MOMENT,
-        WhoAndWhat BRING_IT_BACK_TO_HOW_IT_WAS,
-        About SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER,
-        String GO_BACK_IN_TIME,
-        String GO_BACK,
-        String STAY,
-        Moving MOVE_IT_TO_ANOTHER_BRANCH,
-        String MOVE_TO_ANOTHER_BRANCH,
-        String MOVE,
-        String WOKE_UP,
-        String WENT_TO_SLEEP,
-        String SAVED_BY_HAND,
-        String BEFORE_IT_WENT_TO_WORK,
-        About DID_THE_JOB,
-        String DID_A_SCHEDULED_JOB,
-        About ANSWERED,
-        String ANSWERED_A_QUESTION,
-        About TALKED,
-        String TALKED_WITH_YOU,
-        String BEFORE_GOING_BACK,
-        About UNDID_GOING_BACK_TO_HOW_IT_WAS,
-        About WENT_BACK_TO_HOW_IT_WAS,
-        String WENT_BACK_TO_AN_EARLIER_MOMENT,
-        String BEFORE_IT_MOVED_TO_ANOTHER_BRANCH,
-        String SAVED_AS_ITS_SANDBOX_STARTED,
-        String SAVED_AFTER_ITS_SANDBOX_STOPPED,
-        String SAVED_AS_IT_BEGAN_ON_A_QUESTION_OR_A_JOB,
-        String SAVED_ONCE_THE_CHAT_HAD_GONE_QUIET,
-        About STOPPED_AND_SAID,
-        About FAILED_AND_SAID,
-        About RAN_OUT_OF_TIME_AND_SAID,
-        String KEPT_SO_THAT_GOING_BACK_CAN_BE_UNDONE,
-        String KEPT_AS_IT_WAS_WHEN_IT_MOVED_TO_ANOTHER_BRANCH,
-        String WAKES,
-        String ANSWERS,
-        String BEGINS_TO_ANSWER,
-        String SLEEPS,
-        Listed ONE_OR_ANOTHER,
-        String A_BRANCH_NEEDS_A_NAME,
-        Counted A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG,
-        String A_BRANCHS_NAME_IS_MADE_OF_LOWERCASE_LETTERS_DIGITS_AND_SIGNS,
-        String A_BRANCHS_NAME_CANNOT_HOLD_TWO_DOTS_OR_END_IN_A_DOT_OR_LOCK,
-        About THERE_IS_A_BRANCH_CALLED_IT_ALREADY
-    ) {
-        public static final HistoryPage ENGLISH = new HistoryPage(
-            genie -> genie + " is waking; go back once it is awake",
-            genie -> genie + " is working; go back once it is done",
-            "A job is running; go back once it is done",
-            genie -> "Send " + genie + " to sleep first: its home changes only while it sleeps.",
-            genie -> genie + " is saved only when you save it by hand.",
-            (genie, when) -> "Saved whenever " + genie + " " + when + ".",
-            "Going back keeps how it is now, so you can always return.",
-            genie -> genie + " is working. You can go back once it is done.",
-            genie -> genie + " is waking. You can go back once it is awake.",
-            "History",
-            "New branch…",
-            genie ->
-                "Keep how " + genie + " was last saved as a branch of "
-                + "its own, to try something else from there. " + genie + " stays where it lives",
-            "Save now…",
-            "Keep how the genie is now as a moment to come back to, such as before a big change",
-            "How it was before is kept, so you can return to it.",
-            "Undo",
-            "Go back to how it was before",
-            Lang::listedInEnglish,
-            "then",
-            genie -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.",
-            (branch, when) -> "Reset " + branch + " to how it was " + when + "?",
-            (count, branch) ->
-                count == 0 ? "No moment comes after it on " + branch + "."
-                : count == 1 ? "The moment after it leaves " + branch + "."
-                : "The " + count + " moments after it leave " + branch + ".",
-            "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
-            + "Going back instead keeps how it is now as a moment of its own.",
-            branch -> "Reset " + branch,
-            branch -> "Delete the branch " + branch + "?",
-            (count, branch) ->
-                count == 0 ? "Every moment on it is on another branch too, so no moment is lost."
-                : count == 1 ? "One moment is on " + branch + " alone, and goes with it."
-                : count + " moments are on " + branch + " alone, and go with it.",
-            branch -> "Delete " + branch,
-            count -> "Delete the " + (count == 1 ? "oldest moment" : count + " oldest moments") + "?",
-            (count, branches, frees) ->
-                (count == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
-                + (branches.isEmpty() ? "" : ", on " + branches) + ". Deleting "
-                + (count == 1 ? "it" : "them") + " frees " + frees
-                + ". Each branch keeps its newest moment, and the next save would delete them anyway.",
-            count -> "Delete " + (count == 1 ? "it" : "them"),
-            "Cancel",
-            "Go back instead",
-            "Bring it back to that moment, and keep how it is now as a moment you can return to",
-            "Show only the newest moments",
-            count -> "Show " + count + " earlier " + (count == 1 ? "moment" : "moments"),
-            "MOMENTS",
-            "Reading the history…",
-            "Nothing saved yet",
-            genie ->
-                genie + "'s home is saved the first time it wakes, and from then on "
-                + "whenever something changed. Each save is a moment you can bring it back to.",
-            (genie, branch) -> "How " + genie + " is now" + (branch.isEmpty() ? "" : ", on " + branch),
-            "now",
-            genie -> "(" + genie + " lives here)",
-            count -> "and " + count + " more",
-            "Click a line to show it here",
-            branches -> listedInEnglish(branches) + (branches.size() == 1 ? " stands here" : " stand here"),
-            "Click again to close",
-            "Click to go back to this moment, start a branch from it, or open its conversation",
-            "Go back to this moment…",
-            "Bring its files and conversations back to how they were then",
-            "Start a branch here…",
-            genie -> "Keep this moment as a branch of its own, to try something else from here. " + genie + " stays where it lives",
-            "Reset to here…",
-            "Take every moment after this one off the branch, for good. You are asked first",
-            "Open the conversation",
-            (genie, branch) -> genie + " lives on " + branch + ", and every save goes there. Click another branch, or its line, to look at it.",
-            (shown, genie, home) -> "You are looking at " + shown + ". " + genie + " lives on " + home + ", and stays there until you move it.",
-            (genie, branch) -> "Move " + genie + " to " + branch + "…",
-            "Make this branch the genie's home: its files and conversations become this branch's newest moment",
-            branch -> "Delete " + branch + "…",
-            "Delete this branch. You are told first how many moments only it holds",
-            genie -> genie + " lives on this branch.",
-            "Its line is the one with words",
-            "Click to look at its line",
-            genie -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.",
-            "Reading its settings…",
-            genie -> "Send " + genie + " to sleep to change these. While it is awake, it keeps what it woke with.",
-            "WHEN IT SAVES BY ITSELF",
-            "As it wakes",
-            "After it went to sleep",
-            "As it begins on a question or a job",
-            "As it answers, or ends a job",
-            "A job is told what its last runs said and changed from "
-            + "what was saved as they ended. Saving by hand works whatever these say.",
-            "HOW LARGE IT MAY GROW",
-            "WHAT A MOMENT HOLDS",
-            genie ->
-                genie + "'s home: the files it made, its notes and its conversations, "
-                + "and the settings of its lamp. Going back brings all of these back together.",
-            "Its schedule stays as it is, and so does everything on this computer outside the genie's lamp.",
-            genie ->
-                "A branch is a line of moments with a home of its own, schedule and settings "
-                + "included, to try something without losing the rest. " + genie + " lives on one at a time.",
-            "Save by hand before something you might want to undo, such as a big change to a project.",
-            genie -> "Nothing is ever deleted: " + genie + "'s history may grow without end.",
-            (genie, size) ->
-                genie + "'s history may grow " + size + " beyond its first moment, on all branches "
-                + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest.",
-            (count, freed, taken, most) ->
-                "The last time, oillamp deleted " + (count == 1 ? "one old moment" : count + " old moments")
-                + " to stay within it, which freed " + freed + ". The history now takes "
-                + taken + " of the " + most + " it may, its first moment included.",
-            "Tidy up now…",
-            "Delete what does not fit now, rather than at the next save. You are told first what that is",
-            "Never delete",
-            "What should this moment be remembered by? You may leave it empty.",
-            genie -> "Save " + genie + " as it is now",
-            (genie, home) ->
-                "What should the new branch be called? Lowercase letters, digits, -, _ and ., such as rust-rewrite.\n"
-                + genie + " stays on " + home + "; you can move it later, while it sleeps.",
-            "Start a branch from the newest moment",
-            "Start a branch from this moment",
-            (genie, when) ->
-                "Bring " + genie + " back to how it was " + when + "?\n"
-                + "Its files and conversations become what they were then. How it is now is kept, so you can return.",
-            genie -> genie + " sleeps while it goes back, and wakes again after.",
-            "Go back in time",
-            "Go back",
-            "Stay",
-            (genie, to, from) ->
-                "Move " + genie + " to " + to + "?\n"
-                + "Its files and conversations become those of the newest moment on " + to
-                + ", and every save goes to " + to + " from now on.\n"
-                + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost.",
-            "Move to another branch",
-            "Move",
-            "Woke up",
-            "Went to sleep",
-            "Saved by hand",
-            "Before it went to work",
-            job -> "Did the job: " + job,
-            "Did a scheduled job",
-            conversation -> "Answered: " + conversation,
-            "Answered a question",
-            conversation -> "Talked: " + conversation,
-            "Talked with you",
-            "Before going back",
-            when -> "Undid going back to how it was " + when,
-            when -> "Went back to how it was " + when,
-            "Went back to an earlier moment",
-            "Before it moved to another branch",
-            "Saved as its sandbox started",
-            "Saved after its sandbox stopped",
-            "Saved as it began on a question or a job",
-            "Saved once the chat had gone quiet",
-            said -> "Stopped. " + said,
-            said -> "Failed. " + said,
-            said -> "Ran out of time. " + said,
-            "Kept so that going back can be undone",
-            "Kept as it was when it moved to another branch",
-            "wakes",
-            "answers",
-            "begins to answer",
-            "sleeps",
-            Lang::eitherInEnglish,
-            "A branch needs a name, such as rust-rewrite.",
-            most -> "A branch's name is at most " + most + " characters long.",
-            "A branch's name is made of lowercase letters, digits, -, _ and ., and begins with a letter or a digit, such as rust-rewrite.",
-            "A branch's name cannot hold .., or end in . or .lock.",
-            branch -> "There is a branch called " + branch + " already."
-        );
+    public record HistoryPage(Lang lang) {
+        public String IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is waking; go back once it is awake";
+            };
+        }
+
+        public String IS_WORKING_GO_BACK_ONCE_IT_IS_DONE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is working; go back once it is done";
+            };
+        }
+
+        public String A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE() {
+            return switch (lang) {
+                case ENGLISH -> "A job is running; go back once it is done";
+            };
+        }
+
+        public String SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Send " + genie + " to sleep first: its home changes only while it sleeps.";
+            };
+        }
+
+        public String IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is saved only when you save it by hand.";
+            };
+        }
+
+        public String SAVED_WHENEVER(String genie, String when) {
+            return switch (lang) {
+                case ENGLISH -> "Saved whenever " + genie + " " + when + ".";
+            };
+        }
+
+        public String GOING_BACK_KEEPS_HOW_IT_IS_NOW_SO_YOU_CAN_ALWAYS_RETURN() {
+            return switch (lang) {
+                case ENGLISH -> "Going back keeps how it is now, so you can always return.";
+            };
+        }
+
+        public String IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is working. You can go back once it is done.";
+            };
+        }
+
+        public String IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is waking. You can go back once it is awake.";
+            };
+        }
+
+        public String HISTORY() {
+            return switch (lang) {
+                case ENGLISH -> "History";
+            };
+        }
+
+        public String NEW_BRANCH_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "New branch…";
+            };
+        }
+
+        public String KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Keep how " + genie + " was last saved as a branch of "
+                    + "its own, to try something else from there. " + genie + " stays where it lives";
+            };
+        }
+
+        public String SAVE_NOW_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Save now…";
+            };
+        }
+
+        public String KEEP_HOW_THE_GENIE_IS_NOW_AS_A_MOMENT_TO_COME_BACK_TO() {
+            return switch (lang) {
+                case ENGLISH -> "Keep how the genie is now as a moment to come back to, such as before a big change";
+            };
+        }
+
+        public String HOW_IT_WAS_BEFORE_IS_KEPT_SO_YOU_CAN_RETURN_TO_IT() {
+            return switch (lang) {
+                case ENGLISH -> "How it was before is kept, so you can return to it.";
+            };
+        }
+
+        public String UNDO() {
+            return switch (lang) {
+                case ENGLISH -> "Undo";
+            };
+        }
+
+        public String GO_BACK_TO_HOW_IT_WAS_BEFORE() {
+            return switch (lang) {
+                case ENGLISH -> "Go back to how it was before";
+            };
+        }
+
+        public String NAMES_LISTED(List<String> names) {
+            return switch (lang) {
+                case ENGLISH -> listedInEnglish(names);
+            };
+        }
+
+        public String THEN() {
+            return switch (lang) {
+                case ENGLISH -> "then";
+            };
+        }
+
+        public String WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "What changed in " + genie + "'s home since the newest moment was never saved, and is lost.";
+            };
+        }
+
+        public String RESET_TO_HOW_IT_WAS(String branch, String when) {
+            return switch (lang) {
+                case ENGLISH -> "Reset " + branch + " to how it was " + when + "?";
+            };
+        }
+
+        public String MOMENTS_AFTER_IT_LEAVE(int count, String branch) {
+            return switch (lang) {
+                case ENGLISH ->
+                    count == 0 ? "No moment comes after it on " + branch + "."
+                    : count == 1 ? "The moment after it leaves " + branch + "."
+                    : "The " + count + " moments after it leave " + branch + ".";
+            };
+        }
+
+        public String A_RESET_KEEPS_NO_COPY_SO_IT_CANNOT_BE_UNDONE() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "A reset keeps no copy, so it cannot be undone; moments also on another branch stay there. "
+                    + "Going back instead keeps how it is now as a moment of its own.";
+            };
+        }
+
+        public String RESET(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Reset " + branch;
+            };
+        }
+
+        public String DELETE_THE_BRANCH(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Delete the branch " + branch + "?";
+            };
+        }
+
+        public String MOMENTS_ON_IT_ALONE_GO_WITH_IT(int count, String branch) {
+            return switch (lang) {
+                case ENGLISH ->
+                    count == 0 ? "Every moment on it is on another branch too, so no moment is lost."
+                    : count == 1 ? "One moment is on " + branch + " alone, and goes with it."
+                    : count + " moments are on " + branch + " alone, and go with it.";
+            };
+        }
+
+        public String DELETE(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + branch;
+            };
+        }
+
+        public String DELETE_THE_OLDEST_MOMENTS(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Delete the " + (count == 1 ? "oldest moment" : count + " oldest moments") + "?";
+            };
+        }
+
+        public String THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW(int count, String branches, String frees) {
+            return switch (lang) {
+                case ENGLISH ->
+                    (count == 1 ? "It does" : "They do") + " not fit within how far the history may grow"
+                    + (branches.isEmpty() ? "" : ", on " + branches) + ". Deleting "
+                    + (count == 1 ? "it" : "them") + " frees " + frees
+                    + ". Each branch keeps its newest moment, and the next save would delete them anyway.";
+            };
+        }
+
+        public String DELETE_THEM(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + (count == 1 ? "it" : "them");
+            };
+        }
+
+        public String CANCEL() {
+            return switch (lang) {
+                case ENGLISH -> "Cancel";
+            };
+        }
+
+        public String GO_BACK_INSTEAD() {
+            return switch (lang) {
+                case ENGLISH -> "Go back instead";
+            };
+        }
+
+        public String BRING_IT_BACK_TO_THAT_MOMENT_AND_KEEP_HOW_IT_IS_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "Bring it back to that moment, and keep how it is now as a moment you can return to";
+            };
+        }
+
+        public String SHOW_ONLY_THE_NEWEST_MOMENTS() {
+            return switch (lang) {
+                case ENGLISH -> "Show only the newest moments";
+            };
+        }
+
+        public String SHOW_EARLIER_MOMENTS(int count) {
+            return switch (lang) {
+                case ENGLISH -> "Show " + count + " earlier " + (count == 1 ? "moment" : "moments");
+            };
+        }
+
+        public String MOMENTS() {
+            return switch (lang) {
+                case ENGLISH -> "MOMENTS";
+            };
+        }
+
+        public String READING_THE_HISTORY() {
+            return switch (lang) {
+                case ENGLISH -> "Reading the history…";
+            };
+        }
+
+        public String NOTHING_SAVED_YET() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing saved yet";
+            };
+        }
+
+        public String ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    genie + "'s home is saved the first time it wakes, and from then on "
+                    + "whenever something changed. Each save is a moment you can bring it back to.";
+            };
+        }
+
+        public String HOW_IT_IS_NOW_ON_BRANCH(String genie, String branch) {
+            return switch (lang) {
+                case ENGLISH -> "How " + genie + " is now" + (branch.isEmpty() ? "" : ", on " + branch);
+            };
+        }
+
+        public String NOW() {
+            return switch (lang) {
+                case ENGLISH -> "now";
+            };
+        }
+
+        public String LIVES_HERE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "(" + genie + " lives here)";
+            };
+        }
+
+        public String AND_MORE(int count) {
+            return switch (lang) {
+                case ENGLISH -> "and " + count + " more";
+            };
+        }
+
+        public String CLICK_A_LINE_TO_SHOW_IT_HERE() {
+            return switch (lang) {
+                case ENGLISH -> "Click a line to show it here";
+            };
+        }
+
+        public String STAND_HERE(List<String> branches) {
+            return switch (lang) {
+                case ENGLISH -> listedInEnglish(branches) + (branches.size() == 1 ? " stands here" : " stand here");
+            };
+        }
+
+        public String CLICK_AGAIN_TO_CLOSE() {
+            return switch (lang) {
+                case ENGLISH -> "Click again to close";
+            };
+        }
+
+        public String CLICK_TO_GO_BACK_TO_THIS_MOMENT_START_A_BRANCH_FROM_IT_OR_OPEN_ITS_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "Click to go back to this moment, start a branch from it, or open its conversation";
+            };
+        }
+
+        public String GO_BACK_TO_THIS_MOMENT_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Go back to this moment…";
+            };
+        }
+
+        public String BRING_ITS_FILES_AND_CONVERSATIONS_BACK_TO_HOW_THEY_WERE_THEN() {
+            return switch (lang) {
+                case ENGLISH -> "Bring its files and conversations back to how they were then";
+            };
+        }
+
+        public String START_A_BRANCH_HERE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Start a branch here…";
+            };
+        }
+
+        public String KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Keep this moment as a branch of its own, to try something else from here. " + genie + " stays where it lives";
+            };
+        }
+
+        public String RESET_TO_HERE_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Reset to here…";
+            };
+        }
+
+        public String TAKE_EVERY_MOMENT_AFTER_THIS_ONE_OFF_THE_BRANCH_FOR_GOOD() {
+            return switch (lang) {
+                case ENGLISH -> "Take every moment after this one off the branch, for good. You are asked first";
+            };
+        }
+
+        public String OPEN_THE_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "Open the conversation";
+            };
+        }
+
+        public String LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE(String genie, String branch) {
+            return switch (lang) {
+                case ENGLISH -> genie + " lives on " + branch + ", and every save goes there. Click another branch, or its line, to look at it.";
+            };
+        }
+
+        public String YOU_ARE_LOOKING_AT(String shown, String genie, String home) {
+            return switch (lang) {
+                case ENGLISH -> "You are looking at " + shown + ". " + genie + " lives on " + home + ", and stays there until you move it.";
+            };
+        }
+
+        public String MOVE_TO_ELLIPSIS(String genie, String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Move " + genie + " to " + branch + "…";
+            };
+        }
+
+        public String MAKE_THIS_BRANCH_THE_GENIES_HOME() {
+            return switch (lang) {
+                case ENGLISH -> "Make this branch the genie's home: its files and conversations become this branch's newest moment";
+            };
+        }
+
+        public String DELETE_ELLIPSIS(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + branch + "…";
+            };
+        }
+
+        public String DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS() {
+            return switch (lang) {
+                case ENGLISH -> "Delete this branch. You are told first how many moments only it holds";
+            };
+        }
+
+        public String LIVES_ON_THIS_BRANCH(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " lives on this branch.";
+            };
+        }
+
+        public String ITS_LINE_IS_THE_ONE_WITH_WORDS() {
+            return switch (lang) {
+                case ENGLISH -> "Its line is the one with words";
+            };
+        }
+
+        public String CLICK_TO_LOOK_AT_ITS_LINE() {
+            return switch (lang) {
+                case ENGLISH -> "Click to look at its line";
+            };
+        }
+
+        public String WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Wake " + genie + " once first. Its settings are kept in its lamp, which it gets as it first wakes.";
+            };
+        }
+
+        public String READING_ITS_SETTINGS() {
+            return switch (lang) {
+                case ENGLISH -> "Reading its settings…";
+            };
+        }
+
+        public String SEND_IT_TO_SLEEP_TO_CHANGE_THESE(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Send " + genie + " to sleep to change these. While it is awake, it keeps what it woke with.";
+            };
+        }
+
+        public String WHEN_IT_SAVES_BY_ITSELF() {
+            return switch (lang) {
+                case ENGLISH -> "WHEN IT SAVES BY ITSELF";
+            };
+        }
+
+        public String AS_IT_WAKES() {
+            return switch (lang) {
+                case ENGLISH -> "As it wakes";
+            };
+        }
+
+        public String AFTER_IT_WENT_TO_SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "After it went to sleep";
+            };
+        }
+
+        public String AS_IT_BEGINS_ON_A_QUESTION_OR_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "As it begins on a question or a job";
+            };
+        }
+
+        public String AS_IT_ANSWERS_OR_ENDS_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "As it answers, or ends a job";
+            };
+        }
+
+        public String A_JOB_IS_TOLD_WHAT_ITS_LAST_RUNS_SAID_AND_CHANGED() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "A job is told what its last runs said and changed from "
+                    + "what was saved as they ended. Saving by hand works whatever these say.";
+            };
+        }
+
+        public String HOW_LARGE_IT_MAY_GROW() {
+            return switch (lang) {
+                case ENGLISH -> "HOW LARGE IT MAY GROW";
+            };
+        }
+
+        public String WHAT_A_MOMENT_HOLDS() {
+            return switch (lang) {
+                case ENGLISH -> "WHAT A MOMENT HOLDS";
+            };
+        }
+
+        public String ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    genie + "'s home: the files it made, its notes and its conversations, "
+                    + "and the settings of its lamp. Going back brings all of these back together.";
+            };
+        }
+
+        public String ITS_SCHEDULE_STAYS_AS_IT_IS() {
+            return switch (lang) {
+                case ENGLISH -> "Its schedule stays as it is, and so does everything on this computer outside the genie's lamp.";
+            };
+        }
+
+        public String A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN(String genie) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "A branch is a line of moments with a home of its own, schedule and settings "
+                    + "included, to try something without losing the rest. " + genie + " lives on one at a time.";
+            };
+        }
+
+        public String SAVE_BY_HAND_BEFORE_SOMETHING_YOU_MIGHT_WANT_TO_UNDO() {
+            return switch (lang) {
+                case ENGLISH -> "Save by hand before something you might want to undo, such as a big change to a project.";
+            };
+        }
+
+        public String NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Nothing is ever deleted: " + genie + "'s history may grow without end.";
+            };
+        }
+
+        public String ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT(String genie, String size) {
+            return switch (lang) {
+                case ENGLISH ->
+                    genie + "'s history may grow " + size + " beyond its first moment, on all branches "
+                    + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest.";
+            };
+        }
+
+        public String THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS(int count, String freed, String taken, String most) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "The last time, oillamp deleted " + (count == 1 ? "one old moment" : count + " old moments")
+                    + " to stay within it, which freed " + freed + ". The history now takes "
+                    + taken + " of the " + most + " it may, its first moment included.";
+            };
+        }
+
+        public String TIDY_UP_NOW_ELLIPSIS() {
+            return switch (lang) {
+                case ENGLISH -> "Tidy up now…";
+            };
+        }
+
+        public String DELETE_WHAT_DOES_NOT_FIT_NOW_RATHER_THAN_AT_THE_NEXT_SAVE() {
+            return switch (lang) {
+                case ENGLISH -> "Delete what does not fit now, rather than at the next save. You are told first what that is";
+            };
+        }
+
+        public String NEVER_DELETE() {
+            return switch (lang) {
+                case ENGLISH -> "Never delete";
+            };
+        }
+
+        public String WHAT_SHOULD_THIS_MOMENT_BE_REMEMBERED_BY() {
+            return switch (lang) {
+                case ENGLISH -> "What should this moment be remembered by? You may leave it empty.";
+            };
+        }
+
+        public String SAVE_AS_IT_IS_NOW(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Save " + genie + " as it is now";
+            };
+        }
+
+        public String WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED(String genie, String home) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "What should the new branch be called? Lowercase letters, digits, -, _ and ., such as rust-rewrite.\n"
+                    + genie + " stays on " + home + "; you can move it later, while it sleeps.";
+            };
+        }
+
+        public String START_A_BRANCH_FROM_THE_NEWEST_MOMENT() {
+            return switch (lang) {
+                case ENGLISH -> "Start a branch from the newest moment";
+            };
+        }
+
+        public String START_A_BRANCH_FROM_THIS_MOMENT() {
+            return switch (lang) {
+                case ENGLISH -> "Start a branch from this moment";
+            };
+        }
+
+        public String BRING_IT_BACK_TO_HOW_IT_WAS(String genie, String when) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Bring " + genie + " back to how it was " + when + "?\n"
+                    + "Its files and conversations become what they were then. How it is now is kept, so you can return.";
+            };
+        }
+
+        public String SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " sleeps while it goes back, and wakes again after.";
+            };
+        }
+
+        public String GO_BACK_IN_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "Go back in time";
+            };
+        }
+
+        public String GO_BACK() {
+            return switch (lang) {
+                case ENGLISH -> "Go back";
+            };
+        }
+
+        public String STAY() {
+            return switch (lang) {
+                case ENGLISH -> "Stay";
+            };
+        }
+
+        public String MOVE_IT_TO_ANOTHER_BRANCH(String genie, String to, String from) {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Move " + genie + " to " + to + "?\n"
+                    + "Its files and conversations become those of the newest moment on " + to
+                    + ", and every save goes to " + to + " from now on.\n"
+                    + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost.";
+            };
+        }
+
+        public String MOVE_TO_ANOTHER_BRANCH() {
+            return switch (lang) {
+                case ENGLISH -> "Move to another branch";
+            };
+        }
+
+        public String MOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Move";
+            };
+        }
+
+        public String WOKE_UP() {
+            return switch (lang) {
+                case ENGLISH -> "Woke up";
+            };
+        }
+
+        public String WENT_TO_SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Went to sleep";
+            };
+        }
+
+        public String SAVED_BY_HAND() {
+            return switch (lang) {
+                case ENGLISH -> "Saved by hand";
+            };
+        }
+
+        public String BEFORE_IT_WENT_TO_WORK() {
+            return switch (lang) {
+                case ENGLISH -> "Before it went to work";
+            };
+        }
+
+        public String DID_THE_JOB(String job) {
+            return switch (lang) {
+                case ENGLISH -> "Did the job: " + job;
+            };
+        }
+
+        public String DID_A_SCHEDULED_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Did a scheduled job";
+            };
+        }
+
+        public String ANSWERED(String conversation) {
+            return switch (lang) {
+                case ENGLISH -> "Answered: " + conversation;
+            };
+        }
+
+        public String ANSWERED_A_QUESTION() {
+            return switch (lang) {
+                case ENGLISH -> "Answered a question";
+            };
+        }
+
+        public String TALKED(String conversation) {
+            return switch (lang) {
+                case ENGLISH -> "Talked: " + conversation;
+            };
+        }
+
+        public String TALKED_WITH_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Talked with you";
+            };
+        }
+
+        public String BEFORE_GOING_BACK() {
+            return switch (lang) {
+                case ENGLISH -> "Before going back";
+            };
+        }
+
+        public String UNDID_GOING_BACK_TO_HOW_IT_WAS(String when) {
+            return switch (lang) {
+                case ENGLISH -> "Undid going back to how it was " + when;
+            };
+        }
+
+        public String WENT_BACK_TO_HOW_IT_WAS(String when) {
+            return switch (lang) {
+                case ENGLISH -> "Went back to how it was " + when;
+            };
+        }
+
+        public String WENT_BACK_TO_AN_EARLIER_MOMENT() {
+            return switch (lang) {
+                case ENGLISH -> "Went back to an earlier moment";
+            };
+        }
+
+        public String BEFORE_IT_MOVED_TO_ANOTHER_BRANCH() {
+            return switch (lang) {
+                case ENGLISH -> "Before it moved to another branch";
+            };
+        }
+
+        public String SAVED_AS_ITS_SANDBOX_STARTED() {
+            return switch (lang) {
+                case ENGLISH -> "Saved as its sandbox started";
+            };
+        }
+
+        public String SAVED_AFTER_ITS_SANDBOX_STOPPED() {
+            return switch (lang) {
+                case ENGLISH -> "Saved after its sandbox stopped";
+            };
+        }
+
+        public String SAVED_AS_IT_BEGAN_ON_A_QUESTION_OR_A_JOB() {
+            return switch (lang) {
+                case ENGLISH -> "Saved as it began on a question or a job";
+            };
+        }
+
+        public String SAVED_ONCE_THE_CHAT_HAD_GONE_QUIET() {
+            return switch (lang) {
+                case ENGLISH -> "Saved once the chat had gone quiet";
+            };
+        }
+
+        public String STOPPED_AND_SAID(String said) {
+            return switch (lang) {
+                case ENGLISH -> "Stopped. " + said;
+            };
+        }
+
+        public String FAILED_AND_SAID(String said) {
+            return switch (lang) {
+                case ENGLISH -> "Failed. " + said;
+            };
+        }
+
+        public String RAN_OUT_OF_TIME_AND_SAID(String said) {
+            return switch (lang) {
+                case ENGLISH -> "Ran out of time. " + said;
+            };
+        }
+
+        public String KEPT_SO_THAT_GOING_BACK_CAN_BE_UNDONE() {
+            return switch (lang) {
+                case ENGLISH -> "Kept so that going back can be undone";
+            };
+        }
+
+        public String KEPT_AS_IT_WAS_WHEN_IT_MOVED_TO_ANOTHER_BRANCH() {
+            return switch (lang) {
+                case ENGLISH -> "Kept as it was when it moved to another branch";
+            };
+        }
+
+        public String WAKES() {
+            return switch (lang) {
+                case ENGLISH -> "wakes";
+            };
+        }
+
+        public String ANSWERS() {
+            return switch (lang) {
+                case ENGLISH -> "answers";
+            };
+        }
+
+        public String BEGINS_TO_ANSWER() {
+            return switch (lang) {
+                case ENGLISH -> "begins to answer";
+            };
+        }
+
+        public String SLEEPS() {
+            return switch (lang) {
+                case ENGLISH -> "sleeps";
+            };
+        }
+
+        public String ONE_OR_ANOTHER(List<String> names) {
+            return switch (lang) {
+                case ENGLISH -> eitherInEnglish(names);
+            };
+        }
+
+        public String A_BRANCH_NEEDS_A_NAME() {
+            return switch (lang) {
+                case ENGLISH -> "A branch needs a name, such as rust-rewrite.";
+            };
+        }
+
+        public String A_BRANCHS_NAME_IS_AT_MOST_SO_MANY_CHARACTERS_LONG(int most) {
+            return switch (lang) {
+                case ENGLISH -> "A branch's name is at most " + most + " characters long.";
+            };
+        }
+
+        public String A_BRANCHS_NAME_IS_MADE_OF_LOWERCASE_LETTERS_DIGITS_AND_SIGNS() {
+            return switch (lang) {
+                case ENGLISH -> "A branch's name is made of lowercase letters, digits, -, _ and ., and begins with a letter or a digit, such as rust-rewrite.";
+            };
+        }
+
+        public String A_BRANCHS_NAME_CANNOT_HOLD_TWO_DOTS_OR_END_IN_A_DOT_OR_LOCK() {
+            return switch (lang) {
+                case ENGLISH -> "A branch's name cannot hold .., or end in . or .lock.";
+            };
+        }
+
+        public String THERE_IS_A_BRANCH_CALLED_IT_ALREADY(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "There is a branch called " + branch + " already.";
+            };
+        }
     }
 
     /// Days and spans of time, as the pages say them; [DateWordingUtil] says which of them fits.
