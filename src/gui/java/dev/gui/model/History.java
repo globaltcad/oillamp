@@ -65,12 +65,15 @@ public record History(
     /// @param beforeRun as it begins on a question or a job, when something changed since the last moment
     /// @param afterRun  as it ends one, with its last words. A job's prompt tells the genie what
     ///                  its last runs said and changed from these
-    public record Autosave(boolean waking, boolean sleeping, boolean beforeRun, boolean afterRun) {
+    /// @param chatQuietMinutes how long a chat must have been quiet before it is saved, once for
+    ///                  all its questions; 0 saves around each question as around a job
+    public record Autosave(boolean waking, boolean sleeping, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {
 
-        public Autosave withWaking(boolean waking)       { return new Autosave(waking, sleeping, beforeRun, afterRun); }
-        public Autosave withSleeping(boolean sleeping)   { return new Autosave(waking, sleeping, beforeRun, afterRun); }
-        public Autosave withBeforeRun(boolean beforeRun) { return new Autosave(waking, sleeping, beforeRun, afterRun); }
-        public Autosave withAfterRun(boolean afterRun)   { return new Autosave(waking, sleeping, beforeRun, afterRun); }
+        public Autosave withWaking(boolean waking)       { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
+        public Autosave withSleeping(boolean sleeping)   { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
+        public Autosave withBeforeRun(boolean beforeRun) { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
+        public Autosave withAfterRun(boolean afterRun)   { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
+        public Autosave withChatQuietMinutes(int chatQuietMinutes) { return new Autosave(waking, sleeping, beforeRun, afterRun, chatQuietMinutes); }
 
         /// When it saves, as the end of a sentence such as "Saved whenever Jafar …": "wakes,
         /// answers or sleeps", or "answers"; empty when it never saves by itself.
