@@ -1195,22 +1195,24 @@ final class HistoryPage {
                 .orElse(GROWTH_CHOICES);
             return offered.mapTo(Growth.class, gb -> new Growth(gb, it.maxGrowthGb().equals(Optional.of(gb))));
         });
-        Val<String> about = genie.viewAsString(it ->
+        Val<String> about = Viewable.of(String.class, genie, words, (it, page) ->
             it.history().maxGrowthGb()
             .map(gb ->
                 gb == 0
-                    ? "Nothing is ever deleted: " + it.name() + "'s history may grow without end."
-                    : it.name() + "'s history may grow " + gigabytes(gb) + " beyond its first moment, on all branches "
-                      + "together. Past that, each save deletes the moments saved longest ago; each branch keeps its newest."
+                    ? page.NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END().of(it.name())
+                    : page.ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT().of(it.name(), gigabytes(gb))
             )
             .orElse("")
         );
-        Val<String> pruned = history.viewAsString(it ->
+        Val<String> pruned = Viewable.of(String.class, history, words, (it, page) ->
             it.pruned()
             .map(last ->
-                "The last time, oillamp deleted " + (last.moments() == 1 ? "one old moment" : last.moments() + " old moments")
-                + " to stay within it, which freed " + bytes(last.bytesFreed()) + ". The history now takes "
-                + bytes(last.remainingBytes()) + " of the " + bytes(last.limitBytes()) + " it may, its first moment included."
+                page.THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS().of(
+                    last.moments(),
+                    bytes(last.bytesFreed()),
+                    bytes(last.remainingBytes()),
+                    bytes(last.limitBytes())
+                )
             )
             .orElse("")
         );
@@ -1226,7 +1228,7 @@ final class HistoryPage {
             )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, pruned, Palette::SUBTEXT, pruned.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add("left",
-                button("Tidy up now…")
+                button(words.viewAsString(Lang.HistoryPage::TIDY_UP_NOW_ELLIPSIS))
                 .group(Skin.QUIET_BUTTON)
                 .isVisibleIf(history.viewAs(Boolean.class, it -> it.maxGrowthGb().filter(gb -> gb > 0).isPresent()))
                 .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
@@ -1235,10 +1237,8 @@ final class HistoryPage {
                     Palette p = themed.palette();
                     return why.isEmpty() ? it : it.backgroundColor(p.SMOKE()).cursor(UI.Cursor.DEFAULT);
                 })
-                .withTooltip(homeLocked.viewAsString(it ->
-                    it.isEmpty()
-                        ? "Delete what does not fit now, rather than at the next save. You are told first what that is"
-                        : it
+                .withTooltip(Viewable.of(String.class, homeLocked, words, (it, page) ->
+                    it.isEmpty() ? page.DELETE_WHAT_DOES_NOT_FIT_NOW_RATHER_THAN_AT_THE_NEXT_SAVE() : it
                 ))
                 .onClick(_ -> app.planPruning(selected()))
             );
@@ -1246,7 +1246,7 @@ final class HistoryPage {
 
     private UIForButton<JButton> growthChip(Growth growth, Val<Boolean> changeable) {
         return
-            button(growth.gb() == 0 ? "Never delete" : gigabytes(growth.gb()))
+            button(words.viewAsString(it -> growth.gb() == 0 ? it.NEVER_DELETE() : gigabytes(growth.gb())))
             .group(Skin.CHIP)
             .isEnabledIf(changeable)
             .withStyle(palette, (p, it) ->
