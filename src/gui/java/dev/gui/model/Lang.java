@@ -72,6 +72,13 @@ public record Lang(
             : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
     }
 
+    /// The same, as choices: "a, b or c".
+    private static String eitherInEnglish(List<String> names) {
+        return names.size() < 2
+            ? String.join("", names)
+            : String.join(", ", names.subList(0, names.size() - 1)) + " or " + names.getLast();
+    }
+
     /// A text that says how many there are of something.
     public interface Counted { String of(int count); }
 
@@ -1121,7 +1128,36 @@ public record Lang(
         String STAY,
         Moving MOVE_IT_TO_ANOTHER_BRANCH,
         String MOVE_TO_ANOTHER_BRANCH,
-        String MOVE
+        String MOVE,
+        String WOKE_UP,
+        String WENT_TO_SLEEP,
+        String SAVED_BY_HAND,
+        String BEFORE_IT_WENT_TO_WORK,
+        About DID_THE_JOB,
+        String DID_A_SCHEDULED_JOB,
+        About ANSWERED,
+        String ANSWERED_A_QUESTION,
+        About TALKED,
+        String TALKED_WITH_YOU,
+        String BEFORE_GOING_BACK,
+        About UNDID_GOING_BACK_TO_HOW_IT_WAS,
+        About WENT_BACK_TO_HOW_IT_WAS,
+        String WENT_BACK_TO_AN_EARLIER_MOMENT,
+        String BEFORE_IT_MOVED_TO_ANOTHER_BRANCH,
+        String SAVED_AS_ITS_SANDBOX_STARTED,
+        String SAVED_AFTER_ITS_SANDBOX_STOPPED,
+        String SAVED_AS_IT_BEGAN_ON_A_QUESTION_OR_A_JOB,
+        String SAVED_ONCE_THE_CHAT_HAD_GONE_QUIET,
+        About STOPPED_AND_SAID,
+        About FAILED_AND_SAID,
+        About RAN_OUT_OF_TIME_AND_SAID,
+        String KEPT_SO_THAT_GOING_BACK_CAN_BE_UNDONE,
+        String KEPT_AS_IT_WAS_WHEN_IT_MOVED_TO_ANOTHER_BRANCH,
+        String WAKES,
+        String ANSWERS,
+        String BEGINS_TO_ANSWER,
+        String SLEEPS,
+        Listed ONE_OR_ANOTHER
     ) {
         public static final HistoryPage ENGLISH = new HistoryPage(
             genie -> genie + " is waking; go back once it is awake",
@@ -1253,7 +1289,36 @@ public record Lang(
                 + ", and every save goes to " + to + " from now on.\n"
                 + "What changed since the newest moment on " + from + " is saved there first, so nothing is lost.",
             "Move to another branch",
-            "Move"
+            "Move",
+            "Woke up",
+            "Went to sleep",
+            "Saved by hand",
+            "Before it went to work",
+            job -> "Did the job: " + job,
+            "Did a scheduled job",
+            conversation -> "Answered: " + conversation,
+            "Answered a question",
+            conversation -> "Talked: " + conversation,
+            "Talked with you",
+            "Before going back",
+            when -> "Undid going back to how it was " + when,
+            when -> "Went back to how it was " + when,
+            "Went back to an earlier moment",
+            "Before it moved to another branch",
+            "Saved as its sandbox started",
+            "Saved after its sandbox stopped",
+            "Saved as it began on a question or a job",
+            "Saved once the chat had gone quiet",
+            said -> "Stopped. " + said,
+            said -> "Failed. " + said,
+            said -> "Ran out of time. " + said,
+            "Kept so that going back can be undone",
+            "Kept as it was when it moved to another branch",
+            "wakes",
+            "answers",
+            "begins to answer",
+            "sleeps",
+            Lang::eitherInEnglish
         );
     }
 
@@ -1275,7 +1340,8 @@ public record Lang(
         String JUST_NOW,
         Counted MINUTES_AGO,
         Counted HOURS_AGO,
-        Counted DAYS_AGO
+        Counted DAYS_AGO,
+        DayAndTime AT
     ) {
         public static final Dates ENGLISH = new Dates(
             "Today",
@@ -1294,7 +1360,8 @@ public record Lang(
             "just now",
             count -> count + (count == 1 ? " minute ago" : " minutes ago"),
             count -> count + (count == 1 ? " hour ago" : " hours ago"),
-            count -> count + (count == 1 ? " day ago" : " days ago")
+            count -> count + (count == 1 ? " day ago" : " days ago"),
+            (date, time) -> date + " at " + time
         );
     }
 
