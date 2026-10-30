@@ -96,8 +96,8 @@ final class HomeFolders {
         String words(Lang.HomeFolders words) {
             return switch (kind) {
                 case NONE -> "";
-                case LINKED -> words.LINKED().of(what);
-                case LINKED_ALREADY -> words.IT_WAS_LINKED_ALREADY().of(what);
+                case LINKED -> words.LINKED(what);
+                case LINKED_ALREADY -> words.IT_WAS_LINKED_ALREADY(what);
                 case FAILED -> what;
             };
         }
@@ -176,8 +176,8 @@ final class HomeFolders {
     Val<String> says() {
         return Viewable.of(String.class, genie, words, (it, folders) ->
             it.home().read() && it.home().where().isEmpty()
-                ? folders.HAS_NO_HOME_YET().of(it.name())
-                : folders.ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS().of(it.name())
+                ? folders.HAS_NO_HOME_YET(it.name())
+                : folders.ITS_HOME_IS_A_FOLDER_ON_THIS_COMPUTER_LINK_ONE_OF_ITS_FOLDERS_INTO_YOURS(it.name())
         );
     }
 
@@ -378,7 +378,7 @@ final class HomeFolders {
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 8)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-8, -8, 0, -8))
                 .add(
-                    button(Viewable.of(String.class, documentsName, words, (it, folders) -> folders.LINK_INTO().of(it))).group(Skin.FLAME_BUTTON)
+                    button(Viewable.of(String.class, documentsName, words, (it, folders) -> folders.LINK_INTO(it))).group(Skin.FLAME_BUTTON)
                     .isEnabledIf(nameable)
                     .withTooltip(app.documents().toString())
                     .withStyle(it -> it.padding(9, 16, 9, 16))
@@ -399,7 +399,7 @@ final class HomeFolders {
                 ViewPartsUtil.wrapped(
                     theme,
                     Viewable.of(String.class, genie, words, (it, folders) ->
-                        folders.OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER().of(it.name())
+                        folders.OR_DRAG_A_FOLDER_FROM_THE_TREE_INTO_YOUR_FILE_MANAGER(it.name())
                     ),
                     Palette::SUBTEXT,
                     Val.of(true)
@@ -411,7 +411,7 @@ final class HomeFolders {
     private Optional<Path> chooseWhere(Component button) {
         JFileChooser chooser = new JFileChooser(app.documents().toFile());
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setDialogTitle(words.get().WHERE_TO_PUT_THE_LINK().of(linkName.get().strip()));
+        chooser.setDialogTitle(words.get().WHERE_TO_PUT_THE_LINK(linkName.get().strip()));
         return chooser.showDialog(button, words.get().LINK_HERE()) == JFileChooser.APPROVE_OPTION
             ? Optional.of(chooser.getSelectedFile().toPath())
             : Optional.empty();
