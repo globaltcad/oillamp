@@ -26,6 +26,17 @@ public enum Lang {
     JAPANESE,
     CHINESE;
 
+    /// The language's name, as it calls itself, so that whoever speaks it finds it in any other.
+    public String NAME_IN_ITSELF() {
+        return switch (this) {
+            case ENGLISH -> "English";
+            case GERMAN -> "Deutsch";
+            case SPANISH -> "Español";
+            case JAPANESE -> "日本語";
+            case CHINESE -> "中文";
+        };
+    }
+
     /// The words of the window around the genies: the list of them, and what went wrong.
     public Window WINDOW() {
         return new Window(this);
@@ -2797,23 +2808,33 @@ public enum Lang {
             };
         }
 
-        public String APPEARANCE() {
+        public String PERSONALIZATION() {
             return switch (lang) {
-                case ENGLISH -> "Appearance";
-                case GERMAN -> "Darstellung";
-                case SPANISH -> "Apariencia";
-                case JAPANESE -> "外観";
-                case CHINESE -> "外观";
+                case ENGLISH -> "Personalization";
+                case GERMAN -> "Personalisierung";
+                case SPANISH -> "Personalización";
+                case JAPANESE -> "パーソナライズ";
+                case CHINESE -> "个性化";
             };
         }
 
-        public String THE_LAMP_AT_NIGHT_OR_BY_DAY() {
+        public String ITS_LIGHT_AND_ITS_LANGUAGE() {
             return switch (lang) {
-                case ENGLISH -> "The lamp at night, or by day.";
-                case GERMAN -> "Die Lampe bei Nacht oder bei Tag.";
-                case SPANISH -> "La lámpara de noche, o de día.";
-                case JAPANESE -> "夜のランプか、昼のランプか。";
-                case CHINESE -> "夜晚的神灯，或白天的神灯。";
+                case ENGLISH -> "Its light, and its language.";
+                case GERMAN -> "Licht und Sprache der Lampe.";
+                case SPANISH -> "Luz e idioma de la lámpara.";
+                case JAPANESE -> "ランプの明かりと言葉。";
+                case CHINESE -> "神灯的光与语言。";
+            };
+        }
+
+        public String THE_LANGUAGE_GENIES_SPEAKS() {
+            return switch (lang) {
+                case ENGLISH -> "The language Genies speaks";
+                case GERMAN -> "Die Sprache, in der Genies mit dir spricht";
+                case SPANISH -> "El idioma en el que te habla Genies";
+                case JAPANESE -> "Genies の表示言語";
+                case CHINESE -> "Genies 的界面语言";
             };
         }
 
