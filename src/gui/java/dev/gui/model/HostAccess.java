@@ -110,7 +110,7 @@ public record HostAccess(
             Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
             for (String folder : folders(mayRead + "\n" + mayChange))
                 if (!folder.startsWith("/") && !folder.startsWith("~"))
-                    return Optional.of(words.IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS().of(folder));
+                    return Optional.of(words.IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS(folder));
             if (on && empty())
                 return Optional.of(words.NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST());
             return Optional.empty();

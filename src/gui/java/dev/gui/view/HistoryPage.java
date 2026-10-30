@@ -168,15 +168,15 @@ final class HistoryPage {
         wide    = state.viewAs(Boolean.class, GeniesState::sideBySide);
         notNow  = Viewable.of(String.class, genie, words, (it, page) ->
             !it.history().busy().isEmpty() ? it.history().busy()
-            : it.phase() == Genie.Phase.WAKING ? page.IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE().of(it.name())
-            : it.phase() == Genie.Phase.WORKING ? page.IS_WORKING_GO_BACK_ONCE_IT_IS_DONE().of(it.name())
+            : it.phase() == Genie.Phase.WAKING ? page.IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE(it.name())
+            : it.phase() == Genie.Phase.WORKING ? page.IS_WORKING_GO_BACK_ONCE_IT_IS_DONE(it.name())
             : it.schedule().running().isPresent() ? page.A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE()
             : ""
         );
         homeLocked = Viewable.of(String.class, genie, words, (it, page) ->
             !it.history().busy().isEmpty() ? it.history().busy()
             : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
-                ? page.SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS().of(it.name())
+                ? page.SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS(it.name())
             : ""
         );
         autosave = history.viewAs(History.Autosave.class, it -> it.autosave().orElse(UNLESS_SAID));
@@ -253,14 +253,14 @@ final class HistoryPage {
         String saved =
             (
                 when.isEmpty()
-                    ? words.IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND().of(genie.name())
-                    : words.SAVED_WHENEVER().of(genie.name(), when)
+                    ? words.IS_SAVED_ONLY_WHEN_YOU_SAVE_IT_BY_HAND(genie.name())
+                    : words.SAVED_WHENEVER(genie.name(), when)
             )
             + " " + words.GOING_BACK_KEEPS_HOW_IT_IS_NOW_SO_YOU_CAN_ALWAYS_RETURN();
         return switch (genie.phase()) {
             case READY -> new Status(p.CONTENT(), saved);
-            case WORKING -> new Status(p.BRASS(), words.IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE().of(genie.name()));
-            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE().of(genie.name()));
+            case WORKING -> new Status(p.BRASS(), words.IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE(genie.name()));
+            case WAKING -> new Status(p.BRASS(), words.IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE(genie.name()));
             case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), saved);
         };
     }
@@ -310,7 +310,7 @@ final class HistoryPage {
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(branchable)
                     .withTooltip(Viewable.of(String.class, genie, words, (it, page) ->
-                        page.KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN().of(it.name())
+                        page.KEEP_HOW_IT_WAS_LAST_SAVED_AS_A_BRANCH_OF_ITS_OWN(it.name())
                     ))
                     .onClick(it -> startBranch(it.getComponent(), ""))
                 )
@@ -385,33 +385,33 @@ final class HistoryPage {
                 String when = history.find(reset.target()).map(wording::when).orElse(words.THEN());
                 String branch = history.lampBranch();
                 String unsaved = reset.unsaved()
-                    ? words.WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST().of(wording.name()) + " "
+                    ? words.WHAT_CHANGED_SINCE_THE_NEWEST_MOMENT_WAS_NEVER_SAVED_AND_IS_LOST(wording.name()) + " "
                     : "";
                 yield new Asked(
-                    words.RESET_TO_HOW_IT_WAS().of(branch, when),
-                    words.MOMENTS_AFTER_IT_LEAVE().of(reset.moments(), branch) + " "
+                    words.RESET_TO_HOW_IT_WAS(branch, when),
+                    words.MOMENTS_AFTER_IT_LEAVE(reset.moments(), branch) + " "
                     + unsaved
                     + words.A_RESET_KEEPS_NO_COPY_SO_IT_CANNOT_BE_UNDONE(),
-                    words.RESET().of(branch),
+                    words.RESET(branch),
                     true,
                     true
                 );
             }
             case History.Plan.DeleteBranch delete -> new Asked(
-                words.DELETE_THE_BRANCH().of(delete.branch()),
-                words.MOMENTS_ON_IT_ALONE_GO_WITH_IT().of(delete.moments(), delete.branch()),
-                words.DELETE().of(delete.branch()),
+                words.DELETE_THE_BRANCH(delete.branch()),
+                words.MOMENTS_ON_IT_ALONE_GO_WITH_IT(delete.moments(), delete.branch()),
+                words.DELETE(delete.branch()),
                 delete.moments() > 0,
                 false
             );
             case History.Plan.Prune prune -> new Asked(
-                words.DELETE_THE_OLDEST_MOMENTS().of(prune.moments()),
-                words.THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW().of(
+                words.DELETE_THE_OLDEST_MOMENTS(prune.moments()),
+                words.THEY_DO_NOT_FIT_WITHIN_HOW_FAR_THE_HISTORY_MAY_GROW(
                     prune.moments(),
-                    words.NAMES_LISTED().of(prune.branches().toList()),
+                    words.NAMES_LISTED(prune.branches().toList()),
                     bytes(prune.bytesFreed())
                 ),
-                words.DELETE_THEM().of(prune.moments()),
+                words.DELETE_THEM(prune.moments()),
                 true,
                 false
             );
@@ -503,7 +503,7 @@ final class HistoryPage {
         Val<Boolean> reading = history.viewAs(Boolean.class, it -> !it.read());
         Val<Boolean> none = history.viewAs(Boolean.class, it -> it.read() && it.all().isEmpty());
         Val<String> earlierButtonText = Viewable.of(String.class, Viewable.of(EarlierMoments.class, hidden, earlier, EarlierMoments::new), words, (it, page) ->
-            it.shown() ? page.SHOW_ONLY_THE_NEWEST_MOMENTS() : page.SHOW_EARLIER_MOMENTS().of(it.hidden())
+            it.shown() ? page.SHOW_ONLY_THE_NEWEST_MOMENTS() : page.SHOW_EARLIER_MOMENTS(it.hidden())
         );
         Val<Boolean> earlierButtonShown = Viewable.of(Boolean.class, hidden, earlier, (more, shown) -> more > 0 || shown);
         return
@@ -524,7 +524,7 @@ final class HistoryPage {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, genie, words, (it, page) -> page.ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES().of(it.name())),
+                        Viewable.of(String.class, genie, words, (it, page) -> page.ITS_HOME_IS_SAVED_THE_FIRST_TIME_IT_WAKES(it.name())),
                         Palette::SUBTEXT,
                         Val.of(true)
                     )
@@ -629,7 +629,7 @@ final class HistoryPage {
     /// Now, at the top: where going back starts from, on the line of the branch the genie lives on.
     private UIForPanel<JPanel> nowRow(Tuple<Lines.Lane> lanes, Lines.Row.Now now) {
         Val<String> howItIsNow = Viewable.of(String.class, genie, words, (it, page) ->
-            page.HOW_IT_IS_NOW_ON_BRANCH().of(it.name(), now.lampLane().isPresent() ? it.history().lampBranch() : "")
+            page.HOW_IT_IS_NOW_ON_BRANCH(it.name(), now.lampLane().isPresent() ? it.history().lampBranch() : "")
         );
         return
             panel("fill, ins 0, gap 0", columns(lanes))
@@ -733,7 +733,7 @@ final class HistoryPage {
         List<String> said = new ArrayList<>();
         for (int l = 0; l < lanes.size(); l++) {
             Lines.Strand strand = row.strands().get(l);
-            String branch = lanes.get(l).branch() + (lanes.get(l).lampIsOn() ? " " + wording.words().LIVES_HERE().of(wording.name()) : "");
+            String branch = lanes.get(l).branch() + (lanes.get(l).lampIsOn() ? " " + wording.words().LIVES_HERE(wording.name()) : "");
             if (strand.dots().isEmpty() && !strand.isEmpty()) said.add(branch);
             for (Lines.Dot dot : strand.dots())
                 said.add(branch + ": " + wording.title(dot.moment()) + ", " + wording.when(dot.moment()));
@@ -741,7 +741,7 @@ final class HistoryPage {
         if (said.isEmpty()) return "";
         return
             String.join("\n", said.subList(0, Math.min(8, said.size())))
-            + (said.size() > 8 ? "\n" + wording.words().AND_MORE().of(said.size() - 8) : "")
+            + (said.size() > 8 ? "\n" + wording.words().AND_MORE(said.size() - 8) : "")
             + "\n" + wording.words().CLICK_A_LINE_TO_SHOW_IT_HERE();
     }
 
@@ -876,7 +876,7 @@ final class HistoryPage {
             .filter(it -> it == Schedule.Outcome.FAILED || it == Schedule.Outcome.TIMED_OUT)
             .isPresent();
         Val<String> detail = wording.viewAsString(it -> moment.detail(it.lang()));
-        Val<String> standsHere = words.viewAsString(it -> "⑂  " + it.STAND_HERE().of(shown.newestOf().toList()));
+        Val<String> standsHere = words.viewAsString(it -> "⑂  " + it.STAND_HERE(shown.newestOf().toList()));
         Val<String> title = wording.viewAsString(it -> it.title(moment));
         Val<Boolean> canOpen = genie.viewAs(Boolean.class, it ->
             !moment.conversation().isEmpty() &&
@@ -965,7 +965,7 @@ final class HistoryPage {
                     button(words.viewAsString(it -> "⑂  " + it.START_A_BRANCH_HERE_ELLIPSIS()))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(idle)
-                    .withTooltip(Viewable.of(String.class, genie, words, (it, page) -> page.KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN().of(it.name())))
+                    .withTooltip(Viewable.of(String.class, genie, words, (it, page) -> page.KEEP_THIS_MOMENT_AS_A_BRANCH_OF_ITS_OWN(it.name())))
                     .onClick(it -> startBranch(it.getComponent(), moment.id()))
                 )
                 .add(
@@ -1015,8 +1015,8 @@ final class HistoryPage {
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
         Val<String> about = Viewable.of(String.class, genie, words, (it, page) ->
             it.history().shownLine().equals(it.history().lampBranch())
-                ? page.LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE().of(it.name(), it.history().lampBranch())
-                : page.YOU_ARE_LOOKING_AT().of(it.history().shownLine(), it.name(), it.history().lampBranch())
+                ? page.LIVES_ON_IT_AND_EVERY_SAVE_GOES_THERE(it.name(), it.history().lampBranch())
+                : page.YOU_ARE_LOOKING_AT(it.history().shownLine(), it.name(), it.history().lampBranch())
         );
         return
             box("fillx, wrap 1, ins 0 0 6 0, gap 6, hidemode 3", "[grow]")
@@ -1032,7 +1032,7 @@ final class HistoryPage {
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .isVisibleIf(elsewhere)
                 .add(
-                    button(Viewable.of(String.class, genie, words, (it, page) -> "⇄  " + page.MOVE_TO_ELLIPSIS().of(it.name(), it.history().shownLine())))
+                    button(Viewable.of(String.class, genie, words, (it, page) -> "⇄  " + page.MOVE_TO_ELLIPSIS(it.name(), it.history().shownLine())))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(homeLocked.viewAs(Boolean.class, String::isEmpty))
                     .withStyle(Themed.of(homeLocked, theme), (themed, it) -> {
@@ -1046,7 +1046,7 @@ final class HistoryPage {
                     .onClick(_ -> confirmSwitch())
                 )
                 .add(
-                    button(Viewable.of(String.class, history, words, (it, page) -> page.DELETE_ELLIPSIS().of(it.shownLine())))
+                    button(Viewable.of(String.class, history, words, (it, page) -> page.DELETE_ELLIPSIS(it.shownLine())))
                     .group(Skin.QUIET_BUTTON)
                     .isEnabledIf(idle)
                     .withTooltip(words.viewAsString(Lang.HistoryPage::DELETE_THIS_BRANCH_YOU_ARE_TOLD_FIRST_HOW_MANY_MOMENTS_ONLY_IT_HOLDS))
@@ -1057,7 +1057,7 @@ final class HistoryPage {
 
     private UIForPanel<JPanel> chipView(Chip chip) {
         Val<String> tooltip = Viewable.of(String.class, genie, words, (it, page) ->
-            (chip.lampIsOn() ? page.LIVES_ON_THIS_BRANCH().of(it.name()) + " " : "")
+            (chip.lampIsOn() ? page.LIVES_ON_THIS_BRANCH(it.name()) + " " : "")
             + (chip.shown() ? page.ITS_LINE_IS_THE_ONE_WITH_WORDS() : page.CLICK_TO_LOOK_AT_ITS_LINE())
         );
         var view =
@@ -1089,10 +1089,10 @@ final class HistoryPage {
     private static String settingsLocked(Genie genie, Lang.HistoryPage words) {
         if (genie.history().autosave().isEmpty())
             return genie.history().read()
-                ? words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP().of(genie.name())
+                ? words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP(genie.name())
                 : words.READING_ITS_SETTINGS();
         if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
-            return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE().of(genie.name());
+            return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE(genie.name());
         return "";
     }
 
@@ -1150,7 +1150,7 @@ final class HistoryPage {
                     ViewPartsUtil.wrapped(
                         theme,
                         Viewable.of(String.class, genie, words, (it, page) ->
-                            page.ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS().of(it.name())
+                            page.ITS_HOME_THE_FILES_IT_MADE_ITS_NOTES_AND_ITS_CONVERSATIONS(it.name())
                         ),
                         Palette::TEXT,
                         Val.of(true)
@@ -1168,7 +1168,7 @@ final class HistoryPage {
                     ViewPartsUtil.wrapped(
                         theme,
                         Viewable.of(String.class, genie, words, (it, page) ->
-                            page.A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN().of(it.name())
+                            page.A_BRANCH_IS_A_LINE_OF_MOMENTS_WITH_A_HOME_OF_ITS_OWN(it.name())
                         ),
                         Palette::SUBTEXT,
                         Val.of(true)
@@ -1204,15 +1204,15 @@ final class HistoryPage {
             it.history().maxGrowthGb()
             .map(gb ->
                 gb == 0
-                    ? page.NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END().of(it.name())
-                    : page.ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT().of(it.name(), gigabytes(gb))
+                    ? page.NOTHING_IS_EVER_DELETED_ITS_HISTORY_MAY_GROW_WITHOUT_END(it.name())
+                    : page.ITS_HISTORY_MAY_GROW_BEYOND_ITS_FIRST_MOMENT(it.name(), gigabytes(gb))
             )
             .orElse("")
         );
         Val<String> pruned = Viewable.of(String.class, history, words, (it, page) ->
             it.pruned()
             .map(last ->
-                page.THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS().of(
+                page.THE_LAST_TIME_OILLAMP_DELETED_OLD_MOMENTS(
                     last.moments(),
                     bytes(last.bytesFreed()),
                     bytes(last.remainingBytes()),
@@ -1303,7 +1303,7 @@ final class HistoryPage {
         Object answer = JOptionPane.showInputDialog(
             parent,
             page.WHAT_SHOULD_THIS_MOMENT_BE_REMEMBERED_BY(),
-            page.SAVE_AS_IT_IS_NOW().of(shown.name()),
+            page.SAVE_AS_IT_IS_NOW(shown.name()),
             JOptionPane.PLAIN_MESSAGE,
             null,
             null,
@@ -1323,7 +1323,7 @@ final class HistoryPage {
             Object answer = JOptionPane.showInputDialog(
                 parent,
                 (problem.isEmpty() ? "" : problem + "\n\n")
-                + page.WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED().of(shown.name(), shown.history().lampBranch()),
+                + page.WHAT_SHOULD_THE_NEW_BRANCH_BE_CALLED(shown.name(), shown.history().lampBranch()),
                 moment.isEmpty() ? page.START_A_BRANCH_FROM_THE_NEWEST_MOMENT() : page.START_A_BRANCH_FROM_THIS_MOMENT(),
                 JOptionPane.PLAIN_MESSAGE,
                 null,
@@ -1347,8 +1347,8 @@ final class HistoryPage {
         Lang.HistoryPage page = words.get();
         ConfirmAnswer answer =
             UI.confirmation(
-                page.BRING_IT_BACK_TO_HOW_IT_WAS().of(shown.name(), when)
-                + (shown.phase().isAwake() ? "\n" + page.SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER().of(shown.name()) : "")
+                page.BRING_IT_BACK_TO_HOW_IT_WAS(shown.name(), when)
+                + (shown.phase().isAwake() ? "\n" + page.SLEEPS_WHILE_IT_GOES_BACK_AND_WAKES_AGAIN_AFTER(shown.name()) : "")
             )
             .titled(page.GO_BACK_IN_TIME())
             .yesOption(page.GO_BACK()).noOption(page.STAY()).cancelOption("")
@@ -1362,7 +1362,7 @@ final class HistoryPage {
         String from = shown.history().lampBranch();
         Lang.HistoryPage page = words.get();
         ConfirmAnswer answer =
-            UI.confirmation(page.MOVE_IT_TO_ANOTHER_BRANCH().of(shown.name(), branch, from))
+            UI.confirmation(page.MOVE_IT_TO_ANOTHER_BRANCH(shown.name(), branch, from))
             .titled(page.MOVE_TO_ANOTHER_BRANCH())
             .yesOption(page.MOVE()).noOption(page.STAY()).cancelOption("")
             .show();
