@@ -98,9 +98,7 @@ public enum Lang {
 
     /// The words of the parts of the window that several pages share.
     public Parts PARTS() {
-        return switch (this) {
-            case ENGLISH -> Parts.ENGLISH;
-        };
+        return new Parts(this);
     }
 
     /// The words of days and spans of time, as the pages say them.
@@ -1471,13 +1469,17 @@ public enum Lang {
     }
 
     /// The words of the parts of the window that several pages share.
-    public record Parts(
-        String NO,
-        String YES
-    ) {
-        public static final Parts ENGLISH = new Parts(
-            "No",
-            "Yes"
-        );
+    public record Parts(Lang lang) {
+        public String NO() {
+            return switch (lang) {
+                case ENGLISH -> "No";
+            };
+        }
+
+        public String YES() {
+            return switch (lang) {
+                case ENGLISH -> "Yes";
+            };
+        }
     }
 }
