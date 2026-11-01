@@ -332,6 +332,23 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             chat.entries()*.words(Lang.GERMAN).subList(1, 3) == ['hi', 'Half']
     }
 
+    def 'Why the model could not answer is said in the language Genies speaks, and what the service said as it said it'() {
+        reportInfo """
+            Let's consider a model service that refuses the key, answering 401 and "invalid api
+            key". The chat says plainly who refused what, in the language Genies speaks, and then
+            what the service said, as it said it.
+        """
+        given: 'an answer that failed as the service refused the key'
+            def chat = Transcript.empty().you('hi').hear(new PiEvent.Answered('', '401 invalid api key', 0, ''))
+            def refused = chat.entries().last()
+
+        expect: 'it is said in each language, the service\'s words as it put them'
+            refused.isFailed()
+            refused.words(Lang.ENGLISH) == 'The model service refused the key (401): invalid api key.'
+            refused.words(Lang.GERMAN) == 'Der Modelldienst hat den Schlüssel abgelehnt (401): invalid api key.'
+            refused.words(Lang.CHINESE) == '模型服务拒绝了该密钥（401）：invalid api key.'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false

@@ -1296,6 +1296,97 @@ public enum Lang {
     /// The words of a genie's chat: the conversation, the files the genie hands out, and the
     /// composer under it.
     public record Chat(Lang lang) {
+        public String OILLAMP_COULD_NOT_REACH_THE_MODEL_SERVICE_AT(String host, String why) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not reach the model service at " + host + " (" + why + "), so the genie got no answer. "
+                    + "The service, or this computer's way to it, is down; the genie is fine.";
+                case GERMAN -> "oillamp hat den Modelldienst unter " + host + " nicht erreicht (" + why + "), der Dschinn hat also keine Antwort bekommen. Der Dienst oder der Weg dieses Rechners dorthin ist ausgefallen; dem Dschinn geht es gut.";
+                case SPANISH -> "oillamp no pudo llegar al servicio de modelos en " + host + " (" + why + "), así que el genio no recibió respuesta. El servicio, o el camino de este equipo hasta él, no funciona; el genio está bien.";
+                case JAPANESE -> "oillamp は " + host + " のモデルサービスに接続できませんでした（" + why + "）。そのためジーニーは回答を受け取れませんでした。サービスか、このコンピューターからの経路が止まっています。ジーニーは無事です。";
+                case CHINESE -> "oillamp 无法连接到 " + host + " 上的模型服务（" + why + "），因此精灵没有收到回答。该服务或这台电脑通往它的网络出现了故障；精灵本身没有问题。";
+            };
+        }
+
+        public String THE_CONNECTION_TO_THE_MODEL_SERVICE_BROKE_OFF_BEFORE_AN_ANSWER_CAME() {
+            return switch (lang) {
+                case ENGLISH -> "The connection to the model service broke off before an answer came, so the genie got none. The genie is fine.";
+                case GERMAN -> "Die Verbindung zum Modelldienst brach ab, bevor eine Antwort kam, der Dschinn hat also keine bekommen. Dem Dschinn geht es gut.";
+                case SPANISH -> "La conexión con el servicio de modelos se cortó antes de que llegara una respuesta, así que el genio no recibió ninguna. El genio está bien.";
+                case JAPANESE -> "回答が届く前にモデルサービスとの接続が切れたため、ジーニーは回答を受け取れませんでした。ジーニーは無事です。";
+                case CHINESE -> "在回答到达之前，与模型服务的连接中断了，因此精灵没有收到回答。精灵本身没有问题。";
+            };
+        }
+
+        public String THE_MODEL_SERVICE_REFUSED_THE_KEY() {
+            return switch (lang) {
+                case ENGLISH -> "The model service refused the key";
+                case GERMAN -> "Der Modelldienst hat den Schlüssel abgelehnt";
+                case SPANISH -> "El servicio de modelos rechazó la clave";
+                case JAPANESE -> "モデルサービスがキーを拒否しました";
+                case CHINESE -> "模型服务拒绝了该密钥";
+            };
+        }
+
+        public String THE_MODEL_SERVICE_TAKES_NO_MORE_REQUESTS_FOR_NOW_OR_THE_KEYS_CREDIT_RAN_OUT() {
+            return switch (lang) {
+                case ENGLISH -> "The model service takes no more requests for now, or the key's credit ran out";
+                case GERMAN -> "Der Modelldienst nimmt gerade keine Anfragen mehr an, oder das Guthaben des Schlüssels ist aufgebraucht";
+                case SPANISH -> "El servicio de modelos no acepta más solicitudes por ahora, o se agotó el crédito de la clave";
+                case JAPANESE -> "モデルサービスが今はこれ以上リクエストを受け付けないか、キーのクレジットが尽きました";
+                case CHINESE -> "模型服务暂时不再接受请求，或者该密钥的额度已用完";
+            };
+        }
+
+        public String THE_MODEL_SERVICE_HAD_TROUBLE_OF_ITS_OWN() {
+            return switch (lang) {
+                case ENGLISH -> "The model service had trouble of its own";
+                case GERMAN -> "Der Modelldienst hatte selbst Probleme";
+                case SPANISH -> "El servicio de modelos tuvo problemas propios";
+                case JAPANESE -> "モデルサービス側で問題が起きました";
+                case CHINESE -> "模型服务自身出了问题";
+            };
+        }
+
+        public String THE_MODEL_SERVICE_REFUSED_THE_REQUEST() {
+            return switch (lang) {
+                case ENGLISH -> "The model service refused the request";
+                case GERMAN -> "Der Modelldienst hat die Anfrage abgelehnt";
+                case SPANISH -> "El servicio de modelos rechazó la solicitud";
+                case JAPANESE -> "モデルサービスがリクエストを拒否しました";
+                case CHINESE -> "模型服务拒绝了该请求";
+            };
+        }
+
+        public String REFUSED_THE_REQUEST(String model) {
+            return switch (lang) {
+                case ENGLISH -> model + " refused the request";
+                case GERMAN -> model + " hat die Anfrage abgelehnt";
+                case SPANISH -> model + " rechazó la solicitud";
+                case JAPANESE -> model + " がリクエストを拒否しました";
+                case CHINESE -> model + " 拒绝了该请求";
+            };
+        }
+
+        public String WITH_STATUS(String who, int code, String said) {
+            return switch (lang) {
+                case ENGLISH -> who + " (" + code + "): " + said;
+                case GERMAN -> who + " (" + code + "): " + said;
+                case SPANISH -> who + " (" + code + "): " + said;
+                case JAPANESE -> who + "（" + code + "）：" + said;
+                case CHINESE -> who + "（" + code + "）：" + said;
+            };
+        }
+
+        public String THE_MODEL_COULD_NOT_ANSWER(String said) {
+            return switch (lang) {
+                case ENGLISH -> "The model could not answer: " + said;
+                case GERMAN -> "Das Modell konnte nicht antworten: " + said;
+                case SPANISH -> "El modelo no pudo responder: " + said;
+                case JAPANESE -> "モデルが回答できませんでした：" + said;
+                case CHINESE -> "模型无法回答：" + said;
+            };
+        }
+
         public String SAVED_AS_A_MOMENT_OF_THE_HISTORY(String message) {
             return switch (lang) {
                 case ENGLISH -> "Saved as a moment of the history" + (message.isBlank() ? "" : ": " + message.strip()) + ". The history page brings the genie back to it.";
