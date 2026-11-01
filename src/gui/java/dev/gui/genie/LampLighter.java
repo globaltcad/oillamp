@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
+import dev.gui.model.Genie;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
@@ -39,7 +40,7 @@ public interface LampLighter {
         final Settings settings,
         final String key,
         final LampWallpaper wallpaper,
-        final Consumer<String> progress,
+        final Consumer<Genie.Activity> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException;
 
@@ -54,7 +55,7 @@ public interface LampLighter {
         final Path directory,
         final Settings settings,
         final String key,
-        final Consumer<String> progress,
+        final Consumer<Genie.Activity> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         Path name = directory.getFileName();

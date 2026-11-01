@@ -49,7 +49,7 @@ class RunningARealGenieSpec extends Specification {
 
     @Shared Path lamp = RealLamps.newLampPath('genie')
     @Shared Genie genie = Genie.named('Spike')
-    @Shared List<String> activities = new CopyOnWriteArrayList<>()
+    @Shared List<Genie.Activity> activities = new CopyOnWriteArrayList<>()
     @Shared GenieRunner runner = new GenieRunner(lamp, new LampLighterImpl(), { UnaryOperator<Genie> change ->
         synchronized (RunningARealGenieSpec) {
             genie = change.apply(genie)

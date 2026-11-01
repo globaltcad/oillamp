@@ -167,7 +167,7 @@ public final class GenieRunner {
                             );
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
-                changes.accept(genie -> genie.lampSays("waking the genie"));
+                changes.accept(genie -> genie.lampSays(new Genie.Activity.WakingTheGenie()));
                 GenieFileTransferUtil.makeDirectories(lit);
                 showConversation(fileOrMostRecent(conversation), leaf);
                 var files = GenieFileTransferUtil.list(lit);
@@ -347,8 +347,8 @@ public final class GenieRunner {
         sleeping = false;
         rejoinAt = new Conversations.Here(conversation, leaf);
         heldWhileCatchingUp = Optional.of(new ArrayList<>());
-        changes.accept(genie -> genie.waking().withActivity(fromElsewhere ? "joining its lamp, lit elsewhere"
-                                                                          : "joining its lamp, which was left running"));
+        changes.accept(genie -> genie.waking().withActivity(fromElsewhere ? new Genie.Activity.JoiningLitElsewhere()
+                                                                          : new Genie.Activity.JoiningLeftRunning()));
         try {
             Optional<LampLighter.Lit> lit = lighter.join(directory, heardFromThisLamp());
             if (lit.isEmpty()) {

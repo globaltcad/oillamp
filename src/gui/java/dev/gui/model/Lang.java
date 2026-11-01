@@ -166,6 +166,136 @@ public enum Lang {
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(Lang lang) {
+        public String LIGHTING_THE_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "lighting the lamp";
+                case GERMAN -> "entzündet die Lampe";
+                case SPANISH -> "encendiendo la lámpara";
+                case JAPANESE -> "ランプを灯しています";
+                case CHINESE -> "正在点亮神灯";
+            };
+        }
+
+        public String JOINING_ITS_LAMP_LIT_ELSEWHERE() {
+            return switch (lang) {
+                case ENGLISH -> "joining its lamp, lit elsewhere";
+                case GERMAN -> "verbindet sich mit seiner Lampe, die anderswo entzündet wurde";
+                case SPANISH -> "uniéndose a su lámpara, encendida en otro sitio";
+                case JAPANESE -> "ほかの場所で灯されたランプに接続しています";
+                case CHINESE -> "正在连接在别处点亮的神灯";
+            };
+        }
+
+        public String JOINING_ITS_LAMP_WHICH_WAS_LEFT_RUNNING() {
+            return switch (lang) {
+                case ENGLISH -> "joining its lamp, which was left running";
+                case GERMAN -> "verbindet sich mit seiner Lampe, die weiterlief";
+                case SPANISH -> "uniéndose a su lámpara, que siguió en marcha";
+                case JAPANESE -> "動かしたままだったランプに接続しています";
+                case CHINESE -> "正在连接一直在运行的神灯";
+            };
+        }
+
+        public String CHECKING_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "checking this computer";
+                case GERMAN -> "prüft diesen Rechner";
+                case SPANISH -> "comprobando este equipo";
+                case JAPANESE -> "このコンピューターを確認しています";
+                case CHINESE -> "正在检查这台电脑";
+            };
+        }
+
+        public String PREPARING_THE_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "preparing the lamp";
+                case GERMAN -> "bereitet die Lampe vor";
+                case SPANISH -> "preparando la lámpara";
+                case JAPANESE -> "ランプを準備しています";
+                case CHINESE -> "正在准备神灯";
+            };
+        }
+
+        public String MAKING_THE_SANDBOX_THE_FIRST_TIME_TAKES_SEVERAL_MINUTES() {
+            return switch (lang) {
+                case ENGLISH -> "making the sandbox; the first time takes several minutes";
+                case GERMAN -> "legt die Sandbox an; beim ersten Mal dauert das einige Minuten";
+                case SPANISH -> "creando el sandbox; la primera vez tarda varios minutos";
+                case JAPANESE -> "サンドボックスを作成しています。初回は数分かかります";
+                case CHINESE -> "正在创建沙箱；第一次需要几分钟";
+            };
+        }
+
+        public String STARTING_THE_SANDBOX() {
+            return switch (lang) {
+                case ENGLISH -> "starting the sandbox";
+                case GERMAN -> "startet die Sandbox";
+                case SPANISH -> "iniciando el sandbox";
+                case JAPANESE -> "サンドボックスを起動しています";
+                case CHINESE -> "正在启动沙箱";
+            };
+        }
+
+        public String WAKING_THE_GENIE() {
+            return switch (lang) {
+                case ENGLISH -> "waking the genie";
+                case GERMAN -> "weckt den Dschinn";
+                case SPANISH -> "despertando al genio";
+                case JAPANESE -> "ジーニーを起こしています";
+                case CHINESE -> "正在唤醒精灵";
+            };
+        }
+
+        public String READY() {
+            return switch (lang) {
+                case ENGLISH -> "ready";
+                case GERMAN -> "bereit";
+                case SPANISH -> "listo";
+                case JAPANESE -> "待機中";
+                case CHINESE -> "就绪";
+            };
+        }
+
+        public String ASLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "asleep";
+                case GERMAN -> "schläft";
+                case SPANISH -> "dormido";
+                case JAPANESE -> "眠っています";
+                case CHINESE -> "休眠中";
+            };
+        }
+
+        public String THINKING() {
+            return switch (lang) {
+                case ENGLISH -> "thinking";
+                case GERMAN -> "denkt nach";
+                case SPANISH -> "pensando";
+                case JAPANESE -> "考え中";
+                case CHINESE -> "思考中";
+            };
+        }
+
+        public String USING(String tool) {
+            return switch (lang) {
+                case ENGLISH -> "using " + tool;
+                case GERMAN -> "benutzt " + tool;
+                case SPANISH -> "usando " + tool;
+                case JAPANESE -> tool + " を使っています";
+                case CHINESE -> "正在使用 " + tool;
+            };
+        }
+
+        public String WRITING() {
+            return switch (lang) {
+                case ENGLISH -> "writing";
+                case GERMAN -> "schreibt";
+                case SPANISH -> "escribiendo";
+                case JAPANESE -> "書いています";
+                case CHINESE -> "正在撰写";
+            };
+        }
+
         public String NEW_GENIE() {
             return switch (lang) {
                 case ENGLISH -> "New genie";

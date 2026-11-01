@@ -97,7 +97,7 @@ class FollowingAConversationSpec extends Specification {
             entries[1].detail() == 'notes.md'
             entries[1].state() == Entry.State.DONE
             entries[2].state() == Entry.State.FAILED
-            working.activity() == 'using read'
+            working.activity() == new Genie.Activity.Using('read')
     }
 
     def 'A genie whose model shares its thoughts can be watched thinking'() {
@@ -119,7 +119,7 @@ class FollowingAConversationSpec extends Specification {
                 text() == 'Rayleigh scattering.'
                 isWriting()
             }
-            thinking.activity() == 'thinking'
+            thinking.activity() == new Genie.Activity.Thinking()
 
         when:
             var answering = thinking.hear(new PiEvent.Said('Because'))
@@ -490,7 +490,7 @@ class FollowingAConversationSpec extends Specification {
             interrupted.asleep().transcript().entries().every { !it.isWriting() }
             with(interrupted.broken('the sandbox stopped')) {
                 phase() == Genie.Phase.BROKEN
-                activity() == 'the sandbox stopped'
+                activity() == new Genie.Activity.Broken('the sandbox stopped')
                 transcript().entries().last().isFailed()
             }
     }

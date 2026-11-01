@@ -266,6 +266,26 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             local.askingForModels().lookUp().note(Lang.SPANISH) == 'Consultando los modelos…'
     }
 
+    def 'What a genie is doing is said in the language Genies speaks, and what its lamp reports as oillamp put it'() {
+        reportInfo """
+            Let's consider a genie that uses the tool "read", and another whose lamp makes its
+            sandbox. Under each genie's name, Genies says what it is doing in the language it
+            speaks. A step its lamp reports in oillamp's own words, such as "Pulling the base
+            image", is said as oillamp put it.
+        """
+        given: 'a genie using the tool read, and its lamp\'s steps'
+            def jafar = Genie.named('Jafar').withPhase(Genie.Phase.WORKING).withActivity(new Genie.Activity.Using('read'))
+
+        expect: 'what it does is said in each language'
+            jafar.status(Lang.ENGLISH) == 'using read'
+            jafar.status(Lang.GERMAN) == 'benutzt read'
+            jafar.status(Lang.JAPANESE) == 'read を使っています'
+
+        and: 'so are the steps of waking, and a step its lamp reports stays as oillamp put it'
+            new Genie.Activity.MakingTheSandbox().words(Lang.SPANISH) == 'creando el sandbox; la primera vez tarda varios minutos'
+            new Genie.Activity.LampSays('Pulling the base image').words(Lang.GERMAN) == 'Pulling the base image'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false
