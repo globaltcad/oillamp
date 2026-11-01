@@ -93,7 +93,7 @@ public record Transcript(Tuple<Entry> entries) {
                 // The failed answer before a retry said why already.
                 boolean told = !entries.isEmpty() && entries.last().kind() == Entry.Kind.NOTICE && entries.last().isFailed();
                 yield told ? notice(new Notice.TryingAgain(Optional.empty(), retry.attempt(), retry.attempts()))
-                           : problem(new Notice.TryingAgain(Optional.of(new Notice.Said(explained(retry.reason(), ""))), retry.attempt(), retry.attempts()));
+                           : problem(new Notice.TryingAgain(Optional.of(explained(retry.reason(), "")), retry.attempt(), retry.attempts()));
             }
             case PiEvent.Settled _ -> settled();
             case PiEvent.Refused refused -> problem(new Notice.CouldNotTake(refused.reason()));
@@ -214,40 +214,27 @@ public record Transcript(Tuple<Entry> entries) {
         String stripped = error.strip().toLowerCase(Locale.ROOT);
         return stripped.endsWith("aborted") || stripped.endsWith("aborted.")
             ? notice(new Notice.Stopped())
-            : problem(new Notice.Said(explained(error, model)));
+            : problem(explained(error, model));
     }
 
     /// Why the model could not answer, said plainly. `error` is what pi got: oillamp's answer
     /// when it could not pass the request on, the SDK's word for a broken connection, or the
     /// model service's status and message. A request the service refused names the model it was
     /// for, when `model` says which: the same request may well suit another model.
-    private static String explained(String error, String model) {
+    private static Notice explained(String error, String model) {
         String raw = error.strip();
         Matcher unreachable = UNREACHABLE.matcher(raw);
-        if (unreachable.matches())
-            return
-                "oillamp could not reach the model service at " + unreachable.group(1) + " (" + unreachable.group(2).strip()
-                + "), so the genie got no answer. The service, or this computer's way to it, is down; the genie is fine.";
-        if (raw.equals("Connection error."))
-            return "The connection to the model service broke off before an answer came, so the genie got none. The genie is fine.";
+        if (unreachable.matches()) return new Notice.ModelServiceUnreachable(unreachable.group(1), unreachable.group(2).strip());
+        if (raw.equals("Connection error.")) return new Notice.ConnectionBrokeOff();
         Matcher status = STATUS.matcher(raw);
-        String told = "The model could not answer: " + raw;
-        if (status.matches()) {
-            int code = Integer.parseInt(status.group(1));
-            String said = status.group(2).strip();
-            Matcher message = MESSAGE.matcher(said);
-            if (message.find()) said = message.group(1).replace("\\\"", "\"").replace("\\\\", "\\");
-            String who =
-                code == 401 || code == 403 ? "The model service refused the key"
-                : code == 429 ? "The model service takes no more requests for now, or the key's credit ran out"
-                : code >= 500 ? "The model service had trouble of its own"
-                : model.isBlank() ? "The model service refused the request"
-                : model.strip() + " refused the request";
-            // oillamp says plainly already what it refused.
-            told = said.startsWith("oillamp:") ? said : who + " (" + code + "): " + said;
-        }
-        // Ending as a sentence, so more can follow it.
-        return told.matches("(?s).*[.!?]") ? told : told + ".";
+        if (!status.matches()) return new Notice.ModelCouldNotAnswer(raw);
+        int code = Integer.parseInt(status.group(1));
+        String said = status.group(2).strip();
+        Matcher message = MESSAGE.matcher(said);
+        if (message.find()) said = message.group(1).replace("\\\"", "\"").replace("\\\\", "\\");
+        // oillamp says plainly already what it refused, ending as a sentence, so more can follow it.
+        if (said.startsWith("oillamp:")) return new Notice.Said(said.matches("(?s).*[.!?]") ? said : said + ".");
+        return new Notice.ModelServiceRefused(code, model, said);
     }
 
     /// The genie goes on to use a tool, so its last answer since the user wrote said what it does.
