@@ -111,7 +111,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() && !app.state().get().find(jafar).orElseThrow().history().note().isEmpty() }
             app.state().get().find(jafar).orElseThrow().history().picked() == app.state().get().find(jafar).orElseThrow().history().moments().first().id()
             app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.CHATTED
-            app.state().get().find(jafar).orElseThrow().transcript().entries().last().text() == app.state().get().find(jafar).orElseThrow().history().note().get().words(Lang.ENGLISH)
+            app.state().get().find(jafar).orElseThrow().transcript().entries().last().words(Lang.ENGLISH) == app.state().get().find(jafar).orElseThrow().history().note().get().words(Lang.ENGLISH)
 
         when: 'a file changes in the genie\'s home, and the user saves again'
             Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'refactor the parser')
@@ -126,7 +126,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
 
         and: 'the chat says so'
-            var told = app.state().get().find(jafar).orElseThrow().transcript().entries().last().text()
+            var told = app.state().get().find(jafar).orElseThrow().transcript().entries().last().words(Lang.ENGLISH)
             told == 'Saved as a moment of the history: before the big refactor. The history page brings the genie back to it.'
     }
 

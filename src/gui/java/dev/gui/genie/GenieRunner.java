@@ -22,6 +22,7 @@ import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
 import dev.gui.model.Handout;
 import dev.gui.model.History;
+import dev.gui.model.Notice;
 import dev.gui.model.Settings;
 import dev.gui.pi.PiEvent;
 import dev.lamp.Lamp;
@@ -204,7 +205,7 @@ public final class GenieRunner {
             try {
                 lit.get().cancel(run);
             } catch (IOException | LampFailedException failed) {
-                showProblem("The genie could not be stopped: " + reasonOf(failed));
+                showProblem(new Notice.CouldNotBeStopped(reasonOf(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -220,7 +221,7 @@ public final class GenieRunner {
             try {
                 lit.get().decidePermission(request, allowed);
             } catch (IOException | LampFailedException failed) {
-                showProblem("The decision did not reach the genie's lamp: " + reasonOf(failed));
+                showProblem(new Notice.DecisionDidNotReachTheLamp(reasonOf(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -241,7 +242,7 @@ public final class GenieRunner {
     /// Shows the conversation pi knows by `id`, where it stands, such as the one a job's run had.
     public void openConversation(String id) {
         work.execute(() -> Lamp.conversation(directory, id).ifPresentOrElse(conversation -> showConversation(conversation.file(), ""),
-                () -> showProblem("That conversation is not there any more.")));
+                () -> showProblem(new Notice.ConversationGone())));
     }
 
     /// Starts a new conversation: the chat empties, and the next message begins it. The others stay.
@@ -255,7 +256,7 @@ public final class GenieRunner {
         conversationReader.execute(() -> {
             Optional<LampConversation> conversation = conversationIn(where.file());
             if (conversation.isEmpty()) {
-                showProblem("The conversation of that question is not there any more.");
+                showProblem(new Notice.QuestionsConversationGone());
                 return;
             }
             sendQuestion(LampPrompt.insteadOf(conversation.get().id(), id, text));
@@ -269,11 +270,13 @@ public final class GenieRunner {
         work.execute(() -> {
             try {
                 Optional<LampConversation> doomed = conversationIn(conversation);
-                if (doomed.isEmpty()) throw new IOException("it is not there any more");
-                if (where.file().equals(conversation)) showConversation("", "");
-                Lamp.forget(directory, doomed.get().id());
+                if (doomed.isEmpty()) showProblem(new Notice.ConversationGone());
+                else {
+                    if (where.file().equals(conversation)) showConversation("", "");
+                    Lamp.forget(directory, doomed.get().id());
+                }
             } catch (IOException failed) {
-                showProblem("The conversation could not be deleted: " + reasonOf(failed));
+                showProblem(new Notice.ConversationNotDeleted(reasonOf(failed)));
             }
             reloadConversations();
         });
@@ -451,7 +454,7 @@ public final class GenieRunner {
     private void sendQuestion(LampPrompt question) {
         Optional<LampLighter.Lit> lit = lamp;
         if (lit.isEmpty()) {
-            showProblem("The genie is asleep; wake it first.");
+            showProblem(new Notice.AsleepWakeItFirst());
             return;
         }
         promptBeingSent = Optional.of(question.prompt());
@@ -526,7 +529,7 @@ public final class GenieRunner {
         runInProgress = Optional.empty();
         runsOfThisChat.remove(run);
         if (!runsThatAnswered.remove(run) && finished.outcome() != LampRunOutcome.FINISHED && !finished.answer().isBlank())
-            showProblem(finished.answer());
+            showProblem(new Notice.Said(finished.answer()));
         changes.accept(genie -> genie.hear(new PiEvent.Settled()));
         Optional<LampConversation> conversation = finished.conversation().flatMap(id -> Lamp.conversation(directory, id));
         if (conversation.isPresent()) {
@@ -575,14 +578,14 @@ public final class GenieRunner {
                 litWith = Optional.of(was.get().withModel(wanted));
             } catch (IOException | LampFailedException | IllegalArgumentException failed) {
                 String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
-                showProblem("The genie keeps answering with " + was.get().model() + " until it wakes again: " + why);
+                showProblem(new Notice.KeepsAnsweringWith(was.get().model(), why));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
         });
     }
 
-    private void showProblem(String problem) {
+    private void showProblem(Notice problem) {
         changes.accept(genie -> genie.withTranscript(genie.transcript().problem(problem)));
     }
 
@@ -710,13 +713,13 @@ public final class GenieRunner {
 
     /// Copies the outbox file `name` to `target`, which the user chose.
     public void saveOutboxFile(String name, Path target) {
-        transfer("Saved " + name + " to " + target + ".", lit -> GenieFileTransferUtil.fetch(lit, name, target));
+        transfer(Optional.of(new Notice.SavedFile(name, target.toString())), lit -> GenieFileTransferUtil.fetch(lit, name, target));
     }
 
     /// Puts `file` into the genie's inbox, and tells the genie.
     public void giveFile(Path file) {
         String name = file.getFileName().toString();
-        transfer("", lit -> {
+        transfer(Optional.empty(), lit -> {
             GenieFileTransferUtil.give(lit, file);
             changes.accept(genie -> genie.gave(name));
         });
@@ -724,18 +727,18 @@ public final class GenieRunner {
 
     private interface Transfer { void run(LampLighter.Lit lit) throws IOException, InterruptedException; }
 
-    private void transfer(String done, Transfer transfer) {
+    private void transfer(Optional<Notice> done, Transfer transfer) {
         Optional<LampLighter.Lit> lit = lamp;
         if (lit.isEmpty()) {
-            showProblem("The genie is asleep; wake it first.");
+            showProblem(new Notice.AsleepWakeItFirst());
             return;
         }
         Thread.ofVirtual().name("transfer").start(() -> {
             try {
                 transfer.run(lit.get());
-                if (!done.isEmpty()) changes.accept(genie -> genie.withTranscript(genie.transcript().notice(done)));
+                done.ifPresent(told -> changes.accept(genie -> genie.withTranscript(genie.transcript().notice(told))));
             } catch (IOException | InterruptedException failed) {
-                showProblem(reasonOf(failed));
+                showProblem(new Notice.Said(reasonOf(failed)));
             }
         });
     }

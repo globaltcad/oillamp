@@ -198,12 +198,12 @@ class FollowingAConversationSpec extends Specification {
         then:
             var entries = failed.transcript().entries()
             entries[1].isFailed()
-            entries[1].text() == 'The model service had trouble of its own (529): overloaded. Trying again, 1 of 3.'
-            entries[2].text() == 'The model service had trouble of its own (503): unavailable.'
+            entries[1].words(Lang.ENGLISH) == 'The model service had trouble of its own (529): overloaded. Trying again, 1 of 3.'
+            entries[2].words(Lang.ENGLISH) == 'The model service had trouble of its own (503): unavailable.'
             !entries[3].isFailed()
-            entries[3].text() == 'Trying again, 2 of 3.'
+            entries[3].words(Lang.ENGLISH) == 'Trying again, 2 of 3.'
             entries.last().isFailed()
-            entries.last().text() == 'The model service refused the key (401): there is no model key.'
+            entries.last().words(Lang.ENGLISH) == 'The model service refused the key (401): there is no model key.'
             failed.phase() == Genie.Phase.READY
     }
 
@@ -220,7 +220,7 @@ class FollowingAConversationSpec extends Specification {
 
         then:
             failed.transcript().entries().last().isFailed()
-            failed.transcript().entries().last().text().startsWith(said)
+            failed.transcript().entries().last().words(Lang.ENGLISH).startsWith(said)
 
         where:
             error                                                                                  | said
@@ -250,7 +250,7 @@ class FollowingAConversationSpec extends Specification {
                     .hear(new PiEvent.Answered('Half', 'Request was aborted', 0, ''))
 
         then:
-            stopped.transcript().entries()*.text() == ['hi', 'Half', 'Stopped before the answer was done.']
+            stopped.transcript().entries()*.words(Lang.ENGLISH) == ['hi', 'Half', 'Stopped before the answer was done.']
             !stopped.transcript().entries().last().isFailed()
     }
 
@@ -313,10 +313,10 @@ class FollowingAConversationSpec extends Specification {
                                 Entry.Kind.GENIE, Entry.Kind.NOTICE]
             entries*.beforeTools() == [false, true, false, false, false, false]
             entries*.isFailed() == [false, false, true, true, false, false]
-            entries[2].text().startsWith('oillamp could not reach the model service at api.eu.edenai.run')
-            entries[3].text().startsWith('The connection to the model service broke off')
-            entries[4].text() == 'It is half done.'
-            entries[5].text() == 'Stopped before the answer was done.'
+            entries[2].words(Lang.ENGLISH).startsWith('oillamp could not reach the model service at api.eu.edenai.run')
+            entries[3].words(Lang.ENGLISH).startsWith('The connection to the model service broke off')
+            entries[4].words(Lang.ENGLISH) == 'It is half done.'
+            entries[5].words(Lang.ENGLISH) == 'Stopped before the answer was done.'
     }
 
     def 'A genie that wakes again shows the conversation its harness kept'() {
@@ -449,7 +449,7 @@ class FollowingAConversationSpec extends Specification {
         then:
             refused.phase() == Genie.Phase.READY
             refused.transcript().entries().last().isFailed()
-            refused.transcript().entries().last().text().contains('No API key found')
+            refused.transcript().entries().last().words(Lang.ENGLISH).contains('No API key found')
     }
 
     def 'A new file in the outbox is announced once, and the files already there when it woke are not'() {
