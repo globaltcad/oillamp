@@ -284,17 +284,17 @@ class ChoosingTheGeniesModelSpec extends Specification {
             var refusal = '400: {"message":"OpenAIException - Invalid request","type":"invalid_request_error","param":null,"code":"invalid_parameter"}'
 
         expect: 'as the answer fails'
-            Transcript.empty().you('hi').hear(new PiEvent.Answered('', refusal, 0, DEEPSEEK)).entries().last().text() ==
+            Transcript.empty().you('hi').hear(new PiEvent.Answered('', refusal, 0, DEEPSEEK)).entries().last().words(Lang.ENGLISH) ==
                     "${DEEPSEEK} refused the request (400): OpenAIException - Invalid request.".toString()
 
         and: 'read back from the conversation'
             Transcript.empty().hear(new PiEvent.History(Tuple.of(PiEvent.History.Line,
                     new PiEvent.History.Line(true, 'hi', 'q1', false, false, ''),
-                    new PiEvent.History.Line(false, refusal, 'a1', false, true, DEEPSEEK)), 'a1')).entries().last().text() ==
+                    new PiEvent.History.Line(false, refusal, 'a1', false, true, DEEPSEEK)), 'a1')).entries().last().words(Lang.ENGLISH) ==
                     "${DEEPSEEK} refused the request (400): OpenAIException - Invalid request.".toString()
 
         and: 'with no model known'
-            Transcript.empty().you('hi').hear(new PiEvent.Answered('', refusal, 0, '')).entries().last().text() ==
+            Transcript.empty().you('hi').hear(new PiEvent.Answered('', refusal, 0, '')).entries().last().words(Lang.ENGLISH) ==
                     'The model service refused the request (400): OpenAIException - Invalid request.'
     }
 

@@ -27,6 +27,7 @@ import dev.gui.model.Conversation;
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
+import dev.gui.model.Notice;
 import dev.gui.model.History;
 import dev.gui.model.Home;
 import dev.gui.model.Lang;
@@ -242,7 +243,8 @@ public final class GeniesBackend implements Genies {
         Optional<String> problem = now.settingsProblem();
         Optional<String> key = now.settings().keyFrom(now.environmentKey());
         if (problem.isPresent() || key.isEmpty()) {
-            String why = problem.orElse("There is no model key.");
+            // A problem with the settings is worded already, in the language Genies speaks now.
+            Notice why = problem.<Notice>map(Notice.Said::new).orElse(new Notice.NoModelKey());
             state.update(From.VIEW, it -> it.update(id, genie -> genie.withTranscript(genie.transcript().problem(why)))
                                              .withPage(GeniesState.Page.SETTINGS));
             return;
