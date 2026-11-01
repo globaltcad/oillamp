@@ -5,6 +5,7 @@ import dev.gui.genie.Shelf
 import dev.gui.genie.SystemLook
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.Handout
 import dev.gui.model.History
 import dev.gui.model.HostAccess
 import dev.gui.model.OllamaSetup
@@ -347,6 +348,20 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             refused.words(Lang.ENGLISH) == 'The model service refused the key (401): invalid api key.'
             refused.words(Lang.GERMAN) == 'Der Modelldienst hat den Schlüssel abgelehnt (401): invalid api key.'
             refused.words(Lang.CHINESE) == '模型服务拒绝了该密钥（401）：invalid api key.'
+    }
+
+    def 'A file handed over in a chat is said in the language Genies speaks'() {
+        reportInfo """
+            Let's consider a genie that hands the user a small file, notes.txt, of 312 bytes,
+            and a user who gives it a file in return. The chat shows each as a file, with what
+            happened to it, in the language Genies speaks.
+        """
+        given: 'a file handed over, and one given'
+            def chat = Transcript.empty().handedOver(new Handout('notes.txt', 312)).gave('plan.md')
+
+        expect: 'each is said in each language'
+            chat.entries()*.words(Lang.ENGLISH) == ['handed you a file, 312 bytes', 'you gave the genie this file, in ~/inbox']
+            chat.entries()*.words(Lang.GERMAN) == ['hat dir eine Datei gegeben, 312 Bytes', 'du hast dem Dschinn diese Datei gegeben, in ~/inbox']
     }
 
     /// Whether a label in `view` says `text`.

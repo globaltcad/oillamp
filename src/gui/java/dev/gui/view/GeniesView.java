@@ -1404,7 +1404,7 @@ public final class GeniesView extends JPanel {
             .add("growx, wmin 0",
                 box("ins 0, gap 6").withMinSize(0, 0)
                 .addAll(handouts, file -> UI.of(UI.use(look, () ->
-                    button("⤓ " + file.name() + "  ·  " + file.readableSize()).group(Skin.QUIET_BUTTON)
+                    button(chatWords.viewAsString(it -> "⤓ " + file.name() + "  ·  " + file.readableSize(it.lang()))).group(Skin.QUIET_BUTTON)
                     .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER(file.name())))
                     .onClick(_ -> saveHandout(file.name()))
                     .get(JButton.class)
