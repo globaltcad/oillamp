@@ -7,6 +7,7 @@ import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.History
 import dev.gui.model.HostAccess
+import dev.gui.model.OllamaSetup
 import dev.gui.model.Schedule
 import dev.gui.model.Lang
 import dev.gui.model.Settings
@@ -204,6 +205,28 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             job.words(Lang.GERMAN) == 'Der Auftrag ließ sich nicht ausschalten: the lamp is busy'
             access.words(Lang.ENGLISH) == 'oillamp could not save it: permission denied'
             access.words(Lang.SPANISH) == 'oillamp no pudo guardarlo: permission denied'
+    }
+
+    def 'How far setting up Ollama is, is said in the language Genies speaks'() {
+        reportInfo """
+            Let's consider Genies downloading the model qwen3:8b for Ollama. The settings say how
+            far the download is, and the steps before and after it. Genies keeps each as a value,
+            such as how many bytes of how many arrived, and the settings say it in the language
+            Genies speaks, the amounts in MB and GB.
+        """
+        given: 'a download of qwen3:8b, 512 MB of 2 GB along'
+            def downloading = new OllamaSetup.Says.DownloadingModel('qwen3:8b', 512L << 20, 2L << 30)
+
+        expect: 'it is said in each language'
+            downloading.words(Lang.ENGLISH) == 'Downloading qwen3:8b: 512 MB of 2.0 GB.'
+            downloading.words(Lang.GERMAN) == 'Lade qwen3:8b herunter: 512 MB von 2.0 GB.'
+            downloading.words(Lang.JAPANESE) == 'qwen3:8b をダウンロード中：512 MB / 2.0 GB'
+
+        and: 'before anything arrived, it says only what it downloads'
+            new OllamaSetup.Says.DownloadingModel('qwen3:8b', 0, 0).words(Lang.SPANISH) == 'Descargando qwen3:8b…'
+
+        and: 'so are the other steps'
+            new OllamaSetup.Says.StartingOllama().words(Lang.CHINESE) == '正在启动 Ollama…'
     }
 
     /// Whether a label in `view` says `text`.

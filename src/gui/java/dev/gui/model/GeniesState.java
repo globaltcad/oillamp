@@ -358,7 +358,7 @@ public record GeniesState(
                 settings.withPlace(Settings.Place.THIS_MACHINE)
                 .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, OllamaSetup.PREFIX + model))
             )
-            .withOllama(ollama.at(OllamaSetup.Step.IDLE, 0, ""));
+            .withOllama(ollama.at(OllamaSetup.Step.IDLE, 0));
     }
 
     /// Why genies cannot reach their model with the current settings, or nothing.
