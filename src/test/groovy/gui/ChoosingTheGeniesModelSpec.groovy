@@ -14,6 +14,7 @@ import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampPrompt
 import dev.lamp.LampRun
+import dev.lamp.LampWallpaper
 import oillamp.ScenarioHost
 import sprouts.Tuple
 import spock.lang.Narrative
@@ -125,7 +126,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             through the same provider, so the name is all the lamp needs.
         """
         when: 'Jafar wakes with settings for the place in the row below'
-            runner.wake('Jafar', SETTINGS[where], 'sk-key')
+            runner.wake('Jafar', SETTINGS[where], 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
 
         then: 'the genie\'s engine was started with the model the settings name there'
@@ -149,7 +150,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             still there.
         """
         given: 'a genie that answered on DeepSeek'
-            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
             say('hello')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
@@ -188,7 +189,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             The user's own messages say nothing.
         """
         given: 'a conversation answered by DeepSeek, then by GPT'
-            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
             say('hello')
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
@@ -200,7 +201,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             runner.sleep()
             waitUntil { genie.phase() == Genie.Phase.ASLEEP }
             synchronized (this) { genie = genie.withTranscript(Transcript.empty()) }
-            runner.wake('Jafar', Settings.defaults().withModel(GPT), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel(GPT), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 2 }
 
         then: 'each answer names its own model, and the user\'s messages name none'
@@ -218,7 +219,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             settings say.
         """
         given: 'a genie awake on Eden AI\'s GPT'
-            runner.wake('Jafar', Settings.defaults().withModel(GPT), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel(GPT), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
 
         when: 'the settings change to Ollama on this computer, and then to another Eden AI key'
@@ -236,7 +237,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             runner.sleep()
             waitUntil { genie.phase() == Genie.Phase.ASLEEP }
             runner.wake('Jafar', Settings.defaults().withPlace(Settings.Place.THIS_MACHINE)
-                    .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, 'genies/qwen3:8b')), 'no-key-needed')
+                    .withLocal(new Settings.OnThisMachine(Settings.OLLAMA, 'genies/qwen3:8b')), 'no-key-needed', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
 
         then: 'its lamp is lit with all of them'
@@ -253,7 +254,7 @@ class ChoosingTheGeniesModelSpec extends Specification {
             with, and takes the settings' model when it next wakes.
         """
         given: 'a genie on DeepSeek, left running as Genies closed'
-            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel(DEEPSEEK), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
             runner.leaveRunningAndWait(30)
 
@@ -356,8 +357,8 @@ class ChoosingTheGeniesModelSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
-            noted(real.light(directory, name, settings, key, progress, events))
+        var light = { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<String> progress, Consumer<LampEvent> events ->
+            noted(real.light(directory, name, settings, key, wallpaper, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events -> real.join(directory, events).map { noted(it) } }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
