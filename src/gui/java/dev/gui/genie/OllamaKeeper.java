@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -87,10 +86,10 @@ public final class OllamaKeeper {
     /// @param home the folder Genies installs Ollama into, and writes what it says into
     public OllamaKeeper(Path home) { this.home = home; }
 
-    /// How far a step is, from 0 to 1, and what happens, in a few words.
+    /// How far a download is: `done` bytes of `total`, which is 0 while unknown.
     @FunctionalInterface
     public interface Progress {
-        void at(double progress, String says);
+        void at(long done, long total);
     }
 
     /// Whether Ollama is installed, whether it runs, the models it has, and what the computer has
@@ -108,8 +107,9 @@ public final class OllamaKeeper {
     }
 
     /// Installs Ollama into [#home], replacing what was there only once the new one is whole. A
-    /// computer with an AMD graphics card gets a second archive, with what Ollama needs for it.
-    public void install(Progress progress) throws IOException, InterruptedException {
+    /// computer with an AMD graphics card gets a second archive, with what Ollama needs for it,
+    /// whose download `forAmd` follows.
+    public void install(Progress progress, Progress forAmd) throws IOException, InterruptedException {
         String processor = System.getProperty("os.arch").equals("aarch64") ? "arm64" : "amd64";
         Path partial = Path.of(home + ".part");
         deleteAll(partial);
@@ -117,7 +117,7 @@ public final class OllamaKeeper {
         try {
             unpack(URI.create(DOWNLOADS + "ollama-linux-" + processor + ".tar.zst"), partial, "Downloading Ollama", progress);
             if (!amdCards().isEmpty()) unpack(URI.create(DOWNLOADS + "ollama-linux-" + processor + "-rocm.tar.zst"), partial,
-                            "Downloading what Ollama needs for AMD graphics cards", progress);
+                            "Downloading what Ollama needs for AMD graphics cards", forAmd);
         } catch (IOException | InterruptedException | RuntimeException failed) {
             // What was unpacked so far can be gigabytes, and is of no use to anyone.
             try {
@@ -176,7 +176,7 @@ public final class OllamaKeeper {
                 if (said.has("total")) layers.put(said.path("digest").asText(), new long[] { said.path("completed").asLong(), said.path("total").asLong() });
                 long done = layers.values().stream().mapToLong(it -> it[0]).sum();
                 long all = layers.values().stream().mapToLong(it -> it[1]).sum();
-                if (all > 0) progress.at((double) done / all, "Downloading " + model + ": " + amount(done) + " of " + amount(all) + ".");
+                if (all > 0) progress.at(done, all);
             }
         }
         throw new IOException("Ollama stopped downloading " + model + " without saying why.");
@@ -321,7 +321,7 @@ public final class OllamaKeeper {
                 // Once for each megabyte, which is often enough to look smooth.
                 if (arrived[0] >> 20 != shown) {
                     shown = arrived[0] >> 20;
-                    progress.at(total > 0 ? (double) arrived[0] / total : 0, what + ": " + amount(arrived[0]) + (total > 0 ? " of " + amount(total) : "") + ".");
+                    progress.at(arrived[0], total);
                 }
             }
         } catch (IOException failed) {
@@ -398,10 +398,5 @@ public final class OllamaKeeper {
         try (Stream<Path> all = Files.walk(directory)) {
             for (Path path : all.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
         }
-    }
-
-    /// "312 MB", or "5.2 GB" from a gigabyte on.
-    private static String amount(long bytes) {
-        return bytes < 1L << 30 ? (bytes >> 20) + " MB" : String.format(Locale.ROOT, "%.1f GB", bytes / (double) (1L << 30));
     }
 }

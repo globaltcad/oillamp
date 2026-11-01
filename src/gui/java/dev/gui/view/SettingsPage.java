@@ -399,7 +399,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    ollama.viewAsString(OllamaSetup::says),
+                                    Viewable.of(String.class, ollama, words, (it, page) -> it.says().map(says -> says.words(page.lang())).orElse("")),
                                     Palette::SUBTEXT,
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.FAILED && !it.says().isEmpty())
                                 )
@@ -407,7 +407,7 @@ final class SettingsPage {
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    ollama.viewAsString(OllamaSetup::says),
+                                    Viewable.of(String.class, ollama, words, (it, page) -> it.says().map(says -> says.words(page.lang())).orElse("")),
                                     Palette::TROUBLE,
                                     ollama.viewAs(Boolean.class, it -> it.step() == OllamaSetup.Step.FAILED)
                                 )
