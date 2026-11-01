@@ -1744,6 +1744,100 @@ public enum Lang {
                 case CHINESE -> "保存 " + file;
             };
         }
+
+        /// What the user is asked on closing Genies with `awake`, the names of the genies awake. On
+        /// two lines, since a dialog does not wrap its text.
+        public String ARE_AWAKE_PUT_THEM_TO_SLEEP_OR_KEEP_THEM_RUNNING_IN_THE_BACKGROUND(List<String> awake) {
+            boolean one = awake.size() == 1;
+            return switch (lang) {
+                case ENGLISH -> {
+                    String them = one ? "it" : "them";
+                    yield listedInEnglish(awake) + (one ? " is" : " are") + " awake. Put " + them + " to sleep, or keep " + them
+                        + " running in the background?\nKept running, "
+                        + (one ? "it finishes what it is doing and keeps to its" : "they finish what they are doing and keep to their")
+                        + " schedule, and Genies finds " + them + " again when it opens.";
+                }
+                case GERMAN -> one
+                    ? awake.getFirst() + " ist wach. Soll er schlafen gehen oder im Hintergrund weiterlaufen?\n"
+                        + "Läuft er weiter, macht er fertig, woran er gerade arbeitet, hält sich an seinen Zeitplan, und Genies findet ihn beim nächsten Öffnen wieder."
+                    : listedInGerman(awake) + " sind wach. Sollen sie schlafen gehen oder im Hintergrund weiterlaufen?\n"
+                        + "Laufen sie weiter, machen sie fertig, woran sie gerade arbeiten, halten sich an ihren Zeitplan, und Genies findet sie beim nächsten Öffnen wieder.";
+                case SPANISH -> one
+                    ? awake.getFirst() + " está despierto. ¿Lo duermes o lo dejas en marcha en segundo plano?\n"
+                        + "Si sigue en marcha, termina lo que está haciendo, cumple su programación y Genies lo vuelve a encontrar al abrirse."
+                    : listedInSpanish(awake) + " están despiertos. ¿Los duermes o los dejas en marcha en segundo plano?\n"
+                        + "Si siguen en marcha, terminan lo que están haciendo, cumplen su programación y Genies los vuelve a encontrar al abrirse.";
+                case JAPANESE -> listedInJapanese(awake) + " は起きています。眠らせますか？それともバックグラウンドで動かしたままにしますか？\n"
+                    + "動かしたままにすると、今の作業を終えてスケジュールどおりに動き、次に Genies を開いたときにまた見つかります。";
+                case CHINESE -> {
+                    String it = one ? "它" : "它们";
+                    yield listedInChinese(awake) + " 正醒着。让" + it + "休眠，还是让" + it + "在后台继续运行？\n"
+                        + "继续运行时，" + it + "会做完手头的事并按计划运行，下次打开 Genies 时会再找到" + it + "。";
+                }
+            };
+        }
+
+        public String GENIES_ARE_AWAKE() {
+            return switch (lang) {
+                case ENGLISH -> "Genies are awake";
+                case GERMAN -> "Dschinns sind wach";
+                case SPANISH -> "Hay genios despiertos";
+                case JAPANESE -> "起きているジーニーがいます";
+                case CHINESE -> "有精灵醒着";
+            };
+        }
+
+        public String PUT_TO_SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Put to sleep";
+                case GERMAN -> "Schlafen legen";
+                case SPANISH -> "Dormir";
+                case JAPANESE -> "眠らせる";
+                case CHINESE -> "休眠";
+            };
+        }
+
+        public String KEEP_RUNNING() {
+            return switch (lang) {
+                case ENGLISH -> "Keep running";
+                case GERMAN -> "Weiterlaufen lassen";
+                case SPANISH -> "Dejar en marcha";
+                case JAPANESE -> "動かしたままにする";
+                case CHINESE -> "继续运行";
+            };
+        }
+
+        public String CANCEL() {
+            return switch (lang) {
+                case ENGLISH -> "Cancel";
+                case GERMAN -> "Abbrechen";
+                case SPANISH -> "Cancelar";
+                case JAPANESE -> "キャンセル";
+                case CHINESE -> "取消";
+            };
+        }
+
+        /// The window's title while Genies closes and leaves the genies running.
+        public String GENIES_LEAVING_THE_GENIES_RUNNING() {
+            return switch (lang) {
+                case ENGLISH -> "Genies — leaving the genies running…";
+                case GERMAN -> "Genies — die Dschinns laufen weiter…";
+                case SPANISH -> "Genies — los genios siguen en marcha…";
+                case JAPANESE -> "Genies — ジーニーを動かしたままにしています…";
+                case CHINESE -> "Genies — 精灵将继续运行…";
+            };
+        }
+
+        /// The window's title while Genies closes and puts the genies to sleep.
+        public String GENIES_PUTTING_THE_GENIES_TO_SLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Genies — putting the genies to sleep…";
+                case GERMAN -> "Genies — die Dschinns werden schlafen gelegt…";
+                case SPANISH -> "Genies — durmiendo a los genios…";
+                case JAPANESE -> "Genies — ジーニーを眠らせています…";
+                case CHINESE -> "Genies — 正在让精灵休眠…";
+            };
+        }
     }
 
     /// The words of a genie's Actions page: what can be done with the genie as a whole.
