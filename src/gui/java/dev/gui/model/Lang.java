@@ -1296,6 +1296,36 @@ public enum Lang {
     /// The words of a genie's chat: the conversation, the files the genie hands out, and the
     /// composer under it.
     public record Chat(Lang lang) {
+        public String BYTES(long count) {
+            return switch (lang) {
+                case ENGLISH -> count + " bytes";
+                case GERMAN -> count + " Bytes";
+                case SPANISH -> count + " bytes";
+                case JAPANESE -> count + " バイト";
+                case CHINESE -> count + " 字节";
+            };
+        }
+
+        public String HANDED_YOU_A_FILE(String size) {
+            return switch (lang) {
+                case ENGLISH -> "handed you a file, " + size;
+                case GERMAN -> "hat dir eine Datei gegeben, " + size;
+                case SPANISH -> "te ha dado un archivo, " + size;
+                case JAPANESE -> "ファイルを渡しました（" + size + "）";
+                case CHINESE -> "交给你一个文件，" + size;
+            };
+        }
+
+        public String YOU_GAVE_THE_GENIE_THIS_FILE_IN_INBOX() {
+            return switch (lang) {
+                case ENGLISH -> "you gave the genie this file, in ~/inbox";
+                case GERMAN -> "du hast dem Dschinn diese Datei gegeben, in ~/inbox";
+                case SPANISH -> "le diste este archivo al genio, en ~/inbox";
+                case JAPANESE -> "このファイルをジーニーに渡しました（~/inbox）";
+                case CHINESE -> "你把这个文件交给了精灵，在 ~/inbox 中";
+            };
+        }
+
         public String OILLAMP_COULD_NOT_REACH_THE_MODEL_SERVICE_AT(String host, String why) {
             return switch (lang) {
                 case ENGLISH -> "oillamp could not reach the model service at " + host + " (" + why + "), so the genie got no answer. "
