@@ -29,7 +29,7 @@ import sprouts.Tuple;
 ///                 branch the genie lives on. Showing a line changes only what the page shows
 /// @param picked   the id of the moment whose card is open, with its buttons; empty for none
 /// @param earlier  whether every moment of the line is shown, not only the newest [#SHOWN]
-/// @param busy     what is on its way to the lamp, such as "Saving…"; empty while nothing is
+/// @param busy     what is on its way to the lamp, such as a save; empty while nothing is
 /// @param note     what the last save came to when it saved nothing; empty otherwise
 /// @param problem  why the last change failed, in the lamp's words; empty when it did not
 /// @param plan     what a change the user asked for would throw away, as the lamp said, until
@@ -47,7 +47,7 @@ public record History(
     String line,
     String picked,
     boolean earlier,
-    String busy,
+    Optional<Busy> busy,
     String note,
     String problem,
     Optional<Plan> plan,
@@ -190,6 +190,48 @@ public record History(
         @Override public String id() { return name; }
     }
 
+    /// What is on its way to the lamp, which the page says while it is. Said in the language
+    /// Genies speaks with [#words(Lang)], so the page says it in another once the user picks one.
+    public sealed interface Busy {
+        /// Saving the genie's home as a new moment.
+        record Saving() implements Busy {}
+        /// Starting the branch `branch` from the newest moment.
+        record StartingBranch(String branch) implements Busy {}
+        /// Asking the lamp what deleting the branch `branch` would throw away.
+        record LookingAtBranch(String branch) implements Busy {}
+        /// Deleting the branch `branch`.
+        record DeletingBranch(String branch) implements Busy {}
+        /// Asking the lamp what a reset would throw away.
+        record LookingAtReset() implements Busy {}
+        /// Asking the lamp which moments do not fit within the history's size.
+        record LookingAtWhatDoesNotFit() implements Busy {}
+        /// Deleting the moments that do not fit.
+        record DeletingOldMoments() implements Busy {}
+        /// Going back to a moment.
+        record GoingBack() implements Busy {}
+        /// Moving to the branch `branch`.
+        record MovingTo(String branch) implements Busy {}
+        /// Resetting the branch the genie lives on.
+        record Resetting() implements Busy {}
+
+        /// What it is, in `lang`.
+        default String words(Lang lang) {
+            Lang.HistoryPage words = lang.HISTORY_PAGE();
+            return switch (this) {
+                case Saving _ -> words.SAVING();
+                case StartingBranch it -> words.STARTING_THE_BRANCH(it.branch());
+                case LookingAtBranch it -> words.LOOKING_AT_WHAT_THE_BRANCH_HOLDS(it.branch());
+                case DeletingBranch it -> words.DELETING_THE_BRANCH(it.branch());
+                case LookingAtReset _ -> words.LOOKING_AT_WHAT_A_RESET_WOULD_THROW_AWAY();
+                case LookingAtWhatDoesNotFit _ -> words.LOOKING_AT_WHAT_DOES_NOT_FIT();
+                case DeletingOldMoments _ -> words.DELETING_OLD_MOMENTS();
+                case GoingBack _ -> words.GOING_BACK();
+                case MovingTo it -> words.MOVING_TO(it.branch());
+                case Resetting _ -> words.RESETTING();
+            };
+        }
+    }
+
     /// What a change the user asked for would throw away, as the lamp said when Genies asked it
     /// first. The page shows it, and the change happens only once the user confirms.
     public sealed interface Plan {
@@ -230,12 +272,13 @@ public record History(
 
     public static final History UNREAD = new History(
         false, 0, Tuple.of(Moment.class), Tuple.of(Branch.class), "", "",
-        false, "", "", "", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
+        false, Optional.empty(), "", "", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
     );
 
     public History withPicked(String picked)    { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withEarlier(boolean earlier) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
-    public History withBusy(String busy)        { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
+    public History withBusy(Busy busy)          { return new History(read, reading, all, branches, line, picked, earlier, Optional.of(busy), note, problem, plan, autosave, maxGrowthGb, pruned); }
+    public History notBusy()                    { return new History(read, reading, all, branches, line, picked, earlier, Optional.empty(), note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withNote(String note)        { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withProblem(String problem)  { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withPlan(Optional<Plan> plan) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }

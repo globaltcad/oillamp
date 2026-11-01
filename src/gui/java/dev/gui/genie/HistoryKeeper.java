@@ -165,19 +165,19 @@ public final class HistoryKeeper {
     /// @param message what to remember the moment by; may be empty
     public void save(String message) {
         watched = true;
-        change(it -> it.withBusy("Saving…").withNote("").withProblem(""));
+        change(it -> it.withBusy(new History.Busy.Saving()).withNote("").withProblem(""));
         work.execute(() -> {
             try {
                 Optional<LampSave> saved = lamp.save(message.strip());
                 String nothingChanged = "Nothing changed since the newest moment, so it holds how the genie is now already.";
-                change(it -> saved.isPresent() ? it.withBusy("").withPicked(saved.get().id())
-                        : it.withBusy("").withPicked(it.moments().isEmpty() ? "" : it.moments().first().id()).withNote(nothingChanged));
+                change(it -> saved.isPresent() ? it.notBusy().withPicked(saved.get().id())
+                        : it.notBusy().withPicked(it.moments().isEmpty() ? "" : it.moments().first().id()).withNote(nothingChanged));
                 String told = saved.isEmpty() ? nothingChanged
                         : "Saved as a moment of the history" + (message.isBlank() ? "" : ": " + message.strip())
                           + ". The history page brings the genie back to it.";
                 changes.accept(genie -> genie.withTranscript(genie.transcript().notice(told)));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy("").withProblem("oillamp could not save: " + reason(failed)));
+                change(it -> it.notBusy().withProblem("oillamp could not save: " + reason(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -192,14 +192,14 @@ public final class HistoryKeeper {
     /// moment of the branch the genie lives on. The genie stays on its branch, awake or asleep.
     public void startBranch(String name, String moment) {
         watched = true;
-        change(it -> it.withBusy("Starting the branch " + name + "…").withNote("").withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.StartingBranch(name)).withNote("").withProblem("").withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 if (moment.isEmpty()) lamp.branch(name);
                 else lamp.branch(name, moment);
-                change(it -> it.withBusy(""));
+                change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy("").withProblem("oillamp could not start the branch " + name + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem("oillamp could not start the branch " + name + ": " + reason(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -211,7 +211,7 @@ public final class HistoryKeeper {
     /// Asks the lamp how many moments only the branch `name` holds, which deleting it would lose,
     /// for the page to ask the user.
     public void planDeletingBranch(String name) {
-        plan("Looking at what the branch " + name + " holds…", "deleting the branch " + name, () -> {
+        plan(new History.Busy.LookingAtBranch(name), "deleting the branch " + name, () -> {
             LampEvent.BranchDeletePlanned planned = lamp.wouldDeleteBranch(name);
             return Optional.of(new History.Plan.DeleteBranch(planned.branch(), planned.snapshots()));
         });
@@ -220,13 +220,13 @@ public final class HistoryKeeper {
     /// Deletes the branch `name`, which the genie does not live on. The user confirmed.
     public void deleteBranch(String name) {
         watched = true;
-        change(it -> it.withBusy("Deleting the branch " + name + "…").withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.DeletingBranch(name)).withProblem("").withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 lamp.deleteBranch(name);
-                change(it -> it.withBusy(""));
+                change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy("").withProblem("oillamp could not delete the branch " + name + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem("oillamp could not delete the branch " + name + ": " + reason(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -238,7 +238,7 @@ public final class HistoryKeeper {
     /// Asks the lamp what resetting the branch the genie lives on back to `moment` would throw
     /// away, for the page to ask the user. Only while the genie sleeps.
     public void planReset(String moment) {
-        plan("Looking at what a reset would throw away…", "resetting", () -> {
+        plan(new History.Busy.LookingAtReset(), "resetting", () -> {
             LampEvent.ResetPlanned planned = lamp.wouldReset(moment);
             return Optional.of(new History.Plan.Reset(planned.target().id(), planned.snapshots(), planned.unsaved()));
         });
@@ -249,7 +249,7 @@ public final class HistoryKeeper {
     /// Asks the lamp which moments keeping the history within its size would delete now, for the
     /// page to ask the user; when none, the page says so instead. Only while the genie sleeps.
     public void planPruning() {
-        plan("Looking at what does not fit…", "tidying up", () -> {
+        plan(new History.Busy.LookingAtWhatDoesNotFit(), "tidying up", () -> {
             Optional<LampEvent.HistoryPrunePlanned> planned = lamp.wouldPruneHistory();
             Optional<History.Plan> pruning = planned.filter(it -> !it.removed().isEmpty()).map(LampApiConversionUtil::pruning);
             if (pruning.isEmpty())
@@ -262,13 +262,13 @@ public final class HistoryKeeper {
     /// confirmed. Only while the genie sleeps.
     public void prune() {
         watched = true;
-        change(it -> it.withBusy("Deleting old moments…").withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.DeletingOldMoments()).withProblem("").withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 lamp.pruneHistory();
-                change(it -> it.withBusy(""));
+                change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy("").withProblem("oillamp could not delete old moments: " + reason(failed)));
+                change(it -> it.notBusy().withProblem("oillamp could not delete old moments: " + reason(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -285,14 +285,14 @@ public final class HistoryKeeper {
 
     /// Asks the lamp what a change would throw away, saying `busy` meanwhile, and shows it as the
     /// plan the user confirms or drops; `what` names the change if the lamp refuses.
-    private void plan(String busy, String what, Asking asking) {
+    private void plan(History.Busy busy, String what, Asking asking) {
         change(it -> it.withBusy(busy).withNote("").withProblem("").withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 Optional<History.Plan> plan = asking.ask();
-                change(it -> it.withBusy("").withPlan(plan));
+                change(it -> it.notBusy().withPlan(plan));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy("").withProblem("oillamp refused " + what + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem("oillamp refused " + what + ": " + reason(failed)));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
