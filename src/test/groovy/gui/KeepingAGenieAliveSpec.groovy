@@ -1,6 +1,5 @@
 package gui
 
-import dev.gui.Main
 import dev.gui.genie.GenieRunner
 import dev.gui.genie.LampLighterImpl
 import dev.gui.genie.LampLighter
@@ -607,12 +606,23 @@ class KeepingAGenieAliveSpec extends Specification {
         reportInfo """
             Closing Genies used to put every genie to sleep. Now, when any is awake, Genies asks
             first: put them to sleep, keep them running in the background, or not close after
-            all. The question names the genies, and says what keeping them running means.
+            all. The question names the genies, and says what keeping them running means, in
+            the language Genies speaks, as its answers and its title do.
         """
+        given: 'the words of the dialogs, in English and in German'
+            def english = Lang.ENGLISH.DIALOGS()
+            def german = Lang.GERMAN.DIALOGS()
         expect:
-            Main.awakeQuestion(['Jafar']) == 'Jafar is awake. Put it to sleep, or keep it running in the background?\n' +
+            english.ARE_AWAKE_PUT_THEM_TO_SLEEP_OR_KEEP_THEM_RUNNING_IN_THE_BACKGROUND(['Jafar']) ==
+                    'Jafar is awake. Put it to sleep, or keep it running in the background?\n' +
                     'Kept running, it finishes what it is doing and keeps to its schedule, and Genies finds it again when it opens.'
-            Main.awakeQuestion(['Jafar', 'Iago', 'Abu']).startsWith('Jafar, Iago and Abu are awake. Put them to sleep')
+            english.ARE_AWAKE_PUT_THEM_TO_SLEEP_OR_KEEP_THEM_RUNNING_IN_THE_BACKGROUND(['Jafar', 'Iago', 'Abu'])
+                    .startsWith('Jafar, Iago and Abu are awake. Put them to sleep')
+        and: 'in German, the question, its title and its answers are German'
+            german.ARE_AWAKE_PUT_THEM_TO_SLEEP_OR_KEEP_THEM_RUNNING_IN_THE_BACKGROUND(['Jafar', 'Iago'])
+                    .startsWith('Jafar und Iago sind wach.')
+            german.GENIES_ARE_AWAKE() == 'Dschinns sind wach'
+            [german.PUT_TO_SLEEP(), german.KEEP_RUNNING(), german.CANCEL()] == ['Schlafen legen', 'Weiterlaufen lassen', 'Abbrechen']
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
