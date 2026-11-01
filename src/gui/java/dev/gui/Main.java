@@ -13,6 +13,7 @@ import javax.swing.Timer;
 
 import dev.gui.genie.Shelf;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.view.GeniesView;
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -62,19 +63,6 @@ final class Main {
         frame.setVisible(true);
     }
 
-    /// What the user is asked on closing Genies with `awake`, the names of the genies awake. On two
-    /// lines, since a dialog does not wrap its text.
-    static String awakeQuestion(List<String> awake) {
-        boolean one = awake.size() == 1;
-        String names = one ? awake.getFirst()
-                : String.join(", ", awake.subList(0, awake.size() - 1)) + " and " + awake.getLast();
-        String them = one ? "it" : "them";
-        return names + (one ? " is" : " are") + " awake. Put " + them + " to sleep, or keep " + them
-                + " running in the background?\nKept running, "
-                + (one ? "it finishes what it is doing and keeps to its" : "they finish what they are doing and keep to their")
-                + " schedule, and Genies finds " + them + " again when it opens.";
-    }
-
     /// Asks the user what becomes of the genies that are awake, then puts them to sleep or leaves
     /// them running, before the window goes. Without an answer, nothing closes.
     private static void quit(Genies app, JFrame frame, Var<String> title, GeniesView view) {
@@ -82,16 +70,17 @@ final class Main {
         List<String> awake = new ArrayList<>();
         for (Genie genie : app.state().get().genies())
             if (!genie.fromElsewhere() && (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)) awake.add(genie.name());
+        Lang.Dialogs words = app.state().get().lang().DIALOGS();
         boolean leaveRunning = false;
         if (!awake.isEmpty()) {
-            ConfirmAnswer answer = UI.confirmation(awakeQuestion(awake))
-                    .titled("Genies are awake").yesOption("Put to sleep").noOption("Keep running")
-                    .cancelOption("Cancel").parent(frame).show();
+            ConfirmAnswer answer = UI.confirmation(words.ARE_AWAKE_PUT_THEM_TO_SLEEP_OR_KEEP_THEM_RUNNING_IN_THE_BACKGROUND(awake))
+                    .titled(words.GENIES_ARE_AWAKE()).yesOption(words.PUT_TO_SLEEP()).noOption(words.KEEP_RUNNING())
+                    .cancelOption(words.CANCEL()).parent(frame).show();
             if (answer.isCancelOrClose()) return;
             leaveRunning = answer.isNo();
         }
         boolean keep = leaveRunning;
-        title.set(keep ? "Genies — leaving the genies running…" : "Genies — putting the genies to sleep…");
+        title.set(keep ? words.GENIES_LEAVING_THE_GENIES_RUNNING() : words.GENIES_PUTTING_THE_GENIES_TO_SLEEP());
         // A desktop shown at the size of the panel gets its own size back, for the genie that
         // goes on without the panel, before its lamp is let go. A genie put to sleep takes its
         // desktop with it.
