@@ -166,6 +166,16 @@ public enum Lang {
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(Lang lang) {
+        public String GENIE_NUMBERED(int number) {
+            return switch (lang) {
+                case ENGLISH -> "Genie " + number;
+                case GERMAN -> "Dschinn " + number;
+                case SPANISH -> "Genio " + number;
+                case JAPANESE -> "ジーニー " + number;
+                case CHINESE -> "精灵 " + number;
+            };
+        }
+
         public String CANNOT_BE_A_MODELS_NAME(String model) {
             return switch (lang) {
                 case ENGLISH -> "\"" + model + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol";

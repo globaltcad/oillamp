@@ -364,6 +364,25 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             chat.entries()*.words(Lang.GERMAN) == ['hat dir eine Datei gegeben, 312 Bytes', 'du hast dem Dschinn diese Datei gegeben, in ~/inbox']
     }
 
+    def 'A new genie is named in the language Genies speaks, and keeps that name'() {
+        reportInfo """
+            Let's consider a user of Genies in German who adds a genie without naming it. It is
+            called "Dschinn 1", as Genies speaks German. The name is the genie's from then on: it
+            stays "Dschinn 1" when the user switches to English, as any name they chose would.
+        """
+        given: 'Genies, in German'
+            def german = GeniesState.of(Tuple.of(Genie), Settings.defaults(), Optional.empty()).withLang(Lang.GERMAN)
+
+        when: 'the user adds a genie without naming it, then switches to English'
+            def added = german.add(Genie.named(german.freshName())).withLang(Lang.ENGLISH)
+
+        then: 'it is named in German, and keeps that name'
+            added.genie().name() == 'Dschinn 1'
+
+        and: 'the next one is named in English'
+            added.freshName() == 'Genie 2'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false
