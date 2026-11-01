@@ -12,7 +12,10 @@ import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.ConvolveOp;
+import java.awt.image.Kernel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -608,11 +611,14 @@ final class WelcomeScene {
             }
     }
 
-    /// The outline of the genie, under it, on each empty pixel beside one of its pixels that has
-    /// appeared, where it is shown with its body leaning `lean` and risen `risen`: in the colour
+    /// The outline of the genie, under it, around each of its pixels that has appeared, where it
+    /// is shown with its body leaning `lean` and risen `risen`: in the colour
     /// [GenieSvgUtil#outline] gives it on the night of `palette`, and none where it stands out
-    /// by itself. Each pixel of it is painted once, so that none is darker for lying beside more
-    /// than one of the genie's.
+    /// by itself. It is a fine line, as [GenieSvgUtil#LINE] wide, on a soft glow of that colour
+    /// all around the genie. The glow does not fall to one side, as the shadow of the small
+    /// pictures does: the light here is the flame the genie rises from. Line and glow are each
+    /// painted at once, so that none of their pixels is darker for lying beside more than one
+    /// of the genie's.
     private static void outline(
         final Graphics2D g,
         final Palette palette,
@@ -634,14 +640,87 @@ final class WelcomeScene {
                 shape.add(new Point(column + (row < 15 ? lean : 0), row < 15 ? row - risen : row));
                 if (row == 15 && risen == 1) shape.add(new Point(column, 14));
             }
-        Set<Point> around = new HashSet<>();
-        for (Point at : shape)
-            for (Point next : List.of(new Point(at.x - 1, at.y), new Point(at.x + 1, at.y), new Point(at.x, at.y - 1), new Point(at.x, at.y + 1)))
-                // Not on the lamp: the tail stands on the wick, at the top of row 18.
-                if (!shape.contains(next) && next.y < 18) around.add(next);
-        g.setColor(outline);
+        if (shape.isEmpty()) return;
         int pixel = stage.pixel();
-        for (Point at : around) g.fillRect(stage.pipX() + at.x * pixel, stage.pipY() + at.y * pixel, pixel, pixel);
+        glow(g, stage, shape, alpha(outline, GenieSvgUtil.SHADOW * outline.getAlpha() / 255.0));
+        int line = Math.max(1, (int) Math.round(GenieSvgUtil.LINE * pixel));
+        Path2D edge = new Path2D.Double();
+        for (Point at : shape) {
+            int x = stage.pipX() + at.x * pixel;
+            int y = stage.pipY() + at.y * pixel;
+            // Not on the lamp: the tail stands on the wick, at the top of row 18.
+            boolean below = at.y + 1 < 18 && !shape.contains(new Point(at.x, at.y + 1));
+            boolean above = !shape.contains(new Point(at.x, at.y - 1));
+            boolean left = !shape.contains(new Point(at.x - 1, at.y));
+            boolean right = !shape.contains(new Point(at.x + 1, at.y));
+            if (above) edge.append(new Rectangle2D.Double(x, y - line, pixel, line), false);
+            if (below) edge.append(new Rectangle2D.Double(x, y + pixel, pixel, line), false);
+            if (left) edge.append(new Rectangle2D.Double(x - line, y, line, pixel), false);
+            if (right) edge.append(new Rectangle2D.Double(x + pixel, y, line, pixel), false);
+            // The corners the shape turns outwards at.
+            if (above && left && !shape.contains(new Point(at.x - 1, at.y - 1))) edge.append(new Rectangle2D.Double(x - line, y - line, line, line), false);
+            if (above && right && !shape.contains(new Point(at.x + 1, at.y - 1))) edge.append(new Rectangle2D.Double(x + pixel, y - line, line, line), false);
+            if (below && left && !shape.contains(new Point(at.x - 1, at.y + 1))) edge.append(new Rectangle2D.Double(x - line, y + pixel, line, line), false);
+            if (below && right && !shape.contains(new Point(at.x + 1, at.y + 1))) edge.append(new Rectangle2D.Double(x + pixel, y + pixel, line, line), false);
+        }
+        g.setColor(outline);
+        g.fill(edge);
+    }
+
+    /// How many points of the glow's picture there are to each of the genie's pixels, and how
+    /// many of its pixels the glow may reach beyond the genie.
+    private static final int GLOW_POINTS = 4, GLOW_REACH = 3;
+
+    /// The glow's blur, about a pixel of the genie wide: a Gaussian bell over the points of its
+    /// picture, in rows and then in columns.
+    private static final ConvolveOp[] BLUR = blur(0.75 * GLOW_POINTS);
+
+    private static ConvolveOp[] blur(double sigma) {
+        int reach = (int) Math.ceil(2.5 * sigma);
+        float[] bell = new float[2 * reach + 1];
+        float sum = 0;
+        for (int i = 0; i < bell.length; i++) {
+            bell[i] = (float) Math.exp(-Math.pow(i - reach, 2) / (2 * sigma * sigma));
+            sum += bell[i];
+        }
+        for (int i = 0; i < bell.length; i++) bell[i] /= sum;
+        return new ConvolveOp[] {
+            new ConvolveOp(new Kernel(bell.length, 1, bell), ConvolveOp.EDGE_ZERO_FILL, null),
+            new ConvolveOp(new Kernel(1, bell.length, bell), ConvolveOp.EDGE_ZERO_FILL, null)
+        };
+    }
+
+    /// A soft glow of `colour` around the genie's pixels in `shape`: the shape drawn small,
+    /// blurred, and stretched smoothly over the stage.
+    private static void glow(Graphics2D g, Stage stage, Set<Point> shape, Color colour) {
+        int size = (20 + 2 * GLOW_REACH) * GLOW_POINTS;
+        BufferedImage small = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        int rgb = colour.getRGB() & 0xffffff;
+        int[] points = new int[size * size];
+        Arrays.fill(points, rgb);
+        for (Point at : shape)
+            for (int dy = 0; dy < GLOW_POINTS; dy++)
+                for (int dx = 0; dx < GLOW_POINTS; dx++) {
+                    int x = (at.x + GLOW_REACH) * GLOW_POINTS + dx;
+                    int y = (at.y + GLOW_REACH) * GLOW_POINTS + dy;
+                    if (x >= 0 && x < size && y >= 0 && y < size) points[y * size + x] = colour.getRGB() | 0xff000000;
+                }
+        small.setRGB(0, 0, size, size, points, 0, size);
+        BufferedImage blurred = BLUR[1].filter(BLUR[0].filter(small, null), null);
+        Graphics2D painter = (Graphics2D) g.create();
+        try {
+            painter.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            painter.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, colour.getAlpha() / 255f));
+            int pixel = stage.pixel();
+            painter.drawImage(
+                blurred,
+                stage.pipX() - GLOW_REACH * pixel, stage.pipY() - GLOW_REACH * pixel,
+                size / GLOW_POINTS * pixel, size / GLOW_POINTS * pixel,
+                null
+            );
+        } finally {
+            painter.dispose();
+        }
     }
 
     /// When the genie's pixel in `row` and `column` appears as it takes form: its tail first, and
