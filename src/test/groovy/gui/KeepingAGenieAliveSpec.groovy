@@ -15,6 +15,7 @@ import dev.lamp.LampConversation
 import dev.lamp.LampPrompt
 import dev.lamp.LampRun
 import dev.lamp.LampSessionStatus
+import dev.lamp.LampWallpaper
 import dev.lamp.LampWebPort
 import oillamp.ScenarioHost
 import spock.lang.Specification
@@ -86,7 +87,7 @@ class KeepingAGenieAliveSpec extends Specification {
             writes nothing into the genie's home itself.
         """
         when: 'Jafar wakes, with a model and a key in the settings'
-            runner.wake('Jafar', Settings.defaults().withModel('mistral/mistral-large-latest'), 'sk-key')
+            runner.wake('Jafar', Settings.defaults().withModel('mistral/mistral-large-latest'), 'sk-key', LampWallpaper.WAVES_DARK)
             waitUntil { genie.phase() == Genie.Phase.READY }
 
         then: 'the engine was started with the model, and with the names of the variables that hold the instructions and the key'
@@ -422,13 +423,13 @@ class KeepingAGenieAliveSpec extends Specification {
             and in its chat.
         """
         given:
-            runner = new GenieRunner(lamp, { dir, name, settings, key, progress, events ->
+            runner = new GenieRunner(lamp, { dir, name, settings, key, wallpaper, progress, events ->
                 progress.accept('checking this computer')
                 throw new IOException('podman is not installed')
             } as LampLighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
 
         when:
-            runner.wake('Jafar', Settings.defaults(), 'sk-key')
+            runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
 
         then:
             waitUntil { genie.phase() == Genie.Phase.BROKEN }
@@ -466,9 +467,9 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<String> progress, Consumer<LampEvent> events ->
                         listeners << events
-                        real.light(directory, name, settings, key, progress, events)
+                        real.light(directory, name, settings, key, wallpaper, progress, events)
                     },
                     unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
                     { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -617,7 +618,7 @@ class KeepingAGenieAliveSpec extends Specification {
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     private void awake() {
-        runner.wake('Jafar', Settings.defaults(), 'sk-key')
+        runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
         waitUntil { genie.phase() == Genie.Phase.READY }
     }
 
@@ -648,8 +649,8 @@ class KeepingAGenieAliveSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Settings settings, String key, Consumer<String> progress, Consumer<LampEvent> events ->
-            noted(real.light(directory, name, settings, key, progress, events))
+        var light = { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<String> progress, Consumer<LampEvent> events ->
+            noted(real.light(directory, name, settings, key, wallpaper, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events ->
             real.join(directory, events).map { noted(it) }

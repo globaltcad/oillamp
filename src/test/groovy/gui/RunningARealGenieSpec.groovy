@@ -8,6 +8,7 @@ import dev.gui.model.Entry
 import dev.gui.model.Genie
 import dev.gui.model.Settings
 import dev.lamp.Lamp
+import dev.lamp.LampWallpaper
 import oillamp.RealLamps
 import oillamp.Spike
 import spock.lang.Requires
@@ -70,7 +71,7 @@ class RunningARealGenieSpec extends Specification {
             so while it happens.
         """
         when:
-            runner.wake('Spike', Settings.defaults().withModel(MODEL), KEY ?: 'sk-no-real-key')
+            runner.wake('Spike', Settings.defaults().withModel(MODEL), KEY ?: 'sk-no-real-key', LampWallpaper.WAVES_DARK)
 
         then:
             RealLamps.eventually(RealLamps.FIRST_START) { genie.phase() != Genie.Phase.WAKING }
@@ -232,7 +233,7 @@ class RunningARealGenieSpec extends Specification {
         when:
             runner.sleep()
             RealLamps.eventually(Duration.ofMinutes(3)) { genie.phase() == Genie.Phase.ASLEEP }
-            runner.wake('Spike', Settings.defaults().withModel(MODEL), KEY)
+            runner.wake('Spike', Settings.defaults().withModel(MODEL), KEY, LampWallpaper.WAVES_DARK)
 
         then:
             RealLamps.eventually(RealLamps.LATER_START + Duration.ofMinutes(1)) { genie.phase() == Genie.Phase.READY }
