@@ -196,7 +196,8 @@ final class SchedulePage {
         Val<Status> status = state.viewAs(Status.class, SchedulePage::status);
         Val<Boolean> paused = schedule.viewAs(Boolean.class, Schedule::paused);
         Val<Boolean> asleep = genie.viewAs(Boolean.class, it -> it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN);
-        Val<String> problem = schedule.viewAsString(it -> it.draft().isPresent() ? "" : it.problem());
+        Val<String> problem = Viewable.of(String.class, schedule, state, (it, s) ->
+            it.draft().isPresent() ? "" : it.problem().map(why -> why.words(s.lang())).orElse(""));
         return
             panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 10)
             .isVisibleIf(overview)
@@ -627,7 +628,7 @@ final class SchedulePage {
         Val<String> blocked = Viewable.of(String.class, draft, state, (it, s) -> it.problem(s.localNow(), s.lang()).orElse(""));
         Val<Boolean> busy = schedule.viewAs(Boolean.class, Schedule::busy);
         Val<Boolean> canSave = Viewable.of(Boolean.class, blocked, busy, (problem, isBusy) -> problem.isEmpty() && !isBusy);
-        Val<String> refused = schedule.viewAsString(Schedule::problem);
+        Val<String> refused = Viewable.of(String.class, schedule, state, (it, s) -> it.problem().map(why -> why.words(s.lang())).orElse(""));
         return
             panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 16).group(Skin.CARD)
             .isVisibleIf(editing)

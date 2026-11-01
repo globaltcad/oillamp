@@ -160,7 +160,7 @@ class KeepingAGeniesScheduleSpec extends Specification {
 
         then:
             waitUntil { !app.state().get().find(jafar).orElseThrow().schedule().busy() && !app.state().get().find(jafar).orElseThrow().schedule().problem().isEmpty() }
-            app.state().get().find(jafar).orElseThrow().schedule().problem().contains('the hour 25 is not between 0 and 23')
+            app.state().get().find(jafar).orElseThrow().schedule().problem().get().reason().contains('the hour 25 is not between 0 and 23')
             app.state().get().find(jafar).orElseThrow().schedule().draft().isPresent()
             app.state().get().find(jafar).orElseThrow().schedule().jobs()*.id() == ['job-1']
 
