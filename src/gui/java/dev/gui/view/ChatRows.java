@@ -546,14 +546,14 @@ final class ChatRows {
     /// What the app says, in grey; or a problem, in red, beside the dizzy genie.
     private UIForAnySwing<?, ?> notice(Var<Entry> entry) {
         boolean failed = entry.get().isFailed();
-        String text = entry.get().text();
+        Val<String> text = lang.viewAsString(it -> entry.get().words(it));
         return
             panel("fill, ins 6 0 6 0, gap 8", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top", failed ? picture(_ -> GenieSvgUtil.Pose.DIZZY, _ -> false) : box())
             .add("growx, wmin 0",
                 box().withMinSize(0, 0)
-                .withStyle(theme, (now, it) -> it
+                .withStyle(Themed.of(text, theme), (now, it) -> it
                     .backgroundColor(failed ? now.palette().TROUBLE_WASH() : now.palette().TRANSPARENT())
                     .border(failed ? 1 : 0, now.palette().TROUBLE())
                     .borderRadius(8)
@@ -561,7 +561,7 @@ final class ChatRows {
                     .text(t -> t
                         .content(StyledString.of(
                             f -> f.family(now.fonts().FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? now.palette().TROUBLE() : now.palette().SUBTEXT()),
-                            text
+                            now.item()
                         ))
                         .placement(UI.Placement.TOP_LEFT)
                         .wrapLines(true)

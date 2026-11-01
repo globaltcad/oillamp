@@ -34,12 +34,12 @@ public record Transcript(Tuple<Entry> entries) {
     /// What the user wrote.
     public Transcript you(String text) { return add(Entry.of(Entry.Kind.YOU, text)); }
 
-    /// Something the app says, such as a genie waking up.
-    public Transcript notice(String text) { return add(Entry.of(Entry.Kind.NOTICE, text)); }
+    /// Something the app says, such as that a moment was saved.
+    public Transcript notice(Notice notice) { return add(Entry.of(notice)); }
 
     /// Something that went wrong, said in the chat so the user sees it where they look.
-    public Transcript problem(String text) {
-        return add(Entry.of(Entry.Kind.NOTICE, text).withState(Entry.State.FAILED));
+    public Transcript problem(Notice problem) {
+        return add(Entry.of(problem).withState(Entry.State.FAILED));
     }
 
     /// A file the genie handed over, which the user can save.
@@ -91,12 +91,12 @@ public record Transcript(Tuple<Entry> entries) {
             case PiEvent.Answered answered -> answered(answered);
             case PiEvent.Retrying retry -> {
                 // The failed answer before a retry said why already.
-                String again = "Trying again, " + retry.attempt() + " of " + retry.attempts() + ".";
                 boolean told = !entries.isEmpty() && entries.last().kind() == Entry.Kind.NOTICE && entries.last().isFailed();
-                yield told ? notice(again) : problem(explained(retry.reason(), "") + " " + again);
+                yield told ? notice(new Notice.TryingAgain(Optional.empty(), retry.attempt(), retry.attempts()))
+                           : problem(new Notice.TryingAgain(Optional.of(new Notice.Said(explained(retry.reason(), ""))), retry.attempt(), retry.attempts()));
             }
             case PiEvent.Settled _ -> settled();
-            case PiEvent.Refused refused -> problem("The genie could not take that: " + refused.reason());
+            case PiEvent.Refused refused -> problem(new Notice.CouldNotTake(refused.reason()));
             case PiEvent.History history -> asksTheSame(history) ? learnIds(history) : replacedBy(history);
             case PiEvent.Opened _ -> this;
         };
@@ -213,8 +213,8 @@ public record Transcript(Tuple<Entry> entries) {
     private Transcript failed(String error, String model) {
         String stripped = error.strip().toLowerCase(Locale.ROOT);
         return stripped.endsWith("aborted") || stripped.endsWith("aborted.")
-            ? notice("Stopped before the answer was done.")
-            : problem(explained(error, model));
+            ? notice(new Notice.Stopped())
+            : problem(new Notice.Said(explained(error, model)));
     }
 
     /// Why the model could not answer, said plainly. `error` is what pi got: oillamp's answer

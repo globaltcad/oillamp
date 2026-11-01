@@ -248,8 +248,7 @@ public record Genie(
             .withActivity(new Activity.Broken(why))
             .withDesktopShown(false)
             .withConversations(conversations.withAside(Optional.empty()))
-            // In English until the chat's notices are values too.
-            .withTranscript(transcript.settled().problem(why.words(Lang.ENGLISH)));
+            .withTranscript(transcript.settled().problem(new Notice.Broke(why)));
     }
 
     // ─── what it is busy with ──────────────────────────────────────────────────────────────

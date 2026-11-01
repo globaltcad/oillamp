@@ -1,5 +1,6 @@
 package dev.gui.model;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import sprouts.HasId;
@@ -21,6 +22,8 @@ import sprouts.HasId;
 ///              it was doing, rather than answering
 /// @param model for an answer, or a failed one, the model that wrote it, as the service names it,
 ///              such as `azure/gpt-6.1-sol`; otherwise, or when not known, nothing
+/// @param notice for what the app says, what that is, which the chat words in the language Genies
+///              speaks; otherwise nothing, and the entry says [#text]
 public record Entry(
     UUID id,
     Kind kind,
@@ -31,28 +34,39 @@ public record Entry(
     State state,
     boolean expanded,
     boolean beforeTools,
-    String model
+    String model,
+    Optional<Notice> notice
 ) implements HasId<UUID> {
 
     public enum Kind { YOU, GENIE, THINKING, TOOL, FILE, NOTICE }
 
     public enum State { WRITING, DONE, FAILED }
 
-    public static Entry of(Kind kind, String text) {
-        return new Entry(UUID.randomUUID(), kind, "", text, "", "", State.DONE, false, false, "");
+    /// What the app says, `notice`.
+    public static Entry of(Notice notice) {
+        return new Entry(UUID.randomUUID(), Kind.NOTICE, "", "", "", "", State.DONE, false, false, "", Optional.of(notice));
     }
 
-    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
-    public Entry withText(String text)     { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
-    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
-    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
-    public Entry withState(State state)    { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    /// What it says, in `lang`: its [#notice] in that language, or its [#text] as it was written.
+    public String words(Lang lang) {
+        return notice.map(it -> it.words(lang)).orElse(text);
+    }
 
-    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public static Entry of(Kind kind, String text) {
+        return new Entry(UUID.randomUUID(), kind, "", text, "", "", State.DONE, false, false, "", Optional.empty());
+    }
 
-    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withText(String text)     { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withState(State state)    { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
 
-    public Entry withModel(String model) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model); }
+    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+
+    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+
+    public Entry withModel(String model) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
 
     /// What the chat says about the entry when the user points at it: for an answer, which model
     /// wrote it. Nothing when that is not known, so that nothing is shown.
