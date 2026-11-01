@@ -2504,6 +2504,127 @@ public enum Lang {
     /// The words of the settings every genie shares, and of the welcome above them while there
     /// are no genies.
     public record SettingsPage(Lang lang) {
+        public String OLLAMA_IS_NOT_INSTALLED() {
+            return switch (lang) {
+                case ENGLISH -> "Ollama is not installed.";
+                case GERMAN -> "Ollama ist nicht installiert.";
+                case SPANISH -> "Ollama no está instalado.";
+                case JAPANESE -> "Ollama はインストールされていません。";
+                case CHINESE -> "未安装 Ollama。";
+            };
+        }
+
+        public String OLLAMA_DID_NOT_START_WITHIN(long seconds, String log) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama did not start within " + seconds + " seconds. What it said is in " + log + ".";
+                case GERMAN -> "Ollama ist nicht innerhalb von " + seconds + " Sekunden gestartet. Was es ausgegeben hat, steht in " + log + ".";
+                case SPANISH -> "Ollama no arrancó en " + seconds + " segundos. Lo que dijo está en " + log + ".";
+                case JAPANESE -> "Ollama が " + seconds + " 秒以内に起動しませんでした。出力は " + log + " にあります。";
+                case CHINESE -> "Ollama 未能在 " + seconds + " 秒内启动。它的输出在 " + log + " 中。";
+            };
+        }
+
+        public String OLLAMA_HAS_NO_MODEL_CALLED(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama has no model called " + model + ". Check its name on ollama.com/library.";
+                case GERMAN -> "Ollama kennt kein Modell namens " + model + ". Prüfe den Namen auf ollama.com/library.";
+                case SPANISH -> "Ollama no tiene ningún modelo llamado " + model + ". Comprueba el nombre en ollama.com/library.";
+                case JAPANESE -> "Ollama には " + model + " という名前のモデルがありません。ollama.com/library で名前を確認してください。";
+                case CHINESE -> "Ollama 没有名为 " + model + " 的模型。请在 ollama.com/library 上核对名称。";
+            };
+        }
+
+        public String OLLAMA_COULD_NOT_DOWNLOAD(String model, String said) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama could not download " + model + ": " + said;
+                case GERMAN -> "Ollama konnte " + model + " nicht herunterladen: " + said;
+                case SPANISH -> "Ollama no pudo descargar " + model + ": " + said;
+                case JAPANESE -> "Ollama は " + model + " をダウンロードできませんでした：" + said;
+                case CHINESE -> "Ollama 无法下载 " + model + "：" + said;
+            };
+        }
+
+        public String OLLAMA_STOPPED_DOWNLOADING_WITHOUT_SAYING_WHY(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama stopped downloading " + model + " without saying why.";
+                case GERMAN -> "Ollama hat das Herunterladen von " + model + " abgebrochen, ohne zu sagen, warum.";
+                case SPANISH -> "Ollama dejó de descargar " + model + " sin decir por qué.";
+                case JAPANESE -> "Ollama は理由を示さずに " + model + " のダウンロードをやめました。";
+                case CHINESE -> "Ollama 停止了下载 " + model + "，但没有说明原因。";
+            };
+        }
+
+        public String CANNOT_USE_TOOLS_SO_A_GENIE_COULD_NOT_WORK_WITH_IT(String model) {
+            return switch (lang) {
+                case ENGLISH -> model + " cannot use tools, so a genie could not work with it. Choose a model that can: "
+                    + "Genies suggests some, and ollama.com/search?c=tools lists them all.";
+                case GERMAN -> model + " kann keine Werkzeuge benutzen, ein Dschinn könnte also nicht damit arbeiten. Wähle ein Modell, das es kann: Genies schlägt einige vor, und ollama.com/search?c=tools listet alle auf.";
+                case SPANISH -> model + " no puede usar herramientas, así que un genio no podría trabajar con él. Elige un modelo que pueda: Genies sugiere algunos, y ollama.com/search?c=tools los muestra todos.";
+                case JAPANESE -> model + " はツールを使えないため、ジーニーはこのモデルで作業できません。ツールを使えるモデルを選んでください。Genies がいくつか提案しており、ollama.com/search?c=tools にすべて載っています。";
+                case CHINESE -> model + " 无法使用工具，因此精灵无法用它工作。请选择能使用工具的模型：Genies 推荐了一些，ollama.com/search?c=tools 列出了全部。";
+            };
+        }
+
+        public String OLLAMA_COM_ANSWERED_FOR(int status, String archive) {
+            return switch (lang) {
+                case ENGLISH -> "ollama.com answered " + status + " for " + archive + ".";
+                case GERMAN -> "ollama.com antwortete auf " + archive + " mit " + status + ".";
+                case SPANISH -> "ollama.com respondió " + status + " para " + archive + ".";
+                case JAPANESE -> "ollama.com は " + archive + " に対して " + status + " を返しました。";
+                case CHINESE -> "ollama.com 对 " + archive + " 返回了 " + status + "。";
+            };
+        }
+
+        public String DOWNLOADING_OLLAMA_FAILED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading Ollama failed: " + reason;
+                case GERMAN -> "Das Herunterladen von Ollama ist fehlgeschlagen: " + reason;
+                case SPANISH -> "La descarga de Ollama falló: " + reason;
+                case JAPANESE -> "Ollama のダウンロードに失敗しました：" + reason;
+                case CHINESE -> "下载 Ollama 失败：" + reason;
+            };
+        }
+
+        public String DOWNLOADING_WHAT_OLLAMA_NEEDS_FOR_AMD_GRAPHICS_CARDS_FAILED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading what Ollama needs for AMD graphics cards failed: " + reason;
+                case GERMAN -> "Das Herunterladen dessen, was Ollama für AMD-Grafikkarten braucht, ist fehlgeschlagen: " + reason;
+                case SPANISH -> "La descarga de lo que Ollama necesita para tarjetas gráficas AMD falló: " + reason;
+                case JAPANESE -> "Ollama が AMD のグラフィックカードで使うもののダウンロードに失敗しました：" + reason;
+                case CHINESE -> "下载 Ollama 支持 AMD 显卡所需的组件失败：" + reason;
+            };
+        }
+
+        public String UNPACKING_OLLAMA_FAILED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "Unpacking Ollama failed: " + reason;
+                case GERMAN -> "Das Entpacken von Ollama ist fehlgeschlagen: " + reason;
+                case SPANISH -> "No se pudo desempaquetar Ollama: " + reason;
+                case JAPANESE -> "Ollama の展開に失敗しました：" + reason;
+                case CHINESE -> "解压 Ollama 失败：" + reason;
+            };
+        }
+
+        public String OLLAMA_ANSWERED(int status) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama answered " + status + ".";
+                case GERMAN -> "Ollama antwortete mit " + status + ".";
+                case SPANISH -> "Ollama respondió " + status + ".";
+                case JAPANESE -> "Ollama は " + status + " を返しました。";
+                case CHINESE -> "Ollama 返回了 " + status + "。";
+            };
+        }
+
+        public String OLLAMA_DOES_NOT_ANSWER_ON_THIS_COMPUTER() {
+            return switch (lang) {
+                case ENGLISH -> "Ollama does not answer on this computer.";
+                case GERMAN -> "Ollama antwortet auf diesem Rechner nicht.";
+                case SPANISH -> "Ollama no responde en este equipo.";
+                case JAPANESE -> "このコンピューターの Ollama が応答しません。";
+                case CHINESE -> "这台电脑上的 Ollama 没有响应。";
+            };
+        }
+
         public String LOOKING_AT_WHAT_IS_LEFT_TO_DO() {
             return switch (lang) {
                 case ENGLISH -> "Looking at what is left to do…";

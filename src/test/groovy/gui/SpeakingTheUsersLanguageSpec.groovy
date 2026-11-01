@@ -229,6 +229,22 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             new OllamaSetup.Says.StartingOllama().words(Lang.CHINESE) == '正在启动 Ollama…'
     }
 
+    def 'Why setting up Ollama failed is said in the language Genies speaks, and what Ollama said as it said it'() {
+        reportInfo """
+            Let's consider a user who asked Genies for a model Ollama does not know, and another
+            whose download Ollama broke off. The settings say why in the language Genies speaks;
+            what Ollama itself said, as why it broke off, stays as Ollama put it.
+        """
+        given: 'a model Ollama does not know, and a download Ollama broke off'
+            def unknown = new OllamaSetup.Says.Failed(new OllamaSetup.Failure.NoSuchModel('qwen9'))
+            def brokeOff = new OllamaSetup.Says.Failed(new OllamaSetup.Failure.CouldNotDownload('qwen3:8b', 'connection reset'))
+
+        expect: 'why is said in each language, and what Ollama said as it said it'
+            unknown.words(Lang.ENGLISH) == 'Ollama has no model called qwen9. Check its name on ollama.com/library.'
+            unknown.words(Lang.GERMAN) == 'Ollama kennt kein Modell namens qwen9. Prüfe den Namen auf ollama.com/library.'
+            brokeOff.words(Lang.SPANISH) == 'Ollama no pudo descargar qwen3:8b: connection reset'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false
