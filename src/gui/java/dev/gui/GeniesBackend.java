@@ -60,7 +60,6 @@ public final class GeniesBackend implements Genies {
     private static final long SECONDS_TO_LET_GO_OF_A_LAMP = 180;
 
     /// What setting up Ollama says once the user stopped it.
-    private static final String STOPPED = "Stopped. What was downloaded of a model is kept, and getting it again goes on from there.";
 
     private final Var<GeniesState> state;
     private final Shelf shelf;
@@ -645,35 +644,36 @@ public final class GeniesBackend implements Genies {
         String model = state.get().ollama().wanted().strip();
         if (model.isEmpty() || state.get().ollama().step().isBusy()) return;
         stopping = false;
-        state.update(From.VIEW, it -> it.withOllama(it.ollama().at(OllamaSetup.Step.STARTING, 0, "Looking at what is left to do…")));
+        state.update(From.VIEW, it -> it.withOllama(it.ollama().at(OllamaSetup.Step.STARTING, 0, new OllamaSetup.Says.LookingAtWhatIsLeft())));
         settingUp = Optional.of(Thread.ofVirtual().name("set up ollama").start(() -> {
             try {
                 OllamaSetup.Found found = ollama.look();
                 if (!found.isInstalled() && !found.isRunning()) {
-                    step(OllamaSetup.Step.INSTALLING, 0, "Downloading Ollama…");
-                    ollama.install((done, says) -> step(OllamaSetup.Step.INSTALLING, done, says));
+                    step(OllamaSetup.Step.INSTALLING, 0, new OllamaSetup.Says.DownloadingOllama(0, 0));
+                    ollama.install((done, all) -> step(OllamaSetup.Step.INSTALLING, part(done, all), new OllamaSetup.Says.DownloadingOllama(done, all)),
+                                   (done, all) -> step(OllamaSetup.Step.INSTALLING, part(done, all), new OllamaSetup.Says.DownloadingAmdSupport(done, all)));
                 }
                 if (!found.isRunning()) {
-                    step(OllamaSetup.Step.STARTING, 0, "Starting Ollama…");
+                    step(OllamaSetup.Step.STARTING, 0, new OllamaSetup.Says.StartingOllama());
                     ollama.start();
                 }
                 if (!found.has(model)) {
-                    step(OllamaSetup.Step.DOWNLOADING, 0, "Downloading " + model + "…");
-                    ollama.pull(model, (done, says) -> step(OllamaSetup.Step.DOWNLOADING, done, says));
+                    step(OllamaSetup.Step.DOWNLOADING, 0, new OllamaSetup.Says.DownloadingModel(model, 0, 0));
+                    ollama.pull(model, (done, all) -> step(OllamaSetup.Step.DOWNLOADING, part(done, all), new OllamaSetup.Says.DownloadingModel(model, done, all)));
                 }
-                step(OllamaSetup.Step.PREPARING, 0, "Preparing " + model + " for genies…");
+                step(OllamaSetup.Step.PREPARING, 0, new OllamaSetup.Says.Preparing(model));
                 ollama.prepare(model);
-                step(OllamaSetup.Step.TRYING, 0, "Trying " + model + ". Its first answer loads it, which can take a few minutes…");
+                step(OllamaSetup.Step.TRYING, 0, new OllamaSetup.Says.Trying(model));
                 ollama.tryOut(OllamaSetup.PREFIX + model);
                 SwingUtilities.invokeLater(() -> {
                     state.update(it -> it.usingOllama(model));
                     keepSettings();
                 });
             } catch (IOException failed) {
-                if (stopping) step(OllamaSetup.Step.IDLE, 0, STOPPED);
-                else step(OllamaSetup.Step.FAILED, 0, Optional.ofNullable(failed.getMessage()).orElse(failed.toString()));
+                if (stopping) step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
+                else step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(Optional.ofNullable(failed.getMessage()).orElse(failed.toString())));
             } catch (InterruptedException stopped) {
-                step(OllamaSetup.Step.IDLE, 0, STOPPED);
+                step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
             }
             SwingUtilities.invokeLater(() -> {
                 settingUp = Optional.empty();
@@ -712,8 +712,13 @@ public final class GeniesBackend implements Genies {
     }
 
     /// Shows how far setting up Ollama is.
-    private void step(OllamaSetup.Step step, double done, String says) {
+    private void step(OllamaSetup.Step step, double done, OllamaSetup.Says says) {
         SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().at(step, done, says))));
+    }
+
+    /// How far a download is, from 0 to 1: `done` bytes of `all`, which is 0 while unknown.
+    private static double part(long done, long all) {
+        return all > 0 ? (double) done / all : 0;
     }
 
     private GenieRunner runner(UUID id) {

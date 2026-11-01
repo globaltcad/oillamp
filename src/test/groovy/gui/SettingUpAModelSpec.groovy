@@ -165,7 +165,7 @@ class SettingUpAModelSpec extends Specification {
         """
         given:
             def state = GeniesState.of(Tuple.of(Genie), Settings.defaults(), Optional.empty())
-                    .withOllama(OllamaSetup.NOT_YET.withWanted('qwen3:8b').at(OllamaSetup.Step.TRYING, 0, 'Trying qwen3:8b…'))
+                    .withOllama(OllamaSetup.NOT_YET.withWanted('qwen3:8b').at(OllamaSetup.Step.TRYING, 0, new OllamaSetup.Says.Trying('qwen3:8b')))
         when:
             def ready = state.usingOllama('qwen3:8b')
         then:

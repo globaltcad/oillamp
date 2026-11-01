@@ -2504,6 +2504,116 @@ public enum Lang {
     /// The words of the settings every genie shares, and of the welcome above them while there
     /// are no genies.
     public record SettingsPage(Lang lang) {
+        public String LOOKING_AT_WHAT_IS_LEFT_TO_DO() {
+            return switch (lang) {
+                case ENGLISH -> "Looking at what is left to do…";
+                case GERMAN -> "Sehe nach, was noch zu tun ist…";
+                case SPANISH -> "Mirando qué queda por hacer…";
+                case JAPANESE -> "残りの作業を確認中…";
+                case CHINESE -> "正在查看还剩哪些步骤…";
+            };
+        }
+
+        public String DOWNLOADING_OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "Downloading Ollama…";
+                case GERMAN -> "Lade Ollama herunter…";
+                case SPANISH -> "Descargando Ollama…";
+                case JAPANESE -> "Ollama をダウンロード中…";
+                case CHINESE -> "正在下载 Ollama…";
+            };
+        }
+
+        public String DOWNLOADING_OLLAMA_SO_FAR(String amount) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading Ollama: " + amount + ".";
+                case GERMAN -> "Lade Ollama herunter: " + amount + ".";
+                case SPANISH -> "Descargando Ollama: " + amount + ".";
+                case JAPANESE -> "Ollama をダウンロード中：" + amount;
+                case CHINESE -> "正在下载 Ollama：" + amount;
+            };
+        }
+
+        public String DOWNLOADING_WHAT_OLLAMA_NEEDS_FOR_AMD_GRAPHICS_CARDS(String amount) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading what Ollama needs for AMD graphics cards: " + amount + ".";
+                case GERMAN -> "Lade herunter, was Ollama für AMD-Grafikkarten braucht: " + amount + ".";
+                case SPANISH -> "Descargando lo que Ollama necesita para tarjetas gráficas AMD: " + amount + ".";
+                case JAPANESE -> "Ollama が AMD のグラフィックカードで使うものをダウンロード中：" + amount;
+                case CHINESE -> "正在下载 Ollama 支持 AMD 显卡所需的组件：" + amount;
+            };
+        }
+
+        public String STARTING_OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "Starting Ollama…";
+                case GERMAN -> "Starte Ollama…";
+                case SPANISH -> "Iniciando Ollama…";
+                case JAPANESE -> "Ollama を起動中…";
+                case CHINESE -> "正在启动 Ollama…";
+            };
+        }
+
+        public String DOWNLOADING(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading " + model + "…";
+                case GERMAN -> "Lade " + model + " herunter…";
+                case SPANISH -> "Descargando " + model + "…";
+                case JAPANESE -> model + " をダウンロード中…";
+                case CHINESE -> "正在下载 " + model + "…";
+            };
+        }
+
+        public String DOWNLOADING_SO_FAR(String model, String amount) {
+            return switch (lang) {
+                case ENGLISH -> "Downloading " + model + ": " + amount + ".";
+                case GERMAN -> "Lade " + model + " herunter: " + amount + ".";
+                case SPANISH -> "Descargando " + model + ": " + amount + ".";
+                case JAPANESE -> model + " をダウンロード中：" + amount;
+                case CHINESE -> "正在下载 " + model + "：" + amount;
+            };
+        }
+
+        public String AMOUNT_OF(String done, String total) {
+            return switch (lang) {
+                case ENGLISH -> done + " of " + total;
+                case GERMAN -> done + " von " + total;
+                case SPANISH -> done + " de " + total;
+                case JAPANESE -> done + " / " + total;
+                case CHINESE -> done + " / " + total;
+            };
+        }
+
+        public String PREPARING_FOR_GENIES(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Preparing " + model + " for genies…";
+                case GERMAN -> "Bereite " + model + " für Dschinns vor…";
+                case SPANISH -> "Preparando " + model + " para los genios…";
+                case JAPANESE -> model + " をジーニー用に準備中…";
+                case CHINESE -> "正在为精灵准备 " + model + "…";
+            };
+        }
+
+        public String TRYING_ITS_FIRST_ANSWER_LOADS_IT_WHICH_CAN_TAKE_A_FEW_MINUTES(String model) {
+            return switch (lang) {
+                case ENGLISH -> "Trying " + model + ". Its first answer loads it, which can take a few minutes…";
+                case GERMAN -> "Probiere " + model + " aus. Die erste Antwort lädt das Modell, das kann ein paar Minuten dauern…";
+                case SPANISH -> "Probando " + model + ". Su primera respuesta lo carga, lo que puede tardar unos minutos…";
+                case JAPANESE -> model + " を試しています。最初の応答でモデルを読み込むため、数分かかることがあります…";
+                case CHINESE -> "正在试用 " + model + "。第一次回答时会加载它，可能需要几分钟…";
+            };
+        }
+
+        public String STOPPED_WHAT_WAS_DOWNLOADED_OF_A_MODEL_IS_KEPT() {
+            return switch (lang) {
+                case ENGLISH -> "Stopped. What was downloaded of a model is kept, and getting it again goes on from there.";
+                case GERMAN -> "Angehalten. Was von einem Modell schon heruntergeladen ist, bleibt erhalten, und beim nächsten Mal geht es dort weiter.";
+                case SPANISH -> "Detenido. Lo que se descargó de un modelo se conserva, y al volver a pedirlo se sigue desde ahí.";
+                case JAPANESE -> "停止しました。モデルのダウンロード済みの部分は残り、次はそこから続きます。";
+                case CHINESE -> "已停止。模型已下载的部分会保留，再次获取时会从那里继续。";
+            };
+        }
+
         public String YOUR_GENIES_MODEL() {
             return switch (lang) {
                 case ENGLISH -> "Your genies' model";
