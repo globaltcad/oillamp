@@ -423,7 +423,7 @@ class KeepingAGenieAliveSpec extends Specification {
         """
         given:
             runner = new GenieRunner(lamp, { dir, name, settings, key, wallpaper, progress, events ->
-                progress.accept('checking this computer')
+                progress.accept(new Genie.Activity.CheckingThisComputer())
                 throw new IOException('podman is not installed')
             } as LampLighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
 
@@ -432,7 +432,7 @@ class KeepingAGenieAliveSpec extends Specification {
 
         then:
             waitUntil { genie.phase() == Genie.Phase.BROKEN }
-            genie.activity() == 'podman is not installed'
+            genie.activity().words(Lang.ENGLISH) == 'podman is not installed'
             genie.transcript().entries().last().isFailed()
     }
 
@@ -449,7 +449,7 @@ class KeepingAGenieAliveSpec extends Specification {
 
         then:
             waitUntil { genie.phase() == Genie.Phase.BROKEN }
-            genie.activity().contains('stopped')
+            genie.activity().words(Lang.ENGLISH).contains('stopped')
             !runner.isAwake()
     }
 
@@ -466,7 +466,7 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<String> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
                         listeners << events
                         real.light(directory, name, settings, key, wallpaper, progress, events)
                     },
@@ -659,7 +659,7 @@ class KeepingAGenieAliveSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<String> progress, Consumer<LampEvent> events ->
+        var light = { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
             noted(real.light(directory, name, settings, key, wallpaper, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events ->

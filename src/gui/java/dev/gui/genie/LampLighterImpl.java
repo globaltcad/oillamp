@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
+import dev.gui.model.Genie;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
@@ -58,7 +59,7 @@ public final class LampLighterImpl implements LampLighter {
         final Settings settings,
         final String key,
         final LampWallpaper wallpaper,
-        final Consumer<String> progress,
+        final Consumer<Genie.Activity> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         LampDirectory lampDir;
@@ -86,7 +87,7 @@ public final class LampLighterImpl implements LampLighter {
         final Path directory,
         final Settings settings,
         final String key,
-        final Consumer<String> progress,
+        final Consumer<Genie.Activity> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         return light(unlit(directory), settings, key, progress, events);
@@ -96,7 +97,7 @@ public final class LampLighterImpl implements LampLighter {
         final LampDirectory starting,
         final Settings settings,
         final String key,
-        final Consumer<String> progress,
+        final Consumer<Genie.Activity> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         AtomicReference<String> problem = new AtomicReference<>("");
@@ -188,17 +189,17 @@ public final class LampLighterImpl implements LampLighter {
     }
 
     /// What the lamp is doing, in the few words the genie's status has room for.
-    static Optional<String> describe(LampEvent event) {
+    static Optional<Genie.Activity> describe(LampEvent event) {
         return switch (event) {
             case LampEvent.PhaseStarted started -> Optional.of(switch (started.phase()) {
-                case HOST -> "checking this computer";
-                case LAMP -> "preparing the lamp";
-                case IMAGE -> "making the sandbox; the first time takes several minutes";
-                default -> "starting the sandbox";
+                case HOST -> new Genie.Activity.CheckingThisComputer();
+                case LAMP -> new Genie.Activity.PreparingTheLamp();
+                case IMAGE -> new Genie.Activity.MakingTheSandbox();
+                default -> new Genie.Activity.StartingTheSandbox();
             });
-            case LampEvent.StepStarted step -> Optional.of(step.step().describe());
-            case LampEvent.Ok ok -> Optional.of(ok.text());
-            case LampEvent.Warning warning -> Optional.of(warning.problem().title());
+            case LampEvent.StepStarted step -> Optional.of(new Genie.Activity.LampSays(step.step().describe()));
+            case LampEvent.Ok ok -> Optional.of(new Genie.Activity.LampSays(ok.text()));
+            case LampEvent.Warning warning -> Optional.of(new Genie.Activity.LampSays(warning.problem().title()));
             default -> Optional.empty();
         };
     }
