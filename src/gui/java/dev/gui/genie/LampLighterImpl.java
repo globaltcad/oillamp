@@ -66,7 +66,7 @@ public final class LampLighterImpl implements LampLighter {
         try {
             lampDir = unlit(directory).model(settings.model().strip());
         } catch (IllegalArgumentException wrong) {
-            throw new IOException("\"" + settings.model().strip() + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol", wrong);
+            throw new Failed(new Genie.Broke.NotAModelsName(settings.model().strip()), wrong);
         }
         return light(
                 lampDir
@@ -114,9 +114,9 @@ public final class LampLighterImpl implements LampLighter {
         if (!lamp.awaitRunning(WAKING_TIME)) {
             lamp.close();
             String why = Optional.ofNullable(problem.get()).orElse("");
-            throw new IOException(why.isEmpty()
-                    ? "The genie's lamp did not start" + lamp.exitStatus().map(status -> " (" + status + ")").orElse(" in time")
-                    : why);
+            throw new Failed(why.isEmpty()
+                    ? new Genie.Broke.LampDidNotStart(lamp.exitStatus().map(String::valueOf))
+                    : new Genie.Broke.Failed(why));
         }
         return lit(lamp);
     }
