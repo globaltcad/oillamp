@@ -4438,6 +4438,166 @@ public enum Lang {
     /// The words of a genie's History page: the moments its home was saved at, its branches, and
     /// going back to a moment.
     public record HistoryPage(Lang lang) {
+        public String THE_HISTORY_COULD_NOT_BE_READ(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The history could not be read: " + reason;
+                case GERMAN -> "Der Verlauf ließ sich nicht lesen: " + reason;
+                case SPANISH -> "No se pudo leer el historial: " + reason;
+                case JAPANESE -> "履歴を読み込めませんでした：" + reason;
+                case CHINESE -> "无法读取历史记录：" + reason;
+            };
+        }
+
+        public String THE_HISTORYS_SETTINGS_COULD_NOT_BE_READ(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The history's settings could not be read: " + reason;
+                case GERMAN -> "Die Einstellungen des Verlaufs ließen sich nicht lesen: " + reason;
+                case SPANISH -> "No se pudieron leer los ajustes del historial: " + reason;
+                case JAPANESE -> "履歴の設定を読み込めませんでした：" + reason;
+                case CHINESE -> "无法读取历史记录的设置：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_CHANGE_WHEN_IT_SAVES(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not change when it saves: " + reason;
+                case GERMAN -> "oillamp konnte nicht ändern, wann gespeichert wird: " + reason;
+                case SPANISH -> "oillamp no pudo cambiar cuándo guarda: " + reason;
+                case JAPANESE -> "oillamp は保存のタイミングを変更できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法更改保存时机：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_CHANGE_HOW_FAR_THE_HISTORY_MAY_GROW(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not change how far the history may grow: " + reason;
+                case GERMAN -> "oillamp konnte nicht ändern, wie weit der Verlauf wachsen darf: " + reason;
+                case SPANISH -> "oillamp no pudo cambiar cuánto puede crecer el historial: " + reason;
+                case JAPANESE -> "oillamp は履歴の上限サイズを変更できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法更改历史记录可增长的大小：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_SAVE(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not save: " + reason;
+                case GERMAN -> "oillamp konnte nicht speichern: " + reason;
+                case SPANISH -> "oillamp no pudo guardar: " + reason;
+                case JAPANESE -> "oillamp は保存できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法保存：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_START_THE_BRANCH(String branch, String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not start the branch " + branch + ": " + reason;
+                case GERMAN -> "oillamp konnte den Zweig " + branch + " nicht anlegen: " + reason;
+                case SPANISH -> "oillamp no pudo crear la rama " + branch + ": " + reason;
+                case JAPANESE -> "oillamp はブランチ " + branch + " を作成できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法创建分支 " + branch + "：" + reason;
+            };
+        }
+
+        public String OILLAMP_REFUSED_DELETING_THE_BRANCH(String branch, String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp refused deleting the branch " + branch + ": " + reason;
+                case GERMAN -> "oillamp verweigerte das Löschen des Zweigs " + branch + ": " + reason;
+                case SPANISH -> "oillamp se negó a eliminar la rama " + branch + ": " + reason;
+                case JAPANESE -> "oillamp はブランチ " + branch + " の削除を拒否しました：" + reason;
+                case CHINESE -> "oillamp 拒绝删除分支 " + branch + "：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_DELETE_THE_BRANCH(String branch, String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not delete the branch " + branch + ": " + reason;
+                case GERMAN -> "oillamp konnte den Zweig " + branch + " nicht löschen: " + reason;
+                case SPANISH -> "oillamp no pudo eliminar la rama " + branch + ": " + reason;
+                case JAPANESE -> "oillamp はブランチ " + branch + " を削除できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法删除分支 " + branch + "：" + reason;
+            };
+        }
+
+        public String OILLAMP_REFUSED_RESETTING(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp refused resetting: " + reason;
+                case GERMAN -> "oillamp verweigerte das Zurücksetzen: " + reason;
+                case SPANISH -> "oillamp se negó a restablecer: " + reason;
+                case JAPANESE -> "oillamp はリセットを拒否しました：" + reason;
+                case CHINESE -> "oillamp 拒绝重置：" + reason;
+            };
+        }
+
+        public String OILLAMP_REFUSED_TIDYING_UP(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp refused tidying up: " + reason;
+                case GERMAN -> "oillamp verweigerte das Aufräumen: " + reason;
+                case SPANISH -> "oillamp se negó a ordenar: " + reason;
+                case JAPANESE -> "oillamp は整理を拒否しました：" + reason;
+                case CHINESE -> "oillamp 拒绝整理：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_DELETE_OLD_MOMENTS(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not delete old moments: " + reason;
+                case GERMAN -> "oillamp konnte alte Stände nicht löschen: " + reason;
+                case SPANISH -> "oillamp no pudo eliminar momentos antiguos: " + reason;
+                case JAPANESE -> "oillamp は古い時点を削除できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法删除旧的保存点：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_GO_BACK(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not go back: " + reason;
+                case GERMAN -> "oillamp konnte nicht zurückgehen: " + reason;
+                case SPANISH -> "oillamp no pudo volver atrás: " + reason;
+                case JAPANESE -> "oillamp は戻せませんでした：" + reason;
+                case CHINESE -> "oillamp 无法回退：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_MOVE_TO(String branch, String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not move to " + branch + ": " + reason;
+                case GERMAN -> "oillamp konnte nicht zu " + branch + " wechseln: " + reason;
+                case SPANISH -> "oillamp no pudo pasar a " + branch + ": " + reason;
+                case JAPANESE -> "oillamp は " + branch + " に移動できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法切换到 " + branch + "：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_RESET(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not reset: " + reason;
+                case GERMAN -> "oillamp konnte nicht zurücksetzen: " + reason;
+                case SPANISH -> "oillamp no pudo restablecer: " + reason;
+                case JAPANESE -> "oillamp はリセットできませんでした：" + reason;
+                case CHINESE -> "oillamp 无法重置：" + reason;
+            };
+        }
+
+        public String NOTHING_CHANGED_SINCE_THE_NEWEST_MOMENT_SO_IT_HOLDS_HOW_THE_GENIE_IS_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing changed since the newest moment, so it holds how the genie is now already.";
+                case GERMAN -> "Seit dem neuesten Stand hat sich nichts geändert, er hält also schon fest, wie der Dschinn jetzt ist.";
+                case SPANISH -> "Nada cambió desde el momento más reciente, así que ya guarda cómo está el genio ahora.";
+                case JAPANESE -> "最新の時点から何も変わっていないので、その時点がすでに今のジーニーの状態です。";
+                case CHINESE -> "自最新的保存点以来没有任何变化，它已经保存了精灵现在的状态。";
+            };
+        }
+
+        public String THE_HISTORY_FITS_WITHIN_ITS_SIZE_SO_THERE_IS_NOTHING_TO_DELETE() {
+            return switch (lang) {
+                case ENGLISH -> "The history fits within its size, so there is nothing to delete.";
+                case GERMAN -> "Der Verlauf passt in seine Größe, es gibt also nichts zu löschen.";
+                case SPANISH -> "El historial cabe en su tamaño, así que no hay nada que eliminar.";
+                case JAPANESE -> "履歴はサイズ内に収まっているので、削除するものはありません。";
+                case CHINESE -> "历史记录没有超出大小，因此没有需要删除的内容。";
+            };
+        }
+
         public String SAVING() {
             return switch (lang) {
                 case ENGLISH -> "Saving…";
