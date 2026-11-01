@@ -2278,6 +2278,26 @@ public enum Lang {
     /// The words of a genie's Host access page: whether it may reach this computer, and the
     /// rules a model judges its requests by.
     public record HostAccessPage(Lang lang) {
+        public String THE_HOST_ACCESS_COULD_NOT_BE_READ(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The host access could not be read: " + reason;
+                case GERMAN -> "Der Rechnerzugriff ließ sich nicht lesen: " + reason;
+                case SPANISH -> "No se pudo leer el acceso al equipo: " + reason;
+                case JAPANESE -> "ホストへのアクセスの設定を読み込めませんでした：" + reason;
+                case CHINESE -> "无法读取主机访问设置：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_SAVE_IT(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not save it: " + reason;
+                case GERMAN -> "oillamp konnte ihn nicht speichern: " + reason;
+                case SPANISH -> "oillamp no pudo guardarlo: " + reason;
+                case JAPANESE -> "oillamp は保存できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法保存：" + reason;
+            };
+        }
+
         public String HOST_ACCESS() {
             return switch (lang) {
                 case ENGLISH -> "Host access";
@@ -3284,6 +3304,76 @@ public enum Lang {
 
     /// The words of a genie's Schedule page: when jobs wake the genie, and what they did.
     public record SchedulePage(Lang lang) {
+        public String THE_SCHEDULE_COULD_NOT_BE_READ(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The schedule could not be read: " + reason;
+                case GERMAN -> "Der Zeitplan ließ sich nicht lesen: " + reason;
+                case SPANISH -> "No se pudo leer la programación: " + reason;
+                case JAPANESE -> "スケジュールを読み込めませんでした：" + reason;
+                case CHINESE -> "无法读取计划：" + reason;
+            };
+        }
+
+        public String OILLAMP_COULD_NOT_ADD_IT(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "oillamp could not add it: " + reason;
+                case GERMAN -> "oillamp konnte den Auftrag nicht hinzufügen: " + reason;
+                case SPANISH -> "oillamp no pudo añadir la tarea: " + reason;
+                case JAPANESE -> "oillamp はジョブを追加できませんでした：" + reason;
+                case CHINESE -> "oillamp 无法添加任务：" + reason;
+            };
+        }
+
+        public String THE_JOB_COULD_NOT_BE_REMOVED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The job could not be removed: " + reason;
+                case GERMAN -> "Der Auftrag ließ sich nicht entfernen: " + reason;
+                case SPANISH -> "No se pudo quitar la tarea: " + reason;
+                case JAPANESE -> "ジョブを削除できませんでした：" + reason;
+                case CHINESE -> "无法删除任务：" + reason;
+            };
+        }
+
+        public String THE_JOB_COULD_NOT_BE_SWITCHED_ON(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The job could not be switched on: " + reason;
+                case GERMAN -> "Der Auftrag ließ sich nicht einschalten: " + reason;
+                case SPANISH -> "No se pudo activar la tarea: " + reason;
+                case JAPANESE -> "ジョブをオンにできませんでした：" + reason;
+                case CHINESE -> "无法开启任务：" + reason;
+            };
+        }
+
+        public String THE_JOB_COULD_NOT_BE_SWITCHED_OFF(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The job could not be switched off: " + reason;
+                case GERMAN -> "Der Auftrag ließ sich nicht ausschalten: " + reason;
+                case SPANISH -> "No se pudo desactivar la tarea: " + reason;
+                case JAPANESE -> "ジョブをオフにできませんでした：" + reason;
+                case CHINESE -> "无法关闭任务：" + reason;
+            };
+        }
+
+        public String THE_SCHEDULE_COULD_NOT_BE_PAUSED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The schedule could not be paused: " + reason;
+                case GERMAN -> "Der Zeitplan ließ sich nicht pausieren: " + reason;
+                case SPANISH -> "No se pudo pausar la programación: " + reason;
+                case JAPANESE -> "スケジュールを一時停止できませんでした：" + reason;
+                case CHINESE -> "无法暂停计划：" + reason;
+            };
+        }
+
+        public String THE_SCHEDULE_COULD_NOT_BE_RESUMED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The schedule could not be resumed: " + reason;
+                case GERMAN -> "Der Zeitplan ließ sich nicht fortsetzen: " + reason;
+                case SPANISH -> "No se pudo reanudar la programación: " + reason;
+                case JAPANESE -> "スケジュールを再開できませんでした：" + reason;
+                case CHINESE -> "无法恢复计划：" + reason;
+            };
+        }
+
         public String PAUSED_NO_JOB_RUNS_UNTIL_YOU_RESUME_THE_SCHEDULE() {
             return switch (lang) {
                 case ENGLISH -> "Paused. No job runs until you resume the schedule.";
