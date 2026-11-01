@@ -174,10 +174,21 @@ final class GenieSvgUtil {
     /// The outline of a genie of `appearance` on `ground`: a deep shade of its body colour, as
     /// strong as the body lacks contrast with the ground, and none where the body stands out by
     /// itself, as every genie does on the dark palette's night. A light genie on light paper
-    /// gets a clear one, a darker genie a faint one.
+    /// gets a clear one, a darker genie a faint one. It is drawn thin, see [#LINE], and its
+    /// colour casts the genie's soft shadow too, see [#SHADOW].
     static Color outline(Appearance appearance, Color ground) {
         return ContrastUtil.edge(appearance.colour(), ground, 210);
     }
+
+    /// How far the outline reaches out from the genie's shape, in the genie's pixels: a fine
+    /// line that follows each step of the shape, so it reads as the genie's edge, not as a frame
+    /// around it, as an outline a whole pixel wide did.
+    static final double LINE = 0.16;
+
+    /// How opaque the genie's shadow is, as a part of the outline's opacity. The shadow is the
+    /// genie's shape, blurred by about a pixel and fallen a third of one below it, so the genie
+    /// seems to float a little above the paper.
+    static final double SHADOW = 0.55;
 
     /// The SVG text of the genie without an outline.
     static String svg(Appearance appearance, Pose pose, int frame) {
@@ -186,9 +197,9 @@ final class GenieSvgUtil {
 
     /// The SVG text of the genie: one path for each colour, each pixel a square of one unit.
     /// Under them all lies the genie's whole shape in its body colour, so no thin gap shows
-    /// between two colours where the drawing is scaled and smoothed; and under that, unless it
-    /// is transparent, `outline`, in each empty pixel beside the shape, above, below or to
-    /// either side, as pixel pictures are outlined.
+    /// between two colours where the drawing is scaled and smoothed; and under that, unless
+    /// `outline` is transparent, the shape again twice: stroked in `outline` as a fine line, see
+    /// [#LINE], and blurred in it as a soft shadow, see [#SHADOW].
     static String svg(Appearance appearance, Pose pose, int frame, Color outline) {
         char[][] pixels = pixels(appearance, pose, frame);
         Map<Character, Color> paint = colours(appearance);
@@ -197,32 +208,24 @@ final class GenieSvgUtil {
             new StringBuilder()
             .append("<svg xmlns='http://www.w3.org/2000/svg' width='").append(size).append("' height='").append(size)
             .append("' viewBox='0 0 ").append(size).append(' ').append(size).append("' shape-rendering='crispEdges'>");
-        if (outline.getAlpha() > 0) appendPath(svg, beside(pixels), 'o', outline);
+        if (outline.getAlpha() > 0) {
+            String shape = path(pixels, '.');
+            String hex = hex(outline);
+            double opacity = outline.getAlpha() / 255.0;
+            svg
+            .append("<filter id='shadow' x='-0.2' y='-0.2' width='1.4' height='1.4'>")
+            .append("<feOffset dy='0.35'/><feGaussianBlur stdDeviation='0.7'/></filter>")
+            .append("<path fill='").append(hex).append("' fill-opacity='").append(decimal(SHADOW * opacity))
+            .append("' filter='url(#shadow)' shape-rendering='geometricPrecision' d='").append(shape).append("'/>")
+            // Stroked twice as wide as the line, for the fill above covers the inner half.
+            .append("<path fill='none' stroke='").append(hex).append("' stroke-opacity='").append(decimal(opacity))
+            .append("' stroke-width='").append(decimal(2 * LINE)).append("' stroke-linejoin='miter'")
+            .append(" shape-rendering='geometricPrecision' d='").append(shape).append("'/>");
+        }
         appendPath(svg, pixels, '.', appearance.colour());
         for (Map.Entry<Character, Color> colour : paint.entrySet())
             appendPath(svg, pixels, colour.getKey(), colour.getValue());
         return svg.append("</svg>").toString();
-    }
-
-    /// The empty pixels beside the shape of `pixels`, as `o`, and every other pixel as `.`.
-    private static char[][] beside(char[][] pixels) {
-        char[][] around = new char[pixels.length][];
-        for (int y = 0; y < pixels.length; y++) {
-            around[y] = new char[pixels[y].length];
-            for (int x = 0; x < pixels[y].length; x++) {
-                boolean next =
-                    pixels[y][x] == '.' && (
-                        filled(pixels, x - 1, y) || filled(pixels, x + 1, y) ||
-                        filled(pixels, x, y - 1) || filled(pixels, x, y + 1)
-                    );
-                around[y][x] = next ? 'o' : '.';
-            }
-        }
-        return around;
-    }
-
-    private static boolean filled(char[][] pixels, int x, int y) {
-        return y >= 0 && y < pixels.length && x >= 0 && x < pixels[y].length && pixels[y][x] != '.';
     }
 
     /// The genie's pixels, twenty rows of twenty letters, one for each pixel: `.` for none, and
@@ -269,9 +272,19 @@ final class GenieSvgUtil {
     }
 
     /// Appends one path in `colour` covering every pixel that is `letter`, or, for `.`, every
-    /// pixel that is not empty: the genie's whole shape. A run of such pixels in a row becomes
-    /// one rectangle, so neighbouring pixels of one colour never show a seam between them.
+    /// pixel that is not empty: the genie's whole shape.
     private static void appendPath(StringBuilder svg, char[][] pixels, char letter, Color colour) {
+        String path = path(pixels, letter);
+        if (path.isEmpty()) return;
+        svg.append("<path fill='").append(hex(colour)).append("' d='").append(path).append("'");
+        if (colour.getAlpha() < 255) svg.append(" fill-opacity='").append(decimal(colour.getAlpha() / 255.0)).append("'");
+        svg.append("/>");
+    }
+
+    /// The outline of every pixel that is `letter`, or, for `.`, every pixel that is not empty,
+    /// as the data of an SVG path. A run of such pixels in a row becomes one rectangle, so
+    /// neighbouring pixels of one colour never show a seam between them.
+    private static String path(char[][] pixels, char letter) {
         StringBuilder path = new StringBuilder();
         for (int y = 0; y < pixels.length; y++) {
             char[] row = pixels[y];
@@ -287,11 +300,15 @@ final class GenieSvgUtil {
                 .append('z');
             }
         }
-        if (path.isEmpty()) return;
-        String hex = String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue());
-        svg.append("<path fill='").append(hex).append("' d='").append(path).append("'");
-        if (colour.getAlpha() < 255) svg.append(" fill-opacity='").append(String.format(Locale.ROOT, "%.3f", colour.getAlpha() / 255.0)).append("'");
-        svg.append("/>");
+        return path.toString();
+    }
+
+    private static String hex(Color colour) {
+        return String.format("#%02x%02x%02x", colour.getRed(), colour.getGreen(), colour.getBlue());
+    }
+
+    private static String decimal(double value) {
+        return String.format(Locale.ROOT, "%.3f", value);
     }
 
     /// A small drawing laid over the genie: its rows of letters, and where its top left pixel
