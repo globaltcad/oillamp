@@ -6,6 +6,8 @@ import dev.gui.genie.SystemLook
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.History
+import dev.gui.model.HostAccess
+import dev.gui.model.Schedule
 import dev.gui.model.Lang
 import dev.gui.model.Settings
 import dev.gui.view.GeniesView
@@ -185,6 +187,23 @@ class SpeakingTheUsersLanguageSpec extends Specification {
 
         and: 'once the next change begins, neither is said'
             history.withNote(History.Note.NOTHING_CHANGED).noProblem().noNote().problem().isEmpty()
+    }
+
+    def 'What failed on the schedule and host access pages is said in the language Genies speaks'() {
+        reportInfo """
+            Let's consider a job oillamp could not switch off, and host access it could not
+            save. As on the history page, each page says what failed in the language Genies
+            speaks, and why as oillamp said it.
+        """
+        given: 'a job that could not be switched off, and host access that could not be saved'
+            def job = new Schedule.Problem.CouldNotSwitchOff('the lamp is busy')
+            def access = new HostAccess.Problem.CouldNotSave('permission denied')
+
+        expect: 'each is said in each language, and why as oillamp said it'
+            job.words(Lang.ENGLISH) == 'The job could not be switched off: the lamp is busy'
+            job.words(Lang.GERMAN) == 'Der Auftrag ließ sich nicht ausschalten: the lamp is busy'
+            access.words(Lang.ENGLISH) == 'oillamp could not save it: permission denied'
+            access.words(Lang.SPANISH) == 'oillamp no pudo guardarlo: permission denied'
     }
 
     /// Whether a label in `view` says `text`.

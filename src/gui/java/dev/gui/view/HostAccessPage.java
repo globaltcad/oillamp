@@ -156,7 +156,7 @@ final class HostAccessPage {
                 ? page.MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST(it.name())
                 : page.CANNOT_REACH_THIS_COMPUTER(it.name())
         );
-        Val<String> problem = hostAccess.viewAsString(HostAccess::problem);
+        Val<String> problem = Viewable.of(String.class, hostAccess, pageWords, (it, page) -> it.problem().map(why -> why.words(page.lang())).orElse(""));
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
             .add(label(pageWords.viewAsString(Lang.HostAccessPage::HOST_ACCESS)).group(Skin.EMPTY_TITLE))

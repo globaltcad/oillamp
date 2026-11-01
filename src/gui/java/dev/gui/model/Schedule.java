@@ -22,7 +22,7 @@ import sprouts.Tuple;
 /// @param draft   the job being written or changed, while the page shows its editor
 /// @param picked  the job whose times the timeline brings forward; empty for none
 /// @param earlier whether the timeline shows every run of the last week, not only the last few
-/// @param problem why the last change could not be made, in the lamp's words; empty when it could
+/// @param problem what could not be done last, with why in the lamp's words; empty when it could
 /// @param busy    whether a change is on its way to the lamp
 public record Schedule(
     boolean read,
@@ -34,9 +34,46 @@ public record Schedule(
     Optional<JobDraft> draft,
     String picked,
     boolean earlier,
-    String problem,
+    Optional<Problem> problem,
     boolean busy
 ) {
+
+    /// What could not be done last, which the page says until the next change. Each says why in
+    /// `reason`, in the words of the lamp, which stay as oillamp put them; what could not be done
+    /// is said in the language Genies speaks with [#words(Lang)].
+    public sealed interface Problem {
+        /// Why it failed, as oillamp said.
+        String reason();
+
+        /// Reading the jobs and their runs.
+        record CouldNotRead(String reason) implements Problem {}
+        /// Adding the job the user wrote, or changing one.
+        record CouldNotAdd(String reason) implements Problem {}
+        /// Taking a job off the schedule.
+        record CouldNotRemove(String reason) implements Problem {}
+        /// Switching a job on.
+        record CouldNotSwitchOn(String reason) implements Problem {}
+        /// Switching a job off.
+        record CouldNotSwitchOff(String reason) implements Problem {}
+        /// Pausing the whole schedule.
+        record CouldNotPause(String reason) implements Problem {}
+        /// Letting the whole schedule run again.
+        record CouldNotResume(String reason) implements Problem {}
+
+        /// What could not be done and why, in `lang`.
+        default String words(Lang lang) {
+            Lang.SchedulePage words = lang.SCHEDULE_PAGE();
+            return switch (this) {
+                case CouldNotRead it -> words.THE_SCHEDULE_COULD_NOT_BE_READ(it.reason());
+                case CouldNotAdd it -> words.OILLAMP_COULD_NOT_ADD_IT(it.reason());
+                case CouldNotRemove it -> words.THE_JOB_COULD_NOT_BE_REMOVED(it.reason());
+                case CouldNotSwitchOn it -> words.THE_JOB_COULD_NOT_BE_SWITCHED_ON(it.reason());
+                case CouldNotSwitchOff it -> words.THE_JOB_COULD_NOT_BE_SWITCHED_OFF(it.reason());
+                case CouldNotPause it -> words.THE_SCHEDULE_COULD_NOT_BE_PAUSED(it.reason());
+                case CouldNotResume it -> words.THE_SCHEDULE_COULD_NOT_BE_RESUMED(it.reason());
+            };
+        }
+    }
 
     /// A job as oillamp lists it, read into the page's terms.
     ///
@@ -97,7 +134,7 @@ public record Schedule(
 
     public static Schedule unread(ZoneId zone) {
         return new Schedule(false, false, zone, Tuple.of(Job.class), Tuple.of(Run.class), Optional.empty(),
-                            Optional.empty(), "", false, "", false);
+                            Optional.empty(), "", false, Optional.empty(), false);
     }
 
     public Schedule withPaused(boolean paused)            { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
@@ -106,7 +143,8 @@ public record Schedule(
     public Schedule withDraft(Optional<JobDraft> draft)   { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
     public Schedule withPicked(String picked)             { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
     public Schedule withEarlier(boolean earlier)          { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
-    public Schedule withProblem(String problem)           { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
+    public Schedule withProblem(Problem problem)          { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, Optional.of(problem), busy); }
+    public Schedule noProblem()                           { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, Optional.empty(), busy); }
     public Schedule withBusy(boolean busy)                { return new Schedule(read, paused, zone, jobs, runs, running, draft, picked, earlier, problem, busy); }
 
     /// What the lamp holds now. The job being written, and the job picked if it is still there,
@@ -128,17 +166,17 @@ public record Schedule(
 
     /// Opens the editor on a new job.
     public Schedule writeNew(LocalDateTime now) {
-        return withDraft(Optional.of(JobDraft.fresh(now))).withProblem("");
+        return withDraft(Optional.of(JobDraft.fresh(now))).noProblem();
     }
 
     /// Opens the editor on job `id`, to change it.
     public Schedule change(String id, LocalDateTime now) {
-        return job(id).map(job -> withDraft(Optional.of(JobDraft.of(job, zone, now))).withProblem("")).orElse(this);
+        return job(id).map(job -> withDraft(Optional.of(JobDraft.of(job, zone, now))).noProblem()).orElse(this);
     }
 
     /// Closes the editor, and forgets what was written in it.
     public Schedule closeEditor() {
-        return withDraft(Optional.empty()).withProblem("").withBusy(false);
+        return withDraft(Optional.empty()).noProblem().withBusy(false);
     }
 
     static String firstLine(String text, int most) {
