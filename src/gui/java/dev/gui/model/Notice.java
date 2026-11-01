@@ -56,6 +56,19 @@ public sealed interface Notice {
     /// The genie's harness could not take what the user sent, and said `reason`.
     record CouldNotTake(String reason) implements Notice {}
 
+    /// oillamp could not reach the model service at `host`, for `why`, so the genie got no answer.
+    record ModelServiceUnreachable(String host, String why) implements Notice {}
+
+    /// The connection to the model service broke off before an answer came.
+    record ConnectionBrokeOff() implements Notice {}
+
+    /// The model service refused with the status `code`, and `said` why. `model` is the model
+    /// the request was for; empty when not known.
+    record ModelServiceRefused(int code, String model, String said) implements Notice {}
+
+    /// The model could not answer, and pi got `said`, which Genies could not make out.
+    record ModelCouldNotAnswer(String said) implements Notice {}
+
     /// Anything else, as oillamp, the model service or the computer `said` it, or as Genies
     /// worded it when it happened.
     record Said(String said) implements Notice {}
@@ -80,7 +93,26 @@ public sealed interface Notice {
             case TryingAgain it -> it.why().map(why -> why.words(lang) + " ").orElse("")
                                    + words.TRYING_AGAIN(it.attempt(), it.attempts());
             case CouldNotTake it -> words.THE_GENIE_COULD_NOT_TAKE_THAT(it.reason());
+            case ModelServiceUnreachable it -> words.OILLAMP_COULD_NOT_REACH_THE_MODEL_SERVICE_AT(it.host(), it.why());
+            case ConnectionBrokeOff _ -> words.THE_CONNECTION_TO_THE_MODEL_SERVICE_BROKE_OFF_BEFORE_AN_ANSWER_CAME();
+            case ModelServiceRefused it -> sentence(words.WITH_STATUS(who(it, words), it.code(), it.said()));
+            case ModelCouldNotAnswer it -> sentence(words.THE_MODEL_COULD_NOT_ANSWER(it.said()));
             case Said it -> it.said();
         };
+    }
+
+    /// Who refused, and how, as the status `code` says.
+    private static String who(ModelServiceRefused refused, Lang.Chat words) {
+        int code = refused.code();
+        return code == 401 || code == 403 ? words.THE_MODEL_SERVICE_REFUSED_THE_KEY()
+             : code == 429 ? words.THE_MODEL_SERVICE_TAKES_NO_MORE_REQUESTS_FOR_NOW_OR_THE_KEYS_CREDIT_RAN_OUT()
+             : code >= 500 ? words.THE_MODEL_SERVICE_HAD_TROUBLE_OF_ITS_OWN()
+             : refused.model().isBlank() ? words.THE_MODEL_SERVICE_REFUSED_THE_REQUEST()
+             : words.REFUSED_THE_REQUEST(refused.model().strip());
+    }
+
+    /// `text` ending as a sentence, so that more can follow it.
+    private static String sentence(String text) {
+        return text.matches("(?s).*[.!?。！？]") ? text : text + ".";
     }
 }
