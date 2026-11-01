@@ -72,8 +72,8 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         record Trying(String model) implements Says {}
         /// The user stopped setting up.
         record Stopped() implements Says {}
-        /// A step failed, for `reason`.
-        record Failed(String reason) implements Says {}
+        /// A step failed, as `failure` says.
+        record Failed(Failure failure) implements Says {}
 
         /// What happens, in `lang`.
         default String words(Lang lang) {
@@ -89,7 +89,7 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
                 case Preparing it -> words.PREPARING_FOR_GENIES(it.model());
                 case Trying it -> words.TRYING_ITS_FIRST_ANSWER_LOADS_IT_WHICH_CAN_TAKE_A_FEW_MINUTES(it.model());
                 case Stopped _ -> words.STOPPED_WHAT_WAS_DOWNLOADED_OF_A_MODEL_IS_KEPT();
-                case Failed it -> it.reason();
+                case Failed it -> it.failure().words(lang);
             };
         }
 
@@ -102,6 +102,60 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         /// `bytes` in MB, or in GB from one GB on, such as "640 MB" or "1.4 GB".
         private static String amount(long bytes) {
             return bytes < 1L << 30 ? (bytes >> 20) + " MB" : String.format(Locale.ROOT, "%.1f GB", bytes / (double) (1L << 30));
+        }
+    }
+
+    /// Why a step of setting Ollama up failed. Said in the language Genies speaks with
+    /// [#words(Lang)]; what Ollama, ollama.com or the computer said stays as they put it.
+    public sealed interface Failure {
+        /// There is no `ollama` program to start.
+        record NotInstalled() implements Failure {}
+        /// Ollama did not answer within `seconds` of starting; what it said is in the file `log`.
+        record DidNotStart(long seconds, String log) implements Failure {}
+        /// Ollama knows no model called `model`.
+        record NoSuchModel(String model) implements Failure {}
+        /// Ollama could not download `model`, and `said` why.
+        record CouldNotDownload(String model, String said) implements Failure {}
+        /// Ollama stopped downloading `model` without saying why.
+        record StoppedDownloading(String model) implements Failure {}
+        /// `model` cannot use tools, as a genie must.
+        record CannotUseTools(String model) implements Failure {}
+        /// ollama.com answered `status` for the archive at `archive`.
+        record ArchiveRefused(int status, String archive) implements Failure {}
+        /// Downloading Ollama broke off, for `reason`.
+        record DownloadFailed(String reason) implements Failure {}
+        /// Downloading what Ollama needs for AMD graphics cards broke off, for `reason`.
+        record AmdDownloadFailed(String reason) implements Failure {}
+        /// Unpacking Ollama failed, and `tar` said why in `reason`.
+        record UnpackingFailed(String reason) implements Failure {}
+        /// Ollama answered `status` without saying why.
+        record Answered(int status) implements Failure {}
+        /// Ollama refused, and `said` why.
+        record Said(String said) implements Failure {}
+        /// Nothing answers at Ollama's address on this computer.
+        record NotAnswering() implements Failure {}
+        /// Anything else, as the computer `said` it.
+        record Other(String said) implements Failure {}
+
+        /// Why it failed, in `lang`.
+        default String words(Lang lang) {
+            Lang.SettingsPage words = lang.SETTINGS_PAGE();
+            return switch (this) {
+                case NotInstalled _ -> words.OLLAMA_IS_NOT_INSTALLED();
+                case DidNotStart it -> words.OLLAMA_DID_NOT_START_WITHIN(it.seconds(), it.log());
+                case NoSuchModel it -> words.OLLAMA_HAS_NO_MODEL_CALLED(it.model());
+                case CouldNotDownload it -> words.OLLAMA_COULD_NOT_DOWNLOAD(it.model(), it.said());
+                case StoppedDownloading it -> words.OLLAMA_STOPPED_DOWNLOADING_WITHOUT_SAYING_WHY(it.model());
+                case CannotUseTools it -> words.CANNOT_USE_TOOLS_SO_A_GENIE_COULD_NOT_WORK_WITH_IT(it.model());
+                case ArchiveRefused it -> words.OLLAMA_COM_ANSWERED_FOR(it.status(), it.archive());
+                case DownloadFailed it -> words.DOWNLOADING_OLLAMA_FAILED(it.reason());
+                case AmdDownloadFailed it -> words.DOWNLOADING_WHAT_OLLAMA_NEEDS_FOR_AMD_GRAPHICS_CARDS_FAILED(it.reason());
+                case UnpackingFailed it -> words.UNPACKING_OLLAMA_FAILED(it.reason());
+                case Answered it -> words.OLLAMA_ANSWERED(it.status());
+                case Said it -> it.said();
+                case NotAnswering _ -> words.OLLAMA_DOES_NOT_ANSWER_ON_THIS_COMPUTER();
+                case Other it -> it.said();
+            };
         }
     }
 

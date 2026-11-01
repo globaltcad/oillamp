@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.Serial;
 import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,6 +37,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.gui.model.Hardware;
+import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 
 import io.airlift.compress.v3.zstd.ZstdInputStream;
@@ -86,6 +89,26 @@ public final class OllamaKeeper {
     /// @param home the folder Genies installs Ollama into, and writes what it says into
     public OllamaKeeper(Path home) { this.home = home; }
 
+    /// Setting Ollama up failed, as [#failure] says. Its message says it in English, for the
+    /// error log; the settings say it in the language Genies speaks.
+    public static final class Failed extends IOException {
+        @Serial private static final long serialVersionUID = 1L;
+
+        private final transient OllamaSetup.Failure failure;
+
+        Failed(OllamaSetup.Failure failure) {
+            super(failure.words(Lang.ENGLISH));
+            this.failure = failure;
+        }
+
+        Failed(OllamaSetup.Failure failure, Throwable cause) {
+            super(failure.words(Lang.ENGLISH), cause);
+            this.failure = failure;
+        }
+
+        public OllamaSetup.Failure failure() { return failure; }
+    }
+
     /// How far a download is: `done` bytes of `total`, which is 0 while unknown.
     @FunctionalInterface
     public interface Progress {
@@ -115,9 +138,9 @@ public final class OllamaKeeper {
         deleteAll(partial);
         Files.createDirectories(partial);
         try {
-            unpack(URI.create(DOWNLOADS + "ollama-linux-" + processor + ".tar.zst"), partial, "Downloading Ollama", progress);
+            unpack(URI.create(DOWNLOADS + "ollama-linux-" + processor + ".tar.zst"), partial, OllamaSetup.Failure.DownloadFailed::new, progress);
             if (!amdCards().isEmpty()) unpack(URI.create(DOWNLOADS + "ollama-linux-" + processor + "-rocm.tar.zst"), partial,
-                            "Downloading what Ollama needs for AMD graphics cards", forAmd);
+                            OllamaSetup.Failure.AmdDownloadFailed::new, forAmd);
         } catch (IOException | InterruptedException | RuntimeException failed) {
             // What was unpacked so far can be gigabytes, and is of no use to anyone.
             try {
@@ -137,7 +160,7 @@ public final class OllamaKeeper {
     /// Starts Ollama, unless it runs already, and waits until it answers.
     public void start() throws IOException, InterruptedException {
         if (isRunning()) return;
-        Path program = program().orElseThrow(() -> new IOException("Ollama is not installed."));
+        Path program = program().orElseThrow(() -> new Failed(new OllamaSetup.Failure.NotInstalled()));
         Files.createDirectories(home);
         Path log = home.resolve("serve.log");
         // In a session of its own, so that closing the terminal Genies was started from does not
@@ -155,7 +178,7 @@ public final class OllamaKeeper {
             if (isRunning()) return;
             Thread.sleep(500);
         }
-        throw new IOException("Ollama did not start within " + STARTING.toSeconds() + " seconds. What it said is in " + log + ".");
+        throw new Failed(new OllamaSetup.Failure.DidNotStart(STARTING.toSeconds(), log.toString()));
     }
 
     /// Downloads `model` into Ollama. Ollama keeps what it downloaded of a model that was
@@ -170,8 +193,8 @@ public final class OllamaKeeper {
                 JsonNode said = JSON.readTree(line);
                 String error = said.path("error").asText("");
                 if (error.contains("file does not exist"))
-                    throw new IOException("Ollama has no model called " + model + ". Check its name on ollama.com/library.");
-                if (!error.isEmpty()) throw new IOException("Ollama could not download " + model + ": " + error);
+                    throw new Failed(new OllamaSetup.Failure.NoSuchModel(model));
+                if (!error.isEmpty()) throw new Failed(new OllamaSetup.Failure.CouldNotDownload(model, error));
                 if (said.path("status").asText().equals("success")) return;
                 if (said.has("total")) layers.put(said.path("digest").asText(), new long[] { said.path("completed").asLong(), said.path("total").asLong() });
                 long done = layers.values().stream().mapToLong(it -> it[0]).sum();
@@ -179,7 +202,7 @@ public final class OllamaKeeper {
                 if (all > 0) progress.at(done, all);
             }
         }
-        throw new IOException("Ollama stopped downloading " + model + " without saying why.");
+        throw new Failed(new OllamaSetup.Failure.StoppedDownloading(model));
     }
 
     /// Makes Genies' version of `model`, named [OllamaSetup#PREFIX] and the model, with a context
@@ -188,8 +211,7 @@ public final class OllamaKeeper {
         JsonNode shown = ask(post("show", JSON.createObjectNode().put("model", model), ASKING));
         boolean tools = false;
         for (JsonNode capability : shown.path("capabilities")) tools |= capability.asText().equals("tools");
-        if (!tools) throw new IOException(model + " cannot use tools, so a genie could not work with it. Choose a model that can: "
-                                          + "Genies suggests some, and ollama.com/search?c=tools lists them all.");
+        if (!tools) throw new Failed(new OllamaSetup.Failure.CannotUseTools(model));
         ObjectNode create = JSON.createObjectNode().put("model", OllamaSetup.PREFIX + model).put("from", model).put("stream", false);
         create.putObject("parameters").put("num_ctx", CONTEXT);
         ask(post("create", create, Duration.ofMinutes(2)));
@@ -287,11 +309,13 @@ public final class OllamaKeeper {
     }
 
     /// Downloads the archive at `archive` and unpacks it into `into` as it arrives, with `tar`.
-    private void unpack(URI archive, Path into, String what, Progress progress) throws IOException, InterruptedException {
+    /// When the download breaks off, `brokeOff` says so, with why.
+    private void unpack(URI archive, Path into, Function<String, OllamaSetup.Failure> brokeOff, Progress progress)
+            throws IOException, InterruptedException {
         HttpResponse<InputStream> response = http.send(HttpRequest.newBuilder(archive).build(), HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() != 200) {
             response.body().close();
-            throw new IOException("ollama.com answered " + response.statusCode() + " for " + archive + ".");
+            throw new Failed(new OllamaSetup.Failure.ArchiveRefused(response.statusCode(), archive.toString()));
         }
         long total = response.headers().firstValueAsLong("content-length").orElse(0);
         long[] arrived = { 0 };
@@ -330,11 +354,11 @@ public final class OllamaKeeper {
             // A tar that stopped on its own, as on a full disk, makes the write fail with a broken
             // pipe, which says nothing; what tar said is the reason.
             String complaints = lastComplaints(said);
-            throw new IOException(what + " failed: " + (complaints.isEmpty()
+            throw new Failed(brokeOff.apply(complaints.isEmpty()
                     ? Optional.ofNullable(failed.getMessage()).orElse(failed.toString()) : complaints), failed);
         }
         if (tar.waitFor() == 0) return;
-        throw new IOException("Unpacking Ollama failed: " + lastComplaints(said));
+        throw new Failed(new OllamaSetup.Failure.UnpackingFailed(lastComplaints(said)));
     }
 
     /// The last lines tar wrote on its error output, once it has ended: on a full disk the same
@@ -361,12 +385,13 @@ public final class OllamaKeeper {
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
     }
 
-    /// Ollama's answer to `request`, or its error as the exception's message.
+    /// Ollama's answer to `request`; when Ollama refuses, what it said, or its status.
     private JsonNode ask(HttpRequest request) throws IOException, InterruptedException {
         HttpResponse<String> response = send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         JsonNode answer = JSON.readTree(response.body().isBlank() ? "{}" : response.body());
         if (response.statusCode() / 100 != 2)
-            throw new IOException(answer.path("error").asText("Ollama answered " + response.statusCode() + "."));
+            throw new Failed(answer.hasNonNull("error") ? new OllamaSetup.Failure.Said(answer.path("error").asText())
+                                                        : new OllamaSetup.Failure.Answered(response.statusCode()));
         return answer;
     }
 
@@ -374,7 +399,7 @@ public final class OllamaKeeper {
         try {
             return http.send(request, body);
         } catch (ConnectException notRunning) {
-            throw new IOException("Ollama does not answer on this computer.", notRunning);
+            throw new Failed(new OllamaSetup.Failure.NotAnswering(), notRunning);
         }
     }
 
