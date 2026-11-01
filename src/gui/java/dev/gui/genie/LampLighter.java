@@ -14,6 +14,7 @@ import dev.lamp.LampFailedException;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
 import dev.lamp.LampDirectory;
+import dev.lamp.LampWallpaper;
 
 /// Lights a genie's lamp: starts its sandbox and waits until it runs.
 ///
@@ -26,6 +27,8 @@ public interface LampLighter {
     /// @param name     the genie's name, which it is told in its instructions
     /// @param settings the model service and the model the genie answers with
     /// @param key      the model key, which the lamp's engine keeps on the host
+    /// @param wallpaper the sandbox desktop's wallpaper, for a lamp lit for the first time; a
+    ///                 lamp keeps the one it was made with
     /// @param progress receives what the lamp is doing, in a few words, while it starts
     /// @param events   receives every event of the lamp's session, from any thread, including
     ///                 the progress of the agent's runs
@@ -35,6 +38,7 @@ public interface LampLighter {
         final String name,
         final Settings settings,
         final String key,
+        final LampWallpaper wallpaper,
         final Consumer<String> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException;
@@ -44,7 +48,8 @@ public interface LampLighter {
     /// the settings' model and a genie's instructions, which the engine would write into the
     /// agent's home, changing how it answers wherever it is lit next.
     ///
-    /// The default lights it as [#light] does, for a lighter that makes no difference.
+    /// The default lights it as [#light] does, for a lighter that makes no difference. The
+    /// wallpaper it gives makes none either: a lamp made elsewhere has its own already.
     default Lit lightAsItIs(
         final Path directory,
         final Settings settings,
@@ -53,7 +58,8 @@ public interface LampLighter {
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         Path name = directory.getFileName();
-        return light(directory, name == null ? directory.toString() : name.toString(), settings, key, progress, events);
+        return light(directory, name == null ? directory.toString() : name.toString(), settings, key,
+                     LampWallpaper.WAVES_DARK, progress, events);
     }
 
     /// The lamp in `directory`, not lit, for what works without its sandbox: its schedule and

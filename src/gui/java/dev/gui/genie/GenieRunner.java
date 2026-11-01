@@ -32,6 +32,7 @@ import dev.lamp.LampFailedException;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
 import dev.lamp.LampRunOutcome;
+import dev.lamp.LampWallpaper;
 
 import sprouts.Tuple;
 
@@ -125,9 +126,10 @@ public final class GenieRunner {
 
     /// Lights the lamp, and shows the genie's most recent conversation.
     ///
-    /// @param key the model key, from the settings or the environment; the lamp's engine keeps it
-    public void wake(String name, Settings settings, String key) {
-        wake(name, settings, key, "", "");
+    /// @param key       the model key, from the settings or the environment; the lamp's engine keeps it
+    /// @param wallpaper the sandbox desktop's wallpaper, if the lamp is new
+    public void wake(String name, Settings settings, String key, LampWallpaper wallpaper) {
+        wake(name, settings, key, wallpaper, "", "");
     }
 
     /// Wakes the genie in one of its conversations.
@@ -135,7 +137,14 @@ public final class GenieRunner {
     /// @param conversation the conversation's file relative to the genie's home, or empty for
     ///                     its most recent one
     /// @param leaf         the entry to continue after, or empty for where the conversation stands
-    public void wake(String name, Settings settings, String key, String conversation, String leaf) {
+    public void wake(
+        final String name,
+        final Settings settings,
+        final String key,
+        final LampWallpaper wallpaper,
+        final String conversation,
+        final String leaf
+    ) {
         work.execute(() -> {
             if (lamp.isPresent()) return;
             // Lit elsewhere, it is joined: lighting it again would find it taken.
@@ -147,10 +156,14 @@ public final class GenieRunner {
             changes.accept(Genie::waking);
             try {
                 LampLighter.Lit lit = fromElsewhere
-                        ? lighter.lightAsItIs(directory, settings, key,
-                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp())
-                        : lighter.light(directory, name, settings, key,
-                            what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp());
+                        ? lighter.lightAsItIs(
+                                directory, settings, key,
+                                what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
+                            )
+                        : lighter.light(
+                                directory, name, settings, key, wallpaper,
+                                 what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
+                            );
                 lamp = Optional.of(lit);
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays("waking the genie"));

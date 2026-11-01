@@ -36,6 +36,7 @@ import dev.gui.model.Settings;
 import dev.lamp.LampExitStatus;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
+import dev.lamp.LampWallpaper;
 
 import sprouts.From;
 import sprouts.Tuple;
@@ -258,8 +259,22 @@ public final class GeniesBackend implements Genies {
                 Thread.currentThread().interrupt();
             }
         });
-        now.find(id).ifPresent(genie -> runner(id).wake(genie.name(), now.settings(), key.get(),
-                conversationShown(genie), leafShown(genie)));
+        // A new genie's lamp gets the wallpaper of the palette the user picked, the dark waves or
+        // the light ones, and keeps it. The lamp on its panel, oillamp's own default, never.
+        LampWallpaper wallpaper = now.palette().isDark()
+                                    ? LampWallpaper.WAVES_DARK
+                                    : LampWallpaper.WAVES_LIGHT;
+        now.find(id).ifPresent( genie ->
+                    runner(id)
+                    .wake(
+                        genie.name(),
+                        now.settings(),
+                        key.get(),
+                        wallpaper,
+                        conversationShown(genie),
+                        leafShown(genie)
+                    )
+                );
     }
 
     @Override public void goTo(UUID id, String conversation, String leaf) {
