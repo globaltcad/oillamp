@@ -488,9 +488,9 @@ class FollowingAConversationSpec extends Specification {
 
         expect:
             interrupted.asleep().transcript().entries().every { !it.isWriting() }
-            with(interrupted.broken('the sandbox stopped')) {
+            with(interrupted.broken(new Genie.Broke.Failed('the sandbox stopped'))) {
                 phase() == Genie.Phase.BROKEN
-                activity() == new Genie.Activity.Broken('the sandbox stopped')
+                activity() == new Genie.Activity.Broken(new Genie.Broke.Failed('the sandbox stopped'))
                 transcript().entries().last().isFailed()
             }
     }

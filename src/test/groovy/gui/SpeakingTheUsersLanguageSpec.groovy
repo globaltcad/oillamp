@@ -286,6 +286,24 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             new Genie.Activity.LampSays('Pulling the base image').words(Lang.GERMAN) == 'Pulling the base image'
     }
 
+    def 'Why a genie broke is said in the language Genies speaks'() {
+        reportInfo """
+            Let's consider a genie whose sandbox stopped by itself, and one whose lamp, lit with
+            `oillamp at`, Genies could not join. The window says why in the language Genies
+            speaks; the detail oillamp gave stays as oillamp put it.
+        """
+        given: 'a genie whose sandbox stopped'
+            def stopped = Genie.named('Jafar').broken(new Genie.Broke.SandboxStopped('exit code 137'))
+
+        expect: 'why is said in each language, with oillamp\'s detail as it put it'
+            stopped.activity().words(Lang.ENGLISH) == "The genie's sandbox stopped: exit code 137"
+            stopped.activity().words(Lang.GERMAN) == 'Die Sandbox des Dschinns hat angehalten: exit code 137'
+
+        and: 'a lamp that could not be joined goes on as it is, as the window says'
+            new Genie.Broke.JoinFailed(new Genie.Broke.Failed('connection refused.')).words(Lang.SPANISH) ==
+                    'connection refused. Su lámpara sigue como está.'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false

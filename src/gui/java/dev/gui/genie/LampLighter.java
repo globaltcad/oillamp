@@ -1,6 +1,7 @@
 package dev.gui.genie;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
@@ -23,6 +25,26 @@ import dev.lamp.LampWallpaper;
 @FunctionalInterface
 public interface LampLighter {
 
+    /// Lighting or joining a lamp failed, as [#why] says. Its message says it in English, for the
+    /// error log; the window says it in the language Genies speaks.
+    final class Failed extends IOException {
+        @Serial private static final long serialVersionUID = 1L;
+
+        private final transient Genie.Broke why;
+
+        public Failed(Genie.Broke why) {
+            super(why.words(Lang.ENGLISH));
+            this.why = why;
+        }
+
+        public Failed(Genie.Broke why, Throwable cause) {
+            super(why.words(Lang.ENGLISH), cause);
+            this.why = why;
+        }
+
+        public Genie.Broke why() { return why; }
+    }
+
     /// Starts the lamp in `directory` and returns once its sandbox runs.
     ///
     /// @param name     the genie's name, which it is told in its instructions
@@ -33,7 +55,7 @@ public interface LampLighter {
     /// @param progress receives what the lamp is doing, in a few words, while it starts
     /// @param events   receives every event of the lamp's session, from any thread, including
     ///                 the progress of the agent's runs
-    /// @throws IOException when the lamp did not start; the message says why, for the user
+    /// @throws IOException when the lamp did not start; a [Failed] says why
     Lit light(
         final Path directory,
         final String name,

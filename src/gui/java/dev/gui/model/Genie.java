@@ -85,7 +85,7 @@ public record Genie(
         /// It writes its answer.
         record Writing() implements Activity {}
         /// It broke, for `why`.
-        record Broken(String why) implements Activity {}
+        record Broken(Broke why) implements Activity {}
 
         /// What it is doing, in a few words, in `lang`.
         default String words(Lang lang) {
@@ -105,7 +105,39 @@ public record Genie(
                 case Thinking _ -> words.THINKING();
                 case Using it -> words.USING(it.tool());
                 case Writing _ -> words.WRITING();
-                case Broken it -> it.why();
+                case Broken it -> it.why().words(lang);
+            };
+        }
+    }
+
+    /// Why a genie broke: its lamp did not start, could not be joined, or its sandbox stopped.
+    /// Said in the language Genies speaks with [#words(Lang)]; what oillamp or the computer said
+    /// stays as they put it.
+    public sealed interface Broke {
+        /// `model` cannot be a model's name, as it has spaces.
+        record NotAModelsName(String model) implements Broke {}
+        /// Its lamp did not start, and ended with `status`; empty when it did not end in time.
+        record LampDidNotStart(Optional<String> status) implements Broke {}
+        /// Its lamp is lit, but Genies could not join it.
+        record CouldNotJoin() implements Broke {}
+        /// Joining its lamp failed, for `why`; the lamp goes on as it is.
+        record JoinFailed(Broke why) implements Broke {}
+        /// Its sandbox stopped by itself, and oillamp said `detail`.
+        record SandboxStopped(String detail) implements Broke {}
+        /// Anything else, as oillamp or the computer `said` it.
+        record Failed(String said) implements Broke {}
+
+        /// Why it broke, in `lang`.
+        default String words(Lang lang) {
+            Lang.Window words = lang.WINDOW();
+            return switch (this) {
+                case NotAModelsName it -> words.CANNOT_BE_A_MODELS_NAME(it.model());
+                case LampDidNotStart it -> it.status().map(words::THE_GENIES_LAMP_DID_NOT_START)
+                                                      .orElse(words.THE_GENIES_LAMP_DID_NOT_START_IN_TIME());
+                case CouldNotJoin _ -> words.ITS_LAMP_IS_LIT_BUT_GENIES_COULD_NOT_JOIN_IT();
+                case JoinFailed it -> words.ITS_LAMP_GOES_ON_AS_IT_IS(it.why().words(lang).replaceAll("[.。\\s]+$", ""));
+                case SandboxStopped it -> words.THE_GENIES_SANDBOX_STOPPED(it.detail());
+                case Failed it -> it.said();
             };
         }
     }
@@ -210,13 +242,14 @@ public record Genie(
         return withDesktopShown(true).withShowing(what);
     }
 
-    public Genie broken(String why) {
+    public Genie broken(Broke why) {
         return
             withPhase(Phase.BROKEN)
             .withActivity(new Activity.Broken(why))
             .withDesktopShown(false)
             .withConversations(conversations.withAside(Optional.empty()))
-            .withTranscript(transcript.settled().problem(why));
+            // In English until the chat's notices are values too.
+            .withTranscript(transcript.settled().problem(why.words(Lang.ENGLISH)));
     }
 
     // ─── what it is busy with ──────────────────────────────────────────────────────────────
