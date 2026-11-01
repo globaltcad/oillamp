@@ -245,6 +245,27 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             brokeOff.words(Lang.SPANISH) == 'Ollama no pudo descargar qwen3:8b: connection reset'
     }
 
+    def 'What looking up the models found is said in the language Genies speaks'() {
+        reportInfo """
+            Let's consider a user who looked up the models of the model server on their computer,
+            which offers two. The note under the list says so in the language Genies speaks, as
+            it says that it is still asking. Genies keeps only the answer, and words the note when
+            it shows it.
+        """
+        given: 'settings that name this computer, whose model server offers two models'
+            def state = GeniesState.of(Tuple.of(Genie), Settings.defaults(), Optional.empty())
+            def local = state.withSettings(state.settings().withPlace(Settings.Place.THIS_MACHINE))
+            def found = local.modelsFound(Settings.Place.THIS_MACHINE, 'http://127.0.0.1:11434/v1', Tuple.of(String, 'a', 'b'))
+
+        expect: 'the note says so in each language'
+            found.lookUp().note(Lang.ENGLISH) == 'The model server offers 2 models.'
+            found.lookUp().note(Lang.GERMAN) == 'Der Modellserver bietet 2 Modelle an.'
+            found.lookUp().note(Lang.CHINESE) == '模型服务器提供 2 个模型。'
+
+        and: 'while it asks, it says so'
+            local.askingForModels().lookUp().note(Lang.SPANISH) == 'Consultando los modelos…'
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false
