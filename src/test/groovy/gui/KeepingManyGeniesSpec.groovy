@@ -335,7 +335,7 @@ class KeepingManyGeniesSpec extends Specification {
         then:
             found.lookUp().models().toList() == ['llama3.2:3b', 'qwen2.5:7b']
             found.settings().local().model() == 'llama3.2:3b'
-            found.lookUp().note() == 'The model server offers 2 models.'
+            found.lookUp().note(Lang.ENGLISH) == 'The model server offers 2 models.'
 
         and: 'a model already chosen stays chosen'
             local.withSettings(local.settings().withModel('mine'))
@@ -343,12 +343,12 @@ class KeepingManyGeniesSpec extends Specification {
 
         and: 'Eden AI\'s list says it is the EU\'s'
             state.modelsFound(Settings.Place.EDEN_AI, 'https://api.eu.edenai.run', Tuple.of(String, 'a', 'b'))
-                 .lookUp().note() == 'Eden AI offers 2 models in the EU.'
+                 .lookUp().note(Lang.ENGLISH) == 'Eden AI offers 2 models in the EU.'
 
         and: 'an empty server, or none, says what to do'
-            local.modelsFound(Settings.Place.THIS_MACHINE, address, Tuple.of(String)).lookUp().note().contains('ollama pull')
+            local.modelsFound(Settings.Place.THIS_MACHINE, address, Tuple.of(String)).lookUp().note(Lang.ENGLISH).contains('ollama pull')
             local.modelsNotFound(Settings.Place.THIS_MACHINE, address, 'Nothing answers at http://127.0.0.1:11434/v1.')
-                 .lookUp().note().startsWith('Nothing answers')
+                 .lookUp().note(Lang.ENGLISH).startsWith('Nothing answers')
     }
 
     def 'Models found for another place, or another address, are not offered'() {

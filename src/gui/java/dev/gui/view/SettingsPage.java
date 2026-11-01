@@ -221,7 +221,7 @@ final class SettingsPage {
             Tuple.classTyped(String.class),
             it -> it.lookUp().isFor(it.settings()) ? it.lookUp().models() : Tuple.of(String.class)
         );
-        Val<String> lookUpNote = state.viewAsString(it -> it.lookUp().isFor(it.settings()) ? it.lookUp().note() : "");
+        Val<String> lookUpNote = state.viewAsString(it -> it.lookUp().isFor(it.settings()) ? it.lookUp().note(it.lang()) : "");
         Val<Boolean> simple = advanced.viewAs(Boolean.class, it -> !it);
         Val<Boolean> isEdenAi = state.viewAs(Boolean.class, it -> it.advanced() && it.settings().place() == Settings.Place.EDEN_AI);
         Val<Boolean> isElsewhere = state.viewAs(Boolean.class, it -> it.advanced() && it.settings().place() == Settings.Place.ELSEWHERE);

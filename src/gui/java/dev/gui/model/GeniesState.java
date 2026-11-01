@@ -66,9 +66,36 @@ public record GeniesState(
     /// @param place   the place in the settings it was asked for
     /// @param service the address it was asked at
     /// @param models  the models it offers, by the names genies use for them, in alphabetical order
-    /// @param note    what happened, in a few words, such as how many were found or why none were
-    public record ModelLookUp(Settings.Place place, String service, Tuple<String> models, String note) {
-        public static final ModelLookUp NOT_YET = new ModelLookUp(Settings.Place.EDEN_AI, "", Tuple.of(String.class), "");
+    /// @param state   whether it is still asking, was answered, or failed; empty before it was asked
+    public record ModelLookUp(Settings.Place place, String service, Tuple<String> models, Optional<State> state) {
+        public static final ModelLookUp NOT_YET = new ModelLookUp(Settings.Place.EDEN_AI, "", Tuple.of(String.class), Optional.empty());
+
+        /// Whether the service is still being asked, answered, or could not be asked.
+        public sealed interface State {
+            /// The service is being asked for its models.
+            record Asking() implements State {}
+            /// The service answered with [#models].
+            record Answered() implements State {}
+            /// The service could not be asked, and `why`, as oillamp said it.
+            record Failed(String why) implements State {}
+        }
+
+        /// What happened, in `lang`: how many models were found, or why none were. Nothing before
+        /// it was asked.
+        public String note(Lang lang) {
+            Lang.SettingsPage words = lang.SETTINGS_PAGE();
+            boolean edenAi = place == Settings.Place.EDEN_AI;
+            return state.map(it -> switch (it) {
+                case State.Asking _ -> words.ASKING_FOR_THE_MODELS();
+                case State.Answered _ when models.isEmpty() -> edenAi
+                    ? words.EDEN_AI_OFFERS_NO_MODELS_IN_THE_EU_JUST_NOW()
+                    : words.THE_MODEL_SERVER_OFFERS_NO_MODELS_YET_PULL_ONE_FIRST();
+                case State.Answered _ -> edenAi
+                    ? words.EDEN_AI_OFFERS_MODELS_IN_THE_EU(models.size())
+                    : words.THE_MODEL_SERVER_OFFERS_MODELS(models.size());
+                case State.Failed failed -> failed.why();
+            }).orElse("");
+        }
 
         /// Whether this is the answer for the service the settings name now. After the place or
         /// the address changed, it is not, and the settings do not offer its models.
@@ -325,20 +352,14 @@ public record GeniesState(
     /// The settings are asking the service they name for its models.
     public GeniesState askingForModels() {
         Tuple<String> known = lookUp.isFor(settings) ? lookUp.models() : Tuple.of(String.class);
-        return withLookUp(new ModelLookUp(settings.place(), settings.service(), known, "Asking for the models…"));
+        return withLookUp(new ModelLookUp(settings.place(), settings.service(), known, Optional.of(new ModelLookUp.State.Asking())));
     }
 
     /// The models the service at `service`, for `place`, offered. If that is still the service
     /// the settings name, and no model was chosen there yet, the first one is.
     public GeniesState modelsFound(Settings.Place place, String service, Tuple<String> found) {
         Tuple<String> models = found.sort(String.CASE_INSENSITIVE_ORDER);
-        String note =
-            models.isEmpty() && place == Settings.Place.EDEN_AI ? "Eden AI offers no models in the EU just now."
-            : models.isEmpty() ? "The model server offers no models yet; pull one first, such as `ollama pull qwen2.5:7b`."
-            : place == Settings.Place.EDEN_AI ? "Eden AI offers " + models.size() + " models in the EU."
-            : models.size() == 1 ? "The model server offers one model."
-            : "The model server offers " + models.size() + " models.";
-        ModelLookUp answer = new ModelLookUp(place, service, models, note);
+        ModelLookUp answer = new ModelLookUp(place, service, models, Optional.of(new ModelLookUp.State.Answered()));
         Settings chosen = answer.isFor(settings) && settings.model().isBlank() && !models.isEmpty()
             ? settings.withModel(models.first())
             : settings;
@@ -347,7 +368,7 @@ public record GeniesState(
 
     /// Asking the service at `service`, for `place`, for its models failed, for the reason given.
     public GeniesState modelsNotFound(Settings.Place place, String service, String why) {
-        return withLookUp(new ModelLookUp(place, service, Tuple.of(String.class), why));
+        return withLookUp(new ModelLookUp(place, service, Tuple.of(String.class), Optional.of(new ModelLookUp.State.Failed(why))));
     }
 
     /// Ollama is set up with the model `model`, as Ollama names it, and the genies use it from
