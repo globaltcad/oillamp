@@ -260,7 +260,9 @@ public final class GeniesBackend implements Genies {
             }
         });
         // A new genie's lamp gets the wallpaper of the palette the user picked, the dark waves or
-        // the light ones, and keeps it. The lamp on its panel, oillamp's own default, never.
+        // the light ones, and keeps it. The lamp on its panel, oillamp's own default, never. Their
+        // background colours are the night of Palette.DARK and of Palette.LIGHT, so the desktop
+        // fades out into the colour of the window around it.
         LampWallpaper wallpaper = now.palette().isDark()
                                     ? LampWallpaper.WAVES_DARK
                                     : LampWallpaper.WAVES_LIGHT;
