@@ -19,6 +19,7 @@ import dev.lamp.LampLauncher;
 import dev.lamp.LampPrompt;
 import dev.lamp.LampRun;
 import dev.lamp.LampSandbox;
+import dev.lamp.LampWallpaper;
 
 /// Lights genies' lamps with oillamp, the way any application does: through [Lamp], and nothing
 /// else.
@@ -31,6 +32,7 @@ import dev.lamp.LampSandbox;
 /// reads them. Which agent that is, and where it keeps its settings, is the engine's business.
 ///
 /// Every lamp is lit with its schedule on, so the jobs on it wake the genie while it is awake.
+/// And each is given a wallpaper, which a new lamp keeps; one that has its own already keeps that.
 public final class LampLighterImpl implements LampLighter {
 
     private final Optional<LampLauncher> launcher;
@@ -55,16 +57,26 @@ public final class LampLighterImpl implements LampLighter {
         final String name,
         final Settings settings,
         final String key,
+        final LampWallpaper wallpaper,
         final Consumer<String> progress,
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
-        LampDirectory starting;
+        LampDirectory lampDir;
         try {
-            starting = unlit(directory).model(settings.model().strip());
+            lampDir = unlit(directory).model(settings.model().strip());
         } catch (IllegalArgumentException wrong) {
             throw new IOException("\"" + settings.model().strip() + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol", wrong);
         }
-        return light(starting.instructions(GenieInstructionsUtil.about(name)).enableScheduling(), settings, key, progress, events);
+        return light(
+                lampDir
+                    .instructions(GenieInstructionsUtil.about(name))
+                    .enableScheduling()
+                    .wallpaper(wallpaper),
+                settings,
+                key,
+                progress,
+                events
+        );
     }
 
     /// Its own model, instructions and schedule, as its `oillamp.toml` and its agent's home
