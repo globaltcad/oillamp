@@ -27,6 +27,7 @@ import dev.gui.model.Entry;
 import dev.gui.model.Fonts;
 import dev.gui.model.Genie;
 import dev.gui.model.Lang;
+import dev.gui.model.Notice;
 import dev.gui.model.Palette;
 
 import sprouts.From;
@@ -517,7 +518,7 @@ final class ChatRows {
     // ─── a file ────────────────────────────────────────────────────────────────────────────
 
     private UIForAnySwing<?, ?> file(Var<Entry> entry) {
-        boolean handed = entry.get().text().startsWith("handed you");
+        boolean handed = entry.get().notice().filter(Notice.HandedOver.class::isInstance).isPresent();
         return
             panel("fill, ins 6 38 6 0", "[grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -531,7 +532,7 @@ final class ChatRows {
                         label(entry.get().title())
                         .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(13).weight(2f).color(now.palette().TEXT())))
                     )
-                    .add("growx, wmin 0", label(entry.get().text()).group(Skin.META))
+                    .add("growx, wmin 0", label(lang.viewAsString(it -> entry.get().words(it))).group(Skin.META))
                 )
                 .add(
                     handed

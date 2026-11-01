@@ -44,12 +44,12 @@ public record Transcript(Tuple<Entry> entries) {
 
     /// A file the genie handed over, which the user can save.
     public Transcript handedOver(Handout file) {
-        return add(Entry.of(Entry.Kind.FILE, "handed you a file, " + file.readableSize()).withTitle(file.name()));
+        return add(Entry.of(Entry.Kind.FILE, new Notice.HandedOver(file)).withTitle(file.name()));
     }
 
     /// A file the user gave the genie.
     public Transcript gave(String name) {
-        return add(Entry.of(Entry.Kind.FILE, "you gave the genie this file, in ~/inbox").withTitle(name));
+        return add(Entry.of(Entry.Kind.FILE, new Notice.Gave()).withTitle(name));
     }
 
     public Transcript hear(PiEvent event) {
