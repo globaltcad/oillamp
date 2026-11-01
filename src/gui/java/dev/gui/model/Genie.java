@@ -17,7 +17,7 @@ import sprouts.Tuple;
 /// @param id        stable for the genie's life; its lamp directory is named after it
 /// @param name      what the user calls it
 /// @param phase     whether it is asleep, waking, ready, working or broken
-/// @param activity  what is happening right now, in a few words, such as the lamp's last report
+/// @param activity  what is happening right now, such as the lamp's last report
 /// @param transcript the conversation
 /// @param draft     what the user is typing to it
 /// @param tokens    how many tokens its model calls have counted since the app started
@@ -37,7 +37,7 @@ public record Genie(
     UUID id,
     String name,
     Phase phase,
-    String activity,
+    Activity activity,
     Transcript transcript,
     String draft,
     int tokens,
@@ -51,6 +51,64 @@ public record Genie(
     Home home,
     Optional<Path> elsewhere
 ) implements HasId<UUID> {
+
+    /// What a genie is doing right now, as its card says under its name, and the window while it
+    /// wakes. Said in the language Genies speaks with [#words(Lang)]; what its lamp reports, and
+    /// why it broke, stay as they were put.
+    public sealed interface Activity {
+        /// Its lamp is being lit.
+        record LightingTheLamp() implements Activity {}
+        /// Genies joins its lamp, which someone lit with `oillamp at`.
+        record JoiningLitElsewhere() implements Activity {}
+        /// Genies joins its lamp, which was left running when Genies closed.
+        record JoiningLeftRunning() implements Activity {}
+        /// Its lamp checks this computer.
+        record CheckingThisComputer() implements Activity {}
+        /// Its lamp prepares itself.
+        record PreparingTheLamp() implements Activity {}
+        /// Its lamp makes the sandbox image, which takes minutes the first time.
+        record MakingTheSandbox() implements Activity {}
+        /// Its lamp starts the sandbox.
+        record StartingTheSandbox() implements Activity {}
+        /// Its lamp reported a step, or a warning, in oillamp's words, `said`.
+        record LampSays(String said) implements Activity {}
+        /// Its sandbox runs, and the genie in it is being woken.
+        record WakingTheGenie() implements Activity {}
+        /// It waits for the user.
+        record Ready() implements Activity {}
+        /// Its lamp is not running.
+        record Asleep() implements Activity {}
+        /// It thinks.
+        record Thinking() implements Activity {}
+        /// It uses the tool `tool`.
+        record Using(String tool) implements Activity {}
+        /// It writes its answer.
+        record Writing() implements Activity {}
+        /// It broke, for `why`.
+        record Broken(String why) implements Activity {}
+
+        /// What it is doing, in a few words, in `lang`.
+        default String words(Lang lang) {
+            Lang.Window words = lang.WINDOW();
+            return switch (this) {
+                case LightingTheLamp _ -> words.LIGHTING_THE_LAMP();
+                case JoiningLitElsewhere _ -> words.JOINING_ITS_LAMP_LIT_ELSEWHERE();
+                case JoiningLeftRunning _ -> words.JOINING_ITS_LAMP_WHICH_WAS_LEFT_RUNNING();
+                case CheckingThisComputer _ -> words.CHECKING_THIS_COMPUTER();
+                case PreparingTheLamp _ -> words.PREPARING_THE_LAMP();
+                case MakingTheSandbox _ -> words.MAKING_THE_SANDBOX_THE_FIRST_TIME_TAKES_SEVERAL_MINUTES();
+                case StartingTheSandbox _ -> words.STARTING_THE_SANDBOX();
+                case LampSays it -> it.said();
+                case WakingTheGenie _ -> words.WAKING_THE_GENIE();
+                case Ready _ -> words.READY();
+                case Asleep _ -> words.ASLEEP();
+                case Thinking _ -> words.THINKING();
+                case Using it -> words.USING(it.tool());
+                case Writing _ -> words.WRITING();
+                case Broken it -> it.why();
+            };
+        }
+    }
 
     public enum Phase {
         /// Its lamp is not running. Its home and its conversation are kept on disk.
@@ -76,7 +134,7 @@ public record Genie(
             id,
             name,
             Phase.ASLEEP,
-            "asleep",
+            new Activity.Asleep(),
             Transcript.empty(),
             "",
             0,
@@ -94,7 +152,7 @@ public record Genie(
 
     public Genie withName(String name)             { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
     public Genie withPhase(Phase phase)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withActivity(String activity)     { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
+    public Genie withActivity(Activity activity)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
     public Genie withTranscript(Transcript transcript) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
     public Genie withDraft(String draft)           { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
     public Genie withTokens(int tokens)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
@@ -122,25 +180,25 @@ public record Genie(
     // ─── its lamp ──────────────────────────────────────────────────────────────────────────
 
     public Genie waking() {
-        return withPhase(Phase.WAKING).withActivity("lighting the lamp");
+        return withPhase(Phase.WAKING).withActivity(new Activity.LightingTheLamp());
     }
 
     /// Its lamp reported progress while waking, such as building the image.
-    public Genie lampSays(String what) {
+    public Genie lampSays(Activity what) {
         return phase == Phase.WAKING ? withActivity(what) : this;
     }
 
     /// Waking is done. A genie that broke while waking, because its harness died say, stays
     /// broken: the news of that may arrive before the news that waking finished.
     public Genie awake() {
-        return phase == Phase.WAKING ? withPhase(Phase.READY).withActivity("ready") : this;
+        return phase == Phase.WAKING ? withPhase(Phase.READY).withActivity(new Activity.Ready()) : this;
     }
 
     /// What was put aside is on disk by now, and is read from there when the chat goes back.
     public Genie asleep() {
         return
             withPhase(Phase.ASLEEP)
-            .withActivity("asleep")
+            .withActivity(new Activity.Asleep())
             .withConversations(conversations.withAside(Optional.empty()))
             .withTranscript(transcript.settled())
             .withDesktopShown(false);
@@ -155,7 +213,7 @@ public record Genie(
     public Genie broken(String why) {
         return
             withPhase(Phase.BROKEN)
-            .withActivity(why)
+            .withActivity(new Activity.Broken(why))
             .withDesktopShown(false)
             .withConversations(conversations.withAside(Optional.empty()))
             .withTranscript(transcript.settled().problem(why));
@@ -173,7 +231,7 @@ public record Genie(
 
     /// What it does, in a few words, such as "thinking".
     public String status(Lang lang) {
-        return phase.isAwake() && schedule.running().isPresent() ? lang.WINDOW().DOING_A_SCHEDULED_JOB() : activity;
+        return phase.isAwake() && schedule.running().isPresent() ? lang.WINDOW().DOING_A_SCHEDULED_JOB() : activity.words(lang);
     }
 
     /// What the user waits for, as the chat's bar says it.
@@ -216,7 +274,7 @@ public record Genie(
             withTranscript(transcript.you(draft.strip()))
             .withDraft("")
             .withPhase(Phase.WORKING)
-            .withActivity("thinking");
+            .withActivity(new Activity.Thinking());
     }
 
     /// Whether the user may ask one of their questions differently now: while the genie waits,
@@ -233,7 +291,7 @@ public record Genie(
         return
             withTranscript(transcript.askedInstead(id, text.strip()))
             .withPhase(Phase.WORKING)
-            .withActivity("thinking");
+            .withActivity(new Activity.Thinking());
     }
 
     /// What the genie's run for the chat did. While the chat shows another conversation, it goes
@@ -291,7 +349,7 @@ public record Genie(
         return
             shown.withTranscript(shown.transcript().you(question.strip()))
             .withPhase(Phase.WORKING)
-            .withActivity("thinking");
+            .withActivity(new Activity.Thinking());
     }
 
     /// The run for the chat ended in the conversation in `file`, standing at `history`'s end.
@@ -306,10 +364,10 @@ public record Genie(
         Genie heard = withTranscript(transcript.hear(event));
         return switch (event) {
             case PiEvent.Answered answered -> heard.withTokens(tokens + answered.tokens());
-            case PiEvent.ToolStarted tool  -> heard.withActivity("using " + tool.tool());
-            case PiEvent.Said _            -> heard.withActivity("writing");
-            case PiEvent.Thinking _        -> heard.withActivity("thinking");
-            case PiEvent.Settled _         -> phase.isAwake() ? heard.withPhase(Phase.READY).withActivity("ready") : heard;
+            case PiEvent.ToolStarted tool  -> heard.withActivity(new Activity.Using(tool.tool()));
+            case PiEvent.Said _            -> heard.withActivity(new Activity.Writing());
+            case PiEvent.Thinking _        -> heard.withActivity(new Activity.Thinking());
+            case PiEvent.Settled _         -> phase.isAwake() ? heard.withPhase(Phase.READY).withActivity(new Activity.Ready()) : heard;
             case PiEvent.History history   -> heard.withConversations(
                 conversations.withHere(new Conversations.Here(conversations.here().file(), history.leaf()))
             );
@@ -320,7 +378,7 @@ public record Genie(
             case PiEvent.Refused refused when
                 phase == Phase.WORKING &&
                 (refused.command().equals("prompt") || refused.command().equals("send_user_message"))
-                -> heard.withPhase(Phase.READY).withActivity("ready");
+                -> heard.withPhase(Phase.READY).withActivity(new Activity.Ready());
             default                        -> heard;
         };
     }

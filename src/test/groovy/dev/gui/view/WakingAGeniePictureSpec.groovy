@@ -190,7 +190,7 @@ class WakingAGeniePictureSpec extends Specification {
         given: 'Juniper’s lamp has been lighting for two seconds and reports an image build'
             var genie = Genie.named('Juniper')
             var waiting = WakeScene.of(genie.waking()).after(2)
-            var reported = waiting.follows(genie.waking().lampSays('building the image'))
+            var reported = waiting.follows(genie.waking().lampSays(new Genie.Activity.MakingTheSandbox()))
             var formed = reported.follows(genie.waking().awake()).after(3)
             var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
             var graphics = picture.createGraphics()

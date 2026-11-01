@@ -1506,7 +1506,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     waving(
                         label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
-                            case WAKING -> words.WAKING(it.name(), it.activity());
+                            case WAKING -> words.WAKING(it.name(), it.activity().words(words.lang()));
                             default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF(it.name());
                         }))
                         .group(Skin.SUBTITLE),
@@ -1517,7 +1517,7 @@ public final class GeniesView extends JPanel {
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, genie, chatWords, (it, words) -> words.COULD_NOT_WAKE_BECAUSE(it.name(), it.activity())),
+                        Viewable.of(String.class, genie, chatWords, (it, words) -> words.COULD_NOT_WAKE_BECAUSE(it.name(), it.activity().words(words.lang()))),
                         Palette::TROUBLE,
                         phase.viewAs(Boolean.class, it -> it == Genie.Phase.BROKEN)
                     )
