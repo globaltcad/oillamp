@@ -407,12 +407,13 @@ class ConfiguringALampSpec extends Specification {
     def 'A new lamp gets the wallpaper chosen on the command line, and keeps it'() {
         reportInfo """
             Let's consider a user who prefers a quieter desktop than the lamp on its panel. The
-            sandbox has three wallpapers: "lamp", the default, and "waves-light" and "waves-dark",
-            the inside of the lamp with its name carved into the wall. `--wallpaper` chooses one
-            when a lamp is made. The choice is written into the new `oillamp.toml` as
-            `display.wallpaper`, so the lamp keeps it, and it reaches the sandbox in `runtime.env`,
-            which accepts only these three words, because it turns them into compositor
-            configuration. Once the file exists it decides: the option does not overwrite it.
+            sandbox has the wallpaper "lamp", the default, and "waves", the inside of the lamp with
+            its name carved into the wall, which "waves-light" and "waves-dark" show on a light and
+            on a dark colour. `--wallpaper` chooses one when a lamp is made. The choice is written
+            into the new `oillamp.toml` as `display.wallpaper`, so the lamp keeps it, and it
+            reaches the sandbox in `runtime.env`, which accepts only these four words, because it
+            turns them into compositor configuration. Once the file exists it decides: the option
+            does not overwrite it.
         """
         given:
             var lamp = host.lampPath()
@@ -426,9 +427,10 @@ class ConfiguringALampSpec extends Specification {
             made.status() == LampExitStatus.SUCCESS
             runtimeEnv.contains("OILLAMP_WALLPAPER='waves-dark'")
 
-        and: 'and the lamp\'s file names them, with the other two wallpapers in its comment'
+        and: 'and the lamp\'s file names them, with the other wallpapers in its comment'
             settings.contains('wallpaper = "waves-dark"')
             settings.contains('"waves-light"')
+            settings.contains('"waves"')
 
         when: 'the user starts it again without the option'
             host.oillamp.run('at', lamp.toString())
@@ -455,9 +457,9 @@ class ConfiguringALampSpec extends Specification {
         when: 'the user asks for a wallpaper there is not'
             var wrong = host.oillamp.run('at', host.lampPath('beach').toString(), '--wallpaper', 'beach')
 
-        then: 'oillamp refuses it, with the three that exist'
+        then: 'oillamp refuses it, with the four that exist'
             wrong.status() == LampExitStatus.USAGE
-            wrong.console().contains('"lamp", "waves-light" or "waves-dark"')
+            wrong.console().contains('"lamp", "waves", "waves-light" or "waves-dark"')
 
         when: 'the file names one there is not'
             host.givenConfig(lamp, '''
@@ -471,7 +473,66 @@ class ConfiguringALampSpec extends Specification {
         then:
             checked.status() == LampExitStatus.USAGE
             checked.reported('OIL-CONFIG-004')
-            checked.console().contains('"lamp", "waves-light" or "waves-dark"')
+            checked.console().contains('"lamp", "waves", "waves-light" or "waves-dark"')
+    }
+
+    def 'A new lamp\'s wallpaper is drawn on the background colour chosen for it'() {
+        reportInfo """
+            Let's consider a user whose own desktop is a deep blue. The "waves" wallpaper has no
+            colour of its own, only light and shadow that fade out towards the edges, so it takes
+            on the colour it is drawn on. `--background` chooses that colour when a lamp is made,
+            and it is written into the new `oillamp.toml` as `display.background`, the way
+            `--wallpaper` is. Without it, each wallpaper is drawn on a colour of its own. The
+            colour reaches the sandbox's compositor configuration, so only `#` and six
+            hexadecimal digits are accepted, here and in the file.
+        """
+        given:
+            var lamp = host.lampPath()
+
+        when: 'the user makes the lamp with the waves on deep blue'
+            var made = host.oillamp.run('at', lamp.toString(), '--wallpaper', 'waves', '--background', '#1b2a44')
+            var settings = Files.readString(lamp.resolve('oillamp.toml'))
+
+        then: 'the first session draws the waves on that colour, and the lamp\'s file keeps it'
+            made.status() == LampExitStatus.SUCCESS
+            Files.readString(lamp.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_BACKGROUND='#1b2a44'")
+            settings.contains('background = "#1b2a44"')
+
+        when: 'the user asks for another colour on the lamp that now exists'
+            var again = host.oillamp.run('at', lamp.toString(), '--background', '#ffffff')
+
+        then: 'the file still decides, and oillamp says so'
+            Files.readString(lamp.resolve('oillamp.toml')) == settings
+            Files.readString(lamp.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_BACKGROUND='#1b2a44'")
+            again.console().contains('--background only chooses the background colour of a new lamp')
+
+        when: 'a lamp is made with the dark waves and no colour'
+            var dark = host.lampPath('dark')
+            host.oillamp.run('at', dark.toString(), '--wallpaper', 'waves-dark')
+
+        then: 'its file leaves the colour empty, and the waves are drawn on their own dark colour'
+            Files.readString(dark.resolve('oillamp.toml')).contains('background = ""')
+            Files.readString(dark.resolve('.oillamp/session/runtime.env')).contains("OILLAMP_BACKGROUND='#15121c'")
+
+        when: 'the user asks for something that is not such a colour'
+            var wrong = host.oillamp.run('at', host.lampPath('named').toString(), '--background', 'navy')
+
+        then: 'oillamp refuses it'
+            wrong.status() == LampExitStatus.USAGE
+            wrong.console().contains('--background "navy": expected a colour such as "#15121c"')
+
+        when: 'the file names something that is not a colour'
+            host.givenConfig(lamp, '''
+                schema_version = 1
+
+                [display]
+                background = "#123; exec foot"
+            '''.stripIndent())
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then:
+            checked.status() == LampExitStatus.USAGE
+            checked.console().contains('a colour such as "#15121c"')
     }
 
     def 'An application gives the lamp it makes a wallpaper, as --wallpaper would'() {
@@ -498,6 +559,22 @@ class ConfiguringALampSpec extends Specification {
         and: 'the first session has them, and the lamp\'s file keeps them'
             runtimeEnv.contains("OILLAMP_WALLPAPER='waves-light'")
             Files.readString(lamp.resolve('oillamp.toml')).contains('wallpaper = "waves-light"')
+
+        when: 'another lamp is made with the waves on the application\'s own surface colour'
+            var other = host.lampPath('other')
+            var second = Lamp.at(other).wallpaper(LampWallpaper.WAVES).background('#202833').launchedBy(host.launcher).start()
+            second.awaitRunning(Duration.ofSeconds(30))
+            second.close()
+
+        then: 'the engine was asked for the colour too, and the lamp\'s file keeps it'
+            host.engines.last().arguments == ['at', other.toString(), '--embedded', '--wallpaper', 'waves', '--background', '#202833']
+            Files.readString(other.resolve('oillamp.toml')).contains('background = "#202833"')
+
+        when: 'the application gives something that is not a colour'
+            Lamp.at(other).background('navy')
+
+        then:
+            thrown(IllegalArgumentException)
     }
 
     def 'Oillamp keeps the sandbox on Eden AI\'s EU endpoint, whatever the host\'s environment says'() {

@@ -210,6 +210,8 @@ sealed interface Command {
                     usageOf("at"));
             case "--wallpaper" -> ProblemCatalogUtil.usage(
                     "--wallpaper needs a value: " + LampWallpaper.names(), usageOf("at"));
+            case "--background" -> ProblemCatalogUtil.usage(
+                    "--background needs a value, for example --background \"#15121c\"", usageOf("at"));
             case "--requirements-env" -> ProblemCatalogUtil.usage(
                     "--requirements-env needs a value, for example --requirements-env MY_RULES", usageOf("host-access"));
             default -> ProblemCatalogUtil.usage(
@@ -259,6 +261,11 @@ sealed interface Command {
             return Result.err(ProblemCatalogUtil.usage(
                     "--wallpaper \"" + wallpaper.get() + "\": expected " + LampWallpaper.names(), usageOf("at")));
         options = options.withWallpaper(wallpaper.flatMap(LampWallpaper::named));
+        Optional<String> background = values.get("--background");
+        if (background.isPresent() && !LampWallpaper.isColour(background.get()))
+            return Result.err(ProblemCatalogUtil.usage(
+                    "--background \"" + background.get() + "\": expected a colour such as \"#15121c\"", usageOf("at")));
+        options = options.withBackground(background);
 
         if (positional.isEmpty()) return Result.ok(new NoCommand(options));
 
@@ -550,7 +557,7 @@ sealed interface Command {
                 .put("at",         ValueSet.of("--init", "--dry-run", "--no-install", "--no-viewer", "--no-windows",
                                                "--embedded", "--model-service", "--model-key-env",
                                                "--model", "--instructions-env", "--enable-scheduling",
-                                               "--security-requirements-env", "--wallpaper"))
+                                               "--security-requirements-env", "--wallpaper", "--background"))
                 .put("view",       ValueSet.of("--view-only"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
@@ -579,7 +586,7 @@ sealed interface Command {
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
-            "--security-requirements-env", "--requirements-env", "--wallpaper",
+            "--security-requirements-env", "--requirements-env", "--wallpaper", "--background",
             "--in", "--after", "--instead-of");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
@@ -637,6 +644,7 @@ sealed interface Command {
                        [--embedded] [--model-service <url>] [--model-key-env <name>]
                        [--model <id>] [--instructions-env <name>] [--enable-scheduling]
                        [--security-requirements-env <name>] [--wallpaper <name>]
+                       [--background <colour>]
                     Set up (if needed) and run a session. Opens a shell window and a viewer
                     onto the sandbox's desktop, and stays in the foreground until the session
                     ends: Ctrl-C here, closing this terminal, or `oillamp stop <dir>`.
@@ -673,9 +681,13 @@ sealed interface Command {
                                       judges is the file's checker_model, or else the agent's
                       --wallpaper <name>
                                       the desktop's wallpaper, for a new lamp: "lamp" (the
-                                      default), "waves-light" or "waves-dark". It is written
-                                      into the new oillamp.toml as display.wallpaper, where it
-                                      can be changed later
+                                      default), "waves", "waves-light" or "waves-dark". It is
+                                      written into the new oillamp.toml as display.wallpaper,
+                                      where it can be changed later
+                      --background <colour>
+                                      the colour the wallpaper is drawn on, for a new lamp,
+                                      such as "#15121c": "waves" takes it on, light or dark.
+                                      Written into the new oillamp.toml as display.background
               view <dir> [--view-only]
                     Open another viewer onto a running session's desktop. Needs a display.
                     --view-only lets you watch without typing.

@@ -77,10 +77,12 @@ final class LampPhase {
                 .withSchedule(context.options().enableScheduling() ? configured.schedule().switchedOn()
                                                                    : configured.schedule())
                 .withHostAccess(((Result.Ok<LampConfig.HostAccess>) access).value());
-        // --wallpaper chooses the wallpaper of a lamp that has no oillamp.toml yet: it is written
-        // into the new file, and this first session has it too. A lamp with a file keeps the
-        // wallpaper the file names, so the option cannot quietly undo an edit.
+        // --wallpaper and --background choose the wallpaper of a lamp that has no oillamp.toml
+        // yet, and the colour it is drawn on: they are written into the new file, and this first
+        // session has them too. A lamp with a file keeps what the file names, so the options
+        // cannot quietly undo an edit.
         Optional<LampWallpaper> wallpaper = context.options().wallpaper();
+        Optional<String> background = context.options().background();
         boolean newFile = !FilesystemUtil.exists(layout.config());
         if (wallpaper.isPresent() && newFile)
             config = config.withDisplay(config.display().withWallpaper(wallpaper.get()));
@@ -88,6 +90,12 @@ final class LampPhase {
             context.sink().accept(new LampEvent.Info("lamp", "--wallpaper only chooses the wallpaper of a new "
                     + "lamp; this one keeps \"" + config.display().wallpaper().configName()
                     + "\", as display.wallpaper in " + layout.config() + " says"));
+        if (background.isPresent() && newFile)
+            config = config.withDisplay(config.display().withBackground(background.get()));
+        else if (background.isPresent())
+            context.sink().accept(new LampEvent.Info("lamp", "--background only chooses the background colour of a "
+                    + "new lamp; this one keeps \"" + config.display().background()
+                    + "\", as display.background in " + layout.config() + " says"));
         context.sinkAcceptProblems(configuration.warnings());
         describeConfiguration(config);
 
@@ -106,7 +114,8 @@ final class LampPhase {
         Result<Plan> skeleton = LampPlanUtil.planSkeleton(new LampPlanUtil.Inputs(
                 state, layout, config, session, agentId, machine.now(), context.version(),
                 existingRecordings(layout), Optional.empty(), FilesystemUtil.exists(layout.sessionMeta()),
-                context.options().init(), newFile ? wallpaper : Optional.empty()));
+                context.options().init(), newFile ? wallpaper : Optional.empty(),
+                newFile ? background : Optional.empty()));
         if (skeleton instanceof Result.Err<Plan> failure) return Result.err(failure.problems());
         context.sinkAcceptProblems(skeleton.warnings());
 

@@ -94,16 +94,26 @@ record LampConfig(
     /// The version of the config schema this build writes and understands.
     public static final int SCHEMA_VERSION = 1;
 
+    /// @param background the colour the wallpaper is drawn on, as `#rrggbb`, or empty for the
+    ///                   wallpaper's own, see [LampWallpaper#background()]
     public record Display(int width, int height, double scale, GpuMode gpu, WindowLayout windows,
-                          LampWallpaper wallpaper) {
+                          LampWallpaper wallpaper, String background) {
         public Display {
             if (width  < 640 || width  > 7680) throw new IllegalArgumentException("display.width out of range: " + width);
             if (height < 480 || height > 4320) throw new IllegalArgumentException("display.height out of range: " + height);
             if (scale  < 0.5 || scale  > 4.0)  throw new IllegalArgumentException("display.scale out of range: " + scale);
+            if (!background.isEmpty() && !LampWallpaper.isColour(background))
+                throw new IllegalArgumentException("display.background is not a colour such as \"#15121c\": " + background);
         }
         public String size() { return width + "x" + height; }
+        /// The colour the desktop's wallpaper is drawn on: [#background] or, where that is empty,
+        /// the wallpaper's own.
+        public String backgroundShown() { return background.isEmpty() ? wallpaper.background() : background; }
         public Display withWallpaper(LampWallpaper changed) {
-            return new Display(width, height, scale, gpu, windows, changed);
+            return new Display(width, height, scale, gpu, windows, changed, background);
+        }
+        public Display withBackground(String changed) {
+            return new Display(width, height, scale, gpu, windows, wallpaper, changed);
         }
     }
 

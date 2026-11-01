@@ -138,17 +138,26 @@ case "$OILLAMP_WINDOWS" in
     *)        fail "OILLAMP_WINDOWS is '$OILLAMP_WINDOWS'; expected floating or tiling" ;;
 esac
 chown lamp:lamp /run/lamp/windows.conf
-# The wallpaper (`display.wallpaper`), accepted the same way. "lamp" is the lamp itself, centred
-# on the colour the rest of the desktop uses: `center` rather than `stretch` so it looks right at
-# any size, and transparent around its panel, so this colour is the surface the panel sits on.
-# The two "waves" wallpapers cover the whole screen, so they `fill` it.
+# The wallpaper (`display.wallpaper`), accepted the same way, on the background colour
+# (`display.background`). "lamp" is the lamp itself, centred: `center` rather than `stretch` so it
+# looks right at any size, and transparent around its panel, so the colour is the surface the
+# panel sits on. "waves" is only light and shadow that fade out towards its edges, so it takes on
+# the colour, and `fit` shows all of it on a screen of any shape, the colour around it.
+# "waves-light" and "waves-dark" are the same picture; only their colours differ.
 case "$OILLAMP_WALLPAPER" in
-    lamp)        wallpaper='wallpaper.png center #161a22' ;;
-    waves-light) wallpaper='wallpaper-waves-light.png fill #d9d2c6' ;;
-    waves-dark)  wallpaper='wallpaper-waves-dark.png fill #12151c' ;;
-    *)           fail "OILLAMP_WALLPAPER is '$OILLAMP_WALLPAPER'; expected lamp, waves-light or waves-dark" ;;
+    lamp)        wallpaper='wallpaper.png center'      ; colour='#161a22' ;;
+    waves)       wallpaper='wallpaper-waves.png fit'   ; colour='#161a22' ;;
+    waves-light) wallpaper='wallpaper-waves.png fit'   ; colour='#f4efe6' ;;
+    waves-dark)  wallpaper='wallpaper-waves.png fit'   ; colour='#15121c' ;;
+    *)           fail "OILLAMP_WALLPAPER is '$OILLAMP_WALLPAPER'; expected lamp, waves, waves-light or waves-dark" ;;
 esac
-echo "output * bg /usr/share/oillamp/$wallpaper" > /run/lamp/wallpaper.conf
+# Only `#` and six hexadecimal digits: whatever lands in the file is sway configuration.
+case "${OILLAMP_BACKGROUND:-}" in
+    '')  ;;
+    \#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) colour="$OILLAMP_BACKGROUND" ;;
+    *)   fail "OILLAMP_BACKGROUND is '$OILLAMP_BACKGROUND'; expected a colour such as #15121c" ;;
+esac
+echo "output * bg /usr/share/oillamp/$wallpaper $colour" > /run/lamp/wallpaper.conf
 chown lamp:lamp /run/lamp/wallpaper.conf
 
 # ── the agent's pi installation ──────────────────────────────────────────────────────────────

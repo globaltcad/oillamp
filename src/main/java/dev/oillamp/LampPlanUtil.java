@@ -38,6 +38,7 @@ final class LampPlanUtil {
     /// @param leftoverContainer  a container left by a previous session that crashed
     /// @param sessionMetaExists  a stale `session.json` from a crashed session
     /// @param newWallpaper       the wallpaper `--wallpaper` chose, if `oillamp.toml` is written now
+    /// @param newBackground      the colour `--background` chose, if `oillamp.toml` is written now
     public record Inputs(
         LampState state,
         LampLayout layout,
@@ -50,7 +51,8 @@ final class LampPlanUtil {
         Optional<ContainerName> leftoverContainer,
         boolean sessionMetaExists,
         boolean initRequested,
-        Optional<LampWallpaper> newWallpaper
+        Optional<LampWallpaper> newWallpaper,
+        Optional<String> newBackground
     ) {}
 
     /// Creates or repairs the lamp's directories, identity, keys and runtime directory.
@@ -97,7 +99,8 @@ final class LampPlanUtil {
         // ── the user's layer ───────────────────────────────────────────────────────────────
         steps = steps.add(new Step.CreateDirectory(layout.root(), PosixMode.PUBLIC_DIR));
         steps = steps.add(new Step.WriteFile(layout.config(),
-                GeneratedFileTextUtil.defaultConfig(inputs.newWallpaper().orElse(LampWallpaper.LAMP)),
+                GeneratedFileTextUtil.defaultConfig(inputs.newWallpaper().orElse(LampWallpaper.LAMP),
+                                                    inputs.newBackground().orElse("")),
                 PosixMode.PRIVATE_FILE, Step.WritePolicy.IF_ABSENT));
         steps = steps.add(new Step.WriteFile(layout.readme(), GeneratedFileTextUtil.readme(layout),
                 PosixMode.PUBLIC_FILE, Step.WritePolicy.IF_ABSENT));

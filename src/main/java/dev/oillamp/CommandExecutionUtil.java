@@ -1770,7 +1770,8 @@ final class CommandExecutionUtil {
         return "display      " + config.display().size() + " scale " + config.display().scale()
                 + " gpu " + config.display().gpu().configName()
                 + ", " + config.display().windows().configName() + " windows"
-                + ", wallpaper " + config.display().wallpaper().configName() + "\n"
+                + ", wallpaper " + config.display().wallpaper().configName()
+                + " on " + config.display().backgroundShown() + "\n"
              + "viewer       clipboard " + config.viewer().clipboard().configName()
                 + ", " + config.viewer().maxFps() + " fps"
                 + (config.viewer().viewOnly() ? ", view only" : "") + "\n"

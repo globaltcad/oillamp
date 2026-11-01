@@ -17,11 +17,12 @@ final class GeneratedFileTextUtil {
     /// `ConfiguringALampSpec` checks this, because many users read this file as the
     /// documentation of the settings.
     public static String defaultConfig() {
-        return defaultConfig(LampWallpaper.LAMP);
+        return defaultConfig(LampWallpaper.LAMP, "");
     }
 
-    /// The same, with the wallpaper `oillamp at <dir> --wallpaper` chose for the new lamp.
-    public static String defaultConfig(LampWallpaper wallpaper) {
+    /// The same, with the wallpaper `oillamp at <dir> --wallpaper` chose for the new lamp, and the
+    /// background colour `--background` chose, or empty for the wallpaper's own.
+    public static String defaultConfig(LampWallpaper wallpaper, String background) {
         return """
             # oillamp lamp configuration. Edited by you, never visible to the agent.
             # Changes take effect at the next `oillamp at`. Arrays replace (not merge with) values
@@ -36,8 +37,13 @@ final class GeneratedFileTextUtil {
             windows = "floating"      # "floating": move by the title bar, resize by the edges
                                       # "tiling": windows share the screen and never overlap
             wallpaper = "%s"%s# "lamp": the lamp on a panel
-                                      # "waves-light", "waves-dark": inside the lamp, its name
-                                      # carved into the wall above three rows of waves
+                                      # "waves": inside the lamp, its name carved into the wall
+                                      # above three rows of waves, in light and shadow only, so
+                                      # it takes on the background colour
+                                      # "waves-light", "waves-dark": the same on a light colour
+                                      # and on a dark one
+            background = "%s"%s# the colour the wallpaper is drawn on, such as "#15121c";
+                                      # "": the wallpaper's own
 
             [viewer]
             open_on_start = true
@@ -207,8 +213,10 @@ final class GeneratedFileTextUtil {
             allow_additive    = true     # writing and copying files out, opening pages, notifications
             ask_the_user      = false    # ask you, rather than refuse, a request outside roots
             """.formatted(wallpaper.configName(),
-                          // the comment lines up with those of the other [display] settings
-                          " ".repeat(Math.max(1, 12 - wallpaper.configName().length())));
+                          // the comments line up with those of the other [display] settings
+                          " ".repeat(Math.max(1, 12 - wallpaper.configName().length())),
+                          background,
+                          " ".repeat(Math.max(1, 11 - background.length())));
     }
 
     /// The bash completion script, printed by `oillamp completion bash`.
@@ -233,7 +241,12 @@ final class GeneratedFileTextUtil {
 
                 # `oillamp at <dir> --wallpaper waves-dark`: the option's value.
                 if [ "${COMP_WORDS[COMP_CWORD-1]}" = --wallpaper ]; then
-                    COMPREPLY=($(compgen -W 'lamp waves-light waves-dark' -- "$current"))
+                    COMPREPLY=($(compgen -W 'lamp waves waves-light waves-dark' -- "$current"))
+                    return
+                fi
+                # `--background "#15121c"`: a colour, which nothing here can guess.
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --background ]; then
+                    COMPREPLY=()
                     return
                 fi
 
@@ -265,7 +278,7 @@ final class GeneratedFileTextUtil {
                     -*)
                         local options='--verbose --debug --no-color'
                         case "$command" in
-                            at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling --wallpaper" ;;
+                            at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling --wallpaper --background" ;;
                             view)          options="$options --view-only" ;;
                             remove)        options="$options --yes --dry-run" ;;
                             history)       options="$options --message --all --delete --yes" ;;

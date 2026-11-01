@@ -697,7 +697,7 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `rootfs/etc/xdg/foot/foot.ini` | config | The in-sandbox terminal's font and colours. |
 | `rootfs/etc/ssh/ssh_config.d/50-oillamp-proxy.conf` | config | Sends outbound SSH (`git@github.com:…`) through the egress proxy. |
 | `rootfs/usr/share/oillamp/wallpaper.svg`, `.png` | image | The desktop background, `display.wallpaper = "lamp"`. After editing the SVG, render it with `inkscape wallpaper.svg --export-type=png --export-filename=wallpaper.png`. |
-| `rootfs/usr/share/oillamp/wallpaper-waves-light.svg`, `wallpaper-waves-dark.svg`, `.png` | image | The two "waves" wallpapers: the same shapes in two palettes, so a change to one belongs in both. Rendered the same way; their lettering is Noto Serif Display Bold, which must be installed where they are rendered. Give inkscape absolute paths: the snap resolves relative ones from your home. |
+| `rootfs/usr/share/oillamp/wallpaper-waves.svg`, `.png` | image | The "waves" wallpaper, for `waves`, `waves-light` and `waves-dark` alike: light and shadow only, partly transparent, so it takes on the background colour. Rendered the same way; its lettering is Noto Serif Display Bold, which must be installed where it is rendered. Give inkscape absolute paths: the snap resolves relative ones from your home, and cannot write to `/tmp`. |
 
 At build time Gradle writes a `MANIFEST` listing every file with its mode (`755` or `644`), so that
 `SandboxImageFilesUtil` can find the files inside the jar and extract them with the right permissions. An
@@ -1388,14 +1388,21 @@ screen instead. The entrypoint turns the choice into `/run/lamp/windows.conf`, a
 those two words, because that file is compositor configuration. Dialogs float either way.
 
 The wallpaper (`display.wallpaper`) is chosen the same way, into `/run/lamp/wallpaper.conf`, from
-three words. `"lamp"`, the default, is the lamp on a panel, drawn `center` on the desktop's surface
-colour, because it is transparent around the panel. `"waves-light"` and `"waves-dark"` are the
-inside of the lamp: its name carved into the wall above three rows of waves. They cover the whole
-screen and are drawn with `fill`, so a screen that is not 16:9 loses a little of their sides or of
-their top and bottom. `oillamp at <dir> --wallpaper <name>` writes the choice into a new lamp's
-`oillamp.toml`; for a lamp that has its file already, the option only says that the file decides.
-An application does the same with `Lamp.at(dir).wallpaper(LampWallpaper.WAVES_DARK).start()`,
-which passes `--wallpaper` to the engine.
+four words, and drawn on the background colour (`display.background`). `"lamp"`, the default, is
+the lamp on a panel, drawn `center`, because it is transparent around the panel. `"waves"` is the
+inside of the lamp: its name carved into the wall above three rows of waves. It has no colour of
+its own: every part of it is black or warm white, partly transparent, and all of it fades out
+towards the edges, so it is dark on a dark colour and light on a light one, and ends in the colour
+itself. It is drawn with `fit`, so a screen of any shape shows all of it, with the colour around
+it. `"waves-light"` and `"waves-dark"` are the same picture on a colour of their own, the night of
+Genies' light and dark palettes. An empty `display.background`, the default, leaves each wallpaper
+on its own colour (`LampWallpaper.background()`); anything else must be `#` and six hexadecimal
+digits, which `runtime.env` carries as `OILLAMP_BACKGROUND` and the entrypoint checks again,
+because it is compositor configuration too. `oillamp at <dir> --wallpaper <name> --background
+<colour>` writes both into a new lamp's `oillamp.toml`; for a lamp that has its file already, each
+option only says that the file decides. An application does the same with
+`Lamp.at(dir).wallpaper(LampWallpaper.WAVES).background("#202833").start()`, which passes
+`--wallpaper` and `--background` to the engine.
 
 No key binding exits sway or runs a command, because the agent can type into the desktop and sway
 runs as the infra user. `TheSandboxImageSpec` checks the sway config for this.
@@ -1569,7 +1576,7 @@ containing a line break are refused, because a root shell executes this file. Ke
 the file is stable.
 
 Contents: `OILLAMP_SESSION`, `OILLAMP_AGENT_ID`, `OILLAMP_LAMP_NAME`,
-`OILLAMP_DISPLAY_WIDTH/HEIGHT/SCALE`, `OILLAMP_WINDOWS`, `OILLAMP_WALLPAPER`, `OILLAMP_RENDERER`, `OILLAMP_VNC_MAX_FPS`,
+`OILLAMP_DISPLAY_WIDTH/HEIGHT/SCALE`, `OILLAMP_WINDOWS`, `OILLAMP_WALLPAPER`, `OILLAMP_BACKGROUND`, `OILLAMP_RENDERER`, `OILLAMP_VNC_MAX_FPS`,
 `OILLAMP_RECORDING_ENABLED/CODEC/CRF/MAX_FPS`, `OILLAMP_PROXY_PORT`, `OILLAMP_MODEL_PORT`, `OILLAMP_MODEL_EU_ONLY`, `OILLAMP_FORWARDS`
 (`name:port name:port`), the LLM variables when configured, and `EDENAI_MAX_TOKENS` when it is set
 on the host (`RuntimeEnvFileUtil.INHERITED_FROM_HOST`). The model key is never in it: it stays on the host,
@@ -1830,7 +1837,8 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `display.scale` | 1.0 | output scale (0.5–4.0) | yes |
 | `display.gpu` | `"auto"` | `auto`, `on`, `off` | yes |
 | `display.windows` | `"floating"` | `floating` or `tiling` | yes |
-| `display.wallpaper` | `"lamp"` | `lamp`, `waves-light` or `waves-dark`; `oillamp at <dir> --wallpaper` sets it in a new lamp | yes |
+| `display.wallpaper` | `"lamp"` | `lamp`, `waves`, `waves-light` or `waves-dark`; `oillamp at <dir> --wallpaper` sets it in a new lamp | yes |
+| `display.background` | `""` | the colour the wallpaper is drawn on, `#rrggbb`; empty for the wallpaper's own; `oillamp at <dir> --background` sets it in a new lamp | yes |
 | `viewer.open_on_start` | true | open the viewer when the session starts | yes |
 | `viewer.clipboard` | `"to-agent"` | `to-agent`, `both`, `none` | yes |
 | `viewer.view_only` | false | the viewer shows but sends no input | yes |

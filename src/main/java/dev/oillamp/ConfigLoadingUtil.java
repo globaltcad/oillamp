@@ -122,7 +122,7 @@ final class ConfigLoadingUtil {
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {
-        s.allowOnly("width", "height", "scale", "gpu", "windows", "wallpaper");
+        s.allowOnly("width", "height", "scale", "gpu", "windows", "wallpaper", "background");
         int width   = bounded(s, "width",  fallback.width(),  640, 7680, "a width between 640 and 7680");
         int height  = bounded(s, "height", fallback.height(), 480, 4320, "a height between 480 and 4320");
         double scale = s.number("scale", fallback.scale());
@@ -134,7 +134,12 @@ final class ConfigLoadingUtil {
         WindowLayout windows = s.oneOf("windows", fallback.windows(), ConfigLoadingUtil::parseWindowLayout,
                                        "\"floating\" or \"tiling\"");
         LampWallpaper wallpaper = s.oneOf("wallpaper", fallback.wallpaper(), LampWallpaper::named, LampWallpaper.names());
-        return new LampConfig.Display(width, height, scale, gpu, windows, wallpaper);
+        String background = s.string("background", fallback.background()).strip();
+        if (!background.isEmpty() && !LampWallpaper.isColour(background)) {
+            s.invalid("background", background, "a colour such as \"#15121c\", or \"\" for the wallpaper's own");
+            background = fallback.background();
+        }
+        return new LampConfig.Display(width, height, scale, gpu, windows, wallpaper, background);
     }
 
     private static LampConfig.Viewer readViewer(ConfigSection s, LampConfig.Viewer fallback) {

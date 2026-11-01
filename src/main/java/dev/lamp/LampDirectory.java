@@ -45,6 +45,7 @@ public final class LampDirectory {
     private final boolean scheduling;
     private final Optional<Security> security;
     private final Optional<LampWallpaper> wallpaper;
+    private final Optional<String> background;
 
     /// What the agent may do on the host, and what it is judged against.
     ///
@@ -70,7 +71,8 @@ public final class LampDirectory {
             final Optional<String> instructions,
             final boolean scheduling,
             final Optional<Security> security,
-            final Optional<LampWallpaper> wallpaper
+            final Optional<LampWallpaper> wallpaper,
+            final Optional<String> background
     ) {
         this.directory = directory;
         this.listeners = listeners;
@@ -82,6 +84,7 @@ public final class LampDirectory {
         this.scheduling = scheduling;
         this.security = security;
         this.wallpaper = wallpaper;
+        this.background = background;
     }
 
     /// Receives every event the engine reports, in order, from the moment it starts.
@@ -95,14 +98,14 @@ public final class LampDirectory {
     public LampDirectory onEvent(Consumer<LampEvent> listener) {
         List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
         more.add(listener);
-        return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper);
+        return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper, background);
     }
 
     /// Starts the engine with `launcher` instead of the default, which runs `java` from this
     /// JVM with this application's classpath, and runs [Lamp#exec]'s commands with it. For
     /// tests, or for an application that runs the engine some other way.
     public LampDirectory launchedBy(LampLauncher launcher) {
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper, background);
     }
 
     /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -113,7 +116,7 @@ public final class LampDirectory {
     /// Only Eden AI's models are filtered to those served in the EU. Any other service's
     /// models are all offered, since its model list names no regions.
     public LampDirectory modelService(URI service) {
-        return new LampDirectory(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security, wallpaper, background);
     }
 
     /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
@@ -122,14 +125,14 @@ public final class LampDirectory {
     /// @throws IllegalArgumentException when `key` is blank, which would only fail later
     public LampDirectory modelKey(String key) {
         if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-        return new LampDirectory(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security, wallpaper, background);
     }
 
     /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
     /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
     /// changed.
     public LampDirectory enableScheduling() {
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security, wallpaper, background);
     }
 
     /// Has the agent answer every question with `id`, a model as the service names it, such
@@ -151,7 +154,7 @@ public final class LampDirectory {
     public LampDirectory model(String id) {
         if (!id.matches(Lamp.MODEL_ID))
             throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security, wallpaper, background);
     }
 
     /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
@@ -172,7 +175,7 @@ public final class LampDirectory {
         if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
         if (text.getBytes(StandardCharsets.UTF_8).length > Lamp.LONGEST_INSTRUCTIONS)
             throw new IllegalArgumentException("instructions cannot be longer than " + Lamp.LONGEST_INSTRUCTIONS / 1024 + " KiB");
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security, wallpaper);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security, wallpaper, background);
     }
 
     /// Lets the agent reach the host machine through oillamp, as `[host_access]` in the lamp's
@@ -198,7 +201,7 @@ public final class LampDirectory {
     /// @throws IllegalArgumentException when the requirements are blank or longer than 64 KiB
     public LampDirectory security(String requirements) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
-                instructions, scheduling, Optional.of(new Security(requirements)), wallpaper);
+                instructions, scheduling, Optional.of(new Security(requirements)), wallpaper, background);
     }
 
     /// Gives a new lamp `wallpaper`, the picture behind the sandbox desktop's windows, in place
@@ -210,7 +213,24 @@ public final class LampDirectory {
     /// edit; a [LampEvent.Info] then says so.
     public LampDirectory wallpaper(LampWallpaper wallpaper) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
-                instructions, scheduling, security, Optional.of(wallpaper));
+                instructions, scheduling, security, Optional.of(wallpaper), background);
+    }
+
+    /// Gives a new lamp `colour`, such as `#15121c`, as the background colour its wallpaper is
+    /// drawn on, in place of the wallpaper's own, see [LampWallpaper#background()].
+    /// [LampWallpaper#WAVES] has no colour of its own and takes this one on, light or dark, so an
+    /// application can make the desktop match its own surface.
+    ///
+    /// Like [#wallpaper], it is for a lamp that [#start] makes: the engine writes it into the new
+    /// `oillamp.toml` as `display.background`, and a lamp that has its file keeps the colour the
+    /// file names.
+    ///
+    /// @throws IllegalArgumentException when `colour` is not `#` and six hexadecimal digits
+    public LampDirectory background(String colour) {
+        if (!LampWallpaper.isColour(colour))
+            throw new IllegalArgumentException("not a colour such as \"#15121c\": " + colour);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
+                instructions, scheduling, security, wallpaper, Optional.of(colour));
     }
 
     /// Starts the engine, and returns at once. The sandbox is running when
@@ -227,6 +247,7 @@ public final class LampDirectory {
                 Lamp.SECURITY_REQUIREMENTS_VARIABLE)));
         if (scheduling) arguments.add("--enable-scheduling");
         wallpaper.ifPresent(chosen -> arguments.addAll(List.of("--wallpaper", chosen.configName())));
+        background.ifPresent(colour -> arguments.addAll(List.of("--background", colour)));
         Map<String, String> environment = new HashMap<>();
         modelKey.ifPresent(key -> environment.put(Lamp.MODEL_KEY_VARIABLE, key));
         instructions.ifPresent(text -> environment.put(Lamp.INSTRUCTIONS_VARIABLE, text));
