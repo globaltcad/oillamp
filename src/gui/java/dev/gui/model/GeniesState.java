@@ -387,10 +387,11 @@ public record GeniesState(
         return settings.problem(environmentKey, lang.SETTINGS_PAGE());
     }
 
-    /// A name for a new genie that no other genie has yet.
+    /// A name for a new genie that no other genie has yet, such as "Genie 2", in the language
+    /// Genies speaks now. It is the genie's name from then on, whatever language Genies speaks.
     public String freshName() {
         for (int number = genies.size() + 1; ; number++) {
-            String name = "Genie " + number;
+            String name = lang.WINDOW().GENIE_NUMBERED(number);
             if (genies.stream().noneMatch(genie -> genie.name().equals(name))) return name;
         }
     }
