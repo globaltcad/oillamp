@@ -175,7 +175,7 @@ public final class GenieRunner {
                 reloadConversations();
             } catch (IOException | RuntimeException failed) {
                 putOutLamp();
-                changes.accept(genie -> genie.broken(reasonOf(failed)));
+                changes.accept(genie -> genie.broken(why(failed)));
             } catch (InterruptedException interrupted) {
                 putOutLamp();
                 changes.accept(Genie::asleep);
@@ -354,8 +354,7 @@ public final class GenieRunner {
             if (lit.isEmpty()) {
                 heldWhileCatchingUp = Optional.empty();
                 if (fromElsewhere && lighter.isLit(directory))
-                    changes.accept(genie -> genie.broken("Its lamp is lit, but Genies could not join it. It goes on as it is; "
-                            + "an oillamp of another version may have lit it."));
+                    changes.accept(genie -> genie.broken(new Genie.Broke.CouldNotJoin()));
                 else changes.accept(Genie::asleep);
                 return;
             }
@@ -366,7 +365,7 @@ public final class GenieRunner {
         } catch (IOException | RuntimeException failed) {
             heldWhileCatchingUp = Optional.empty();
             letGo();
-            changes.accept(genie -> genie.broken(reasonOf(failed).replaceAll("[.\\s]+$", "") + ". Its lamp goes on as it is."));
+            changes.accept(genie -> genie.broken(new Genie.Broke.JoinFailed(why(failed))));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
@@ -514,7 +513,7 @@ public final class GenieRunner {
                 lamp = Optional.empty();
                 schedule.wentOut();
                 hostAccess.wentOut();
-                changes.accept(genie -> genie.broken("The genie's sandbox stopped: " + changed.status().detail()));
+                changes.accept(genie -> genie.broken(new Genie.Broke.SandboxStopped(changed.status().detail())));
             }
             default -> { }
         }
@@ -739,6 +738,11 @@ public final class GenieRunner {
                 showProblem(reasonOf(failed));
             }
         });
+    }
+
+    /// Why the genie broke when lighting or joining its lamp failed with `failed`.
+    private static Genie.Broke why(Exception failed) {
+        return failed instanceof LampLighter.Failed known ? known.why() : new Genie.Broke.Failed(reasonOf(failed));
     }
 
     private static String reasonOf(Exception failed) {

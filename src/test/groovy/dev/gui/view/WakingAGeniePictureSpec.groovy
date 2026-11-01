@@ -120,7 +120,7 @@ class WakingAGeniePictureSpec extends Specification {
             var starting = WakeScene.of(genie.waking()).after(10)
 
         when: 'startup fails because no model is available'
-            var broken = starting.follows(genie.broken('No model'))
+            var broken = starting.follows(genie.broken(new Genie.Broke.Failed('No model')))
 
         then: 'no startup or successful greeting animation continues'
             !broken.moving()
