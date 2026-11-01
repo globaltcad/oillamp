@@ -10,6 +10,9 @@ import dev.gui.model.HostAccess
 import dev.gui.model.OllamaSetup
 import dev.gui.model.Schedule
 import dev.gui.model.Lang
+import dev.gui.model.Notice
+import dev.gui.model.Transcript
+import dev.gui.pi.PiEvent
 import dev.gui.model.Settings
 import dev.gui.view.GeniesView
 import oillamp.ScenarioHost
@@ -302,6 +305,31 @@ class SpeakingTheUsersLanguageSpec extends Specification {
         and: 'a lamp that could not be joined goes on as it is, as the window says'
             new Genie.Broke.JoinFailed(new Genie.Broke.Failed('connection refused.')).words(Lang.SPANISH) ==
                     'connection refused. Su lámpara sigue como está.'
+    }
+
+    def 'What Genies says in a chat is said in the language Genies speaks, even after it was said'() {
+        reportInfo """
+            Let's consider a chat in which the user saved a moment by hand, "before the
+            refactor", and then stopped an answer half way. Genies says both in the chat. It keeps
+            each as a value, and the chat says it in the language Genies speaks: a user who then
+            switches to German reads both in German, not only what comes after.
+        """
+        given: 'a chat with a save and a stopped answer'
+            def chat = Transcript.empty().notice(new Notice.Saved('before the refactor'))
+                    .you('hi').hear(new PiEvent.Answered('Half', 'Request was aborted', 0, ''))
+            def saved = chat.entries().first()
+            def stopped = chat.entries().last()
+
+        expect: 'each is said in English'
+            saved.words(Lang.ENGLISH) == 'Saved as a moment of the history: before the refactor. The history page brings the genie back to it.'
+            stopped.words(Lang.ENGLISH) == 'Stopped before the answer was done.'
+
+        and: 'and in German, once the user picks it'
+            saved.words(Lang.GERMAN) == 'Als Stand im Verlauf gespeichert: before the refactor. Auf der Verlaufsseite bringst du den Dschinn dorthin zurück.'
+            stopped.words(Lang.GERMAN) == 'Angehalten, bevor die Antwort fertig war.'
+
+        and: 'what the user and the genie wrote is said as they wrote it'
+            chat.entries()*.words(Lang.GERMAN).subList(1, 3) == ['hi', 'Half']
     }
 
     /// Whether a label in `view` says `text`.

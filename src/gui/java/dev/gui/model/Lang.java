@@ -1296,6 +1296,136 @@ public enum Lang {
     /// The words of a genie's chat: the conversation, the files the genie hands out, and the
     /// composer under it.
     public record Chat(Lang lang) {
+        public String SAVED_AS_A_MOMENT_OF_THE_HISTORY(String message) {
+            return switch (lang) {
+                case ENGLISH -> "Saved as a moment of the history" + (message.isBlank() ? "" : ": " + message.strip()) + ". The history page brings the genie back to it.";
+                case GERMAN -> "Als Stand im Verlauf gespeichert" + (message.isBlank() ? "" : ": " + message.strip()) + ". Auf der Verlaufsseite bringst du den Dschinn dorthin zurück.";
+                case SPANISH -> "Guardado como un momento del historial" + (message.isBlank() ? "" : ": " + message.strip()) + ". La página del historial devuelve al genio a él.";
+                case JAPANESE -> "履歴の時点として保存しました" + (message.isBlank() ? "" : "：" + message.strip()) + "。履歴ページからジーニーをこの時点に戻せます。";
+                case CHINESE -> "已保存为历史记录中的一个保存点" + (message.isBlank() ? "" : "：" + message.strip()) + "。可以在历史记录页面让精灵回到这里。";
+            };
+        }
+
+        public String THERE_IS_NO_MODEL_KEY() {
+            return switch (lang) {
+                case ENGLISH -> "There is no model key.";
+                case GERMAN -> "Es gibt keinen Modellschlüssel.";
+                case SPANISH -> "No hay ninguna clave del modelo.";
+                case JAPANESE -> "モデルのキーがありません。";
+                case CHINESE -> "没有模型密钥。";
+            };
+        }
+
+        public String THE_GENIE_COULD_NOT_BE_STOPPED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The genie could not be stopped: " + reason;
+                case GERMAN -> "Der Dschinn ließ sich nicht anhalten: " + reason;
+                case SPANISH -> "No se pudo detener al genio: " + reason;
+                case JAPANESE -> "ジーニーを止められませんでした：" + reason;
+                case CHINESE -> "无法停止精灵：" + reason;
+            };
+        }
+
+        public String THE_DECISION_DID_NOT_REACH_THE_GENIES_LAMP(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The decision did not reach the genie's lamp: " + reason;
+                case GERMAN -> "Die Entscheidung hat die Lampe des Dschinns nicht erreicht: " + reason;
+                case SPANISH -> "La decisión no llegó a la lámpara del genio: " + reason;
+                case JAPANESE -> "決定がジーニーのランプに届きませんでした：" + reason;
+                case CHINESE -> "该决定未能送达精灵的神灯：" + reason;
+            };
+        }
+
+        public String THAT_CONVERSATION_IS_NOT_THERE_ANY_MORE() {
+            return switch (lang) {
+                case ENGLISH -> "That conversation is not there any more.";
+                case GERMAN -> "Dieses Gespräch gibt es nicht mehr.";
+                case SPANISH -> "Esa conversación ya no existe.";
+                case JAPANESE -> "その会話はもうありません。";
+                case CHINESE -> "那个对话已经不存在了。";
+            };
+        }
+
+        public String THE_CONVERSATION_OF_THAT_QUESTION_IS_NOT_THERE_ANY_MORE() {
+            return switch (lang) {
+                case ENGLISH -> "The conversation of that question is not there any more.";
+                case GERMAN -> "Das Gespräch zu dieser Frage gibt es nicht mehr.";
+                case SPANISH -> "La conversación de esa pregunta ya no existe.";
+                case JAPANESE -> "その質問の会話はもうありません。";
+                case CHINESE -> "那个问题所在的对话已经不存在了。";
+            };
+        }
+
+        public String THE_CONVERSATION_COULD_NOT_BE_DELETED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The conversation could not be deleted: " + reason;
+                case GERMAN -> "Das Gespräch ließ sich nicht löschen: " + reason;
+                case SPANISH -> "No se pudo eliminar la conversación: " + reason;
+                case JAPANESE -> "会話を削除できませんでした：" + reason;
+                case CHINESE -> "无法删除对话：" + reason;
+            };
+        }
+
+        public String THE_GENIE_IS_ASLEEP_WAKE_IT_FIRST() {
+            return switch (lang) {
+                case ENGLISH -> "The genie is asleep; wake it first.";
+                case GERMAN -> "Der Dschinn schläft; weck ihn zuerst.";
+                case SPANISH -> "El genio está dormido; despiértalo primero.";
+                case JAPANESE -> "ジーニーは眠っています。先に起こしてください。";
+                case CHINESE -> "精灵正在休眠；请先唤醒它。";
+            };
+        }
+
+        public String THE_GENIE_KEEPS_ANSWERING_WITH_UNTIL_IT_WAKES_AGAIN(String model, String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The genie keeps answering with " + model + " until it wakes again: " + reason;
+                case GERMAN -> "Der Dschinn antwortet weiter mit " + model + ", bis er wieder aufwacht: " + reason;
+                case SPANISH -> "El genio sigue respondiendo con " + model + " hasta que vuelva a despertar: " + reason;
+                case JAPANESE -> "ジーニーは次に起きるまで " + model + " で答え続けます：" + reason;
+                case CHINESE -> "在下次醒来之前，精灵会继续使用 " + model + " 回答：" + reason;
+            };
+        }
+
+        public String SAVED_TO(String name, String target) {
+            return switch (lang) {
+                case ENGLISH -> "Saved " + name + " to " + target + ".";
+                case GERMAN -> name + " unter " + target + " gespeichert.";
+                case SPANISH -> name + " guardado en " + target + ".";
+                case JAPANESE -> name + " を " + target + " に保存しました。";
+                case CHINESE -> "已将 " + name + " 保存到 " + target + "。";
+            };
+        }
+
+        public String STOPPED_BEFORE_THE_ANSWER_WAS_DONE() {
+            return switch (lang) {
+                case ENGLISH -> "Stopped before the answer was done.";
+                case GERMAN -> "Angehalten, bevor die Antwort fertig war.";
+                case SPANISH -> "Detenido antes de terminar la respuesta.";
+                case JAPANESE -> "回答が終わる前に止めました。";
+                case CHINESE -> "在回答完成之前已停止。";
+            };
+        }
+
+        public String TRYING_AGAIN(int attempt, int attempts) {
+            return switch (lang) {
+                case ENGLISH -> "Trying again, " + attempt + " of " + attempts + ".";
+                case GERMAN -> "Neuer Versuch, " + attempt + " von " + attempts + ".";
+                case SPANISH -> "Intentándolo de nuevo, " + attempt + " de " + attempts + ".";
+                case JAPANESE -> "再試行しています（" + attempt + "/" + attempts + "）。";
+                case CHINESE -> "正在重试（第 " + attempt + " 次，共 " + attempts + " 次）。";
+            };
+        }
+
+        public String THE_GENIE_COULD_NOT_TAKE_THAT(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "The genie could not take that: " + reason;
+                case GERMAN -> "Das konnte der Dschinn nicht annehmen: " + reason;
+                case SPANISH -> "El genio no pudo aceptar eso: " + reason;
+                case JAPANESE -> "ジーニーはそれを受け付けられませんでした：" + reason;
+                case CHINESE -> "精灵无法接受该请求：" + reason;
+            };
+        }
+
         public String IS_LISTENING(String name) {
             return switch (lang) {
                 case ENGLISH -> name + " is listening.";

@@ -13,7 +13,7 @@ import java.util.function.UnaryOperator;
 
 import dev.gui.model.Genie;
 import dev.gui.model.History;
-import dev.gui.model.Lang;
+import dev.gui.model.Notice;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampDirectory;
@@ -171,13 +171,9 @@ public final class HistoryKeeper {
         work.execute(() -> {
             try {
                 Optional<LampSave> saved = lamp.save(message.strip());
-                // In English until the chat's notices are values too.
-                String nothingChanged = History.Note.NOTHING_CHANGED.words(Lang.ENGLISH);
                 change(it -> saved.isPresent() ? it.notBusy().withPicked(saved.get().id())
                         : it.notBusy().withPicked(it.moments().isEmpty() ? "" : it.moments().first().id()).withNote(History.Note.NOTHING_CHANGED));
-                String told = saved.isEmpty() ? nothingChanged
-                        : "Saved as a moment of the history" + (message.isBlank() ? "" : ": " + message.strip())
-                          + ". The history page brings the genie back to it.";
+                Notice told = saved.isEmpty() ? new Notice.HistoryNote(History.Note.NOTHING_CHANGED) : new Notice.Saved(message);
                 changes.accept(genie -> genie.withTranscript(genie.transcript().notice(told)));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.notBusy().withProblem(new History.Problem.CouldNotSave(reason(failed))));
