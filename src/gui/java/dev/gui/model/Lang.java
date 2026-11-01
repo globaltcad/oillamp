@@ -166,6 +166,67 @@ public enum Lang {
 
     /// The words of the window around the genies: the list of them, and what went wrong.
     public record Window(Lang lang) {
+        public String CANNOT_BE_A_MODELS_NAME(String model) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + model + "\" cannot be a model's name: a model's name has no spaces, such as azure/gpt-6.1-sol";
+                case GERMAN -> "„" + model + "“ kann kein Modellname sein: Ein Modellname hat keine Leerzeichen, etwa azure/gpt-6.1-sol";
+                case SPANISH -> "«" + model + "» no puede ser el nombre de un modelo: el nombre de un modelo no lleva espacios, como azure/gpt-6.1-sol";
+                case JAPANESE -> "「" + model + "」はモデル名にできません。モデル名には空白を含めません（例：azure/gpt-6.1-sol）";
+                case CHINESE -> "“" + model + "”不能作为模型名称：模型名称不含空格，例如 azure/gpt-6.1-sol";
+            };
+        }
+
+        public String THE_GENIES_LAMP_DID_NOT_START(String status) {
+            return switch (lang) {
+                case ENGLISH -> "The genie's lamp did not start (" + status + ")";
+                case GERMAN -> "Die Lampe des Dschinns ist nicht gestartet (" + status + ")";
+                case SPANISH -> "La lámpara del genio no se encendió (" + status + ")";
+                case JAPANESE -> "ジーニーのランプが起動しませんでした（" + status + "）";
+                case CHINESE -> "精灵的神灯没有启动（" + status + "）";
+            };
+        }
+
+        public String THE_GENIES_LAMP_DID_NOT_START_IN_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "The genie's lamp did not start in time";
+                case GERMAN -> "Die Lampe des Dschinns ist nicht rechtzeitig gestartet";
+                case SPANISH -> "La lámpara del genio no se encendió a tiempo";
+                case JAPANESE -> "ジーニーのランプが時間内に起動しませんでした";
+                case CHINESE -> "精灵的神灯没有及时启动";
+            };
+        }
+
+        public String ITS_LAMP_IS_LIT_BUT_GENIES_COULD_NOT_JOIN_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Its lamp is lit, but Genies could not join it. It goes on as it is; "
+                    + "an oillamp of another version may have lit it.";
+                case GERMAN -> "Seine Lampe brennt, aber Genies konnte sich nicht mit ihr verbinden. Sie läuft weiter, wie sie ist; vielleicht hat ein oillamp einer anderen Version sie entzündet.";
+                case SPANISH -> "Su lámpara está encendida, pero Genies no pudo unirse a ella. Sigue como está; quizá la encendió un oillamp de otra versión.";
+                case JAPANESE -> "ランプは灯っていますが、Genies は接続できませんでした。ランプはそのまま動き続けます。別のバージョンの oillamp が灯したのかもしれません。";
+                case CHINESE -> "它的神灯已点亮，但 Genies 无法连接。神灯会保持原样继续运行；可能是另一个版本的 oillamp 点亮了它。";
+            };
+        }
+
+        public String ITS_LAMP_GOES_ON_AS_IT_IS(String reason) {
+            return switch (lang) {
+                case ENGLISH -> reason + ". Its lamp goes on as it is.";
+                case GERMAN -> reason + ". Seine Lampe läuft weiter, wie sie ist.";
+                case SPANISH -> reason + ". Su lámpara sigue como está.";
+                case JAPANESE -> reason + "。ランプはそのまま動き続けます。";
+                case CHINESE -> reason + "。它的神灯会保持原样继续运行。";
+            };
+        }
+
+        public String THE_GENIES_SANDBOX_STOPPED(String detail) {
+            return switch (lang) {
+                case ENGLISH -> "The genie's sandbox stopped: " + detail;
+                case GERMAN -> "Die Sandbox des Dschinns hat angehalten: " + detail;
+                case SPANISH -> "El sandbox del genio se detuvo: " + detail;
+                case JAPANESE -> "ジーニーのサンドボックスが停止しました：" + detail;
+                case CHINESE -> "精灵的沙箱已停止：" + detail;
+            };
+        }
+
         public String LIGHTING_THE_LAMP() {
             return switch (lang) {
                 case ENGLISH -> "lighting the lamp";
