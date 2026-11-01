@@ -2504,6 +2504,56 @@ public enum Lang {
     /// The words of the settings every genie shares, and of the welcome above them while there
     /// are no genies.
     public record SettingsPage(Lang lang) {
+        public String ASKING_FOR_THE_MODELS() {
+            return switch (lang) {
+                case ENGLISH -> "Asking for the models…";
+                case GERMAN -> "Frage nach den Modellen…";
+                case SPANISH -> "Consultando los modelos…";
+                case JAPANESE -> "モデルを問い合わせ中…";
+                case CHINESE -> "正在查询模型…";
+            };
+        }
+
+        public String EDEN_AI_OFFERS_NO_MODELS_IN_THE_EU_JUST_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "Eden AI offers no models in the EU just now.";
+                case GERMAN -> "Eden AI bietet in der EU gerade keine Modelle an.";
+                case SPANISH -> "Eden AI no ofrece ahora mismo ningún modelo en la UE.";
+                case JAPANESE -> "Eden AI は現在、EU でモデルを提供していません。";
+                case CHINESE -> "Eden AI 目前在欧盟没有提供任何模型。";
+            };
+        }
+
+        public String THE_MODEL_SERVER_OFFERS_NO_MODELS_YET_PULL_ONE_FIRST() {
+            return switch (lang) {
+                case ENGLISH -> "The model server offers no models yet; pull one first, such as `ollama pull qwen2.5:7b`.";
+                case GERMAN -> "Der Modellserver bietet noch keine Modelle an; lade zuerst eines, etwa mit `ollama pull qwen2.5:7b`.";
+                case SPANISH -> "El servidor de modelos aún no ofrece ningún modelo; descarga uno primero, por ejemplo con `ollama pull qwen2.5:7b`.";
+                case JAPANESE -> "モデルサーバーにはまだモデルがありません。先に `ollama pull qwen2.5:7b` などでモデルを取得してください。";
+                case CHINESE -> "模型服务器还没有任何模型；请先拉取一个，例如 `ollama pull qwen2.5:7b`。";
+            };
+        }
+
+        public String EDEN_AI_OFFERS_MODELS_IN_THE_EU(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 1 ? "Eden AI offers one model in the EU." : "Eden AI offers " + count + " models in the EU.";
+                case GERMAN -> count == 1 ? "Eden AI bietet in der EU ein Modell an." : "Eden AI bietet in der EU " + count + " Modelle an.";
+                case SPANISH -> count == 1 ? "Eden AI ofrece un modelo en la UE." : "Eden AI ofrece " + count + " modelos en la UE.";
+                case JAPANESE -> "Eden AI は EU で " + count + " 個のモデルを提供しています。";
+                case CHINESE -> "Eden AI 在欧盟提供 " + count + " 个模型。";
+            };
+        }
+
+        public String THE_MODEL_SERVER_OFFERS_MODELS(int count) {
+            return switch (lang) {
+                case ENGLISH -> count == 1 ? "The model server offers one model." : "The model server offers " + count + " models.";
+                case GERMAN -> count == 1 ? "Der Modellserver bietet ein Modell an." : "Der Modellserver bietet " + count + " Modelle an.";
+                case SPANISH -> count == 1 ? "El servidor de modelos ofrece un modelo." : "El servidor de modelos ofrece " + count + " modelos.";
+                case JAPANESE -> "モデルサーバーには " + count + " 個のモデルがあります。";
+                case CHINESE -> "模型服务器提供 " + count + " 个模型。";
+            };
+        }
+
         public String OLLAMA_IS_NOT_INSTALLED() {
             return switch (lang) {
                 case ENGLISH -> "Ollama is not installed.";
