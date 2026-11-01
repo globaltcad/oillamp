@@ -5,6 +5,7 @@ import dev.gui.genie.Shelf
 import dev.gui.genie.SystemLook
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.History
 import dev.gui.model.Lang
 import dev.gui.model.Settings
 import dev.gui.view.GeniesView
@@ -141,6 +142,26 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             var done = new CountDownLatch(1)
             SwingUtilities.invokeAndWait { app?.quit(false, Optional.empty(), { done.countDown() }) }
             done.await(60, TimeUnit.SECONDS)
+    }
+
+    def 'What the history page is busy with is said in the language Genies speaks, even after it began'() {
+        reportInfo """
+            Let's consider a genie moving to its branch "try". While oillamp moves it, the history
+            page says so: "Moving to try…". Genies keeps what is on its way as a value without
+            words, `History.Busy.MovingTo`, and only the page says it, in the language Genies
+            speaks. So a user who switches to German while the genie is still moving reads
+            "Wechsle zu try…", and not the English the move began in.
+        """
+        given: 'a history moving to the branch try'
+            def history = History.UNREAD.withBusy(new History.Busy.MovingTo('try'))
+
+        expect: 'it is said in each language, the branch named in it'
+            history.busy().get().words(Lang.ENGLISH) == 'Moving to try…'
+            history.busy().get().words(Lang.GERMAN) == 'Wechsle zu try…'
+            history.busy().get().words(Lang.JAPANESE) == 'try に移動中…'
+
+        and: 'once it is done, nothing is said'
+            history.notBusy().busy().isEmpty()
     }
 
     /// Whether a label in `view` says `text`.

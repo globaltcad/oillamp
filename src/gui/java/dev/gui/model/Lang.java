@@ -4438,6 +4438,106 @@ public enum Lang {
     /// The words of a genie's History page: the moments its home was saved at, its branches, and
     /// going back to a moment.
     public record HistoryPage(Lang lang) {
+        public String SAVING() {
+            return switch (lang) {
+                case ENGLISH -> "Saving…";
+                case GERMAN -> "Speichere…";
+                case SPANISH -> "Guardando…";
+                case JAPANESE -> "保存中…";
+                case CHINESE -> "正在保存…";
+            };
+        }
+
+        public String STARTING_THE_BRANCH(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Starting the branch " + branch + "…";
+                case GERMAN -> "Lege den Zweig " + branch + " an…";
+                case SPANISH -> "Creando la rama " + branch + "…";
+                case JAPANESE -> "ブランチ " + branch + " を作成中…";
+                case CHINESE -> "正在创建分支 " + branch + "…";
+            };
+        }
+
+        public String LOOKING_AT_WHAT_THE_BRANCH_HOLDS(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Looking at what the branch " + branch + " holds…";
+                case GERMAN -> "Sehe nach, was der Zweig " + branch + " enthält…";
+                case SPANISH -> "Mirando qué contiene la rama " + branch + "…";
+                case JAPANESE -> "ブランチ " + branch + " の中身を確認中…";
+                case CHINESE -> "正在查看分支 " + branch + " 包含的内容…";
+            };
+        }
+
+        public String DELETING_THE_BRANCH(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Deleting the branch " + branch + "…";
+                case GERMAN -> "Lösche den Zweig " + branch + "…";
+                case SPANISH -> "Eliminando la rama " + branch + "…";
+                case JAPANESE -> "ブランチ " + branch + " を削除中…";
+                case CHINESE -> "正在删除分支 " + branch + "…";
+            };
+        }
+
+        public String LOOKING_AT_WHAT_A_RESET_WOULD_THROW_AWAY() {
+            return switch (lang) {
+                case ENGLISH -> "Looking at what a reset would throw away…";
+                case GERMAN -> "Sehe nach, was ein Zurücksetzen verwerfen würde…";
+                case SPANISH -> "Mirando qué se perdería al restablecer…";
+                case JAPANESE -> "リセットで失われるものを確認中…";
+                case CHINESE -> "正在查看重置会丢弃哪些内容…";
+            };
+        }
+
+        public String LOOKING_AT_WHAT_DOES_NOT_FIT() {
+            return switch (lang) {
+                case ENGLISH -> "Looking at what does not fit…";
+                case GERMAN -> "Sehe nach, was nicht mehr hineinpasst…";
+                case SPANISH -> "Mirando qué no cabe…";
+                case JAPANESE -> "収まらないものを確認中…";
+                case CHINESE -> "正在查看哪些内容超出了大小…";
+            };
+        }
+
+        public String DELETING_OLD_MOMENTS() {
+            return switch (lang) {
+                case ENGLISH -> "Deleting old moments…";
+                case GERMAN -> "Lösche alte Stände…";
+                case SPANISH -> "Eliminando momentos antiguos…";
+                case JAPANESE -> "古い時点を削除中…";
+                case CHINESE -> "正在删除旧的保存点…";
+            };
+        }
+
+        public String GOING_BACK() {
+            return switch (lang) {
+                case ENGLISH -> "Going back…";
+                case GERMAN -> "Gehe zurück…";
+                case SPANISH -> "Volviendo atrás…";
+                case JAPANESE -> "戻しています…";
+                case CHINESE -> "正在回退…";
+            };
+        }
+
+        public String MOVING_TO(String branch) {
+            return switch (lang) {
+                case ENGLISH -> "Moving to " + branch + "…";
+                case GERMAN -> "Wechsle zu " + branch + "…";
+                case SPANISH -> "Pasando a " + branch + "…";
+                case JAPANESE -> branch + " に移動中…";
+                case CHINESE -> "正在切换到 " + branch + "…";
+            };
+        }
+
+        public String RESETTING() {
+            return switch (lang) {
+                case ENGLISH -> "Resetting…";
+                case GERMAN -> "Setze zurück…";
+                case SPANISH -> "Restableciendo…";
+                case JAPANESE -> "リセット中…";
+                case CHINESE -> "正在重置…";
+            };
+        }
+
         public String IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE(String genie) {
             return switch (lang) {
                 case ENGLISH -> genie + " is waking; go back once it is awake";
