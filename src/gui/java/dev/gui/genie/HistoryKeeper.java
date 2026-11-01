@@ -8,10 +8,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import dev.gui.model.Genie;
 import dev.gui.model.History;
+import dev.gui.model.Lang;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampDirectory;
@@ -87,7 +89,7 @@ public final class HistoryKeeper {
             var moments = LampApiConversionUtil.moments(lamp.historyOfAllBranches());
             change(it -> it.readAs(reading, branches, moments));
         } catch (IOException | LampFailedException failed) {
-            change(it -> it.withProblem("The history could not be read: " + reason(failed)));
+            change(it -> it.withProblem(new History.Problem.CouldNotRead(reason(failed))));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
@@ -108,7 +110,7 @@ public final class HistoryKeeper {
                 double gb = lamp.historyMaxGrowthGb();
                 change(it -> it.withAutosave(Optional.of(asShown(read))).withMaxGrowthGb(Optional.of(gb)));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withProblem("The history's settings could not be read: " + reason(failed)));
+                change(it -> it.withProblem(new History.Problem.CouldNotReadSettings(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -118,7 +120,7 @@ public final class HistoryKeeper {
     /// Writes `wanted` into the lamp's file. The page shows it at once, then what the file has,
     /// or, when it could not be written, what it had and why.
     public void autosave(History.Autosave wanted) {
-        change(it -> it.withAutosave(Optional.of(wanted)).withProblem(""));
+        change(it -> it.withAutosave(Optional.of(wanted)).noProblem());
         work.execute(() -> {
             try {
                 Lamp.Autosave written = lamp.autosave(new Lamp.Autosave(wanted.waking(), wanted.sleeping(),
@@ -126,7 +128,7 @@ public final class HistoryKeeper {
                                                                          wanted.chatQuietMinutes()));
                 change(it -> it.withAutosave(Optional.of(asShown(written))));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withProblem("oillamp could not change when it saves: " + reason(failed)));
+                change(it -> it.withProblem(new History.Problem.CouldNotChangeAutosave(reason(failed))));
                 readSettings();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -139,13 +141,13 @@ public final class HistoryKeeper {
     ///
     /// @param gb from 0 to 10000; 0 never deletes a moment
     public void maxGrowth(double gb) {
-        change(it -> it.withMaxGrowthGb(Optional.of(gb)).withProblem(""));
+        change(it -> it.withMaxGrowthGb(Optional.of(gb)).noProblem());
         work.execute(() -> {
             try {
                 double written = lamp.historyMaxGrowthGb(gb);
                 change(it -> it.withMaxGrowthGb(Optional.of(written)));
             } catch (IOException | LampFailedException | IllegalArgumentException failed) {
-                change(it -> it.withProblem("oillamp could not change how far the history may grow: " + reason(failed)));
+                change(it -> it.withProblem(new History.Problem.CouldNotChangeMaxGrowth(reason(failed))));
                 readSettings();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -165,19 +167,20 @@ public final class HistoryKeeper {
     /// @param message what to remember the moment by; may be empty
     public void save(String message) {
         watched = true;
-        change(it -> it.withBusy(new History.Busy.Saving()).withNote("").withProblem(""));
+        change(it -> it.withBusy(new History.Busy.Saving()).noNote().noProblem());
         work.execute(() -> {
             try {
                 Optional<LampSave> saved = lamp.save(message.strip());
-                String nothingChanged = "Nothing changed since the newest moment, so it holds how the genie is now already.";
+                // In English until the chat's notices are values too.
+                String nothingChanged = History.Note.NOTHING_CHANGED.words(Lang.ENGLISH);
                 change(it -> saved.isPresent() ? it.notBusy().withPicked(saved.get().id())
-                        : it.notBusy().withPicked(it.moments().isEmpty() ? "" : it.moments().first().id()).withNote(nothingChanged));
+                        : it.notBusy().withPicked(it.moments().isEmpty() ? "" : it.moments().first().id()).withNote(History.Note.NOTHING_CHANGED));
                 String told = saved.isEmpty() ? nothingChanged
                         : "Saved as a moment of the history" + (message.isBlank() ? "" : ": " + message.strip())
                           + ". The history page brings the genie back to it.";
                 changes.accept(genie -> genie.withTranscript(genie.transcript().notice(told)));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.notBusy().withProblem("oillamp could not save: " + reason(failed)));
+                change(it -> it.notBusy().withProblem(new History.Problem.CouldNotSave(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -192,14 +195,14 @@ public final class HistoryKeeper {
     /// moment of the branch the genie lives on. The genie stays on its branch, awake or asleep.
     public void startBranch(String name, String moment) {
         watched = true;
-        change(it -> it.withBusy(new History.Busy.StartingBranch(name)).withNote("").withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.StartingBranch(name)).noNote().noProblem().withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 if (moment.isEmpty()) lamp.branch(name);
                 else lamp.branch(name, moment);
                 change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.notBusy().withProblem("oillamp could not start the branch " + name + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem(new History.Problem.CouldNotStartBranch(name, reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -211,7 +214,7 @@ public final class HistoryKeeper {
     /// Asks the lamp how many moments only the branch `name` holds, which deleting it would lose,
     /// for the page to ask the user.
     public void planDeletingBranch(String name) {
-        plan(new History.Busy.LookingAtBranch(name), "deleting the branch " + name, () -> {
+        plan(new History.Busy.LookingAtBranch(name), reason -> new History.Problem.CouldNotLookAtBranch(name, reason), () -> {
             LampEvent.BranchDeletePlanned planned = lamp.wouldDeleteBranch(name);
             return Optional.of(new History.Plan.DeleteBranch(planned.branch(), planned.snapshots()));
         });
@@ -220,13 +223,13 @@ public final class HistoryKeeper {
     /// Deletes the branch `name`, which the genie does not live on. The user confirmed.
     public void deleteBranch(String name) {
         watched = true;
-        change(it -> it.withBusy(new History.Busy.DeletingBranch(name)).withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.DeletingBranch(name)).noProblem().withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 lamp.deleteBranch(name);
                 change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.notBusy().withProblem("oillamp could not delete the branch " + name + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem(new History.Problem.CouldNotDeleteBranch(name, reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -238,7 +241,7 @@ public final class HistoryKeeper {
     /// Asks the lamp what resetting the branch the genie lives on back to `moment` would throw
     /// away, for the page to ask the user. Only while the genie sleeps.
     public void planReset(String moment) {
-        plan(new History.Busy.LookingAtReset(), "resetting", () -> {
+        plan(new History.Busy.LookingAtReset(), History.Problem.CouldNotLookAtReset::new, () -> {
             LampEvent.ResetPlanned planned = lamp.wouldReset(moment);
             return Optional.of(new History.Plan.Reset(planned.target().id(), planned.snapshots(), planned.unsaved()));
         });
@@ -249,11 +252,11 @@ public final class HistoryKeeper {
     /// Asks the lamp which moments keeping the history within its size would delete now, for the
     /// page to ask the user; when none, the page says so instead. Only while the genie sleeps.
     public void planPruning() {
-        plan(new History.Busy.LookingAtWhatDoesNotFit(), "tidying up", () -> {
+        plan(new History.Busy.LookingAtWhatDoesNotFit(), History.Problem.CouldNotLookAtWhatDoesNotFit::new, () -> {
             Optional<LampEvent.HistoryPrunePlanned> planned = lamp.wouldPruneHistory();
             Optional<History.Plan> pruning = planned.filter(it -> !it.removed().isEmpty()).map(LampApiConversionUtil::pruning);
             if (pruning.isEmpty())
-                change(it -> it.withNote("The history fits within its size, so there is nothing to delete."));
+                change(it -> it.withNote(History.Note.NOTHING_TO_DELETE));
             return pruning;
         });
     }
@@ -262,13 +265,13 @@ public final class HistoryKeeper {
     /// confirmed. Only while the genie sleeps.
     public void prune() {
         watched = true;
-        change(it -> it.withBusy(new History.Busy.DeletingOldMoments()).withProblem("").withPlan(Optional.empty()));
+        change(it -> it.withBusy(new History.Busy.DeletingOldMoments()).noProblem().withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 lamp.pruneHistory();
                 change(it -> it.notBusy());
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.notBusy().withProblem("oillamp could not delete old moments: " + reason(failed)));
+                change(it -> it.notBusy().withProblem(new History.Problem.CouldNotDeleteOldMoments(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -284,15 +287,15 @@ public final class HistoryKeeper {
     }
 
     /// Asks the lamp what a change would throw away, saying `busy` meanwhile, and shows it as the
-    /// plan the user confirms or drops; `what` names the change if the lamp refuses.
-    private void plan(History.Busy busy, String what, Asking asking) {
-        change(it -> it.withBusy(busy).withNote("").withProblem("").withPlan(Optional.empty()));
+    /// plan the user confirms or drops; `refused` says what failed if the lamp refuses, and why.
+    private void plan(History.Busy busy, Function<String, History.Problem> refused, Asking asking) {
+        change(it -> it.withBusy(busy).noNote().noProblem().withPlan(Optional.empty()));
         work.execute(() -> {
             try {
                 Optional<History.Plan> plan = asking.ask();
                 change(it -> it.notBusy().withPlan(plan));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.notBusy().withProblem("oillamp refused " + what + ": " + reason(failed)));
+                change(it -> it.notBusy().withProblem(refused.apply(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }

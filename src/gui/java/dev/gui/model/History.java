@@ -30,8 +30,8 @@ import sprouts.Tuple;
 /// @param picked   the id of the moment whose card is open, with its buttons; empty for none
 /// @param earlier  whether every moment of the line is shown, not only the newest [#SHOWN]
 /// @param busy     what is on its way to the lamp, such as a save; empty while nothing is
-/// @param note     what the last save came to when it saved nothing; empty otherwise
-/// @param problem  why the last change failed, in the lamp's words; empty when it did not
+/// @param note     what the last save or tidying up came to when it did nothing; empty otherwise
+/// @param problem  what failed last, with why in the lamp's words; empty when nothing did
 /// @param plan     what a change the user asked for would throw away, as the lamp said, until
 ///                 the user confirms or drops it; empty otherwise
 /// @param autosave when oillamp saves by itself, as the lamp's file says; empty before it was read,
@@ -48,8 +48,8 @@ public record History(
     String picked,
     boolean earlier,
     Optional<Busy> busy,
-    String note,
-    String problem,
+    Optional<Note> note,
+    Optional<Problem> problem,
     Optional<Plan> plan,
     Optional<Autosave> autosave,
     Optional<Double> maxGrowthGb,
@@ -232,6 +232,82 @@ public record History(
         }
     }
 
+    /// What a save or tidying up came to when it did nothing, which the page says until the next
+    /// change. Said in the language Genies speaks with [#words(Lang)].
+    public enum Note {
+        /// A save saved nothing, as nothing changed since the newest moment.
+        NOTHING_CHANGED,
+        /// Tidying up would delete nothing, as the history fits within its size.
+        NOTHING_TO_DELETE;
+
+        /// What it says, in `lang`.
+        public String words(Lang lang) {
+            Lang.HistoryPage words = lang.HISTORY_PAGE();
+            return switch (this) {
+                case NOTHING_CHANGED -> words.NOTHING_CHANGED_SINCE_THE_NEWEST_MOMENT_SO_IT_HOLDS_HOW_THE_GENIE_IS_NOW();
+                case NOTHING_TO_DELETE -> words.THE_HISTORY_FITS_WITHIN_ITS_SIZE_SO_THERE_IS_NOTHING_TO_DELETE();
+            };
+        }
+    }
+
+    /// What failed last, which the page says until the next change. Each says why in `reason`, in
+    /// the words of the lamp, which stay as oillamp put them; what failed is said in the language
+    /// Genies speaks with [#words(Lang)].
+    public sealed interface Problem {
+        /// Why it failed, as oillamp said.
+        String reason();
+
+        /// Reading the moments and branches.
+        record CouldNotRead(String reason) implements Problem {}
+        /// Reading when oillamp saves by itself, and how far the history may grow.
+        record CouldNotReadSettings(String reason) implements Problem {}
+        /// Changing when oillamp saves by itself.
+        record CouldNotChangeAutosave(String reason) implements Problem {}
+        /// Changing how far the history may grow.
+        record CouldNotChangeMaxGrowth(String reason) implements Problem {}
+        /// Saving the genie's home.
+        record CouldNotSave(String reason) implements Problem {}
+        /// Starting the branch `branch`.
+        record CouldNotStartBranch(String branch, String reason) implements Problem {}
+        /// Asking what deleting the branch `branch` would throw away.
+        record CouldNotLookAtBranch(String branch, String reason) implements Problem {}
+        /// Deleting the branch `branch`.
+        record CouldNotDeleteBranch(String branch, String reason) implements Problem {}
+        /// Asking what a reset would throw away.
+        record CouldNotLookAtReset(String reason) implements Problem {}
+        /// Asking which moments do not fit within the history's size.
+        record CouldNotLookAtWhatDoesNotFit(String reason) implements Problem {}
+        /// Deleting the moments that do not fit.
+        record CouldNotDeleteOldMoments(String reason) implements Problem {}
+        /// Going back to a moment.
+        record CouldNotGoBack(String reason) implements Problem {}
+        /// Moving to the branch `branch`.
+        record CouldNotMoveTo(String branch, String reason) implements Problem {}
+        /// Resetting the branch the genie lives on.
+        record CouldNotReset(String reason) implements Problem {}
+
+        /// What failed and why, in `lang`.
+        default String words(Lang lang) {
+            Lang.HistoryPage words = lang.HISTORY_PAGE();
+            return switch (this) {
+                case CouldNotRead it -> words.THE_HISTORY_COULD_NOT_BE_READ(it.reason());
+                case CouldNotReadSettings it -> words.THE_HISTORYS_SETTINGS_COULD_NOT_BE_READ(it.reason());
+                case CouldNotChangeAutosave it -> words.OILLAMP_COULD_NOT_CHANGE_WHEN_IT_SAVES(it.reason());
+                case CouldNotChangeMaxGrowth it -> words.OILLAMP_COULD_NOT_CHANGE_HOW_FAR_THE_HISTORY_MAY_GROW(it.reason());
+                case CouldNotSave it -> words.OILLAMP_COULD_NOT_SAVE(it.reason());
+                case CouldNotStartBranch it -> words.OILLAMP_COULD_NOT_START_THE_BRANCH(it.branch(), it.reason());
+                case CouldNotLookAtBranch it -> words.OILLAMP_REFUSED_DELETING_THE_BRANCH(it.branch(), it.reason());
+                case CouldNotDeleteBranch it -> words.OILLAMP_COULD_NOT_DELETE_THE_BRANCH(it.branch(), it.reason());
+                case CouldNotLookAtReset it -> words.OILLAMP_REFUSED_RESETTING(it.reason());
+                case CouldNotLookAtWhatDoesNotFit it -> words.OILLAMP_REFUSED_TIDYING_UP(it.reason());
+                case CouldNotDeleteOldMoments it -> words.OILLAMP_COULD_NOT_DELETE_OLD_MOMENTS(it.reason());
+                case CouldNotGoBack it -> words.OILLAMP_COULD_NOT_GO_BACK(it.reason());
+                case CouldNotMoveTo it -> words.OILLAMP_COULD_NOT_MOVE_TO(it.branch(), it.reason());
+                case CouldNotReset it -> words.OILLAMP_COULD_NOT_RESET(it.reason());
+            };
+        }
+    }
+
     /// What a change the user asked for would throw away, as the lamp said when Genies asked it
     /// first. The page shows it, and the change happens only once the user confirms.
     public sealed interface Plan {
@@ -272,15 +348,17 @@ public record History(
 
     public static final History UNREAD = new History(
         false, 0, Tuple.of(Moment.class), Tuple.of(Branch.class), "", "",
-        false, Optional.empty(), "", "", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
+        false, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()
     );
 
     public History withPicked(String picked)    { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withEarlier(boolean earlier) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withBusy(Busy busy)          { return new History(read, reading, all, branches, line, picked, earlier, Optional.of(busy), note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History notBusy()                    { return new History(read, reading, all, branches, line, picked, earlier, Optional.empty(), note, problem, plan, autosave, maxGrowthGb, pruned); }
-    public History withNote(String note)        { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
-    public History withProblem(String problem)  { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
+    public History withNote(Note note)          { return new History(read, reading, all, branches, line, picked, earlier, busy, Optional.of(note), problem, plan, autosave, maxGrowthGb, pruned); }
+    public History noNote()                     { return new History(read, reading, all, branches, line, picked, earlier, busy, Optional.empty(), problem, plan, autosave, maxGrowthGb, pruned); }
+    public History withProblem(Problem problem) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, Optional.of(problem), plan, autosave, maxGrowthGb, pruned); }
+    public History noProblem()                  { return new History(read, reading, all, branches, line, picked, earlier, busy, note, Optional.empty(), plan, autosave, maxGrowthGb, pruned); }
     public History withPlan(Optional<Plan> plan) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withAutosave(Optional<Autosave> autosave) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }
     public History withMaxGrowthGb(Optional<Double> maxGrowthGb) { return new History(read, reading, all, branches, line, picked, earlier, busy, note, problem, plan, autosave, maxGrowthGb, pruned); }

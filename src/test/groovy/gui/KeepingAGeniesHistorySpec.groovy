@@ -111,7 +111,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() && !app.state().get().find(jafar).orElseThrow().history().note().isEmpty() }
             app.state().get().find(jafar).orElseThrow().history().picked() == app.state().get().find(jafar).orElseThrow().history().moments().first().id()
             app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.CHATTED
-            app.state().get().find(jafar).orElseThrow().transcript().entries().last().text() == app.state().get().find(jafar).orElseThrow().history().note()
+            app.state().get().find(jafar).orElseThrow().transcript().entries().last().text() == app.state().get().find(jafar).orElseThrow().history().note().get().words(Lang.ENGLISH)
 
         when: 'a file changes in the genie\'s home, and the user saves again'
             Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'refactor the parser')
@@ -172,7 +172,7 @@ class KeepingAGeniesHistorySpec extends Specification {
         then: 'the genie is awake again, and its home is as it was then'
             waitUntil { app.state().get().find(jafar).orElseThrow().history().moments().first().kind() == History.Kind.WENT_BACK }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY && app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() }
-            app.state().get().find(jafar).orElseThrow().history().problem() == ''
+            app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
             !Files.exists(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'))
 
         and: 'its conversation holds the first question only'
@@ -457,7 +457,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             waitUntil { app.state().get().find(jafar).orElseThrow().history().lampBranch() == 'rust-rewrite' && app.state().get().find(jafar).orElseThrow().history().busy().isEmpty() }
             Lamp.at(app.lampOf(jafar)).branches().find { it.current() }.name() == 'rust-rewrite'
             app.state().get().find(jafar).orElseThrow().history().line() == ''
-            app.state().get().find(jafar).orElseThrow().history().problem() == ''
+            app.state().get().find(jafar).orElseThrow().history().problem().isEmpty()
 
         when: 'a file changes in Jafar\'s home, the user saves, and then looks at main'
             Files.writeString(Lamp.agentHome(app.lampOf(jafar)).orElseThrow().resolve('plan.md'), 'in Rust')
@@ -633,7 +633,7 @@ class KeepingAGeniesHistorySpec extends Specification {
             SwingUtilities.invokeAndWait { app.planPruning(jafar) }
 
         then: 'the page says there is nothing to delete, and shows no banner'
-            waitUntil { app.state().get().find(jafar).orElseThrow().history().note().contains('nothing to delete') }
+            waitUntil { app.state().get().find(jafar).orElseThrow().history().note() == Optional.of(History.Note.NOTHING_TO_DELETE) }
             app.state().get().find(jafar).orElseThrow().history().plan().isEmpty()
 
         when: 'the user saves a 64 KB file, then another version of it'

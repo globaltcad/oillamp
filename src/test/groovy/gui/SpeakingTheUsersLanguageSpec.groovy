@@ -164,6 +164,29 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             history.notBusy().busy().isEmpty()
     }
 
+    def 'What failed on the history page is said in the language Genies speaks, and why in oillamp\'s own words'() {
+        reportInfo """
+            Let's consider oillamp refusing to delete the branch "try" because the disk is full.
+            The history page says what failed in the language Genies speaks, and then why, as
+            oillamp said it: oillamp speaks English, and its words are quoted, not translated.
+            A note, such as that a save saved nothing as nothing changed, is said in that
+            language too.
+        """
+        given: 'a history whose branch try could not be deleted'
+            def history = History.UNREAD.withProblem(new History.Problem.CouldNotDeleteBranch('try', 'no space left on device'))
+
+        expect: 'what failed is said in each language, and why as oillamp said it'
+            history.problem().get().words(Lang.ENGLISH) == 'oillamp could not delete the branch try: no space left on device'
+            history.problem().get().words(Lang.GERMAN) == 'oillamp konnte den Zweig try nicht löschen: no space left on device'
+            history.problem().get().words(Lang.CHINESE) == 'oillamp 无法删除分支 try：no space left on device'
+
+        and: 'a note is said in each language too'
+            History.Note.NOTHING_TO_DELETE.words(Lang.SPANISH) == 'El historial cabe en su tamaño, así que no hay nada que eliminar.'
+
+        and: 'once the next change begins, neither is said'
+            history.withNote(History.Note.NOTHING_CHANGED).noProblem().noNote().problem().isEmpty()
+    }
+
     /// Whether a label in `view` says `text`.
     private static boolean labelled(Container view, String text) {
         boolean found = false
