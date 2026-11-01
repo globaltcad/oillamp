@@ -269,7 +269,7 @@ final class HistoryPage {
 
     private UIForAnySwing<?, ?> header() {
         Val<Status> status = state.viewAs(Status.class, HistoryPage::status);
-        Val<String> problem = Viewable.of(String.class, history, words, (it, page) -> it.problem().map(p -> p.words(page.lang())).orElse(""));
+        Val<String> problem = Viewable.of(String.class, history, words, (it, page) -> it.problem().map(why -> why.words(page.lang())).orElse(""));
         Val<String> note = Viewable.of(String.class, history, words, (it, page) -> it.note().map(n -> n.words(page.lang())).orElse(""));
         Val<Boolean> idle = history.viewAs(Boolean.class, it -> it.busy().isEmpty());
         Val<Boolean> branchable = history.viewAs(Boolean.class, it -> it.busy().isEmpty() && !it.moments().isEmpty());

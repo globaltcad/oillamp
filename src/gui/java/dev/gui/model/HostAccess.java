@@ -28,7 +28,8 @@ import sprouts.Tuple;
 /// @param saved     the rules as the lamp's file has them
 /// @param draft     the rules as the page shows them, which the user changes until they save
 /// @param busy      whether a save is on its way to the lamp
-/// @param problem   why the last reading or save failed, in the lamp's words; empty when it did not
+/// @param problem   what failed last, the reading or the save, with why in the lamp's words; empty
+///                  when it did not
 /// @param requestsForPermission the requests the genie's lamp asks the user to allow, oldest first
 public record HostAccess(
     boolean read,
@@ -36,11 +37,33 @@ public record HostAccess(
     PermissionRules saved,
     PermissionRules draft,
     boolean busy,
-    String problem,
+    Optional<Problem> problem,
     Tuple<RequestForPermission> requestsForPermission
 ) {
 
-    public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, "",
+    /// What failed last, which the page says until the next save. Each says why in `reason`, in
+    /// the words of the lamp, which stay as oillamp put them; what failed is said in the language
+    /// Genies speaks with [#words(Lang)].
+    public sealed interface Problem {
+        /// Why it failed, as oillamp said.
+        String reason();
+
+        /// Reading the settings from the lamp's file.
+        record CouldNotRead(String reason) implements Problem {}
+        /// Saving them to it.
+        record CouldNotSave(String reason) implements Problem {}
+
+        /// What failed and why, in `lang`.
+        default String words(Lang lang) {
+            Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
+            return switch (this) {
+                case CouldNotRead it -> words.THE_HOST_ACCESS_COULD_NOT_BE_READ(it.reason());
+                case CouldNotSave it -> words.OILLAMP_COULD_NOT_SAVE_IT(it.reason());
+            };
+        }
+    }
+
+    public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, Optional.empty(),
                                                            Tuple.of(RequestForPermission.class));
 
     /// How long the lamp waits for the user to allow a request. It refuses the request after that.
@@ -138,11 +161,12 @@ public record HostAccess(
 
     public HostAccess withDraft(PermissionRules draft)     { return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission); }
     public HostAccess withBusy(boolean busy)     { return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission); }
-    public HostAccess withProblem(String problem) { return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission); }
+    public HostAccess withProblem(Problem problem) { return new HostAccess(read, lamp, saved, draft, busy, Optional.of(problem), requestsForPermission); }
+    public HostAccess noProblem()                 { return new HostAccess(read, lamp, saved, draft, busy, Optional.empty(), requestsForPermission); }
 
     /// Read from the lamp, or saved to it: what the page shows is what the file has.
     public HostAccess readAs(boolean lamp, PermissionRules rules) {
-        return new HostAccess(true, lamp, rules, rules, false, "", requestsForPermission);
+        return new HostAccess(true, lamp, rules, rules, false, Optional.empty(), requestsForPermission);
     }
 
     /// Whether the page shows rules the lamp's file does not have yet.

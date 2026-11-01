@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import dev.gui.model.Genie;
@@ -55,7 +56,7 @@ public final class ScheduleKeeper {
                 ZoneId zone = ZoneId.of(schedule.zone());
                 change(it -> it.readAs(schedule.paused(), zone, jobs, runs));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withProblem("The schedule could not be read: " + reason(failed)));
+                change(it -> it.withProblem(new Schedule.Problem.CouldNotRead(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -69,7 +70,7 @@ public final class ScheduleKeeper {
     /// @param now  when the user saved, on the schedule's clock
     public void save(JobDraft draft, LocalDateTime now, ZoneId zone) {
         if (!draft.ready(now)) return;
-        change(it -> it.withBusy(true).withProblem(""));
+        change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
             try {
                 String prompt = draft.prompt().strip();
@@ -90,7 +91,7 @@ public final class ScheduleKeeper {
                 String id = added.id();
                 change(it -> it.closeEditor().withPicked(id));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy(false).withProblem("oillamp could not add it: " + reason(failed)));
+                change(it -> it.withBusy(false).withProblem(new Schedule.Problem.CouldNotAdd(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -100,7 +101,7 @@ public final class ScheduleKeeper {
 
     /// Takes job `id` off the schedule, whoever added it.
     public void remove(String id) {
-        act(() -> lamp.unschedule(id), "The job could not be removed");
+        act(() -> lamp.unschedule(id), Schedule.Problem.CouldNotRemove::new);
     }
 
     /// Switches job `id` on or off.
@@ -108,7 +109,7 @@ public final class ScheduleKeeper {
         act(() -> {
             if (on) lamp.enable(id);
             else lamp.disable(id);
-        }, "The job could not be switched " + (on ? "on" : "off"));
+        }, on ? Schedule.Problem.CouldNotSwitchOn::new : Schedule.Problem.CouldNotSwitchOff::new);
     }
 
     /// Pauses the whole schedule, or lets it run again.
@@ -116,7 +117,7 @@ public final class ScheduleKeeper {
         act(() -> {
             if (paused) lamp.pause();
             else lamp.resume();
-        }, "The schedule could not be " + (paused ? "paused" : "resumed"));
+        }, paused ? Schedule.Problem.CouldNotPause::new : Schedule.Problem.CouldNotResume::new);
     }
 
     /// While the genie is awake. What matters here: a job's run begins or ends, or the genie
@@ -144,13 +145,13 @@ public final class ScheduleKeeper {
 
     private interface Change { void run() throws IOException, InterruptedException, LampFailedException; }
 
-    private void act(Change action, String failure) {
-        change(it -> it.withProblem(""));
+    private void act(Change action, Function<String, Schedule.Problem> failure) {
+        change(it -> it.noProblem());
         work.execute(() -> {
             try {
                 action.run();
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withProblem(failure + ": " + reason(failed)));
+                change(it -> it.withProblem(failure.apply(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }

@@ -49,7 +49,7 @@ public final class HostAccessKeeper {
                 Lamp.HostAccess read = lamp.hostAccess();
                 change(it -> it.readAs(true, HostAccess.PermissionRules.of(read.enabled(), read.requirements())));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withProblem("The host access could not be read: " + reason(failed)));
+                change(it -> it.withProblem(new HostAccess.Problem.CouldNotRead(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -59,13 +59,13 @@ public final class HostAccessKeeper {
     /// Writes `rules`, the ones the page shows, into the lamp's file. The page then shows what
     /// the file has, or says why it could not be written.
     public void save(HostAccess.PermissionRules rules) {
-        change(it -> it.withBusy(true).withProblem(""));
+        change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
             try {
                 Lamp.HostAccess written = lamp.hostAccess(rules.on(), rules.requirements());
                 change(it -> it.readAs(true, HostAccess.PermissionRules.of(written.enabled(), written.requirements())));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy(false).withProblem("oillamp could not save it: " + reason(failed)));
+                change(it -> it.withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
