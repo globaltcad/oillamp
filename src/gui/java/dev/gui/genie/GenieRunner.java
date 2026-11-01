@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import dev.gui.desktop.Desktop;
@@ -630,12 +631,12 @@ public final class GenieRunner {
     /// in its conversation if that is still there, and goes to the most recent one otherwise.
     public void goBackTo(History.Moment moment) {
         work.execute(() -> {
-            changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.GoingBack()).withNote("").withProblem("")));
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.GoingBack()).noNote().noProblem()));
             if (lamp.isPresent()) {
                 putOutLamp();
                 changes.accept(Genie::asleep);
             }
-            changeHome("go back", lamp -> lamp.restore(moment.id()));
+            changeHome(History.Problem.CouldNotGoBack::new, lamp -> lamp.restore(moment.id()));
         });
     }
 
@@ -646,8 +647,8 @@ public final class GenieRunner {
     public void switchTo(String branch) {
         work.execute(() -> {
             changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.MovingTo(branch))
-                    .withNote("").withProblem("").withPlan(Optional.empty())));
-            changeHome("move to " + branch, lamp -> lamp.switchTo(branch));
+                    .noNote().noProblem().withPlan(Optional.empty())));
+            changeHome(reason -> new History.Problem.CouldNotMoveTo(branch, reason), lamp -> lamp.switchTo(branch));
         });
     }
 
@@ -657,8 +658,8 @@ public final class GenieRunner {
     public void reset(String moment) {
         work.execute(() -> {
             changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.Resetting())
-                    .withNote("").withProblem("").withPlan(Optional.empty())));
-            changeHome("reset", lamp -> lamp.reset(moment));
+                    .noNote().noProblem().withPlan(Optional.empty())));
+            changeHome(History.Problem.CouldNotReset::new, lamp -> lamp.reset(moment));
         });
     }
 
@@ -673,8 +674,8 @@ public final class GenieRunner {
     /// settings, the schedule and the host access are read again. The chat stays in its
     /// conversation if that is still there, and goes to the most recent one otherwise.
     ///
-    /// @param what what the change is, as in "oillamp could not go back"
-    private void changeHome(String what, HomeChange change) {
+    /// @param failure what failed, with why, when oillamp could not make the change
+    private void changeHome(Function<String, History.Problem> failure, HomeChange change) {
         try {
             change.change(history.lamp());
             showConversation(fileOrMostRecent(where.file()), where.leaf());
@@ -683,7 +684,7 @@ public final class GenieRunner {
                     .withHistory(genie.history().notBusy().withPicked("")));
         } catch (IOException | LampFailedException failed) {
             String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
-            changes.accept(genie -> genie.withHistory(genie.history().notBusy().withProblem("oillamp could not " + what + ": " + why)));
+            changes.accept(genie -> genie.withHistory(genie.history().notBusy().withProblem(failure.apply(why))));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
