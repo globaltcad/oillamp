@@ -169,14 +169,14 @@ final class HistoryPage {
         history = genie.zoomTo(Genie::history, Genie::withHistory);
         wide    = state.viewAs(Boolean.class, GeniesState::sideBySide);
         notNow  = Viewable.of(String.class, genie, words, (it, page) ->
-            !it.history().busy().isEmpty() ? it.history().busy()
+            it.history().busy().isPresent() ? it.history().busy().get().words(page.lang())
             : it.phase() == Genie.Phase.WAKING ? page.IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE(it.name())
             : it.phase() == Genie.Phase.WORKING ? page.IS_WORKING_GO_BACK_ONCE_IT_IS_DONE(it.name())
             : it.schedule().running().isPresent() ? page.A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE()
             : ""
         );
         homeLocked = Viewable.of(String.class, genie, words, (it, page) ->
-            !it.history().busy().isEmpty() ? it.history().busy()
+            it.history().busy().isPresent() ? it.history().busy().get().words(page.lang())
             : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
                 ? page.SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS(it.name())
             : ""
@@ -250,7 +250,7 @@ final class HistoryPage {
         Genie genie = state.genie();
         Palette p = state.palette();
         Lang.HistoryPage words = state.lang().HISTORY_PAGE();
-        if (!genie.history().busy().isEmpty()) return new Status(p.BRASS(), genie.history().busy());
+        if (genie.history().busy().isPresent()) return new Status(p.BRASS(), genie.history().busy().get().words(state.lang()));
         String when = genie.history().autosave().orElse(UNLESS_SAID).when(state.lang());
         String saved =
             (

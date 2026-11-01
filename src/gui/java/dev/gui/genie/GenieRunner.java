@@ -630,7 +630,7 @@ public final class GenieRunner {
     /// in its conversation if that is still there, and goes to the most recent one otherwise.
     public void goBackTo(History.Moment moment) {
         work.execute(() -> {
-            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Going back…").withNote("").withProblem("")));
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.GoingBack()).withNote("").withProblem("")));
             if (lamp.isPresent()) {
                 putOutLamp();
                 changes.accept(Genie::asleep);
@@ -645,7 +645,7 @@ public final class GenieRunner {
     /// refused by oillamp, and the page says why.
     public void switchTo(String branch) {
         work.execute(() -> {
-            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Moving to " + branch + "…")
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.MovingTo(branch))
                     .withNote("").withProblem("").withPlan(Optional.empty())));
             changeHome("move to " + branch, lamp -> lamp.switchTo(branch));
         });
@@ -656,7 +656,7 @@ public final class GenieRunner {
     /// first, so this cannot be undone. Only while the genie sleeps, as [#switchTo].
     public void reset(String moment) {
         work.execute(() -> {
-            changes.accept(genie -> genie.withHistory(genie.history().withBusy("Resetting…")
+            changes.accept(genie -> genie.withHistory(genie.history().withBusy(new History.Busy.Resetting())
                     .withNote("").withProblem("").withPlan(Optional.empty())));
             changeHome("reset", lamp -> lamp.reset(moment));
         });
@@ -680,10 +680,10 @@ public final class GenieRunner {
             showConversation(fileOrMostRecent(where.file()), where.leaf());
             // The outbox changed too; it is looked into again when the genie wakes.
             changes.accept(genie -> genie.withHandouts(Tuple.of(Handout.class))
-                    .withHistory(genie.history().withBusy("").withPicked("")));
+                    .withHistory(genie.history().notBusy().withPicked("")));
         } catch (IOException | LampFailedException failed) {
             String why = failed instanceof LampFailedException refused ? refused.problem().whatHappened() : reasonOf(failed);
-            changes.accept(genie -> genie.withHistory(genie.history().withBusy("").withProblem("oillamp could not " + what + ": " + why)));
+            changes.accept(genie -> genie.withHistory(genie.history().notBusy().withProblem("oillamp could not " + what + ": " + why)));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
