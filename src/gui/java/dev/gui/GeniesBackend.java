@@ -671,7 +671,8 @@ public final class GeniesBackend implements Genies {
                 });
             } catch (IOException failed) {
                 if (stopping) step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
-                else step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(Optional.ofNullable(failed.getMessage()).orElse(failed.toString())));
+                else step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(failed instanceof OllamaKeeper.Failed known ? known.failure()
+                        : new OllamaSetup.Failure.Other(Optional.ofNullable(failed.getMessage()).orElse(failed.toString()))));
             } catch (InterruptedException stopped) {
                 step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
             }
