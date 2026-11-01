@@ -471,7 +471,7 @@ class FollowingAConversationSpec extends Specification {
             with(told.transcript().entries().first()) {
                 kind() == Entry.Kind.FILE
                 title() == 'sunset.png'
-                text().contains('200.0 KB')
+                words(Lang.ENGLISH) == 'handed you a file, 200.0 KB'
             }
             told.handouts().size() == 2
     }

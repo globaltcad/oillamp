@@ -56,6 +56,12 @@ public sealed interface Notice {
     /// The genie's harness could not take what the user sent, and said `reason`.
     record CouldNotTake(String reason) implements Notice {}
 
+    /// The genie handed the user the file `file`, which the entry's title names.
+    record HandedOver(Handout file) implements Notice {}
+
+    /// The user gave the genie the file the entry's title names, which is in its `~/inbox`.
+    record Gave() implements Notice {}
+
     /// oillamp could not reach the model service at `host`, for `why`, so the genie got no answer.
     record ModelServiceUnreachable(String host, String why) implements Notice {}
 
@@ -93,6 +99,8 @@ public sealed interface Notice {
             case TryingAgain it -> it.why().map(why -> why.words(lang) + " ").orElse("")
                                    + words.TRYING_AGAIN(it.attempt(), it.attempts());
             case CouldNotTake it -> words.THE_GENIE_COULD_NOT_TAKE_THAT(it.reason());
+            case HandedOver it -> words.HANDED_YOU_A_FILE(it.file().readableSize(lang));
+            case Gave _ -> words.YOU_GAVE_THE_GENIE_THIS_FILE_IN_INBOX();
             case ModelServiceUnreachable it -> words.OILLAMP_COULD_NOT_REACH_THE_MODEL_SERVICE_AT(it.host(), it.why());
             case ConnectionBrokeOff _ -> words.THE_CONNECTION_TO_THE_MODEL_SERVICE_BROKE_OFF_BEFORE_AN_ANSWER_CAME();
             case ModelServiceRefused it -> sentence(words.WITH_STATUS(who(it, words), it.code(), it.said()));

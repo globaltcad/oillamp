@@ -44,7 +44,12 @@ public record Entry(
 
     /// What the app says, `notice`.
     public static Entry of(Notice notice) {
-        return new Entry(UUID.randomUUID(), Kind.NOTICE, "", "", "", "", State.DONE, false, false, "", Optional.of(notice));
+        return of(Kind.NOTICE, notice);
+    }
+
+    /// An entry of `kind` that the app words, as `notice` says, such as a file handed over.
+    public static Entry of(Kind kind, Notice notice) {
+        return new Entry(UUID.randomUUID(), kind, "", "", "", "", State.DONE, false, false, "", Optional.of(notice));
     }
 
     /// What it says, in `lang`: its [#notice] in that language, or its [#text] as it was written.
