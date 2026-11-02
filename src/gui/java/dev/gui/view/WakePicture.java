@@ -72,7 +72,7 @@ final class WakePicture {
                         .paintIcon(null, g, (width - UI.scale(100)) / 2, height - UI.scale(100));
                     } else {
                         WelcomeScene.light(g, p, width, height, 0, frame.play(), frame.moment());
-                        WelcomeScene.paint(g, p, width, height, frame.play(), frame.moment());
+                        WelcomeScene.paint(g, p, width, height, frame.play(), frame.moment(), frame.smoke());
                     }
                 });
             });
