@@ -1339,8 +1339,10 @@ public final class GeniesView extends JPanel {
 
     private UIForAnySwing<?, ?> transcript() {
         Val<Boolean> empty = entries.viewAs(Boolean.class, Tuple::isEmpty);
-        Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.emerging(), (it, emerging) ->
-            it == Genie.Phase.WAKING || emerging
+        // The lamp is shown instead of the chat while it is lit or put out, and for as long as
+        // the picture still plays how that ended: the genie greeting, or the flame going out.
+        Val<Boolean> wakingPicture = Viewable.of(Boolean.class, phase, wakePicture.playing(), (it, playing) ->
+            it.isBetween() || playing
         );
         Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
         Val<Boolean> emptyOrOverview = Viewable.of(Boolean.class, empty, overview, (it, home) -> it || home);
