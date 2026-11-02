@@ -494,4 +494,38 @@ class FollowingAConversationSpec extends Specification {
                 transcript().entries().last().isFailed()
             }
     }
+
+    def 'While a genie falls asleep, its status says how the lamp goes out, whatever its run still reports'() {
+        reportInfo """
+            Let's consider a genie put to sleep in the middle of an answer. Putting its lamp out
+            takes a while: oillamp stops the run and saves it, stops the sandbox, and may save
+            the genie's home. Meanwhile the genie is falling asleep, neither awake nor asleep,
+            and its status says what the lamp reports, in oillamp's words. The last pieces its
+            run sends still land in the chat, but they neither wake it again nor take over its
+            status: no one should read "thinking" about a genie that is going to sleep.
+        """
+        given: 'a genie answering a question'
+            var working = genie.withDraft('hi').send().hear(new PiEvent.Said('Once upon'))
+
+        when: 'the user puts it to sleep'
+            var falling = working.fallingAsleep()
+
+        then: 'it is falling asleep, between awake and asleep, and its desktop is gone'
+            falling.phase() == Genie.Phase.FALLING_ASLEEP
+            falling.phase().isBetween()
+            !falling.phase().isAwake()
+            !falling.desktopShown()
+            falling.status(Lang.ENGLISH) == 'putting out the lamp'
+
+        when: 'oillamp reports how the session ends, and the run sends its last words'
+            var stopping = falling.lampSays(new Genie.Activity.LampSays('stopping the sandbox'))
+                    .hear(new PiEvent.Thinking('hmm')).hear(new PiEvent.Settled())
+
+        then: 'the status follows oillamp, and the genie stays falling asleep'
+            stopping.phase() == Genie.Phase.FALLING_ASLEEP
+            stopping.status(Lang.ENGLISH) == 'stopping the sandbox'
+
+        and: 'once the lamp is out, it is asleep'
+            stopping.asleep().phase() == Genie.Phase.ASLEEP
+    }
 }

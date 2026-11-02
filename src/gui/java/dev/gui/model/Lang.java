@@ -327,6 +327,16 @@ public enum Lang {
             };
         }
 
+        public String PUTTING_OUT_THE_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "putting out the lamp";
+                case GERMAN -> "löscht die Lampe";
+                case SPANISH -> "apagando la lámpara";
+                case JAPANESE -> "ランプを消しています";
+                case CHINESE -> "正在熄灭神灯";
+            };
+        }
+
         public String ASLEEP() {
             return switch (lang) {
                 case ENGLISH -> "asleep";
@@ -1577,6 +1587,16 @@ public enum Lang {
             };
         }
 
+        public String IS_GOING_BACK_INTO_THE_LAMP(String name) {
+            return switch (lang) {
+                case ENGLISH -> name + " is going back into the lamp.";
+                case GERMAN -> name + " kehrt in die Lampe zurück.";
+                case SPANISH -> name + " está volviendo a la lámpara.";
+                case JAPANESE -> name + " はランプに戻ろうとしています。";
+                case CHINESE -> name + " 正在回到神灯里。";
+            };
+        }
+
         public String IS_IN_THE_LAMP(String name) {
             return switch (lang) {
                 case ENGLISH -> name + " is in the lamp.";
@@ -1614,6 +1634,16 @@ public enum Lang {
                 case SPANISH -> "Su sandbox se está iniciando. La primera vez hay que crearlo, y eso tarda varios minutos.";
                 case JAPANESE -> "サンドボックスを起動しています。初回はサンドボックスの作成から行うため、数分かかります。";
                 case CHINESE -> "它的沙箱正在启动。第一次需要先创建沙箱，这需要几分钟。";
+            };
+        }
+
+        public String ITS_SANDBOX_IS_STOPPING_ITS_HOME_AND_CONVERSATIONS_ARE_KEPT() {
+            return switch (lang) {
+                case ENGLISH -> "Its sandbox is stopping. Its home and conversations are kept, for when it wakes again.";
+                case GERMAN -> "Seine Sandbox wird beendet. Sein Zuhause und die Gespräche bleiben erhalten, bis er wieder aufwacht.";
+                case SPANISH -> "Su sandbox se está deteniendo. Su hogar y las conversaciones se conservan para cuando vuelva a despertar.";
+                case JAPANESE -> "サンドボックスを止めています。ホームと会話は、次に起きるときのために残ります。";
+                case CHINESE -> "它的沙箱正在停止。主目录和对话都会保留，等它再次醒来。";
             };
         }
 
@@ -1724,6 +1754,16 @@ public enum Lang {
                 case SPANISH -> "Despertando a " + name + ": " + doing + "…";
                 case JAPANESE -> name + " を起こしています：" + doing + "…";
                 case CHINESE -> "正在唤醒 " + name + "：" + doing + "…";
+            };
+        }
+
+        public String FALLING_ASLEEP(String name, String doing) {
+            return switch (lang) {
+                case ENGLISH -> "Putting " + name + " to sleep: " + doing + "…";
+                case GERMAN -> name + " schläft ein: " + doing + "…";
+                case SPANISH -> "Durmiendo a " + name + ": " + doing + "…";
+                case JAPANESE -> name + " を眠らせています：" + doing + "…";
+                case CHINESE -> "正在让 " + name + " 入睡：" + doing + "…";
             };
         }
 
@@ -2464,6 +2504,16 @@ public enum Lang {
             };
         }
 
+        public String IS_GOING_BACK_INTO_THE_LAMP_ITS_SANDBOX_IS_STOPPING(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is going back into the lamp. Its sandbox is stopping; its home is kept as it is.";
+                case GERMAN -> genie + " kehrt in die Lampe zurück. Seine Sandbox wird beendet; sein Zuhause bleibt, wie es ist.";
+                case SPANISH -> genie + " está volviendo a la lámpara. Su sandbox se está deteniendo; su hogar se conserva tal cual.";
+                case JAPANESE -> genie + " はランプに戻ろうとしています。サンドボックスを止めていますが、ホームはそのまま残ります。";
+                case CHINESE -> genie + " 正在回到神灯里。它的沙箱正在停止，主目录会原样保留。";
+            };
+        }
+
         public String IS_WAKING(String genie) {
             return switch (lang) {
                 case ENGLISH -> genie + " is waking…";
@@ -2511,6 +2561,16 @@ public enum Lang {
                 case SPANISH -> "Despertando…";
                 case JAPANESE -> "起こしています…";
                 case CHINESE -> "正在唤醒…";
+            };
+        }
+
+        public String FALLING_ASLEEP() {
+            return switch (lang) {
+                case ENGLISH -> "Going to sleep…";
+                case GERMAN -> "Schläft ein…";
+                case SPANISH -> "Durmiéndose…";
+                case JAPANESE -> "眠ろうとしています…";
+                case CHINESE -> "正在入睡…";
             };
         }
 
@@ -5531,6 +5591,16 @@ public enum Lang {
             };
         }
 
+        public String IS_FALLING_ASLEEP_GO_BACK_ONCE_IT_IS_ASLEEP(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is going to sleep; go back once it is asleep";
+                case GERMAN -> genie + " schläft ein; geh zurück, sobald er schläft";
+                case SPANISH -> genie + " se está durmiendo; vuelve atrás cuando esté dormido";
+                case JAPANESE -> genie + " が眠ろうとしています。眠ってから戻ってください";
+                case CHINESE -> genie + " 正在入睡；请等它睡着后再回退";
+            };
+        }
+
         public String IS_WORKING_GO_BACK_ONCE_IT_IS_DONE(String genie) {
             return switch (lang) {
                 case ENGLISH -> genie + " is working; go back once it is done";
@@ -5608,6 +5678,16 @@ public enum Lang {
                 case SPANISH -> genie + " se está despertando. Podrás volver atrás cuando esté despierto.";
                 case JAPANESE -> genie + " が起きようとしています。起きたら戻れます。";
                 case CHINESE -> genie + " 正在醒来。等它醒来后你就可以回退。";
+            };
+        }
+
+        public String IS_FALLING_ASLEEP_YOU_CAN_GO_BACK_ONCE_IT_IS_ASLEEP(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is going to sleep. You can go back once it is asleep.";
+                case GERMAN -> genie + " schläft ein. Zurückgehen kannst du, sobald er schläft.";
+                case SPANISH -> genie + " se está durmiendo. Podrás volver atrás cuando esté dormido.";
+                case JAPANESE -> genie + " が眠ろうとしています。眠ったら戻れます。";
+                case CHINESE -> genie + " 正在入睡。等它睡着后你就可以回退。";
             };
         }
 
