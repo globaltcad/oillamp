@@ -118,7 +118,10 @@ final class ActionsPage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(20, 4, 28, 4))
+                .withStyle(palette, (p, it) -> it
+                    .backgroundColor(p.TRANSPARENT())
+                    .padding(10, 4, 28, 4)
+                )
                 .add(WHOLE, top())
                 .add(TILE, renaming())
                 .add(TILE, startingAfresh())
