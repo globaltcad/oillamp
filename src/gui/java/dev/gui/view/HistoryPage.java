@@ -171,13 +171,14 @@ final class HistoryPage {
         notNow  = Viewable.of(String.class, genie, words, (it, page) ->
             it.history().busy().isPresent() ? it.history().busy().get().words(page.lang())
             : it.phase() == Genie.Phase.WAKING ? page.IS_WAKING_GO_BACK_ONCE_IT_IS_AWAKE(it.name())
+            : it.phase() == Genie.Phase.FALLING_ASLEEP ? page.IS_FALLING_ASLEEP_GO_BACK_ONCE_IT_IS_ASLEEP(it.name())
             : it.phase() == Genie.Phase.WORKING ? page.IS_WORKING_GO_BACK_ONCE_IT_IS_DONE(it.name())
             : it.schedule().running().isPresent() ? page.A_JOB_IS_RUNNING_GO_BACK_ONCE_IT_IS_DONE()
             : ""
         );
         homeLocked = Viewable.of(String.class, genie, words, (it, page) ->
             it.history().busy().isPresent() ? it.history().busy().get().words(page.lang())
-            : it.phase().isAwake() || it.phase() == Genie.Phase.WAKING
+            : it.phase().isAwake() || it.phase().isBetween()
                 ? page.SEND_IT_TO_SLEEP_FIRST_ITS_HOME_CHANGES_ONLY_WHILE_IT_SLEEPS(it.name())
             : ""
         );
@@ -263,6 +264,7 @@ final class HistoryPage {
             case READY -> new Status(p.CONTENT(), saved);
             case WORKING -> new Status(p.BRASS(), words.IS_WORKING_YOU_CAN_GO_BACK_ONCE_IT_IS_DONE(genie.name()));
             case WAKING -> new Status(p.BRASS(), words.IS_WAKING_YOU_CAN_GO_BACK_ONCE_IT_IS_AWAKE(genie.name()));
+            case FALLING_ASLEEP -> new Status(p.BRASS(), words.IS_FALLING_ASLEEP_YOU_CAN_GO_BACK_ONCE_IT_IS_ASLEEP(genie.name()));
             case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), saved);
         };
     }
@@ -1093,7 +1095,7 @@ final class HistoryPage {
             return genie.history().read()
                 ? words.WAKE_IT_ONCE_FIRST_ITS_SETTINGS_ARE_KEPT_IN_ITS_LAMP(genie.name())
                 : words.READING_ITS_SETTINGS();
-        if (genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING)
+        if (genie.phase().isAwake() || genie.phase().isBetween())
             return words.SEND_IT_TO_SLEEP_TO_CHANGE_THESE(genie.name());
         return "";
     }

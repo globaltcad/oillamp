@@ -56,7 +56,7 @@ import static swingtree.UI.*;
 public final class GeniesView extends JPanel {
 
     /// How long one wave of the flame's light is, in units, as it runs through the status of a
-    /// genie that wakes. It runs its length in one loop of the pulse.
+    /// genie that wakes or falls asleep. It runs its length in one loop of the pulse.
     private static final int WAVE_LENGTH = 120;
 
     private final Var<GeniesState> state;
@@ -555,13 +555,13 @@ public final class GeniesView extends JPanel {
         Var<Fold> chats = conversations.zoomTo(Conversations::chatsFold, Conversations::withChatsFold);
         Var<Fold> jobs = conversations.zoomTo(Conversations::jobsFold, Conversations::withJobsFold);
         // The trees can be gone through while the genie answers; a new conversation waits for the answer.
-        Val<Boolean> browsable = shown.viewAs(Boolean.class, it -> it.phase() != Genie.Phase.WAKING);
+        Val<Boolean> browsable = shown.viewAs(Boolean.class, it -> !it.phase().isBetween());
         // A new conversation needs the genie awake; while it answers, the new one waits.
         Val<Boolean> awake = shown.viewAs(Boolean.class, it -> it.phase().isAwake());
         Val<Boolean> idle = shown.viewAs(Boolean.class, it -> it.phase() != Genie.Phase.WORKING);
         Val<Boolean> canForget = shown.viewAs(Boolean.class, it ->
             it.phase() != Genie.Phase.WORKING &&
-            it.phase() != Genie.Phase.WAKING &&
+            !it.phase().isBetween() &&
             it.conversations().current().isPresent()
         );
         Val<Boolean> eitherOpen = Viewable.of(Boolean.class, chats, jobs, (c, j) -> c.shown() || j.shown());
@@ -1376,6 +1376,7 @@ public final class GeniesView extends JPanel {
                     label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
                         case READY, WORKING -> words.IS_LISTENING(it.name());
                         case WAKING -> words.IS_WAKING(it.name());
+                        case FALLING_ASLEEP -> words.IS_GOING_BACK_INTO_THE_LAMP(it.name());
                         case ASLEEP -> words.IS_IN_THE_LAMP(it.name());
                         case BROKEN -> words.COULD_NOT_WAKE(it.name());
                     }))
@@ -1386,6 +1387,7 @@ public final class GeniesView extends JPanel {
                     html(Viewable.of(String.class, phase, chatWords, (it, words) -> switch (it) {
                         case READY, WORKING -> words.ASK_FOR_ANYTHING_IT_HAS_A_DESKTOP_AND_A_SHELL_OF_ITS_OWN();
                         case WAKING -> words.ITS_SANDBOX_IS_STARTING_THE_VERY_FIRST_TIME_IT_IS_MADE();
+                        case FALLING_ASLEEP -> words.ITS_SANDBOX_IS_STOPPING_ITS_HOME_AND_CONVERSATIONS_ARE_KEPT();
                         case ASLEEP -> words.WAKE_IT_TO_TALK_IT_KEEPS_ITS_OWN_DESKTOP();
                         case BROKEN -> words.WHAT_WENT_WRONG_IS_SAID_BELOW_TRY_AGAIN_ONCE_THAT_IS_SORTED_OUT();
                     }))
@@ -1507,6 +1509,7 @@ public final class GeniesView extends JPanel {
                     waving(
                         label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
                             case WAKING -> words.WAKING(it.name(), it.activity().words(words.lang()));
+                            case FALLING_ASLEEP -> words.FALLING_ASLEEP(it.name(), it.activity().words(words.lang()));
                             default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF(it.name());
                         }))
                         .group(Skin.SUBTITLE),
@@ -1687,7 +1690,7 @@ public final class GeniesView extends JPanel {
             UI.popupMenu()
             .applyIfPresent(state.get().find(id).map(shown -> ui -> {
                 Genie.Phase now = shown.phase();
-                boolean idle = now != Genie.Phase.WORKING && now != Genie.Phase.WAKING;
+                boolean idle = now != Genie.Phase.WORKING && !now.isBetween();
                 // The menu is built as it opens, in the words of that moment.
                 Lang.Window words = windowWords.get();
                 String wake = now == Genie.Phase.BROKEN ? words.TRY_WAKING_AGAIN() : words.WAKE();
@@ -1702,7 +1705,7 @@ public final class GeniesView extends JPanel {
                     .add(ViewPartsUtil.item(words.SLEEP(), true, () -> app.sleep(id)))
                 )
                 .applyIf(!now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item(wake, now != Genie.Phase.WAKING, () -> app.wake(id)))
+                    .add(ViewPartsUtil.item(wake, !now.isBetween(), () -> app.wake(id)))
                 )
                 .peek(JPopupMenu::addSeparator)
                 .add(
@@ -1872,7 +1875,7 @@ public final class GeniesView extends JPanel {
         }
     }
 
-    /// Loops the pulse for as long as any genie works or wakes.
+    /// Loops the pulse for as long as any genie works, wakes or falls asleep.
     private void breathe() {
         if (breathing) return;
         breathing = true;
@@ -1885,13 +1888,14 @@ public final class GeniesView extends JPanel {
     }
 
     private boolean anyWorksOrWakes() {
-        return genies.get().stream().anyMatch(it -> it.phase() == Genie.Phase.WORKING || it.phase() == Genie.Phase.WAKING);
+        return genies.get().stream().anyMatch(it -> it.phase() == Genie.Phase.WORKING || it.phase().isBetween());
     }
 
-    /// `status`, through whose words a wave of the flame's light runs while `genie` wakes. Making
-    /// a sandbox can take minutes with the same words shown; the wave shows that it goes on.
+    /// `status`, through whose words a wave of the flame's light runs while `genie` wakes or falls
+    /// asleep. Making a sandbox, or saving its home, can take minutes with the same words shown;
+    /// the wave shows that it goes on.
     private UIForLabel<JLabel> waving(UIForLabel<JLabel> status, Val<Genie> genie) {
-        return status.withStyle(Themed.of(Viewable.of(Wave.class, genie, pulse, (it, at) -> it.phase() == Genie.Phase.WAKING ? new Wave(true, at) : Wave.NONE), theme), (themed, it) -> {
+        return status.withStyle(Themed.of(Viewable.of(Wave.class, genie, pulse, (it, at) -> it.phase().isBetween() ? new Wave(true, at) : Wave.NONE), theme), (themed, it) -> {
             var wave = themed.item();
             Palette p = themed.palette();
             return !wave.on()

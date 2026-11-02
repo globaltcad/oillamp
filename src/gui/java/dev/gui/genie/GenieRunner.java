@@ -512,6 +512,11 @@ public final class GenieRunner {
             // Another run, such as a scheduled job's, may have added to the conversations.
             case LampEvent.RunFinished _ -> reloadConversations();
             case LampEvent.LookAtDesktop look -> changes.accept(genie -> genie.shows(look.what()));
+            // How the session ends, as oillamp tells it while the lamp is put out.
+            case LampEvent.Info info when sleeping ->
+                changes.accept(genie -> genie.lampSays(new Genie.Activity.LampSays(info.text())));
+            case LampEvent.StepStarted step when sleeping ->
+                changes.accept(genie -> genie.lampSays(new Genie.Activity.LampSays(step.step().describe())));
             case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
                 lamp = Optional.empty();
                 schedule.wentOut();
@@ -591,9 +596,13 @@ public final class GenieRunner {
 
     // ─── sleeping ──────────────────────────────────────────────────────────────────────────
 
-    /// Puts the lamp out. The genie's home, and with it the conversations, stays.
+    /// Puts the lamp out. The genie's home, and with it the conversations, stays. Until the lamp
+    /// is out, which takes a while as the sandbox stops and the home may be saved, the genie is
+    /// falling asleep, and says what its lamp reports meanwhile.
     public void sleep() {
         work.execute(() -> {
+            if (lamp.isPresent())
+                changes.accept(Genie::fallingAsleep);
             putOutLamp();
             changes.accept(Genie::asleep);
             reloadConversations();

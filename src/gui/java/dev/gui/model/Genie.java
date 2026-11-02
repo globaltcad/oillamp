@@ -76,6 +76,8 @@ public record Genie(
         record WakingTheGenie() implements Activity {}
         /// It waits for the user.
         record Ready() implements Activity {}
+        /// Its lamp is being put out: its sandbox stops, and its home may be saved.
+        record PuttingOutTheLamp() implements Activity {}
         /// Its lamp is not running.
         record Asleep() implements Activity {}
         /// It thinks.
@@ -101,6 +103,7 @@ public record Genie(
                 case LampSays it -> it.said();
                 case WakingTheGenie _ -> words.WAKING_THE_GENIE();
                 case Ready _ -> words.READY();
+                case PuttingOutTheLamp _ -> words.PUTTING_OUT_THE_LAMP();
                 case Asleep _ -> words.ASLEEP();
                 case Thinking _ -> words.THINKING();
                 case Using it -> words.USING(it.tool());
@@ -152,9 +155,16 @@ public record Genie(
         /// It is answering.
         WORKING,
         /// Its lamp or its harness failed; [Genie#activity()] says why.
-        BROKEN;
+        BROKEN,
+        /// Its lamp is being put out: the sandbox stops, and its home may be saved, which can take
+        /// a while. It ends asleep.
+        FALLING_ASLEEP;
 
         public boolean isAwake() { return this == READY || this == WORKING; }
+
+        /// Whether its lamp is being lit or put out: it is neither awake nor asleep, and what
+        /// needs either waits until it is one or the other.
+        public boolean isBetween() { return this == WAKING || this == FALLING_ASLEEP; }
     }
 
     public static Genie named(String name) {
@@ -215,9 +225,18 @@ public record Genie(
         return withPhase(Phase.WAKING).withActivity(new Activity.LightingTheLamp());
     }
 
-    /// Its lamp reported progress while waking, such as building the image.
+    /// Its lamp reported progress while waking, such as building the image, or while it is put
+    /// out, such as stopping the sandbox.
     public Genie lampSays(Activity what) {
-        return phase == Phase.WAKING ? withActivity(what) : this;
+        return phase.isBetween() ? withActivity(what) : this;
+    }
+
+    /// Its lamp is being put out. The desktop goes with it at once: it is no longer there to watch.
+    public Genie fallingAsleep() {
+        return
+            withPhase(Phase.FALLING_ASLEEP)
+            .withActivity(new Activity.PuttingOutTheLamp())
+            .withDesktopShown(false);
     }
 
     /// Waking is done. A genie that broke while waking, because its harness died say, stays
@@ -394,7 +413,7 @@ public record Genie(
 
     private Genie heard(PiEvent event) {
         Genie heard = withTranscript(transcript.hear(event));
-        return switch (event) {
+        Genie after = switch (event) {
             case PiEvent.Answered answered -> heard.withTokens(tokens + answered.tokens());
             case PiEvent.ToolStarted tool  -> heard.withActivity(new Activity.Using(tool.tool()));
             case PiEvent.Said _            -> heard.withActivity(new Activity.Writing());
@@ -413,6 +432,9 @@ public record Genie(
                 -> heard.withPhase(Phase.READY).withActivity(new Activity.Ready());
             default                        -> heard;
         };
+        // While its lamp is put out, what the run did last is still heard, but the genie stays
+        // falling asleep, and its status keeps saying how the lamp goes out.
+        return phase == Phase.FALLING_ASLEEP ? after.withPhase(phase).withActivity(activity) : after;
     }
 
     /// What pi sent after an answer: the chat learns pi's ids for the questions in it, and the
