@@ -240,6 +240,34 @@ class WakingAGeniePictureSpec extends Specification {
             out.after(5).moment() == 1
     }
 
+    def 'The picture keeps playing the very moment a genie is awake or asleep'() {
+        reportInfo '''
+            **Subject:** the hand-over from the lifecycle to the end of the play.
+
+            While a genie wakes or falls asleep, its picture stands in place of its conversation,
+            and it stays there while the genie greets or its flame goes out. The picture's own
+            clock follows the genie a moment after the genie changes. In that moment it must
+            not count as finished, or the conversation would flash up for a single frame.
+        '''
+        given: 'Juniper is waking, and its picture has not yet heard of anything else'
+            var genie = sprouts.Var.of(Genie.named('Juniper').waking())
+            var picture = new WakePicture(genie, sprouts.Val.of(Palette.DARK))
+
+        when: 'Juniper is awake'
+            genie.set(genie.get().awake())
+
+        then: 'the picture already plays the greeting'
+            picture.playing().get()
+
+        when: 'later, Juniper is falling asleep, and its lamp goes out'
+            var sleepy = sprouts.Var.of(genie.get().fallingAsleep())
+            var putOut = new WakePicture(sleepy, sprouts.Val.of(Palette.DARK))
+            sleepy.set(sleepy.get().asleep())
+
+        then: 'the picture already plays the flame going out'
+            putOut.playing().get()
+    }
+
     def 'A quick shutdown still shows the genie go back into its lamp'() {
         reportInfo '''
             **Subject:** a lamp that goes out before the picture has caught up.
