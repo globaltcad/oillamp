@@ -10,8 +10,9 @@ import java.util.UUID;
 ///
 /// Put to sleep, the same play runs backwards: the genie sinks into the flame it came from, and
 /// the flame burns on, calmly, for as long as the sandbox takes to stop and the home to be saved.
-/// Only once the lamp is really out does the flame dwindle onto the wick and leave a wisp of
-/// smoke. A fast shutdown still shows the genie go back in.
+/// Only once the lamp is really out does the flame dwindle onto the wick, slowly, and then a
+/// wisp of smoke rises from it and settles: the last act, which ends the play gently. A fast
+/// shutdown still shows the genie go back in.
 ///
 /// @param seconds  how long the scene has played, since the genie began to wake or fall asleep
 /// @param released when, in `seconds`, waking ended or the lamp went out; negative before that
@@ -25,12 +26,21 @@ record WakeScene(UUID id, Genie.Phase phase, double seconds, double released) {
     /// Where the flame burns calmly, on the welcome's timeline: the genie goes back into the
     /// flame until here, and the flame goes out from here.
     private static final double BURNING = 3.6;
+    /// Where the flame is gone from the wick, on the welcome's timeline.
+    private static final double OUT = 1.2;
     /// Where the lamp is cold, with a wisp of smoke above its wick, as a sleeping genie's is.
     private static final double COLD = 1;
     /// How long the genie takes to sink back into the flame.
     private static final double SINKING = (WelcomeScene.FORMED - BURNING) / BACKWARDS;
+    /// How fast the flame dwindles once the lamp is out, in the welcome's seconds per second:
+    /// slower than the genie sinks, as a flame starved of oil does.
+    private static final double DWINDLING = 1.2;
     /// How long the flame takes to go out once the lamp is out.
-    private static final double GOING_OUT = (BURNING - COLD) / BACKWARDS;
+    private static final double FLAME_OUT = (BURNING - OUT) / DWINDLING;
+    /// How long the smoke then takes to rise and settle.
+    private static final double SMOKING = 3;
+    /// How long the whole ending takes, once the lamp is out.
+    private static final double GOING_OUT = FLAME_OUT + SMOKING;
 
     static WakeScene of(Genie genie) {
         return new WakeScene(genie.id(), genie.phase(), 0, -1);
@@ -65,6 +75,14 @@ record WakeScene(UUID id, Genie.Phase phase, double seconds, double released) {
         return phase == Genie.Phase.ASLEEP && released >= 0 && seconds - wentOut() < GOING_OUT;
     }
 
+    /// How far the smoke of the flame that went out has risen, from 0, while the flame still
+    /// dwindles, to 1, as it stands above a sleeping genie's lamp; negative when no flame goes
+    /// out, and the lamp is painted as it is.
+    double smoke() {
+        if (!goingOut()) return -1;
+        return Math.clamp((seconds - wentOut() - FLAME_OUT) / SMOKING, 0, 1);
+    }
+
     /// Whether the picture still plays how waking or falling asleep ended, after the genie's
     /// phase already says so.
     boolean playing() {
@@ -96,7 +114,7 @@ record WakeScene(UUID id, Genie.Phase phase, double seconds, double released) {
         if (phase == Genie.Phase.ASLEEP && released >= 0)
             return seconds < SINKING
                 ? WelcomeScene.FORMED - BACKWARDS * seconds
-                : Math.max(COLD, BURNING - BACKWARDS * (seconds - wentOut()));
+                : seconds - wentOut() < FLAME_OUT ? BURNING - DWINDLING * (seconds - wentOut()) : COLD;
         if (phase.isAwake())
             return released < 0
                 ? WelcomeScene.FORMED + 1 + seconds

@@ -1,14 +1,18 @@
 package dev.gui.view;
 
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
@@ -227,6 +231,14 @@ final class WelcomeScene {
     /// Paints `play` as it is at `clock`, in seconds of the page, onto `g`, `width` by `height`
     /// pixels, on the night of `palette`.
     static void paint(Graphics2D g, Palette palette, int width, int height, Play play, double clock) {
+        paint(g, palette, width, height, play, clock, -1);
+    }
+
+    /// Paints `play` as [#paint(Graphics2D, Palette, int, int, Play, double)] does, but with the
+    /// smoke of a flame that went out `risen` of the way up from the wick, from 0 to 1: the lamp's
+    /// own wisp is then left out, and this one drawn instead. At 1 it is that wisp. A negative
+    /// `risen` paints the lamp as it is at `clock`.
+    static void paint(Graphics2D g, Palette palette, int width, int height, Play play, double clock, double risen) {
         // Pixels fill whole pixels, which smoothing their edges only makes slower to paint.
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
@@ -240,7 +252,8 @@ final class WelcomeScene {
         double time = clock - play.began();
         Hues hues = hues(play, time);
         // In a play after a poof, the lamp is there already, and the smoke is the poof's.
-        lamp(g, palette, stage, play.pip(), tinted(time), strength(time), time < LIT + 0.15, play.poofed() >= 0 ? 1 : clamp(time / SHOWN));
+        lamp(g, palette, stage, play.pip(), tinted(time), strength(time), risen < 0 && time < LIT + 0.15, play.poofed() >= 0 ? 1 : clamp(time / SHOWN));
+        if (risen >= 0) wisp(g, palette, stage, risen);
         flame(g, stage, hues, time);
         sparks(g, stage, hues, time);
         if (time >= FORMING) pip(g, palette, stage, play.pip(), hues, time);
@@ -521,6 +534,74 @@ final class WelcomeScene {
                         }
         }
         g.setComposite(before);
+    }
+
+    /// The smoke of a flame that just went out, `risen` of the way, from 0 to 1. It rises from the
+    /// wick as the lamp's own wisp does, a line that grows upwards, swaying as it goes and
+    /// settling as it ends, with a few faint puffs drifting off its tip and fading. At 1 it is
+    /// the lamp's wisp ([LampSvgUtil#lamp]), in the place and the colour the cold lamp gives it,
+    /// so that the picture of the sleeping genie follows on without a seam.
+    private static void wisp(Graphics2D g, Palette palette, Stage stage, double risen) {
+        double up = clamp(risen);
+        if (up <= 0) return;
+        double unit = stage.lampSize() / 64.0;
+        // In the lamp's own units, as its picture draws the wisp.
+        Path2D wisp = new Path2D.Double();
+        wisp.moveTo(33, 20);
+        wisp.curveTo(29, 16, 36, 13, 32, 8);
+        wisp.curveTo(30, 5, 33, 3, 34, 1);
+        // It sways about the wick, less and less, and stands still once it has risen.
+        double sway = 0.09 * Math.sin(9 * up) * (1 - up);
+        AffineTransform place = new AffineTransform();
+        // Where the lamp's picture is drawn, on whole pixels.
+        place.translate((int) Math.round(stage.lampX()), (int) Math.round(stage.lampY()));
+        place.scale(unit, unit);
+        place.translate(33, 20);
+        place.shear(-sway, 0);
+        place.translate(-33, -20);
+        Shape shown = place.createTransformedShape(wisp);
+        // The cold lamp sinks into the night, its wisp too.
+        Color smoke = mix(SMOKE, sunk(palette), 0.45);
+        Graphics2D on = (Graphics2D) g.create();
+        try {
+            on.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            on.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            double grown = smooth(clamp(up / 0.75));
+            float length = (float) (length(shown) * grown);
+            if (length > 0) {
+                on.setColor(alpha(smoke, 0.35 + 0.65 * smooth(up)));
+                on.setStroke(new BasicStroke((float) (2 * unit), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10,
+                        new float[] { length, 100_000f }, 0));
+                on.draw(shown);
+            }
+            // Puffs leave the tip one after the other, rise, swell and clear, all gone by the end.
+            for (int puff = 0; puff < 3; puff++) {
+                double life = up * 1.8 - puff * 0.35;
+                if (life <= 0 || life >= 1) continue;
+                double x = 34 + 1.5 * Math.sin(3 * life + puff);
+                double y = 3 - 9 * life;
+                double radius = 1 + 1.6 * life;
+                Point2D at = place.transform(new Point2D.Double(x, y), null);
+                on.setColor(alpha(smoke, 0.3 * (1 - life) * (1 - up)));
+                on.fill(new Ellipse2D.Double(at.getX() - radius * unit, at.getY() - radius * unit, 2 * radius * unit, 2 * radius * unit));
+            }
+        } finally {
+            on.dispose();
+        }
+    }
+
+    /// How long the outline of `shape` is, in pixels.
+    private static double length(Shape shape) {
+        double length = 0;
+        double[] point = new double[6];
+        double x = 0, y = 0;
+        for (PathIterator it = shape.getPathIterator(null, 0.25); !it.isDone(); it.next()) {
+            int kind = it.currentSegment(point);
+            if (kind == PathIterator.SEG_LINETO) length += Math.hypot(point[0] - x, point[1] - y);
+            x = point[0];
+            y = point[1];
+        }
+        return length;
     }
 
     /// A drop of flame standing on `x`, `y`: round below, pointed above.
