@@ -39,9 +39,11 @@ final class WakePicture {
     }
 
     /// Whether the picture still plays how waking or falling asleep ended: the genie greeting,
-    /// or the flame going out.
+    /// or the flame going out. Read from the scene as it will be once it follows the genie: the
+    /// scene itself follows a moment later, and until then it would still be waking or falling
+    /// asleep while the genie is already past it, and so the chat would flash up for a frame.
     Val<Boolean> playing() {
-        return scene.viewAs(Boolean.class, WakeScene::playing);
+        return Viewable.of(Boolean.class, genie, scene, (it, now) -> now.follows(it).playing());
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
