@@ -165,7 +165,10 @@ final class SchedulePage {
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
-                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(20, 22, 28, 22))
+                .withStyle(palette, (p, it) -> it
+                    .backgroundColor(p.TRANSPARENT())
+                    .padding(0, 22, 28, 22)
+                )
                 .add(WHOLE, top())
                 .add(WIDE_SIDE, timelineColumn())
                 .add(NARROW_SIDE, jobsColumn())

@@ -231,7 +231,7 @@ final class HistoryPage {
                 .withPrefSize(REFERENCE, 0)
                 .withStyle(palette, (p, it) -> it
                     .backgroundColor(p.TRANSPARENT())
-                    .padding(20, 22, 28, 22)
+                    .padding(0, 22, 28, 22)
                 )
                 .add(WHOLE, header())
                 .add(WHOLE, undoBanner())
