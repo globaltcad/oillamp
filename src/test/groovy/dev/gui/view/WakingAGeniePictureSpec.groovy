@@ -231,12 +231,13 @@ class WakingAGeniePictureSpec extends Specification {
         when: 'the lamp is out'
             var out = falling.after(60).follows(genie.asleep())
 
-        then: 'the flame dwindles to the cold lamp, and the picture then rests'
+        then: 'the flame dwindles to the cold lamp, smoke rises, and the picture then rests'
             out.goingOut()
             out.playing()
             out.after(0.5).moment() < 3.6
-            !out.after(1.4).moving()
-            out.after(1.4).moment() == 1
+            out.after(3).moving()
+            !out.after(5).moving()
+            out.after(5).moment() == 1
     }
 
     def 'A quick shutdown still shows the genie go back into its lamp'() {
@@ -257,7 +258,7 @@ class WakingAGeniePictureSpec extends Specification {
             out.after(1).moment() > 3.6
             out.after(1).moving()
             out.after(2.1 + 0.5).moment() < 3.6
-            !out.after(2.1 + 1.3).moving()
+            !out.after(2.1 + 5).moving()
 
         and: 'waking it again lights the lamp afresh'
             out.after(1).follows(genie.waking()).seconds() == 0
@@ -305,5 +306,58 @@ class WakingAGeniePictureSpec extends Specification {
             var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
             !(0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
             (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) != 0xff000000 } }
+    }
+
+    def 'Once the flame is out, its smoke rises slowly and becomes the sleeping lamp\'s wisp'() {
+        reportInfo '''
+            **Subject:** the last act of putting a genie to sleep.
+
+            The smoke of a flame that went out should not be there all at once. It is the last
+            act, after the flame is gone: it rises from the wick, slowly, and settles into the
+            wisp that stands above a sleeping genie's lamp, so the play ends gently and the
+            still picture that follows looks the same as its last moment. While the flame still
+            dwindles there is no smoke yet, and no smoke stands in for it either.
+        '''
+        given: 'Juniper\'s lamp is out after a long shutdown'
+            var genie = Genie.named('Juniper')
+            var out = WakeScene.of(genie.waking().awake())
+                    .follows(genie.waking().awake().fallingAsleep()).after(10)
+                    .follows(genie.asleep())
+
+        expect: 'while the flame dwindles, there is no smoke yet'
+            out.smoke() == 0
+            out.after(1.5).smoke() == 0
+            out.after(1.5).moment() > 1
+
+        and: 'then the smoke rises, slowly, until it stands as on a sleeping lamp'
+            out.after(2.5).smoke() > 0
+            out.after(3.5).smoke() > out.after(2.5).smoke()
+            out.after(4.9).smoke() < 1
+            out.after(5).smoke() == -1
+
+        when: 'the smoke is painted halfway and fully risen, and the sleeping lamp after it'
+            var half = paint(out.after(3.5).play(), 1, 0.5)
+            var risen = paint(out.after(3.5).play(), 1, 1)
+            var still = paint(out.after(5).play(), 1, -1)
+            var none = paint(out.after(1).play(), 1, 0)
+
+        then: 'there is more smoke as it rises, none before it does, and the last moment is the still picture'
+            smoky(none) < smoky(half)
+            smoky(half) < smoky(risen)
+            Math.abs(smoky(risen) - smoky(still)) <= smoky(still) / 10
+    }
+
+    private static BufferedImage paint(WelcomeScene.Play play, double moment, double smoke) {
+        var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+        var graphics = picture.createGraphics()
+        WelcomeScene.paint(graphics, Palette.DARK, 320, 220, play, moment, smoke)
+        graphics.dispose()
+        return picture
+    }
+
+    /// How many points of `picture` above the lamp's wick are clearly smoke, on the black night:
+    /// the wisp, not the faint puffs drifting off it.
+    private static int smoky(BufferedImage picture) {
+        (0..<320).sum { x -> (0..<160).count { y -> ((picture.getRGB(x, y) >> 16) & 0xff) > 20 } } as int
     }
 }
