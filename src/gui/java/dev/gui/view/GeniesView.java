@@ -57,7 +57,7 @@ public final class GeniesView extends JPanel {
 
     /// How long one wave of the flame's light is, in units, as it runs through the status of a
     /// genie that wakes or falls asleep. It runs its length in one loop of the pulse.
-    private static final int WAVE_LENGTH = 120;
+    private static final int WAVE_LENGTH = 160;
 
     private final Var<GeniesState> state;
     private final Genies app;
@@ -1896,20 +1896,27 @@ public final class GeniesView extends JPanel {
     /// `status`, through whose words a wave of the flame's light runs while `genie` wakes or falls
     /// asleep. Making a sandbox, or saving its home, can take minutes with the same words shown;
     /// the wave shows that it goes on.
+    ///
+    /// The words between the waves are a little dimmer than the status otherwise is, and the
+    /// wave's crest is brighter than the flame, by night, and deeper, by day: the subtext and
+    /// the flame alone are too alike in brightness for the wave to be seen at a glance. The crest
+    /// is a band rather than a point, so that a few letters at a time are lit by it.
     private UIForLabel<JLabel> waving(UIForLabel<JLabel> status, Val<Genie> genie) {
         return status.withStyle(Themed.of(Viewable.of(Wave.class, genie, pulse, (it, at) -> it.phase().isBetween() ? new Wave(true, at) : Wave.NONE), theme), (themed, it) -> {
             var wave = themed.item();
             Palette p = themed.palette();
-            return !wave.on()
-                    ? it
-                    : it.componentFont(f -> f.gradient(g -> g
-                        .type(UI.GradientType.LINEAR)
-                        .span(UI.Span.LEFT_TO_RIGHT)
-                        .cycle(UI.Cycle.REPEAT)
-                        .colors(p.SUBTEXT(), p.FLAME(), p.SUBTEXT())
-                        .size(WAVE_LENGTH)
-                        .offset(wave.at() * WAVE_LENGTH, 0)
-                    ));
+            if (!wave.on()) return it;
+            Color dim = ContrastUtil.mix(p.SUBTEXT(), p.NIGHT(), p.isDark() ? 0.35 : 0.25);
+            Color crest = ContrastUtil.mix(p.FLAME(), p.isDark() ? Color.WHITE : Color.BLACK, p.isDark() ? 0.35 : 0.15);
+            return it.componentFont(f -> f.gradient(g -> g
+                .type(UI.GradientType.LINEAR)
+                .span(UI.Span.LEFT_TO_RIGHT)
+                .cycle(UI.Cycle.REPEAT)
+                .colors(dim, dim, p.FLAME(), crest, p.FLAME(), dim, dim)
+                .fractions(0, 0.2, 0.38, 0.5, 0.62, 0.8, 1)
+                .size(WAVE_LENGTH)
+                .offset(wave.at() * WAVE_LENGTH, 0)
+            ));
         });
     }
 
