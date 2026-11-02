@@ -13,8 +13,9 @@ final class LampSvgUtil {
     static final double WICK_X = 33;
     static final double WICK_Y = 21;
 
-    /// The lamp of a genie in `phase`: lit while it is awake, flaring while it works, a wisp of
-    /// smoke while it sleeps, and red when something went wrong.
+    /// The lamp of a genie in `phase`: lit while it is awake, flaring while it works, small and
+    /// smoking while it is put out, a wisp of smoke while it sleeps, and red when something went
+    /// wrong.
     static String lamp(Genie.Phase phase) {
         String flame = switch (phase) {
             case READY -> "#f0a940";
@@ -22,14 +23,19 @@ final class LampSvgUtil {
             case WAKING -> "#b8864a";
             case BROKEN -> "#e0645a";
             case ASLEEP -> "none";
+            case FALLING_ASLEEP -> "#9a6e3e";
         };
-        String smoke = phase == Genie.Phase.ASLEEP
+        String smoke = phase == Genie.Phase.ASLEEP || phase == Genie.Phase.FALLING_ASLEEP
             ? "<path d='M33 20 C29 16 36 13 32 8 C30 5 33 3 34 1' fill='none' stroke='#6f6479' stroke-width='2' stroke-linecap='round'/>"
             : "";
         String glow = phase == Genie.Phase.READY || phase == Genie.Phase.WORKING
             ? "<circle cx='33' cy='14' r='12' fill='" + flame + "' opacity='0.22'/>"
             : "";
-        return drawn(glow + "<path d='M33 4 C38 10 39 15 33 21 C27 15 28 10 33 4 Z' fill='" + flame + "'/>" + smoke);
+        // Put out, the flame shrinks onto the wick, under the smoke rising from it.
+        String body = phase == Genie.Phase.FALLING_ASLEEP
+            ? "<path d='M33 13 C36 16 36 18 33 21 C30 18 30 16 33 13 Z' fill='" + flame + "'/>"
+            : "<path d='M33 4 C38 10 39 15 33 21 C27 15 28 10 33 4 Z' fill='" + flame + "'/>";
+        return drawn(glow + body + smoke);
     }
 
     /// The lamp with no flame and no smoke, for a flame drawn by itself.

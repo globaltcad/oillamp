@@ -291,7 +291,8 @@ public final class GeniesBackend implements Genies {
                 state.update(From.VIEW, it -> it.update(id, g -> g.withConversations(g.conversations().withOverview(false))));
                 runner(id).goToConversation(conversation, leaf);
             }
-            case WAKING -> { }   // The tree does not move while the genie wakes.
+            // The tree does not move while the genie wakes or falls asleep.
+            case WAKING, FALLING_ASLEEP -> { }
         }
     }
 
@@ -533,11 +534,11 @@ public final class GeniesBackend implements Genies {
 
     @Override public void save(UUID id, String message) { runner(id).history().save(message); }
 
-    /// Not while the genie wakes or works, which going back would cut short. Waking it again
+    /// Not while the genie wakes, falls asleep or works, which going back would cut short. Waking it again
     /// afterwards waits until it went back: the runner does one thing after the other.
     @Override public void goBack(UUID id, String moment) {
         Optional<Genie> genie = state.get().find(id);
-        if (genie.isEmpty() || genie.get().phase() == Genie.Phase.WAKING || genie.get().phase() == Genie.Phase.WORKING) return;
+        if (genie.isEmpty() || genie.get().phase().isBetween() || genie.get().phase() == Genie.Phase.WORKING) return;
         Optional<History.Moment> target = genie.get().history().find(moment);
         if (target.isEmpty()) return;
         runner(id).goBackTo(target.get());
@@ -592,7 +593,7 @@ public final class GeniesBackend implements Genies {
     /// Whether the genie sleeps, or broke: its lamp is out, and its file and home can change.
     private boolean asleep(UUID id) {
         Optional<Genie> genie = state.get().find(id);
-        return genie.isPresent() && !genie.get().phase().isAwake() && genie.get().phase() != Genie.Phase.WAKING;
+        return genie.isPresent() && !genie.get().phase().isAwake() && !genie.get().phase().isBetween();
     }
 
     // ─── the host access ───────────────────────────────────────────────────────────────────
@@ -604,12 +605,12 @@ public final class GeniesBackend implements Genies {
 
     @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }
 
-    /// While the genie wakes, the chat stays where it is, as the tree does.
+    /// While the genie wakes or falls asleep, the chat stays where it is, as the tree does.
     @Override public void openConversation(UUID id, String conversation) {
         Optional<Genie> genie = state.get().find(id);
         if (genie.isEmpty()) return;
         state.update(From.VIEW, it -> it.select(id).withPage(GeniesState.Page.CHAT));
-        if (genie.get().phase() != Genie.Phase.WAKING) runner(id).openConversation(conversation);
+        if (!genie.get().phase().isBetween()) runner(id).openConversation(conversation);
     }
 
     /// Leaving the page keeps the settings.
