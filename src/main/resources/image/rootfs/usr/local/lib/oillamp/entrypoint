@@ -142,13 +142,12 @@ chown lamp:lamp /run/lamp/windows.conf
 # (`display.background`). "lamp" is the lamp itself, centred: `center` rather than `stretch` so it
 # looks right at any size, and transparent around its panel, so the colour is the surface the
 # panel sits on. "waves" is only light and shadow that fade out towards its edges, so it takes on
-# the colour, and `fit` shows all of it on a screen of any shape, the colour around it.
-# "waves-light" and "waves-dark" are the same picture; only their colours differ.
+# the colour. The three "wave" based wallpapers cover the whole screen, so they `fill` it.
 case "$OILLAMP_WALLPAPER" in
-    lamp)        wallpaper='wallpaper.png center'      ; colour='#161a22' ;;
-    waves)       wallpaper='wallpaper-waves.png fit'   ; colour='#161a22' ;;
-    waves-light) wallpaper='wallpaper-waves.png fit'   ; colour='#f4efe6' ;;
-    waves-dark)  wallpaper='wallpaper-waves.png fit'   ; colour='#15121c' ;;
+    lamp)        wallpaper='wallpaper.png center'       ; colour='#161a22' ;;
+    waves)       wallpaper='wallpaper-waves.png fill'   ; colour='#161a22' ;;
+    waves-light) wallpaper='wallpaper-waves.png fill'   ; colour='#f4efe6' ;;
+    waves-dark)  wallpaper='wallpaper-waves.png fill'   ; colour='#15121c' ;;
     *)           fail "OILLAMP_WALLPAPER is '$OILLAMP_WALLPAPER'; expected lamp, waves, waves-light or waves-dark" ;;
 esac
 # Only `#` and six hexadecimal digits: whatever lands in the file is sway configuration.
