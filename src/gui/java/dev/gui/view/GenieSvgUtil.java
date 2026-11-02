@@ -104,11 +104,11 @@ final class GenieSvgUtil {
         return new Appearance(colour, wears);
     }
 
-    /// The pose of `genie`. Waking, it is still in its lamp, so it sleeps. Working, it thinks,
+    /// The pose of `genie`. Waking or falling asleep, it is in its lamp, so it sleeps. Working, it thinks,
     /// unless the newest thing in its conversation is a tool that is running.
     static Pose poseOf(Genie genie) {
         return switch (genie.phase()) {
-            case ASLEEP, WAKING -> Pose.ASLEEP;
+            case ASLEEP, WAKING, FALLING_ASLEEP -> Pose.ASLEEP;
             case READY -> Pose.AWAKE;
             case BROKEN -> Pose.DIZZY;
             case WORKING -> {

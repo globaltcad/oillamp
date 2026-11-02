@@ -188,7 +188,7 @@ final class SchedulePage {
         return switch (genie.phase()) {
             case READY, WORKING -> new Status(p.CONTENT(), words.ON_JOBS_WAKE_IT_AT_THEIR_TIMES(genie.name()));
             case WAKING -> new Status(p.BRASS(), words.IS_WAKING_JOBS_RUN_ONCE_IT_IS_AWAKE(genie.name()));
-            case ASLEEP, BROKEN -> new Status(p.SUBTEXT(), words.IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE(genie.name()));
+            case ASLEEP, BROKEN, FALLING_ASLEEP -> new Status(p.SUBTEXT(), words.IS_ASLEEP_JOBS_RUN_ONLY_WHILE_IT_IS_AWAKE(genie.name()));
         };
     }
 

@@ -221,7 +221,7 @@ final class ActionsPage {
     }
 
     private UIForAnySwing<?, ?> startingAfresh() {
-        Val<Boolean> idle = phase.viewAs(Boolean.class, it -> it != Genie.Phase.WORKING && it != Genie.Phase.WAKING);
+        Val<Boolean> idle = phase.viewAs(Boolean.class, it -> it != Genie.Phase.WORKING && !it.isBetween());
         return tile(
             SignSvgUtil.NEW,
             Palette::TEXT,
@@ -254,6 +254,7 @@ final class ActionsPage {
             Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
                 case ASLEEP -> page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX(it.name());
                 case WAKING -> page.IS_WAKING(it.name());
+                case FALLING_ASLEEP -> page.IS_GOING_BACK_INTO_THE_LAMP_ITS_SANDBOX_IS_STOPPING(it.name());
                 case BROKEN -> page.DID_NOT_WAKE_ITS_HOME_IS_KEPT(it.name());
                 default -> it.fromElsewhere()
                     ? page.END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO(it.name())
@@ -262,11 +263,12 @@ final class ActionsPage {
             big(button(Viewable.of(String.class, phase, words, (it, page) -> switch (it) {
                 case ASLEEP -> page.WAKE();
                 case WAKING -> page.WAKING();
+                case FALLING_ASLEEP -> page.FALLING_ASLEEP();
                 case BROKEN -> page.TRY_WAKING_AGAIN();
                 default -> page.SLEEP();
             })))
             .group(Skin.QUIET_BUTTON)
-            .isEnabledIf(phase.viewAs(Boolean.class, it -> it != Genie.Phase.WAKING))
+            .isEnabledIf(phase.viewAs(Boolean.class, it -> !it.isBetween()))
             .onClick(_ -> {
                 if (phase.get().isAwake()) app.sleep(selected());
                 else app.wake(selected());

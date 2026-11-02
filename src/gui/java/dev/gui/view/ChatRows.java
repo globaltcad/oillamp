@@ -190,7 +190,7 @@ final class ChatRows {
             .orElse(Conversation.Versions.NONE)
         );
         Val<Boolean> movable = genie.viewAs(Boolean.class, it ->
-            it.phase() != Genie.Phase.WAKING &&
+            !it.phase().isBetween() &&
             (it.phase() != Genie.Phase.WORKING || it.conversations().aside().isPresent())
         );
         Val<Boolean> hasEarlier = Viewable.of(Boolean.class, movable, versions, (on, it) -> on && it.at() > 0);
