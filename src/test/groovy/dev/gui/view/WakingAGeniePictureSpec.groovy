@@ -202,4 +202,108 @@ class WakingAGeniePictureSpec extends Specification {
             var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
             (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
     }
+
+    def 'Putting a genie to sleep plays its waking backwards, and the flame waits for the lamp to be out'() {
+        reportInfo '''
+            **Subject:** the picture while the lamp is put out.
+
+            Stopping a sandbox, and saving the genie's home, can take a while. The user should
+            see that something happens, and that it is the reverse of waking: the genie sinks
+            back into the flame it came from. The flame then burns on, calmly, for as long as
+            the lamp takes to go out, and only once it is really out does the flame dwindle and
+            leave a wisp of smoke. As with waking, the picture must not claim more than the
+            lifecycle says: an elapsed animation alone never puts the flame out.
+        '''
+        given: 'Juniper has been awake a while, and is put to sleep'
+            var genie = Genie.named('Juniper')
+            var awake = WakeScene.of(genie.waking().awake()).after(30)
+            var falling = awake.follows(genie.waking().awake().fallingAsleep())
+
+        expect: 'the play starts from the formed genie and runs backwards'
+            falling.moving()
+            falling.moment() == WelcomeScene.FORMED
+            falling.after(1).moment() < WelcomeScene.FORMED
+
+        and: 'a minute later, with the lamp not yet out, the flame still burns calmly'
+            falling.after(60).moving()
+            falling.after(60).moment() >= 3.6 && falling.after(60).moment() < 4.6
+
+        when: 'the lamp is out'
+            var out = falling.after(60).follows(genie.asleep())
+
+        then: 'the flame dwindles to the cold lamp, and the picture then rests'
+            out.goingOut()
+            out.playing()
+            out.after(0.5).moment() < 3.6
+            !out.after(1.4).moving()
+            out.after(1.4).moment() == 1
+    }
+
+    def 'A quick shutdown still shows the genie go back into its lamp'() {
+        reportInfo '''
+            **Subject:** a lamp that goes out before the picture has caught up.
+
+            A sandbox may stop in a moment. The genie should still be seen going back into its
+            lamp, rather than vanishing: the picture finishes sinking it into the flame, and
+            only then puts the flame out. Being asleep already, the genie can be woken again
+            meanwhile, which starts the waking picture afresh.
+        '''
+        given: 'Juniper is put to sleep, and its lamp is out a tenth of a second later'
+            var genie = Genie.named('Juniper')
+            var falling = WakeScene.of(genie.waking().awake()).follows(genie.waking().awake().fallingAsleep())
+            var out = falling.after(0.1).follows(genie.asleep())
+
+        expect: 'the genie keeps sinking into the flame before the flame goes out'
+            out.after(1).moment() > 3.6
+            out.after(1).moving()
+            out.after(2.1 + 0.5).moment() < 3.6
+            !out.after(2.1 + 1.3).moving()
+
+        and: 'waking it again lights the lamp afresh'
+            out.after(1).follows(genie.waking()).seconds() == 0
+            out.after(1).follows(genie.waking()).released() == -1
+    }
+
+    def 'Put to sleep while it greets, a genie goes back from where it was'() {
+        reportInfo '''
+            **Subject:** sleeping while the wake greeting still plays.
+
+            The user can put a genie to sleep before its greeting ends. The picture should not
+            jump to a fully formed genie only to take it back: it runs backwards from the moment
+            it had reached.
+        '''
+        given: 'Juniper is half a second into taking form'
+            var genie = Genie.named('Juniper')
+            var emerging = WakeScene.of(genie.waking()).follows(genie.waking().awake()).after(0.5)
+
+        when: 'it is put to sleep'
+            var falling = emerging.follows(genie.waking().awake().fallingAsleep())
+
+        then: 'the play goes back from that same moment'
+            Math.abs(falling.moment() - emerging.moment()) < 1e-9
+            falling.after(0.2).moment() < emerging.moment()
+    }
+
+    def 'While the lamp is put out, the genie is back in the flame and the lamp still burns'() {
+        reportInfo '''
+            **Subject:** rendering the shutdown picture.
+
+            Once the genie has sunk back, the picture must show a burning lamp without the
+            genie: no pixel in the genie's body colour remains, while the flame's light is
+            still there.
+        '''
+        given: 'Juniper has been falling asleep for three seconds'
+            var genie = Genie.named('Juniper')
+            var falling = WakeScene.of(genie.waking().awake()).follows(genie.waking().awake().fallingAsleep()).after(3)
+            var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+            var graphics = picture.createGraphics()
+        when: 'the picture is painted'
+            WelcomeScene.light(graphics, Palette.DARK, 320, 220, 0, falling.play(), falling.moment())
+            WelcomeScene.paint(graphics, Palette.DARK, 320, 220, falling.play(), falling.moment())
+            graphics.dispose()
+        then: 'Juniper is gone into the lamp, and its flame still lights the picture'
+            var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
+            !(0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
+            (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) != 0xff000000 } }
+    }
 }

@@ -38,8 +38,10 @@ final class WakePicture {
         scene = Var.of(WakeScene.of(genie.get()));
     }
 
-    Val<Boolean> emerging() {
-        return scene.viewAs(Boolean.class, WakeScene::emerging);
+    /// Whether the picture still plays how waking or falling asleep ended: the genie greeting,
+    /// or the flame going out.
+    Val<Boolean> playing() {
+        return scene.viewAs(Boolean.class, WakeScene::playing);
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
