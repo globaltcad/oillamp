@@ -3,11 +3,14 @@ package oillamp
 import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
+import spock.lang.Subject
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,18 +22,20 @@ import java.util.concurrent.TimeUnit
 
 import static oillamp.RealLamps.*
 
-/**
- * The whole life of a lamp held by an application, such as a game hosting an agent, on this
- * machine with real podman.
- *
- * <p>Nothing is simulated. {@link Lamp} starts oillamp's engine as a separate Java process from this
- * JVM's own classpath, exactly as an application would; the engine checks the host, builds the
- * sandbox image if needed, starts the container, and runs the egress proxy and the SSH relay.
- * Every command below goes from this JVM over real ssh, through the relay, into the container.
- *
- * <p>The scenarios follow one lamp from creation to deletion, in order: each one relies on what the
- * one before it left behind, as an application would.
- */
+@Title('Running a lamp for a program built on oillamp')
+@Narrative('''
+The whole life of a lamp held by a program built on oillamp's Java API, such as a game that hosts
+an agent, on this machine with real podman.
+
+Nothing is simulated. `Lamp` starts oillamp's engine as a separate Java process from this JVM's
+own classpath, as such a program would. The engine checks the host, builds the sandbox image if
+needed, starts the container, and runs the egress proxy and the SSH relay. Every command goes from
+this JVM over real ssh, through the relay, into the container.
+
+This is a spike. Its scenarios follow one lamp from creation to deletion, in order: each relies on
+what the one before it left behind, as such a program would.
+''')
+@Subject(Lamp)
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
@@ -46,33 +51,31 @@ class Running_A_Lamp_For_An_Application_Spec extends Specification {
         remove(directory)
     }
 
-    def 'An application starts a lamp from nothing, and hears it come up step by step'() {
+    def 'A program built on oillamp starts a lamp from nothing with `Lamp.start`, and hears it come up step by step'() {
         reportInfo """
-            Let's consider an application, a program such as a game that hosts an agent, built on
-            oillamp's Java API. It names a directory that does not exist yet and asks for a lamp
-            there with `Lamp.at(dir).start()`. oillamp does everything a person's first `oillamp
-            at` does: checks the host, creates the lamp, builds the sandbox image if this version
-            of oillamp has none yet (which can take many minutes), starts the container and opens
-            the session.
+            Let's consider a program built on oillamp's Java API, such as a game that hosts an
+            agent. It names a directory that does not exist yet, and asks for a lamp there with
+            `Lamp.at(dir).start()`. Oillamp does everything a first `oillamp at` does: it checks
+            the host, creates the lamp, builds the sandbox image if this version of oillamp has none
+            yet, which can take many minutes, starts the container and opens the session.
 
-            The application is told about each step as it happens, in the same events a terminal
-            shows, so it can show its user progress rather than a screen that does not change. It
-            learns the session is usable from a single event that also says how to reach the
-            sandbox.
+            The program hears of each step as it happens, in the same events a terminal shows, so
+            that it can show its user progress rather than a screen that does not change. A single
+            event tells it that the session is usable, and how to reach the sandbox.
         """
-        when:
+        when: '`Lamp.at(dir).start()` is called for a directory that does not exist'
             lamp = Lamp.at(directory).onEvent { heard << it }.start()
 
         then: 'the session comes up'
             lamp.awaitRunning(FIRST_START)
 
-        and: 'the application heard each stage succeed, in order: host, lamp, image, session'
+        and: 'the program heard each stage succeed, in order: host, lamp, image, session'
             var areas = heard.findAll { it instanceof LampEvent.Ok }*.area().unique()
             areas.containsAll(['host', 'lamp', 'image', 'session'])
             ['host', 'lamp', 'image', 'session'].collect { areas.indexOf(it) } ==
                     ['host', 'lamp', 'image', 'session'].collect { areas.indexOf(it) }.sort()
 
-        and: 'it was told the image is ready, and that the sandbox is running, in plain words'
+        and: 'it heard that the image is ready, and that the sandbox is running, in plain words'
             heard.any { it instanceof LampEvent.Ok && it.text().startsWith('sandbox image ready') }
             heard.any { it instanceof LampEvent.Ok && it.text().startsWith('sandbox running') }
 
@@ -98,13 +101,13 @@ class Running_A_Lamp_For_An_Application_Spec extends Specification {
             firstAgentId = agentId(directory)
     }
 
-    def 'Commands run in the sandbox as the agent, in its home, with the same environment as its shell'() {
+    def 'Commands run with `Lamp.exec` run in the sandbox as the agent, in its home, with the same environment as its shell'() {
         reportInfo """
-            An application runs programs in the sandbox, such as an agent harness, through
+            A program built on oillamp runs programs in the sandbox, such as an agent harness, with
             `Lamp.exec`. They must run as the agent would run them by hand: as the unprivileged
             `agent` user, in its home directory, with the proxy, display and tool settings every
             shell in the sandbox gets. A harness started without the proxy setting, for example,
-            would find no internet and conclude its model service is down.
+            would find no internet, and conclude that its model service is down.
         """
         expect: 'the agent user, in its home'
             with(inSandbox(lamp, 'sh', '-c', 'id -un; id -u; pwd')) {
@@ -119,7 +122,7 @@ class Running_A_Lamp_For_An_Application_Spec extends Specification {
                 out.readLines()[1].contains('/home/agent/.local/bin')
             }
 
-        and: 'arguments arrive exactly as the application gave them: spaces, quotes and dollars included'
+        and: 'arguments arrive exactly as the program gave them: spaces, quotes and dollars included'
             with(inSandbox(lamp, 'printf', '%s\\n', 'two words', 'it\'s', '$HOME', '"quoted"', '')) {
                 ok
                 out.readLines() == ['two words', 'it\'s', '$HOME', '"quoted"', '']
@@ -133,19 +136,20 @@ class Running_A_Lamp_For_An_Application_Spec extends Specification {
             }
     }
 
-    def 'An application exchanges messages with a program in the sandbox, one at a time, over its standard input and output'() {
+    def 'A program built on oillamp exchanges messages with a process in the sandbox, one at a time, over its standard input and output'() {
         reportInfo """
-            This is how an application, a program built on oillamp's Java API, will talk to an
-            agent harness: it starts the harness with `Lamp.exec` and exchanges messages over its
-            standard input and output, each one answered before the next is sent, as protocols
-            such as ACP, the Agent Client Protocol, do.
+            This is how a program built on oillamp will talk to an agent harness: it starts the
+            harness with `Lamp.exec`, and exchanges messages over the harness's standard input and
+            output, each one answered before the next is sent, as protocols such as ACP, the Agent
+            Client Protocol, do.
 
-            A pipe that only delivered its data when closed, or a relay that held bytes back until
-            a buffer filled, would make that impossible while looking fine for one-shot commands.
-            So each message here must be answered while the program is still running and still
-            waiting for more. The program is a few lines of Python that answer JSON with JSON.
+            A pipe that delivered its data only when closed, or a relay that held bytes back until
+            a buffer filled, would make that impossible, and would still look fine for commands
+            that run once. So each message here must be answered while the process is still
+            running and waiting for more. The process is a few lines of Python that answer JSON
+            with JSON.
         """
-        given: 'a program that answers each JSON message with one of its own'
+        given: 'a Python process that answers each JSON message with one of its own'
             var program = '''
 import json, sys
 for line in sys.stdin:
@@ -169,10 +173,10 @@ for line in sys.stdin:
                         '{"id": 2, "heard": "HUNGRY"}']
             conversation.alive
 
-        when: 'the application ends the conversation by closing the program\'s input'
+        when: 'the program ends the conversation by closing the process\'s input'
             toProgram.close()
 
-        then: 'the program finishes on its own'
+        then: 'the process finishes on its own'
             conversation.waitFor(30, TimeUnit.SECONDS)
             conversation.exitValue() == 0
     }
@@ -207,17 +211,17 @@ for line in sys.stdin:
 
     def 'What the agent writes in its home appears in the lamp on the host, owned by the user'() {
         reportInfo """
-            The agent's home is the one place it shares with the host, on purpose: the application
-            (a program built on oillamp's Java API, here a game) and the user can read what the
-            agent produced, a campaign's notes or a generated map, without copying anything out of
-            a container. Files are owned by the user who runs oillamp, so they can be edited,
-            moved and committed without changing ownership.
+            The agent's home is the one place it shares with the host, on purpose: the program
+            built on oillamp, here a game, and the user can read what the agent produced, a
+            campaign's notes or a generated map, without copying anything out of a container. The
+            files are owned by the user who runs oillamp, so they can be edited, moved and
+            committed without changing ownership.
         """
-        when:
+        when: 'the agent writes notes into `~/workspace/notes.md`'
             var wrote = feeding(lamp, 'The old chapel is haunted.\n',
                                 'sh', '-c', 'cat > ~/workspace/notes.md')
 
-        then:
+        then: 'the file is in the lamp on the host, owned by the user who runs oillamp'
             wrote.ok
             var onHost = agentHome(directory).resolve('workspace/notes.md')
             Files.readString(onHost) == 'The old chapel is haunted.\n'
@@ -231,8 +235,8 @@ for line in sys.stdin:
             local network, a service on this machine. Every connection goes through oillamp's
             proxy, which decides by where a name really points.
 
-            A refusal is not a silent timeout. The agent gets an answer naming the rule, so it
-            stops retrying, and the application that started the lamp gets an event, so it can
+            A refusal is not a silent timeout. The agent gets an answer naming the rule, so that it
+            stops retrying, and the program that started the lamp gets an event, so that it can
             show what was blocked. The decision is also written to the session's network log.
         """
         when: 'the agent fetches a public web page'
@@ -251,7 +255,7 @@ for line in sys.stdin:
             privateAddress.out.readLines().last() == '403'
             privateAddress.out.contains('denied by rule "block private, internal and loopback ranges"')
 
-        and: 'the application was told about the refusal'
+        and: 'the program heard of the refusal'
             eventually(Duration.ofSeconds(10)) {
                 heard.any { it instanceof LampEvent.Info && it.area() == 'network' && it.text().contains('192.168.1.1') }
             }
@@ -301,17 +305,17 @@ for line in sys.stdin:
             !inSandbox(lamp, 'touch', '/usr/local/bin/planted').ok
     }
 
-    def 'Oillamp\'s own commands see the lamp that an application started'() {
+    def '`oillamp status` and `oillamp list` see the lamp that a program built on oillamp started'() {
         reportInfo """
-            When something goes wrong in an application built on oillamp's Java API, such as a
-            game, the person investigating opens a terminal. They must be able to ask the same
-            questions of a lamp an application started as of one they started themselves: what is
-            it doing, and let me look inside.
+            When something goes wrong in a program built on oillamp, such as a game, the person
+            investigating opens a terminal. They must be able to ask the same questions of a lamp
+            that program started as of one they started themselves: whether it runs, and in which
+            container.
         """
-        when:
+        when: '`oillamp status` is run for the lamp'
             var status = oillamp('status', directory.toString())
 
-        then:
+        then: 'it says the lamp is "running, for the application that started it", and names its container'
             status.status() == LampExitStatus.SUCCESS
             var answer = status.events().find { it instanceof LampEvent.Answer }.text()
             answer.contains('running, for the application that started it')
@@ -322,24 +326,23 @@ for line in sys.stdin:
                            .contains(containerOf(directory))
     }
 
-    def 'Closing the lamp ends the session, even with a command still running, and leaves nothing behind'() {
+    def '`Lamp.close` ends the session, even with a command still running, and leaves nothing behind'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, that exits must be able to
-            trust that the sandbox exits with it, even if the agent is in the middle of something.
-            Closing the lamp stops the container, which ends every process in it, and removes
-            everything the session created: the container, the session file, the sockets. It
-            returns only once that is done.
+            A program built on oillamp that exits must be able to trust that the sandbox exits with
+            it, even when the agent is in the middle of something. `Lamp.close` stops the
+            container, which ends every process in it, and removes everything the session created:
+            the container, the session file, the sockets. It returns only once that is done.
         """
         given: 'a command that would run for ten minutes'
             Process busy = lamp.exec('sleep', '600')
             var container = containerOf(directory)
 
-        when:
+        when: '`Lamp.close` is called'
             var closing = Instant.now()
             lamp.close()
             var took = Duration.between(closing, Instant.now())
 
-        then: 'the engine ended cleanly, because the application asked it to'
+        then: 'the engine ended with success, because the program asked it to stop'
             lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
             heard.any { it instanceof LampEvent.Summary
                         && it.lines().toList().any { line -> line.contains('asked to stop by the application') } }
@@ -366,13 +369,13 @@ for line in sys.stdin:
             home as it left it. The image already exists, so this start takes seconds rather than
             minutes.
         """
-        given:
+        given: 'the events heard so far are forgotten'
             heard.clear()
 
-        when:
+        when: '`Lamp.at(dir).start()` is called for the same directory'
             lamp = Lamp.at(directory).onEvent { heard << it }.start()
 
-        then:
+        then: 'the session comes up'
             lamp.awaitRunning(LATER_START)
 
         and: 'the same agent'
@@ -385,17 +388,17 @@ for line in sys.stdin:
             lamp?.close()
     }
 
-    def 'Oillamp\'s `remove` command deletes the lamp, including the files the user cannot delete'() {
+    def '`oillamp remove` deletes the lamp, including the files the user cannot delete'() {
         reportInfo """
-            Some of a lamp's files belong to the sandbox's own infrastructure user, which is not
-            the user on the host, so `rm -rf` fails on them. An application deleting a lamp, such
-            as a game deleting a campaign, uses oillamp's own command, `oillamp remove <dir>
-            --yes`, which can.
+            Some of a lamp's files belong to the sandbox's infrastructure user, which is not the
+            user on the host, so `rm -rf` fails on them. A program built on oillamp that deletes a
+            lamp, as a game deletes a campaign, runs `oillamp remove <dir> --yes`, which can delete
+            them.
         """
-        when:
+        when: '`oillamp remove <dir> --yes` is run'
             var removed = oillamp('remove', directory.toString(), '--yes')
 
-        then:
+        then: 'it succeeds, and the directory is gone'
             removed.status() == LampExitStatus.SUCCESS
             !Files.exists(directory)
     }
