@@ -4,9 +4,12 @@ import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampLauncher
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
+import spock.lang.Subject
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,14 +18,16 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 import static oillamp.RealLamps.*
 
-/**
- * The two ways a lamp ends without anyone asking: the application that holds it crashes, or the
- * sandbox itself dies. Both on this machine, with real podman.
- *
- * <p>Neither is rare. A game gets killed by its player, by the desktop or by a bug; a container gets
- * killed by an out-of-memory condition or by someone tidying up with podman. What matters is what is
- * left afterwards, and who is told.
- */
+@Title('When a program or its sandbox dies')
+@Narrative('''
+The two ways a lamp ends without anyone asking: the program built on oillamp that holds it
+crashes, or the sandbox itself dies. This is a spike: both run on this machine, with real podman.
+
+Neither is rare. A game is killed by its player, by the desktop or by a bug; a container is
+killed for using too much memory, or by someone tidying up with podman. What matters is what is
+left afterwards, and who is told.
+''')
+@Subject(Lamp)
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
 class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
@@ -36,21 +41,21 @@ class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
         remove(directory)
     }
 
-    def 'When the application is killed, its sandbox shuts itself down cleanly'() {
+    def 'When the program that holds a lamp is killed, its sandbox shuts itself down cleanly'() {
         reportInfo """
-            An application, a program such as a game built on oillamp's Java API, runs the engine
-            as a child process and holds its standard input. An application killed with `kill -9`
-            runs no shutdown code at all. It cannot close its lamps, and nothing it planned for
-            its last moments happens. What the kernel does is close every file the process held,
-            and one of them is the engine's standard input. The engine notices that its input has
-            ended and shuts the session down, exactly as if it had been asked: the container
-            stops, the session's files go, the lock is released.
+            A program built on oillamp's Java API, such as a game, runs the engine as a child
+            process, and holds the engine's standard input. A program killed with `kill -9` runs
+            no shutdown code at all: it cannot close its lamps, and nothing it planned for its last
+            moments happens. What the kernel does is close every file the process held, and one of
+            them is the engine's standard input. The engine notices that its input has ended, and
+            shuts the session down as if it had been asked: the container stops, the session's
+            files go, the lock is released.
 
-            The application here is played by a stand-in process that holds the engine's input,
-            and it is that process which is killed. From the engine's side there is no difference:
-            the process at the other end of its input is gone, without a word.
+            Here a stand-in process holds the engine's input in place of the program, and it is
+            that process which is killed. From the engine's side there is no difference: the
+            process at the other end of its input is gone, without a word.
         """
-        given: 'an engine whose standard input is held by a stand-in for the application'
+        given: 'an engine whose standard input is held by a stand-in for the program'
             directory = newLampPath('killed-application')
             var standIn = directory.parent.resolve('application.pid')
             lamp = Lamp.at(directory).onEvent { heard << it }
@@ -62,11 +67,11 @@ class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
         when: 'the stand-in is killed without warning'
             Spike.run('kill', '-9', Files.readString(standIn).strip())
 
-        then: 'the engine shuts the session down by itself, and exits cleanly'
+        then: 'the engine shuts the session down by itself, and exits with success'
             eventually(Duration.ofSeconds(90)) { lamp.exitStatus().isPresent() }
             lamp.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
 
-        and: 'it says why: the application that started it closed its standard input'
+        and: 'it says why: the program that started it closed its standard input'
             heard.any { it instanceof LampEvent.Summary
                         && it.lines().toList().any { line -> line.contains('asked to stop by the application') } }
 
@@ -76,30 +81,29 @@ class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
             oillamp('status', directory.toString()).reported('OIL-SESSION-001')
     }
 
-    def 'When the sandbox dies, the application is told, and the lamp is cleaned up'() {
+    def 'When the sandbox dies, the program that holds the lamp is told, and the lamp is cleaned up'() {
         reportInfo """
             The container can die under a running session: killed for using too much memory, or
-            removed by hand with podman. The engine checks on it every two seconds, so the
-            application, the program built on oillamp's Java API that holds the lamp, learns
-            within moments rather than finding out when its next command hangs. The engine reports
-            the session as failed, not as a normal end, and removes the container, and the lamp
-            throws `IllegalStateException` for further commands instead of handing out an ssh
-            command that cannot connect.
+            removed by hand with podman. The engine checks on it every two seconds, so the program
+            built on oillamp that holds the lamp learns of it within moments, rather than when its
+            next command hangs. The engine reports the session as failed, not as a normal end, and
+            removes the container. The `Lamp` then throws `IllegalStateException` for further
+            commands, rather than hand out an ssh command that cannot connect.
         """
-        given:
+        given: 'a running lamp'
             directory = newLampPath('killed-sandbox')
             lamp = Lamp.at(directory).onEvent { heard << it }.start()
             lamp.awaitRunning(FIRST_START)
             var container = containerOf(directory)
 
-        when: 'the container is killed from outside'
+        when: '`podman kill` kills the container from outside'
             Spike.run('podman', 'kill', container)
 
-        then: 'the engine notices, and ends the session as failed'
+        then: 'the engine notices, and ends the session with `SESSION_FAILED`'
             eventually(Duration.ofSeconds(90)) { lamp.exitStatus().isPresent() }
             lamp.exitStatus() == Optional.of(LampExitStatus.SESSION_FAILED)
 
-        and: 'the application was told what happened, in words it can show'
+        and: 'the program heard what happened, in words it can show'
             heard.any { it instanceof LampEvent.Summary
                         && it.lines().toList().any { line -> line.contains('the sandbox container exited') } }
 
@@ -107,10 +111,10 @@ class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
             !containerExists(container)
             !Files.exists(directory.resolve('.oillamp/session.json'))
 
-        when: 'the application tries to use the lamp anyway'
+        when: 'the program asks the lamp for a command line anyway, with `Lamp.commandLine`'
             lamp.commandLine('true')
 
-        then: 'the lamp refuses with an IllegalStateException'
+        then: 'the lamp refuses with an `IllegalStateException`'
             thrown(IllegalStateException)
     }
 
