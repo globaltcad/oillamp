@@ -179,7 +179,7 @@ same code path oillamp uses.
 |---|---|
 | `VerifyingPodmanAssumptionsSpec` | rootless podman on Ubuntu; the uid mapping; read-only root with writable mounts; Unix sockets in both directions across the container boundary |
 | `VerifyingTheImageBaseSpec` | every package the image needs exists in Debian trixie |
-| `VerifyingTerminalProfilesSpec` | installed terminals accept oillamp's arguments; terminal emulators return before their window closes |
+| `Verifying_Terminal_Profiles_Spec` | installed terminals accept oillamp's arguments; terminal emulators return before their window closes |
 | `Verifying_The_Sandbox_Desktop_Spec` | the real image: readiness, SSH login as `agent`, screen size and rendering, vncviewer on a Unix socket, clicking and typing with `lamp`, a playable recording, a clean second session |
 | `Running_A_Lamp_For_An_Application_Spec` | a lamp's whole life through `dev.lamp.Lamp`, with the engine as a separate process |
 | `Two_Lamps_At_Once_Spec` | one application holding two lamps that must not see each other |

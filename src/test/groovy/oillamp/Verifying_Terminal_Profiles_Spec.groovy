@@ -14,7 +14,7 @@ import java.time.Duration
  * machine and reports which it could not check.
  */
 @Tag('spike')
-class VerifyingTerminalProfilesSpec extends Specification {
+class Verifying_Terminal_Profiles_Spec extends Specification {
 
     /** The option each terminal in {@code TerminalEmulatorUtil.java} is given to set the window title. */
     static final Map<String, String> TITLE_OPTION = [

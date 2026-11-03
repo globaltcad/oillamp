@@ -12,7 +12,7 @@ import sprouts.Tuple;
 ///
 /// Terminal emulators differ in how they set a window title and how they are given a command
 /// (`--` or `-e`). The differences are kept in a table, so supporting another terminal
-/// means adding a row. `VerifyingTerminalProfilesSpec` checks the rows against the terminals
+/// means adding a row. `Verifying_Terminal_Profiles_Spec` checks the rows against the terminals
 /// installed on the machine it runs on.
 final class TerminalEmulatorUtil {
 
