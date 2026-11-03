@@ -3,10 +3,12 @@ package oillamp
 import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
@@ -14,22 +16,26 @@ import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
-/**
- *  {@code view}, {@code shell}, {@code stop}, {@code status} and {@code list}.
- *
- *  <p>These are not five more things oillamp can do to a lamp. They are questions put to the
- *  supervisor that already owns it, over the control socket, and they have to be: that process
- *  holds the lock, the relays and the recording, so a {@code stop} that removed the container
- *  behind its back would leave it believing it still had a session.
- *
- *  <p>Each scenario therefore runs a real session on one thread and asks it something from
- *  another, which is the only arrangement that tests what these commands actually are.
- */
+@Title('The session commands')
+@Narrative('''
+`oillamp at <lamp>` runs a session, and keeps running until the session ends. That process is the
+session's *supervisor*: it holds the lamp's lock and the relays between the sandbox and the host.
+
+`oillamp status`, `stop`, `shell` and `view` do not act on the sandbox themselves. Each sends a
+request to the supervisor over its *control socket*, a Unix socket whose path the supervisor writes
+into the lamp's `.oillamp/session.json`, and the supervisor carries it out. Only the supervisor can
+do so safely: a `stop` that removed the container behind its back would leave it holding a lock and
+relays for a sandbox that no longer exists. `oillamp list` is the exception, and asks podman.
+
+In these scenarios a real session runs on a thread of its own, against a simulated machine, and
+each command runs on the scenario's thread, as if typed into a second terminal.
+''')
+@Subject(OilLamp)
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class The_Session_Commands_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     /**
      *  Everything the running session said, as it said it.
@@ -54,24 +60,25 @@ class The_Session_Commands_Spec extends Specification {
         }
     }
 
-    def 'Oillamp\'s `status` command asks the running session what it is doing'() {
+    def '`oillamp status` gets the state of a running session from its supervisor'() {
         reportInfo """
-            `oillamp status` asks the supervisor, the `oillamp at` process that runs the session,
-            over its control socket, rather than working it out from the outside, because only the
-            supervisor knows the two things that are not written down anywhere: which state the
-            session is in, and how many extra shells are attached to it.
+            Let's consider a lamp whose session runs, started with `oillamp at`. `oillamp status
+            <lamp>` asks that session's supervisor over the control socket, rather than working the
+            answer out from the outside, because two of the things it reports are written down
+            nowhere else: the state the session is in, and the number of extra shells attached to
+            it.
         """
-        given:
+        given: 'a session runs for the lamp'
             var lamp = host.lampPath()
             startASession(lamp)
 
-        when:
+        when: '`oillamp status <lamp>` is run'
             var outcome = host.oillamp.run('status', lamp.toString())
 
         then:
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'it says what state the session is in, and what it is made of'
+        and: 'the answer names the state `running`, the container `oillamp-…`, the desktop size and the lamp\'s directory'
             var answer = outcome.events().find { it instanceof LampEvent.Answer }.text()
             answer.contains('running')
             answer.contains('oillamp-')
@@ -79,110 +86,114 @@ class The_Session_Commands_Spec extends Specification {
             answer.contains(lamp.toString())
     }
 
-    def 'Oillamp\'s `stop` command asks the session to shut down, rather than removing its container'() {
+    def '`oillamp stop` asks the supervisor to end the session, rather than removing its container'() {
         reportInfo """
-            `oillamp stop` asks the supervisor, the `oillamp at` process that runs the session,
-            over its control socket. The difference matters. Removing the container directly would
-            leave the supervisor holding a lock over a sandbox that no longer exists, with its
-            relays still bound and its recording unfinished. Asking it instead runs the full,
-            ordered shutdown - stop the recorder so the video file is properly closed, take down
-            the relays, stop and remove the container, release the lock - which is the same
-            sequence Ctrl-C sets off.
+            Let's consider a session that runs, and `oillamp stop <lamp>` run from another terminal.
+            `stop` does not remove the sandbox's container itself. It asks the session's supervisor,
+            over the control socket, to end the session. Removing the container directly would
+            leave the supervisor holding the lamp's lock for a sandbox that no longer exists, with
+            its relays still bound and its recording unfinished. Asked instead, the supervisor shuts
+            the session down as it does on Ctrl-C, and so finishes the recording, removes the
+            container and releases the lock itself.
         """
-        given:
+        given: 'a session runs for the lamp'
             var lamp = host.lampPath()
             startASession(lamp)
 
-        when:
+        when: '`oillamp stop <lamp>` is run'
             var outcome = host.oillamp.run('stop', lamp.toString())
 
-        then: 'the request is accepted'
+        then: '`stop` succeeds: the supervisor accepted the request'
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'and the session really ends, cleanly, of its own accord'
+        and: 'the session then ends with success, and its summary says it was asked to stop by `oillamp stop`'
             session.join(30_000)
             sessionOutcome.status() == LampExitStatus.SUCCESS
             reported.any { it instanceof LampEvent.Summary &&
                            it.lines().toList().any { line -> line.contains('asked to stop by') } }
     }
 
-    def 'An extra shell from `oillamp shell` attaches to the session, and closing it ends nothing'() {
+    def 'A shell opened with `oillamp shell` attaches to a running session, and closing it does not end the session'() {
         reportInfo """
-            `oillamp shell <lamp>` opens an extra shell into a running session. No shell decides
-            when the session ends. Extra shells are useful, unlimited in number, and powerless to
-            end anything, and so is the window oillamp opened itself.
+            Let's consider a session that runs, and someone who wants a second shell into its
+            sandbox. `oillamp shell <lamp>` asks the session's supervisor for the ssh command line,
+            and runs it in the terminal it was typed in. Such an *extra shell* does not decide when
+            the session ends: closing it leaves the session running.
         """
-        given:
+        given: 'a session runs for the lamp'
             var lamp = host.lampPath()
             startASession(lamp)
 
-        when: 'a second oillamp opens an extra shell, which the user then closes'
+        when: '`oillamp shell <lamp>` opens an extra shell, which is closed two seconds later'
             host.machine { it.windowsStayOpenFor(Duration.ofSeconds(2)) }
             var outcome = host.oillamp.run('shell', lamp.toString())
 
         then:
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'the session noticed it arrive'
+        and: 'the session reports the extra shell'
             waitUntil { reported.any { it instanceof LampEvent.Info &&
                                        it.text().contains('extra shell') } }
 
-        and: 'and is still running now that it has gone'
+        and: 'the session is still running after the extra shell has closed, and has printed no end-of-session summary'
             session.alive
             reported.every { !(it instanceof LampEvent.Summary && it.title().startsWith('session ')) }
     }
 
-    def 'Oillamp\'s `at --no-windows` runs a session where there is no display, and says how to get in'() {
+    def '`oillamp at --no-windows` runs a session on a machine with no display, and prints how to get into it'() {
         reportInfo """
-            For someone who starts oillamp under tmux, so that it outlives the desktop they are
-            logged into, and who attaches to it on their own terms. oillamp opens nothing, so it
-            does not need a display, and the terminal it runs in lists the ways in instead: a
-            shell with `oillamp shell`, the desktop with `oillamp view`, or from another machine
-            by forwarding the desktop's socket over ssh. The session ends the usual way.
+            Let's consider someone who starts oillamp inside tmux, so that the session outlives the
+            desktop they are logged into, and who attaches to it when they choose. With
+            `--no-windows`, `oillamp at` opens no window, and so needs no display. Instead, its
+            summary "your session is up" lists the ways in: a shell with `oillamp shell`, the
+            desktop with `oillamp view` on this machine, or, from another machine, an ssh forward of
+            the desktop's VNC socket. The session ends as any session does, here with
+            `oillamp stop`.
         """
-        given: 'a machine with no desktop session'
+        given: 'a machine with no graphical session'
             var lamp = host.lampPath()
             host.machine { it.noGraphicalSession() }
             var oillamp = host.oillamp.observedBy { reported.add(it) }
 
-        when:
+        when: '`oillamp at <lamp> --no-windows` runs until the session is up'
             session = Thread.start { sessionOutcome = oillamp.run('at', lamp.toString(), '--no-windows') }
             waitUntil { reported.any { it instanceof LampEvent.Summary &&
                                        it.title() == 'your session is up' } }
 
-        then: 'no window opened, and the missing display was not held against it'
+        then: 'it opened no window, and reported no failure for the missing display'
             reported.findAll { it instanceof LampEvent.WindowOpened }.isEmpty()
             reported.every { !(it instanceof LampEvent.Failure) }
 
-        and: 'the terminal says how to get in, including from another machine'
+        and: 'its summary names `oillamp shell <lamp>`, `oillamp view <lamp>`, and an ssh forward of port 5901 to the VNC socket'
             var briefing = reported.find { it instanceof LampEvent.Summary &&
                                            it.title() == 'your session is up' }.lines().join('\n')
             briefing.contains("oillamp shell ${lamp}")
             briefing.contains("oillamp view ${lamp}")
             briefing.contains('ssh -N -L 5901:') && briefing.contains('vnc.sock')
 
-        and: 'and it says which machine each way in is run on, since an ssh forward to itself does nothing'
+        and: 'it says which ways in are for this machine and which for another, since the ssh forward fails when run on this machine itself'
             briefing.contains('on this machine')
             briefing.contains('from another machine')
 
-        and: 'the session is running without anyone having connected'
+        and: 'with nobody connected, `oillamp status` says the session runs with no windows opened'
             host.oillamp.run('status', lamp.toString()).console().contains('no windows opened')
 
-        when: 'the user ends it'
+        when: '`oillamp stop <lamp>` is run'
             host.oillamp.run('stop', lamp.toString())
             session.join(20_000)
 
-        then:
+        then: 'the session ends with success'
             sessionOutcome.status() == LampExitStatus.SUCCESS
     }
 
-    def 'After the shell window closes, the session keeps running and another shell can attach'() {
+    def 'After its shell window closes, a session keeps running, and `oillamp shell` can attach a new shell'() {
         reportInfo """
-            The user closed the shell window oillamp opened, perhaps because a program in it hung.
-            That is not the user saying they are finished. The sandbox, the agent's programs and
-            the desktop carry on, and `oillamp shell` opens a new way in.
+            Let's consider a session whose shell window, the terminal window that `oillamp at`
+            opened, is closed, perhaps because a program in it hung. Closing that window does not
+            mean the session is finished. The sandbox, the agent's programs and the desktop carry
+            on, `oillamp status` says the window is closed, and `oillamp shell` opens a new way in.
         """
-        given: 'a session whose shell window the user closes after a second'
+        given: 'a session whose shell window closes after one second'
             var lamp = host.lampPath()
             host.machine { it.windowsStayOpenFor(Duration.ofSeconds(1))
                                 .userStopsTheSessionAfter(Duration.ofSeconds(60)) }
@@ -191,63 +202,64 @@ class The_Session_Commands_Spec extends Specification {
             waitUntil { reported.any { it instanceof LampEvent.Info &&
                                        it.text().contains('the shell window closed') } }
 
-        when:
+        when: '`oillamp status <lamp>`, then `oillamp shell <lamp>`, is run'
             var status = host.oillamp.run('status', lamp.toString())
             var shell = host.oillamp.run('shell', lamp.toString())
 
-        then: 'the session still answers, and says the window is closed'
+        then: 'the supervisor still answers `status`, and says the shell window is closed'
             status.status() == LampExitStatus.SUCCESS
             status.console().contains('running')
             status.console().contains('shell window oillamp opened is closed')
 
-        and: 'a new shell attached to it'
+        and: 'an extra shell attached to the session'
             shell.status() == LampExitStatus.SUCCESS
             waitUntil { reported.any { it instanceof LampEvent.Info &&
                                        it.text().contains('extra shell attached') } }
 
-        and: 'and nothing has ended'
+        and: 'the session is still running, and has printed no end-of-session summary'
             session.alive
             reported.every { !(it instanceof LampEvent.Summary && it.title().startsWith('session ')) }
     }
 
-    def 'Oillamp\'s `view` command opens another window onto the same desktop'() {
+    def '`oillamp view` opens one more viewer onto the desktop of a running session'() {
         reportInfo """
-            The viewer is how the user watches, and they may want to watch from more than one
-            window - or to reopen the one they closed. Neither changes the session, which is why
-            this is the one control request that does something on the desktop and reports
-            nothing back beyond "opening".
+            Let's consider a session that runs, with the viewer window that `oillamp at` opened onto
+            the sandbox's desktop. Someone may want to watch from a second window, or to reopen the
+            viewer they closed. `oillamp view <lamp>` asks the session's supervisor to open one more
+            viewer. Opening a viewer changes nothing about the session itself.
         """
-        given:
+        given: 'a session runs, with the viewer that `oillamp at` opened'
             var lamp = host.lampPath()
             startASession(lamp)
             var before = windowsOpened()
 
-        when:
+        when: '`oillamp view <lamp>` is run'
             var outcome = host.oillamp.run('view', lamp.toString())
 
         then:
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'the session opened one more viewer than it had'
+        and: 'the supervisor opened one more window, a second viewer'
             waitUntil { windowsOpened() == before + 1 }
             reported.findAll { it instanceof LampEvent.WindowOpened }
                     .count { it.what().contains('viewer') } == 2
     }
 
-    def 'Oillamp\'s `view --view-only` opens a viewer that only watches'() {
+    def '`oillamp view --view-only` opens a viewer that takes no keyboard or mouse input'() {
         reportInfo """
-            A person who wants to watch the agent work, without a stray key press reaching the
-            desktop, opens the viewer with --view-only. It takes nothing typed or clicked. A
-            viewer opened without it can be used as usual.
+            Let's consider someone who wants to watch the agent work without a stray key press or
+            click reaching the sandbox's desktop. `oillamp view <lamp> --view-only` opens a viewer
+            that takes no input. A viewer opened without the flag takes input as usual. The
+            scenario checks the option each viewer was started with: `-ViewOnly=1`, or none.
         """
-        given:
+        given: 'a session runs for the lamp'
             var lamp = host.lampPath()
             startASession(lamp)
             var viewers = {
                 reported.findAll { it instanceof LampEvent.WindowOpened && it.what().contains('viewer') }
             }
 
-        when: 'one viewer is opened to watch, then an ordinary one'
+        when: '`oillamp view --view-only` opens one viewer, then `oillamp view` an ordinary one'
             var watching = host.oillamp.run('view', lamp.toString(), '--view-only')
             waitUntil { viewers().size() == 2 }
             var ordinary = host.oillamp.run('view', lamp.toString())
@@ -257,89 +269,93 @@ class The_Session_Commands_Spec extends Specification {
             watching.status() == LampExitStatus.SUCCESS
             ordinary.status() == LampExitStatus.SUCCESS
 
-        and: 'only the first was told to take no input'
+        and: 'only the viewer opened with `--view-only` was started with `-ViewOnly=1`'
             var watchingViewer = viewers()[1]
             var ordinaryViewer = viewers()[2]
             watchingViewer.argv().contains('-ViewOnly=1')
             !ordinaryViewer.argv().contains('-ViewOnly=1')
     }
 
-    def 'Oillamp\'s `list` command reports the sandboxes running on this host, and says so plainly when there are none'() {
+    def '`oillamp list` reports the oillamp sandboxes running on the host, and says so in words when there are none'() {
         reportInfo """
-            `oillamp list` asks podman, not a list oillamp keeps. A second list beside the one the
-            container runtime already maintains is a list that can be wrong, and it would be wrong
-            in exactly the case it is needed: after a supervisor was killed.
+            `oillamp list` asks podman for the containers oillamp started, rather than keeping a list
+            of its own. Such a list could be wrong, and wrong exactly when it is needed:
+            after a supervisor was killed before it could take its sandbox off the list. In this
+            scenario no oillamp sandbox runs.
         """
-        when:
+        when: '`oillamp list` is run on a host where no oillamp sandbox runs'
             var outcome = host.oillamp.run('list')
 
-        then:
+        then: 'it succeeds, and its `Sandboxes` event lists none'
             outcome.status() == LampExitStatus.SUCCESS
             outcome.events().find { it instanceof LampEvent.Sandboxes }.sandboxes().isEmpty()
 
-        and: 'the command line says so in words'
+        and: 'the console says "no oillamp sandboxes are running on this host"'
             outcome.console().contains('no oillamp sandboxes are running on this host')
     }
 
-    def 'Oillamp\'s `stop` command cleans up after a supervisor that was killed without tidying up'() {
+    def '`oillamp stop` removes what a killed supervisor left behind, whether or not its container is still there'() {
         reportInfo """
-            Killing the supervising process outright (a crash, a `kill -9`, a power cut) must
-            never leave a mess that the user has to clear up by hand. The lock goes with the
-            process, but its control socket file and `session.json` stay, and so may its
-            container. `status` then says the session does not answer and suggests `oillamp stop`.
+            Let's consider a supervisor killed outright, by a crash, a `kill -9` or a power cut. The
+            lamp's lock goes with the process, but the control socket file and
+            `.oillamp/session.json` stay behind, and so may the container. `oillamp status` then
+            reports `OIL-SESSION-002`, that the session did not answer, and suggests
+            `oillamp stop`.
 
-            So `stop` with no supervisor to talk to is the cleanup. It once removed only the
-            container: when that was already gone, it removed nothing and repeated the same advice,
-            so the user went round in a circle.
+            So `oillamp stop`, finding no supervisor to ask, cleans up: it removes the container if
+            it is still there, the control socket file and `session.json`. An earlier `stop` removed
+            only the container. When that was already gone, it removed nothing and gave the same
+            advice again, which sent the user round in a circle.
         """
-        given: 'what a killed supervisor leaves behind: a socket nobody listens on, and session.json'
+        given: 'what a killed supervisor leaves behind: a control socket nobody listens on, `session.json`, and perhaps its container'
             var lamp = host.lampPath()
             var socket = leftBehindByAKilledSupervisor(lamp)
             host.machine { containerStillThere ? it.commandSucceeding('podman container exists', '')
                                                   : it.commandFailing('podman container exists', 1, '') }
 
-        expect: 'status says the session does not answer'
+        expect: '`oillamp status` reports `OIL-SESSION-002`: the session did not answer'
             host.oillamp.run('status', lamp.toString()).reported('OIL-SESSION-002')
 
-        when:
+        when: '`oillamp stop <lamp>` is run'
             var stopped = host.oillamp.run('stop', lamp.toString())
 
-        then: 'stop cleans up and says what it did'
+        then: '`stop` succeeds and says what it removed, and the control socket and `session.json` are gone'
             stopped.status() == LampExitStatus.SUCCESS
             stopped.console().contains(containerStillThere ? 'the sandbox left by the previous session has been removed'
                                                           : 'its sandbox was already gone')
             !Files.exists(socket)
             !Files.exists(lamp.resolve('.oillamp/session.json'))
 
-        and: 'afterwards status says plainly that no session is running'
+        and: '`oillamp status` now reports `OIL-SESSION-001`: no session is running'
             host.oillamp.run('status', lamp.toString()).reported('OIL-SESSION-001')
 
         where:
             containerStillThere << [true, false]
     }
 
-    def 'A connection to the control socket that never says anything does not shut out the others'() {
+    def 'A connection to the control socket that never sends a request does not hold up the other commands'() {
         reportInfo """
-            The session answered its control socket one connection at a time, and waited for
-            each to send its request for as long as it took. One that never sent anything, such
-            as an `oillamp status` suspended with Ctrl-Z at the wrong moment, left `stop`,
-            `status`, `view` and `shell` waiting behind it for the rest of the session. Each
-            connection now has its own thread, and a few seconds to say what it wants.
+            Let's consider a session that runs, and a connection to its control socket that never
+            sends a request, such as an `oillamp status` suspended with Ctrl-Z at the wrong moment.
+            The supervisor once answered one connection at a time, and waited as long as it took
+            for each to send its request, so such a connection kept `stop`, `status`, `view` and
+            `shell` waiting for the rest of the session. Now each connection has a thread of its
+            own, and five seconds to send its request before the supervisor closes it.
         """
-        given:
+        given: 'a session runs, and a connection to its control socket sends nothing'
             var lamp = host.lampPath()
             startASession(lamp)
             var silent = java.nio.channels.SocketChannel.open(UnixDomainSocketAddress.of(controlSocket(lamp)))
 
-        when:
+        when: '`oillamp status <lamp>` is run'
             var started = System.nanoTime()
             var outcome = host.oillamp.run('status', lamp.toString())
 
-        then: 'status is answered straight away'
+        then: '`status` is answered within three seconds'
             outcome.status() == LampExitStatus.SUCCESS
             Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(3)
 
-        and: 'the silent connection is closed once its time is up'
+        and: 'the supervisor later closes the silent connection'
             silent.configureBlocking(true)
             silent.read(java.nio.ByteBuffer.allocate(16)) == -1
 
@@ -347,13 +363,14 @@ class The_Session_Commands_Spec extends Specification {
             silent?.close()
     }
 
-    def 'Oillamp\'s `status` and `stop` give up on a session that accepts a connection but never answers'() {
+    def '`oillamp #command` gives up on a supervisor that accepts connections but never answers, and removes nothing'() {
         reportInfo """
-            A supervisor that is frozen, stopped with Ctrl-Z or stuck, still has its socket, and
-            the kernel still accepts connections to it. `status` and `stop` then waited for an
-            answer that never came, with no way to tell the user anything. They now give up after
-            a few seconds, report `OIL-SESSION-002`, and remove nothing of a session that may
-            still be alive.
+            Let's consider a supervisor that is frozen: stopped with Ctrl-Z, or stuck. Its control
+            socket is still there, and the kernel still accepts connections to it, but nothing
+            answers. `oillamp status` and `oillamp stop` once waited for that answer forever, and
+            could tell the user nothing. Now each waits five seconds, reports `OIL-SESSION-002`,
+            that the session did not answer, and removes nothing, since the session may still be
+            alive.
         """
         given: 'a control socket that accepts connections and never answers them'
             var lamp = host.lampPath()
@@ -362,15 +379,15 @@ class The_Session_Commands_Spec extends Specification {
             var frozen = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
             frozen.bind(UnixDomainSocketAddress.of(socket))
 
-        when:
+        when: '`oillamp <command> <lamp>` is run'
             var started = System.nanoTime()
             var outcome = host.oillamp.run(command, lamp.toString())
 
-        then: 'the user is told the session did not answer'
+        then: 'it reports `OIL-SESSION-002` within 20 seconds'
             outcome.reported('OIL-SESSION-002')
             Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(20)
 
-        and: 'nothing of a session that may still be alive is removed'
+        and: 'the control socket and `session.json` are still there'
             Files.exists(socket)
             Files.exists(lamp.resolve('.oillamp/session.json'))
 
