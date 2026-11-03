@@ -14,7 +14,7 @@ final class GeneratedFileTextUtil {
     /// The commented configuration written into a new lamp.
     ///
     /// Every value here must match [ConfigDefaultsUtil#lampConfig()]. A scenario in
-    /// `ConfiguringALampSpec` checks this, because many users read this file as the
+    /// `Configuring_A_Lamp_Spec` checks this, because many users read this file as the
     /// documentation of the settings.
     public static String defaultConfig() {
         return defaultConfig(LampWallpaper.LAMP, "");

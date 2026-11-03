@@ -16,7 +16,7 @@ import java.time.Duration
  *  and - the part that matters most - where the agent is allowed to connect. It is the sandbox's
  *  policy, so a mistake in it has to be caught and explained rather than quietly ignored.
  */
-class ConfiguringALampSpec extends Specification {
+class Configuring_A_Lamp_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
