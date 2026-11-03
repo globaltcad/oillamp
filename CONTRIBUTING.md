@@ -154,7 +154,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `EmbeddingASessionSpec` | `oillamp at --embedded`, started by another application |
 | `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
 | `Holding_A_Lamp_Spec` | an application holding a lamp through `dev.lamp.Lamp` |
-| `ChoosingTheModelForALampSpec` | an application choosing the model service and key |
+| `Choosing_The_Model_For_A_Lamp_Spec` | an application choosing the model service and key |
 | `ChoosingTheAgentsModelSpec` | `--model`, `oillamp model` and the Lamp API's: one model for every run, old conversations too, written as pi's default; how a model gets from an application to an answer; with a stand-in pi that keeps track of its model |
 | `GivingTheAgentInstructionsSpec` | `--instructions-env` and `LampDirectory.instructions`: the text's way from an application to pi's `APPEND_SYSTEM.md`, leaving pi's files alone without, and refusing links the agent planted |
 | `ListingAServicesModelsSpec` | `Lamp.models`, against a stand-in server: where it asks, the key, the errors |

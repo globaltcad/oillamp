@@ -16,7 +16,7 @@ written into the application. It calls `Lamp.models(service)`, or `Lamp.models(s
 
 `Lamp.models` asks from this machine, where the engine's model relay would ask for the sandbox,
 at the same address and with the key the relay would send. That the relay asks the same place is
-shown in `ChoosingTheModelForALampSpec`.
+shown in `Choosing_The_Model_For_A_Lamp_Spec`.
 
 ## How the scenarios see it
 

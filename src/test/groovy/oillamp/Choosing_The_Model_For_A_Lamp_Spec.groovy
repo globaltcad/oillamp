@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit
  *  requests into the relay's socket as the relay inside the container does.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class ChoosingTheModelForALampSpec extends Specification {
+class Choosing_The_Model_For_A_Lamp_Spec extends Specification {
 
     static final String APP_KEY = 'sk-typed-into-the-app-0123456789'
 
