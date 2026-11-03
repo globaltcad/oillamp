@@ -132,7 +132,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Waking_The_Agent_Spec` | the schedule, `ask`, runs and their snapshots, and the agent's scheduling tools, with a stand-in pi |
 | `Deciding_What_The_Sandbox_May_Reach_Spec` | the egress proxy and policy, over the real socket |
 | `Using_The_Command_Line_Spec` | usage errors, version, crash handling |
-| `TheLampCommandSpec` | the `lamp` script, with stub tools on `PATH` |
+| `The_Lamp_Command_Spec` | the `lamp` script, with stub tools on `PATH` |
 | `ThePointerSpec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
 | `TheLauncherSpec` | the single-file launcher script |
 | `TheSandboxImageSpec` | static checks of the image files |

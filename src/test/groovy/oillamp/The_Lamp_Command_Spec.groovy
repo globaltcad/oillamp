@@ -20,7 +20,7 @@ import java.nio.file.attribute.PosixFilePermissions
  * <p>Not tagged {@code spike}: there is no third-party assumption here and nothing to install, so
  * this belongs in the fast suite that always runs.
  */
-class TheLampCommandSpec extends Specification {
+class The_Lamp_Command_Spec extends Specification {
 
     @TempDir Path temporary
 
