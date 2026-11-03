@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
  *  another, which is the only arrangement that tests what these commands actually are.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class TheSessionCommandsSpec extends Specification {
+class The_Session_Commands_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
