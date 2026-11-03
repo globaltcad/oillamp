@@ -70,4 +70,4 @@ bindsym Ctrl+$mod+m [con_id=__focused__] move container to workspace minimized
 bindsym Ctrl+$mod+n [workspace="^minimized$"] move container to workspace 1, focus
 
 # NO exec, NO exit, NO reload bindings: keyboard input must never run commands as `lamp`.
-# TheSandboxImageSpec checks this.
+# The_Sandbox_Image_Spec checks this.

@@ -17,7 +17,7 @@ import java.nio.file.Path
  *
  * <p>They cannot check that the image works; the spike tests do that.
  */
-class TheSandboxImageSpec extends Specification {
+class The_Sandbox_Image_Spec extends Specification {
 
     static final Path IMAGE = Path.of('src/main/resources/image')
 

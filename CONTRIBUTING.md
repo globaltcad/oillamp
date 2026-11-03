@@ -58,7 +58,7 @@ clear them now and then with `podman images localhost/oillamp/sandbox` and `podm
 
 - **The entrypoint** is a bash script of about 330 lines running as the container's first process.
   It is the least type-checked part of the system and the one with the biggest consequences when it
-  breaks. `TheSandboxImageSpec` checks that it parses, and the spikes run it for real.
+  breaks. `The_Sandbox_Image_Spec` checks that it parses, and the spikes run it for real.
 - **Unix socket paths are limited to 107 bytes.** Host-side sockets are reached through the short
   runtime directory under `$XDG_RUNTIME_DIR`. Any change that moves a socket must respect this.
 - **`/home/agent` is a bind mount**, so anything the image puts there at build time is hidden when
@@ -135,7 +135,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `The_Lamp_Command_Spec` | the `lamp` script, with stub tools on `PATH` |
 | `The_Pointer_Spec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
 | `The_Launcher_Spec` | the single-file launcher script |
-| `TheSandboxImageSpec` | static checks of the image files |
+| `The_Sandbox_Image_Spec` | static checks of the image files |
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |
 | `TheShapeOfTheCodeSpec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
 | `Keeping_The_Model_Key_On_The_Host_Spec` | the model relay: the sandbox sends a placeholder, the host adds the real key |

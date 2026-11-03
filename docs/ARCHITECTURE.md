@@ -1405,7 +1405,7 @@ option only says that the file decides. An application does the same with
 `--wallpaper` and `--background` to the engine.
 
 No key binding exits sway or runs a command, because the agent can type into the desktop and sway
-runs as the infra user. `TheSandboxImageSpec` checks the sway config for this.
+runs as the infra user. `The_Sandbox_Image_Spec` checks the sway config for this.
 
 **The size can change while the session runs.** A VNC viewer may ask for another size (RFB's
 ExtendedDesktopSize: the message `SetDesktopSize`), and wayvnc then changes the size of
@@ -1455,7 +1455,7 @@ There is no window list: that would need sway's control socket, which the agent 
 ### Keys the desktop answers itself
 
 sway answers these on any window. Each runs a sway command, never a program: the config has no
-`exec`, `exit` or `reload` binding, and `TheSandboxImageSpec` checks that. The Ctrl+Super keys
+`exec`, `exit` or `reload` binding, and `The_Sandbox_Image_Spec` checks that. The Ctrl+Super keys
 that act on one window name it with `[con_id=__focused__]`, so they do nothing while no window
 has the keyboard: on the desktop itself, sway would close or minimize every window.
 
