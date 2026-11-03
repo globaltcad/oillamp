@@ -54,7 +54,7 @@ loopback plays the checker, and the scenarios speak MCP to the session's host-ac
 pi does through `socat` in the sandbox.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class WorkingOnTheHostSpec extends Specification {
+class Working_On_The_Host_Spec extends Specification {
 
     static final String MODEL = 'azure/gpt-6.1-sol'
     /** The key the application gives the lamp, which oillamp keeps in `OILLAMP_MODEL_KEY`. */
