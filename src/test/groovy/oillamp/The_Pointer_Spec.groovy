@@ -1,7 +1,9 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
+import spock.lang.Title
 
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
@@ -12,17 +14,18 @@ import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * What the mouse commands of `lamp` send to the desktop.
- *
- * <p>`lamp click`, `move`, `drag` and `scroll` send pointer events to the desktop's VNC server,
- * the way the human's viewer does. These scenarios run the real `lamp` script and its real pointer
- * helper against a small stand-in VNC server, which records every pointer event it receives: the
- * buttons held down and the position. No container or desktop is needed.
- *
- * <p>Whether those events then reach a real application is checked by the desktop spike, which
- * clicks and types into an X11 program in a real sandbox.
- */
+@Title('The pointer')
+@Narrative('''
+What the mouse commands of `lamp` send to the desktop.
+
+`lamp click`, `move`, `drag` and `scroll` send pointer events to the desktop's VNC server, the way
+the human's viewer does. These scenarios run the real `lamp` script and its real pointer helper,
+`lamp-pointer`, against a small stand-in VNC server, which records every pointer event it receives:
+the buttons held down, and the position. No container or desktop is needed.
+
+Whether those events then reach a real application is checked by the desktop spike, which clicks
+and types into an X11 program in a real sandbox.
+''')
 @Requires({ Files.isExecutable(Path.of('/usr/bin/python3')) })
 class The_Pointer_Spec extends Specification {
 
@@ -51,39 +54,40 @@ class The_Pointer_Spec extends Specification {
         directory.toFile().deleteDir()
     }
 
-    def 'A `lamp click` is one press and one release of the left button, at exactly that position'() {
-        when:
+    def '`lamp click X Y` is one press and one release of the left button, at exactly that position'() {
+        when: '`lamp click 300 200` is run'
             var result = lamp('click', '300', '200')
 
-        then:
+        then: 'the server received one press of the left button at 300,200, and then a release there'
             result.status == 0
             presses() == [[LEFT, 300, 200]]
             events.last() == [0, 300, 200]
     }
 
-    def 'A double click needs no button name: lamp click X Y double'() {
+    def 'A double click needs no button name: `lamp click X Y double`'() {
         reportInfo """
-            The button is optional, so `lamp click X Y double` is a left double click. It used to
-            be refused with "unknown button 'double'", which is exactly what an agent would type.
+            The button is optional, so `lamp click X Y double` is a left double click. It was once
+            refused with "unknown button 'double'", although that is exactly what an agent
+            types.
         """
-        when:
+        when: '`lamp click 300 200 double` is run'
             var result = lamp('click', '300', '200', 'double')
 
-        then:
+        then: 'the server received two presses of the left button at 300,200'
             result.status == 0
             presses() == [[LEFT, 300, 200], [LEFT, 300, 200]]
     }
 
     def 'A right click, `lamp click X Y right`, presses the right button'() {
-        when:
+        when: '`lamp click 40 50 right` is run'
             lamp('click', '40', '50', 'right')
 
-        then:
+        then: 'the server received one press of the right button at 40,50'
             presses() == [[RIGHT, 40, 50]]
     }
 
-    def 'A `lamp drag` holds the button down all the way from one position to the other'() {
-        when:
+    def '`lamp drag` holds the button down all the way from one position to the other'() {
+        when: '`lamp drag 100 100 500 300` is run'
             lamp('drag', '100', '100', '500', '300')
 
         then: 'it presses at the start, moves with the button held, and releases at the end'
@@ -93,51 +97,51 @@ class The_Pointer_Spec extends Specification {
             events.last() == [0, 500, 300]
     }
 
-    def 'A `lamp scroll` without a position scrolls where the last click was'() {
-        given:
+    def '`lamp scroll` without a position scrolls where the last click was'() {
+        given: 'a click at 640,100, after which the received events are forgotten'
             lamp('click', '640', '100')
             events.clear()
 
-        when:
+        when: '`lamp scroll 3` is run'
             lamp('scroll', '3')
 
         then: 'three steps of the wheel, at the position of the click'
             presses() == [[WHEEL_DOWN, 640, 100]] * 3
     }
 
-    def 'The `lamp click` command refuses a position outside the screen, and clicks nothing'() {
-        when:
+    def '`lamp click` refuses a position outside the screen, and clicks nothing'() {
+        when: '`lamp click 1280 10` is run on a screen 1280 wide'
             var result = lamp('click', '1280', '10')
 
-        then:
+        then: 'it fails, says the position is outside the 1280x720 screen, and pressed nothing'
             result.status != 0
             result.output.contains('outside the screen, which is 1280x720')
             presses().isEmpty()
     }
 
-    def 'The `lamp info` command reads the desktop\'s size from the greeting the VNC server sends a viewer'() {
+    def '`lamp info` reads the desktop\'s size from the greeting the VNC server sends a viewer'() {
         reportInfo """
             The stand-in desktop is 1280x720. The pointer helper connects, reads the size from the
             server's greeting, and sends nothing else.
         """
-        when:
+        when: '`lamp info` is run'
             var result = lamp('info')
 
-        then:
+        then: 'it reports `size 1280x720`, and sent no pointer event'
             result.status == 0
             result.output.readLines().first() == 'size       1280x720'
             events.isEmpty()
     }
 
     def 'When the desktop\'s VNC server cannot be reached, `lamp click` says so'() {
-        given:
+        given: 'the stand-in VNC server is closed, and its socket gone'
             server.close()
             Files.deleteIfExists(directory.resolve('vnc.sock'))
 
-        when:
+        when: '`lamp click 10 10` is run'
             var result = lamp('click', '10', '10')
 
-        then:
+        then: 'it exits with 3, and says it cannot reach the desktop\'s VNC server'
             result.status == 3
             result.output.contains("cannot reach the desktop's VNC server")
     }
