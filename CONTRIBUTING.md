@@ -150,7 +150,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `AskingInAConversationSpec` | `ask --in`, `--after`, `--instead-of` |
 | `ReadingTheAgentsConversationsSpec` | `conversations` and `Lamp.conversations` |
 | `FollowingARunSpec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
-| `FollowingASessionSpec` | `follow` |
+| `Following_A_Session_Spec` | `follow` |
 | `EmbeddingASessionSpec` | `oillamp at --embedded`, started by another application |
 | `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
 | `Holding_A_Lamp_Spec` | an application holding a lamp through `dev.lamp.Lamp` |

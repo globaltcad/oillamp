@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
  *  events, as they happen, until it ends.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class FollowingASessionSpec extends Specification {
+class Following_A_Session_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
