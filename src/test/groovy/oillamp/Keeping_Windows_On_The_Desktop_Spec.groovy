@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
  * <p>The desktop spike checks the same with real sway and a real window.
  */
 @Requires({ Files.isExecutable(Path.of('/usr/bin/python3')) })
-class KeepingWindowsOnTheDesktopSpec extends Specification {
+class Keeping_Windows_On_The_Desktop_Spec extends Specification {
 
     static final Path HELPER = Path.of('src/main/resources/image/rootfs/usr/local/lib/oillamp/keep-windows-on-screen').toAbsolutePath()
     static final int TITLE = 25

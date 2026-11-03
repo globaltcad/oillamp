@@ -143,7 +143,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `WorkingOnTheHostSpec` | `host_edit_file` and `host_bash` on the host, with `host_access.commands`, timeouts and cancellation |
 | `ServingTheHostToolsOverMcpSpec` | the host tools as an MCP server: initialize, tools/list, JSON-RPC errors, connections |
 | `Showing_The_User_The_Desktop_Spec` | `lamp show` telling the host there is something to look at |
-| `KeepingWindowsOnTheDesktopSpec` | floating windows kept in reach when the desktop changes size |
+| `Keeping_Windows_On_The_Desktop_Spec` | floating windows kept in reach when the desktop changes size |
 | `Giving_The_Agent_A_Git_Identity_Spec` | the name and email on the agent's commits |
 | `Travelling_Back_In_Time_Spec` | `save`, `history` and `restore` |
 | `KeepingHistoryWithinADiskBudgetSpec` | the initial-size allowance, automatic pruning, shallow branches, previews, active-run bases and retained run numbers |
