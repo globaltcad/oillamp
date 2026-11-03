@@ -126,7 +126,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Checking_The_Machine_Spec` | `doctor` and host prerequisites |
 | `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
 | `Configuring_A_Lamp_Spec` | the configuration file and its validation |
-| `StartingTheSandboxSpec` | readiness and socket checks |
+| `Starting_The_Sandbox_Spec` | readiness and socket checks |
 | `SupervisingASessionSpec` | a whole session: windows, shutdown, failures |
 | `The_Session_Commands_Spec` | `status`, `stop`, `shell`, `view`, `list` |
 | `Waking_The_Agent_Spec` | the schedule, `ask`, runs and their snapshots, and the agent's scheduling tools, with a stand-in pi |

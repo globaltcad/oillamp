@@ -28,7 +28,7 @@ import java.time.Instant
  * <p>So these scenarios are all the same question asked in different places: does oillamp know
  * the difference between a socket that is there and a server that is listening?
  */
-class StartingTheSandboxSpec extends Specification {
+class Starting_The_Sandbox_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
