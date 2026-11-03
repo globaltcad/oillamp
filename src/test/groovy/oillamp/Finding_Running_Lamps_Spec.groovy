@@ -29,7 +29,7 @@ The scenarios run oillamp's real engine in this JVM, on a simulated machine whos
 track of the containers started on it.
 ''')
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class FindingRunningLampsSpec extends Specification {
+class Finding_Running_Lamps_Spec extends Specification {
 
     @TempDir Path tmp
     ScenarioHost host
