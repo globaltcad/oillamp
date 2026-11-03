@@ -4,14 +4,17 @@ import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.domain.JavaModifier
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import com.tngtech.archunit.core.importer.ImportOption
+import spock.lang.Narrative
 import spock.lang.Shared
 import spock.lang.Specification
+import spock.lang.Title
 
-/**
- *  Promises about the structure of the code that are easy to break by accident and expensive to
- *  notice late. They are checked here rather than left to review: most are about what is
- *  *absent*, and absences are exactly what review misses.
- */
+@Title('The shape of the code')
+@Narrative('''
+Promises about the structure of the code that are easy to break by accident, and expensive to
+notice late. They are checked here rather than left to review: most are about what is absent, and
+review is where an absence is missed.
+''')
 class The_Shape_Of_The_Code_Spec extends Specification {
 
     @Shared JavaClasses code = new ClassFileImporter()
@@ -31,59 +34,59 @@ class The_Shape_Of_The_Code_Spec extends Specification {
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API
 
-    def 'The engine exposes two types, and nothing else'() {
+    def 'The engine, `dev.oillamp`, exposes two types, and nothing else'() {
         reportInfo """
-            The public surface is the part that cannot be changed later without breaking someone.
-            Keeping the engine's to two types - the entry point and the machine it runs against -
-            is what leaves everything else free to be rewritten. The events, problems and exit
-            codes it speaks in are public too, but they live in `dev.lamp`, because an
-            application that embeds oillamp reads them as well.
+            The public types are the part that cannot be changed later without breaking someone.
+            Keeping the engine's to two, the entry point `OilLamp` and the `Machine` it runs
+            against, leaves everything else free to be rewritten. The events, problems and exit
+            statuses it speaks in are public too, but they are in `dev.lamp`, because a program
+            that embeds oillamp reads them as well.
 
-            This is enforced by the compiler rather than by convention: the engine is one package,
-            so a class that is not marked public simply cannot be reached from outside it. This
-            scenario exists to catch the moment someone adds `public` to another class - which is
-            easy to do while debugging and easy to forget to undo.
+            The compiler enforces this, not a convention: the engine is one package, so a class
+            that is not marked public cannot be reached from outside it. This scenario catches the
+            moment someone adds `public` to another class, which is easy to do while debugging,
+            and easy to forget to undo.
 
-            The scenarios in this package are themselves the proof that these are enough: they
-            live outside `dev.oillamp` and drive the whole tool through nothing else.
+            The scenarios in this package show that the two are enough: they are outside
+            `dev.oillamp`, and drive the whole tool through nothing else.
         """
-        when: 'we look at every top-level type oillamp defines'
+        when: 'the public top-level types of `dev.oillamp` are listed'
             var exposed = code.findAll { it.packageName == 'dev.oillamp' }
                               .findAll { it.enclosingClass.empty && !it.simpleName.contains('\$') }
                               .findAll { it.modifiers.contains(JavaModifier.PUBLIC) }
                               .collect { it.simpleName }
                               .toSet()
 
-        then: 'exactly the two are public'
+        then: 'they are exactly `OilLamp` and `Machine`'
             exposed.sort() == ENGINE_API.sort()
     }
 
-    def 'The client API in dev.lamp has exactly the public types listed in EMBEDDING_API'() {
+    def 'The client API in `dev.lamp` has exactly the public types listed in `EMBEDDING_API`'() {
         reportInfo """
-            `dev.lamp` is the client library: the package that other Java programs compile
-            against when they start and control oillamp from their own code (a game that runs
-            an agent in a lamp, for example), rather than running `oillamp` from a shell.
-            Those programs never touch `dev.oillamp`. They use `Lamp` to start the engine as a
-            separate process and read its `LampEvent`s.
+            `dev.lamp` is the client library: the package other Java programs compile against when
+            they start and control oillamp from their own code, such as a game that runs an agent
+            in a lamp, rather than run `oillamp` from a shell. Those programs never touch
+            `dev.oillamp`. They use `Lamp` to start the engine as a separate process, and read its
+            `LampEvent`s.
 
-            Every public top-level type in `dev.lamp` is something those programs may come to
-            rely on, so it cannot be removed or renamed later without breaking them. This
-            scenario fails when a type becomes public there without being added to
-            EMBEDDING_API, or when a listed type stops being public, so that every change to
-            the client API is deliberate.
+            Every public top-level type in `dev.lamp` is something those programs may come to rely
+            on, so it cannot be removed or renamed later without breaking them. This scenario
+            fails when a type there becomes public without being added to `EMBEDDING_API`, or when
+            a listed type stops being public, so that every change to the client API is
+            deliberate.
         """
-        when:
+        when: 'the public top-level types of `dev.lamp` are listed'
             var exposed = code.findAll { it.packageName == 'dev.lamp' }
                               .findAll { it.enclosingClass.empty && !it.simpleName.contains('\$') }
                               .findAll { it.modifiers.contains(JavaModifier.PUBLIC) }
                               .collect { it.simpleName }
                               .toSet()
 
-        then:
+        then: 'they are exactly those in `EMBEDDING_API`'
             exposed.sort() == EMBEDDING_API.sort()
     }
 
-    def 'A type in dev.lamp says by its name whether it is public: Lamp... if it is, Internal... if not'() {
+    def 'A type in `dev.lamp` says by its name whether it is public: `Lamp…` if it is, `Internal…` if not'() {
         reportInfo """
             A program that uses oillamp imports from `dev.lamp` next to its own types and those
             of other libraries. A prefix on every public type makes it obvious there which ones
@@ -101,12 +104,12 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             types are all internal, apart from its two public ones, the entry point `OilLamp` and
             the `Machine` it runs against.
         """
-        given: 'every top-level type in dev.lamp'
+        given: 'every top-level type in `dev.lamp`'
             var types = code.findAll { it.packageName == 'dev.lamp' }
                             .findAll { it.enclosingClass.empty && !it.simpleName.contains('\$') }
                             .findAll { it.simpleName != 'package-info' }
 
-        when: 'we compare each one\'s name with whether it is public'
+        when: 'each one\'s name is compared with whether it is public'
             var misnamed = types.findResults { type ->
                 boolean exposed = type.modifiers.contains(JavaModifier.PUBLIC)
                 if (exposed && !type.simpleName.startsWith('Lamp'))
@@ -121,14 +124,14 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             misnamed.isEmpty()
     }
 
-    def 'The embedding package does not depend on the engine'() {
+    def 'The client package, `dev.lamp`, does not depend on the engine, `dev.oillamp`'() {
         reportInfo """
-            The engine runs in a process of its own, and an application talks to it. If
-            `dev.lamp` imported `dev.oillamp`, that separation would be a convention rather than
-            a fact, and the application would be one careless import away from running the
-            supervisor inside itself. The engine may use `dev.lamp`; never the other way round.
+            The engine runs in a process of its own, and a program built on oillamp talks to it. If
+            `dev.lamp` imported `dev.oillamp`, that separation would be a convention rather than a
+            fact, and one careless import would let the program run the supervisor inside itself.
+            The engine may use `dev.lamp`; never the other way round.
         """
-        when:
+        when: 'every dependency of a type in `dev.lamp` on a type in `dev.oillamp` is collected'
             var reaching = [] as Set
             code.findAll { it.packageName == 'dev.lamp' }.each { type ->
                 type.directDependenciesFromSelf.each { dependency ->
@@ -137,7 +140,7 @@ class The_Shape_Of_The_Code_Spec extends Specification {
                 }
             }
 
-        then:
+        then: 'there is none'
             reaching.isEmpty()
     }
 
@@ -147,11 +150,11 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             caller can then reach everything that type touches, and the freedom to change it is
             gone without anyone deciding to give it up.
 
-            So every parameter and return type of every public method must itself be public -
-            either one of the public types, one of their nested types, or something from the JDK
-            or a library.
+            So every parameter type and return type of every public method must itself be public:
+            one of the public types, one of their nested types, or something from the JDK or a
+            library.
         """
-        when:
+        when: 'every public method of the public types is checked for parameter and return types that are not public'
             var leaks = []
             // By package as well as name: a dev.lamp type may share its name with an internal one.
             code.findAll { (it.packageName == 'dev.oillamp' && it.simpleName in ENGINE_API)
@@ -164,27 +167,28 @@ class The_Shape_Of_The_Code_Spec extends Specification {
                 }
             }
 
-        then:
+        then: 'there is none'
             leaks.isEmpty()
     }
 
-    def 'Only the classes listed here may use files, processes, threads, System or SecureRandom'() {
+    def 'Only the classes listed here may use files, processes, threads, `System` or `SecureRandom`'() {
         reportInfo """
-            oillamp's logic (which packages to install, whether a directory may become a lamp,
-            which recordings to delete, what the plan is) lives in pure functions. They take
-            plain values as input and return a result, and they never read a file or start a
-            process themselves. The I/O happens in a small set of classes, listed below as
-            `allowed`. Those gather the inputs and carry out the result.
+            Oillamp's logic, such as which packages to install, whether a directory may become a
+            lamp, which recordings to delete, and what the plan is, lives in pure functions. They
+            take plain values and return a result, and never read a file or start a process
+            themselves. The I/O happens in a small set of classes, listed below as `allowed`.
+            Those gather the inputs, and carry out the result.
 
-            This separation is what lets the scenarios test broken machines, dangerous
-            directories and malformed configuration with plain values, without installing
-            anything or starting a container. It breaks silently: a planner that calls
-            `Files.readString` still compiles and still works, but can no longer be tested that way.
+            This separation is what lets the scenarios test broken machines, dangerous directories
+            and malformed configuration with plain values, without installing anything or starting
+            a container. Nothing reports when it is broken: a planner that calls
+            `Files.readString` still compiles and still works, but can no longer be tested that
+            way.
 
-            So this scenario scans every class outside the `allowed` list and fails if one
+            So this scenario scans every class outside the `allowed` list, and fails if one
             depends directly on `Files`, `ProcessBuilder`, `Process`, `Thread`, `System` or
-            `SecureRandom`. If a class really is a new I/O boundary, add it to `allowed` with a
-            comment saying what it touches and which pure class makes its decisions.
+            `SecureRandom`. If a class really is a new I/O boundary, add it to `allowed`, with a
+            comment that says what it touches, and which pure class makes its decisions.
         """
         given: 'the classes whose job is to touch the outside world'
             var allowed = ['RealMachine', 'SimulatedMachine', 'FilesystemUtil', 'LampLock', 'HostProbeUtil',
@@ -225,7 +229,7 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             var effects = ['java.nio.file.Files', 'java.lang.ProcessBuilder', 'java.lang.Process',
                            'java.security.SecureRandom', 'java.lang.Thread', 'java.lang.System']
 
-        when: 'a nested class is judged by the class it lives in, not by its own name'
+        when: 'every class outside `allowed` is checked for those dependencies, a nested class under the name of the class it is in'
             var offenders = [] as Set
             code.findAll { !(outermostNameOf(it) in allowed) }.each { type ->
                 type.directDependenciesFromSelf.each { dependency ->
