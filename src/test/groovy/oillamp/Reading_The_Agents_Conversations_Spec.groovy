@@ -2,33 +2,38 @@ package oillamp
 
 import dev.lamp.Lamp
 import dev.lamp.LampConversation.Kind
+import dev.lamp.LampDirectory
+import dev.oillamp.OilLamp
 import groovy.json.JsonOutput
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-/**
- *  Reading the agent's conversations: {@code Lamp.conversations} and {@code oillamp conversations}.
- *
- *  <p>pi, the agent in the sandbox, keeps every conversation in a file of its own in the agent's
- *  home: one JSON object per line, each entry naming the one before it. That makes a conversation a
- *  tree, which forks wherever someone asked something else instead of an earlier question. An
- *  application shows these conversations, and moves around in them, without starting pi, and
- *  whether or not the lamp is running.
- *
- *  <p>The files here are written the way pi writes them, into the agent's home of a real lamp.
- */
+@Title('Reading the agent\'s conversations')
+@Narrative('''
+pi, the agent in the sandbox, keeps every conversation in a file of its own in the agent's home:
+one JSON object per line, each entry naming the one before it. That makes a conversation a tree,
+which forks wherever someone asked something else instead of an earlier question. A program built
+on oillamp shows these conversations with `Lamp.conversations`, and moves around in them, without
+starting pi, and whether or not the lamp is running. On the command line, `oillamp conversations`
+does the same.
+
+The files here are written the way pi writes them, into the agent's home of a real lamp.
+''')
+@Subject([OilLamp, Lamp, LampDirectory])
 @Timeout(value = 60, unit = TimeUnit.SECONDS)
 class Reading_The_Agents_Conversations_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     Path lamp
 
@@ -39,17 +44,17 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
         assert host.oillamp.run('at', lamp.toString()).succeeded()
     }
 
-    def 'An application reads the agent\'s conversations as values, the most recent first'() {
+    def '`Lamp.conversations` reads the agent\'s conversations as values, the most recent first'() {
         reportInfo """
-            An application, a program built on oillamp's Java API such as a chat app, that shows a
-            lamp's conversations needs them as values it can list and draw, not as pi's files.
-            `Lamp.conversations` reads them straight from the agent's home, so they are there
-            while no session runs too, and the list is quick enough to read again whenever
-            something may have changed. A conversation a scheduled job's run had is named after
-            the run and the job by oillamp, and says which job it was. Each conversation's
-            `line()` is the path of entries from its start to where it stands now.
+            A program built on oillamp that shows a lamp's conversations, such as a chat app, needs
+            them as values it can list and draw, not as pi's files. `Lamp.conversations` reads them
+            straight from the agent's home, so they are there while no session runs too, and the
+            list is quick enough to read again whenever something may have changed. Oillamp names
+            the conversation of a scheduled job's run after the run and the job, and the
+            conversation says which job it was. Each conversation's `line()` is the path of
+            entries from its start to where it stands now.
         """
-        given:
+        given: 'two conversations: one someone had, and a newer one of `run-3`, a run of `job-1`'
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
                 question 'q1', 'How big is the repository?'
                 answer 'a1', 'q1', 'About 12,000 lines.'
@@ -60,7 +65,7 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
                 answer 'a1', 'q1', 'It is green.'
             }
 
-        when:
+        when: '`Lamp.conversations` is called'
             var found = Lamp.conversations(lamp)
 
         then: 'the most recent comes first, named as it was named, or by its first question'
@@ -73,10 +78,10 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
             first.line()*.text().takeRight(2) == ['How big is the repository?', 'About 12,000 lines.']
             first.started() == Instant.parse('2026-09-28T10:00:00Z')
 
-        and: 'the one a job\'s run had says which job, so an application can show it apart'
+        and: 'the one of the job\'s run names the job, so that a program can show it apart'
             found*.job() == [Optional.of('job-1'), Optional.empty()]
 
-        and: 'one is found by the start of its id, as oillamp shows it'
+        and: '`Lamp.conversation` finds one by the start of its id, as oillamp shows it, and none by a start that both ids share'
             Lamp.conversation(lamp, '01a0ec69-de1c').map { it.title() } == Optional.of('How big is the repository?')
             Lamp.conversation(lamp, '01a0').isEmpty()
     }
@@ -89,7 +94,7 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
             question goes unless it says otherwise; its `line()` is the path from the start to
             that entry. Every other branch can still be read with `lineTo`.
         """
-        given:
+        given: 'a conversation that forks after "Blue.": "Name a fruit", then, instead, "Name an animal"'
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
                 question 'q1', 'Name a colour'
                 answer 'a1', 'q1', 'Blue.'
@@ -99,7 +104,7 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
                 answer 'a2b', 'q2b', 'A fox.'
             }
 
-        when:
+        when: '`Lamp.conversations` reads it'
             var found = Lamp.conversations(lamp).first()
 
         then: 'it stands on the branch written last'
@@ -116,10 +121,10 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
     def 'An answer carries what the agent thought, the tools it called, and whether it failed'() {
         reportInfo """
             A chat shows more than words: what the model thought before it answered, each tool it
-            ran with the one line that says what it did, the tool's output, and answers that failed,
-            with the reason the model service gave.
+            ran, with one line that says what the call did, the tool's output, and answers that
+            failed, with the reason the model service gave.
         """
-        given:
+        given: 'an answer that thinks and runs `ls`, the tool\'s failed output, and an answer the model service refused'
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
                 question 'q1', 'List the files'
                 entry id: 'a1', parentId: 'q1', message: [role: 'assistant', stopReason: 'toolUse', content: [
@@ -131,28 +136,28 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
                         errorMessage: '403: model not allowed', content: []]
             }
 
-        when:
+        when: '`Lamp.conversations` reads the conversation\'s line'
             var line = Lamp.conversations(lamp).first().line()
 
-        then:
+        then: 'the answer carries its thinking, and its call of bash, summed up on one line'
             var call = line.find { it.id() == 'a1' }
             call.thinking() == 'I will use ls.'
             call.calls()*.name() == ['bash']
             call.calls().first().summary() == 'ls -la ⏎ ~/workspace'
 
-        and:
+        and: 'the tool\'s output names bash, and failed'
             var output = line.find { it.id() == 't1' }
             output.kind() == Kind.TOOL_OUTPUT
             output.tool() == Optional.of('bash')
             output.failed()
 
-        and:
+        and: 'the refused answer failed, with the service\'s reason'
             var failed = line.find { it.id() == 'a2' }
             failed.failed()
             failed.text() == '403: model not allowed'
     }
 
-    def 'Lamp.conversations does not follow links or trust files that the agent left among its conversations'() {
+    def '`Lamp.conversations` does not follow links or trust files that the agent left among its conversations'() {
         reportInfo """
             The agent writes these files and can write anything there: a link to a file of the
             user's elsewhere, a directory that is a link, lines that are not JSON, a file that is
@@ -176,24 +181,25 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
         and: 'a file with no header'
             Files.writeString(file.parent.resolve('headless.jsonl'), '{"type":"message","id":"x"}\n')
 
-        when:
+        when: '`Lamp.conversations` is called'
             var found = Lamp.conversations(lamp)
 
-        then:
+        then: 'it finds only the real conversation, and reads it'
             found*.id() == ['01a0ec69-de1c-7234-914c-b970a862c13e']
             found.first().line()*.text().contains('Hello')
     }
 
-    def 'Oillamp\'s `conversations` command lists the conversations, and shows one with the ids that `oillamp ask` takes'() {
+    def '`oillamp conversations` lists the conversations, and shows one with the ids that `oillamp ask` takes'() {
         reportInfo """
-            From a terminal, a person lists the agent's conversations with `oillamp conversations
-            <lamp>`, and looks into one by giving the start of its id. The ids next to each
-            question and answer are what `oillamp ask` takes, with `--after` to continue after an
-            answer or `--instead-of` to ask something instead of a question. A fork is marked
-            where it happens. A terminal escape sequence in an answer is not printed, and an id
-            that matches no conversation is reported as `OIL-CONVERSATION-001`.
+            From a terminal, someone lists the agent's conversations with
+            `oillamp conversations <lamp>`, and looks into one by giving the start of its id. The
+            ids next to each question and answer are what `oillamp ask` takes, with `--after` to
+            continue after an answer or `--instead-of` to ask something instead of a question. A
+            fork is marked where it happens. A terminal escape sequence in an answer is not
+            printed, and an id that matches no conversation is reported as
+            `OIL-CONVERSATION-001`.
         """
-        given:
+        given: 'a conversation that forks, whose last answer holds a terminal escape sequence'
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') {
                 question 'q1', 'Name a colour'
                 answer 'a1', 'q1', 'Blue.'
@@ -203,12 +209,12 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
                 answer 'a2b', 'q2b', 'A fox.\u001B[2J'
             }
 
-        when:
+        when: '`oillamp conversations` lists the conversations, shows one by the start of its id, and is given an id that matches none'
             var listed = host.oillamp.run('conversations', lamp.toString())
             var shown = host.oillamp.run('conversations', lamp.toString(), '01a0ec69-de1c')
             var missing = host.oillamp.run('conversations', lamp.toString(), 'ffff')
 
-        then:
+        then: 'the list shows the conversation\'s id and first question'
             listed.succeeded()
             listed.console().contains('01a0ec69-de1c-7234')
             listed.console().contains('Name a colour')
@@ -220,32 +226,32 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
             shown.console().contains('1 other question was asked here instead')
             !shown.console().contains('\u001B[2J')
 
-        and:
+        and: 'the id that matches none is reported as `OIL-CONVERSATION-001`'
             missing.reported('OIL-CONVERSATION-001')
     }
 
-    def 'LampDirectory.forget deletes a conversation for good'() {
+    def '`LampDirectory.forget` deletes a conversation for good'() {
         reportInfo """
-            A person tidying up deletes the conversations they no longer want; an application, a
-            program built on oillamp's Java API, does it with `LampDirectory.forget`, given the
-            start of the conversation's id. The other conversations stay. An id that matches no
-            conversation throws `IOException`.
+            Someone tidying up deletes the conversations they no longer want. A program built on
+            oillamp does it with `LampDirectory.forget`, given the start of the conversation's id.
+            The other conversations stay. An id that matches no conversation throws
+            `IOException`.
         """
-        given:
+        given: 'two conversations, "One" and "Two"'
             conversation('01a0ec69-de1c-7234-914c-b970a862c13e', '2026-09-28T10:00:00Z') { question 'q1', 'One' }
             conversation('01a0ed10-aaaa-7234-914c-b970a862c13e', '2026-09-29T10:00:00Z') { question 'q1', 'Two' }
             var lamps = Lamp.at(lamp)
 
-        when:
+        when: '`forget` is given the start of the first one\'s id'
             lamps.forget('01a0ec69')
 
-        then:
+        then: 'only "Two" is left'
             lamps.conversations()*.title() == ['Two']
 
-        when:
+        when: '`forget` is given an id that matches no conversation'
             lamps.forget('ffffffff')
 
-        then:
+        then: 'it throws `IOException`'
             thrown(IOException)
     }
 
