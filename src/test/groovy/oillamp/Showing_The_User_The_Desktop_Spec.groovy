@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 @Requires({ Files.isExecutable(Path.of('/usr/bin/python3')) })
-class ShowingTheUserTheDesktopSpec extends Specification {
+class Showing_The_User_The_Desktop_Spec extends Specification {
 
     static final Path LAMP = Path.of('src/main/resources/image/rootfs/usr/local/bin/lamp').toAbsolutePath()
 

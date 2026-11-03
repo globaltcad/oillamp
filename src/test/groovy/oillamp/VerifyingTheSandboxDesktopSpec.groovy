@@ -611,7 +611,7 @@ class VerifyingTheSandboxDesktopSpec extends Specification {
             `lamp show` sends one line of JSON to /oillamp/sockets/host/desktop.sock. That
             directory is the host's, mounted read-only into the sandbox, and a socket in it is
             served by the session on the host. Connecting to it needs no write access, which is
-            what this checks for real: the session's side is in ShowingTheUserTheDesktopSpec.
+            what this checks for real: the session's side is in Showing_The_User_The_Desktop_Spec.
         """
         given: 'the host listening on the desktop socket, as the session does'
             var server = java.nio.channels.ServerSocketChannel.open(java.net.StandardProtocolFamily.UNIX)
