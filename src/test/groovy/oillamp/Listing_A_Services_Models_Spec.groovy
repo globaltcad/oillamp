@@ -23,7 +23,7 @@ shown in `Choosing_The_Model_For_A_Lamp_Spec`.
 A stand-in model server on loopback answers the way Ollama does, with an OpenAI-style list of
 models, and records which path it was asked for and with which key.
 ''')
-class ListingAServicesModelsSpec extends Specification {
+class Listing_A_Services_Models_Spec extends Specification {
 
     HttpServer server
     String answer = '{"object":"list","data":[{"id":"qwen2.5:7b","object":"model","owned_by":"library"},' +
