@@ -17,25 +17,28 @@ import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
 import dev.lamp.LampHostRisk
 import dev.lamp.LampHostVerdict
+import spock.lang.Narrative
 import spock.lang.Specification
+import spock.lang.Subject
+import spock.lang.Title
 import sprouts.Tuple
 
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 
-/**
- *  How events get from an embedded oillamp to the application that started it: one line of
- *  JSON each.
- *
- *  <p>An application here is a program built on oillamp, such as a desktop app, that starts the
- *  engine as a separate process with {@code oillamp at <dir> --embedded}, through
- *  {@code dev.lamp.Lamp}. The engine writes each event it reports to that process's standard
- *  output as one line of JSON ({@code LampEvent.toJson}), and the application turns each line back
- *  into an event with {@code LampEvent.fromJson}. The engine writes them in one process and the
- *  application reads them in another. If the two ever disagreed, the application would show its
- *  user nonsense or nothing at all, so every kind of event is written and read back here.
- */
+@Title('The event wire format')
+@Narrative('''
+How events get from an embedded oillamp to the program that started it: one line of JSON each.
+
+A program built on oillamp, such as a desktop app, starts the engine as a separate process with
+`oillamp at <dir> --embedded`, through `dev.lamp.Lamp`. The engine writes each event it reports to
+that process's standard output as one line of JSON, with `LampEvent.toJson`, and the program turns
+each line back into an event with `LampEvent.fromJson`. The engine writes them in one process and
+the program reads them in another. If the two ever disagreed, the program would show its user
+nonsense, or nothing at all, so every kind of event is written and read back here.
+''')
+@Subject(LampEvent)
 class The_Event_Wire_Format_Spec extends Specification {
 
     static final LampProblem PROBLEM = new LampProblem(
@@ -57,7 +60,6 @@ class The_Event_Wire_Format_Spec extends Specification {
 
     static final LampStep STEP = new LampStep('WriteFile', 'write a file', 'because')
 
-    /** One of every kind of event, with every optional part both present and absent somewhere. */
     /** A snapshot with every part present, a message with a line break in it among them. */
     static final LampSave SNAPSHOT = new LampSave(
             '3f2a9c1d00000000000000000000000000000000', Instant.parse('2026-09-29T18:14:03Z'),
@@ -85,6 +87,7 @@ class The_Event_Wire_Format_Spec extends Specification {
 
     static final LampRun RUN = new LampRun('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
+    /** One of every kind of event, with every optional part both present and absent somewhere. */
     static final List<LampEvent> EXAMPLES = [
             new LampEvent.PhaseStarted(LampStartupPhase.SESSION),
             new LampEvent.PhaseFinished(LampStartupPhase.IMAGE, Duration.ofSeconds(3)),
@@ -178,27 +181,27 @@ class The_Event_Wire_Format_Spec extends Specification {
             new LampEvent.Failure(PROBLEM),
     ]
 
-    def 'Every event reads back as the same value it was written from'() {
+    def '`LampEvent.fromJson` reads every event back as the value `LampEvent.toJson` wrote it from'() {
         reportInfo """
-            The engine writes each event as JSON with `LampEvent.toJson`, and an application, a
-            program built on oillamp's Java API, reads it back with `LampEvent.fromJson`. Text
-            with line breaks, quotes, tabs and backslashes, problems with every kind of evidence,
-            and parts that are absent: all come back exactly as they went out.
+            The engine writes each event as JSON with `LampEvent.toJson`, and a program built on
+            oillamp reads it back with `LampEvent.fromJson`. Text with line breaks, quotes, tabs and
+            backslashes, problems with every kind of evidence, and parts that are absent: all come
+            back exactly as they went out.
         """
-        expect:
+        expect: 'every example event, written and read back, equals itself'
             EXAMPLES.every { event -> LampEvent.fromJson(event.toJson()) == Optional.of(event) }
     }
 
-    def 'Each event is written as one line of JSON, so an application can split the engine\'s output on line breaks'() {
+    def 'Each event is written as one line of JSON, so that a program can split the engine\'s output on line breaks'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, runs the engine with
-            `oillamp at <dir> --embedded`, reads its standard output one line at a time and
-            treats each line as one event. Some events carry text with line breaks in it, such as a container log in
-            a problem's evidence. If such a break reached the output as it is, one event would
-            arrive as two broken halves, and neither could be read. So a line break inside an
-            event is always written as an escape, and only the end of an event ends a line.
+            A program built on oillamp runs the engine with `oillamp at <dir> --embedded`, reads its
+            standard output one line at a time, and treats each line as one event. Some events
+            carry text with line breaks in it, such as a container log in a problem's evidence. If
+            such a break reached the output as it is, one event would arrive as two broken halves,
+            and neither could be read. So a line break inside an event is always written as an
+            escape, and only the end of an event ends a line.
         """
-        expect:
+        expect: 'no example event\'s JSON holds a line break'
             EXAMPLES.every { !it.toJson().contains('\n') }
     }
 
@@ -209,21 +212,20 @@ class The_Event_Wire_Format_Spec extends Specification {
             example in that list, so that a new kind of event cannot be added without being
             checked.
         """
-        expect:
+        expect: 'every kind of event `LampEvent` permits has an example in `EXAMPLES`'
             LampEvent.permittedSubclasses
                      .findAll { !it.interface }
                      .every { kind -> EXAMPLES.any { kind.isInstance(it) } }
     }
 
-    def 'LampEvent.fromJson returns no event for a line it does not know, rather than failing'() {
+    def '`LampEvent.fromJson` returns no event for a line it does not know, rather than failing'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, reads the engine's standard
-            output one line of JSON at a time with `LampEvent.fromJson`. It may read from a newer
-            oillamp than it was built with, or receive a line that was cut short. Either way
-            `fromJson` returns an empty `Optional`, so the application carries on with the next
-            line.
+            A program built on oillamp reads the engine's standard output one line of JSON at a
+            time with `LampEvent.fromJson`. It may read from a newer oillamp than it was built
+            with, or receive a line that was cut short. Either way `fromJson` returns an empty
+            `Optional`, so that the program carries on with the next line.
         """
-        expect:
+        expect: '`fromJson` returns an empty `Optional` for the line'
             LampEvent.fromJson(line).isEmpty()
 
         where:
@@ -233,11 +235,11 @@ class The_Event_Wire_Format_Spec extends Specification {
 
     def 'An answer from an engine that did not yet say which model wrote it reads with no model'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, may join a session that an
-            older oillamp started, and read its events with `LampEvent.fromJson`. Answers then come without the model that wrote them; they read as answers whose
-            model is not known, rather than not at all.
+            A program built on oillamp may join a session that an older oillamp started, and read
+            its events with `LampEvent.fromJson`. Its answers then come without the model that
+            wrote them. They read as answers whose model is not known, rather than not at all.
         """
-        expect:
+        expect: 'an `Answered` progress event without a model reads back with an empty model'
             LampEvent.fromJson('{"type":"RunProgress","run":"run-3","progress":{"type":"Answered","text":"Hi.","failed":false}}') ==
                     Optional.of(new LampEvent.RunProgress('run-3', new LampAgentProgress.Answered('Hi.', false, Optional.empty())))
     }
