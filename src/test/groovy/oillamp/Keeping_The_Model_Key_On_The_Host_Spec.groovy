@@ -5,10 +5,12 @@ import com.sun.net.httpserver.HttpServer
 import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
@@ -22,25 +24,28 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- *  The model key stays on the host. The sandbox sends its model requests to oillamp with a
- *  placeholder, and oillamp sends them on to the model service with the real key.
- *
- *  <p>An agent can read everything in its sandbox, and whatever it can read it can send anywhere;
- *  a web page with the right instructions is enough to make it try. So the key is never in the
- *  sandbox, and these scenarios check the one place it is used: the relay on the host.
- *
- *  <p>The session is real apart from the container. A stand-in model service runs on this
- *  machine's loopback, configured as {@code model.service}, and the scenarios send requests into
- *  the relay's socket exactly as the relay inside the container does.
- */
+@Title('Keeping the model key on the host')
+@Narrative('''
+The model key stays on the host. The harness in the sandbox sends its model requests to oillamp's
+model relay with a placeholder key, and the relay, on the host, sends them on to the model service
+with the real key.
+
+An agent can read everything in its sandbox, and whatever it can read it can send anywhere; a web
+page with the right instructions is enough to make it try. So the key is never in the sandbox, and
+these scenarios check the one place it is used: the model relay on the host.
+
+The session is real, apart from the container. A stand-in model service runs on this machine's
+loopback, set as `model.service`, and the scenarios send requests into the model relay's socket
+exactly as the relay inside the container does.
+''')
+@Subject(OilLamp)
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
 
     static final String KEY = 'sk-the-real-key-0123456789'
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
     HttpServer service
     /** What the stand-in model service received, one map per request. */
     final List<Map> received = new CopyOnWriteArrayList<>()
@@ -82,7 +87,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
     def 'The model relay sends each request on with the host\'s key, never with the key the sandbox sent'() {
         reportInfo """
             Inside the sandbox the harness holds only a placeholder key, and sends its model
-            requests to oillamp's model relay, a socket oillamp serves on the host. oillamp takes
+            requests to oillamp's model relay, a socket oillamp serves on the host. Oillamp takes
             each request, removes whatever key and host the sandbox put in it, adds the real key
             from the environment oillamp was started in, and sends it to the configured service.
             The path, the body and the other headers arrive unchanged, and the answer comes back
@@ -113,13 +118,14 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
 
     def 'The key is nowhere the sandbox can see: not in its settings, not in its home, not in its sockets'() {
         reportInfo """
-            Everything the container is given comes from three places in the lamp: the session's
-            settings (runtime.env and the agent guide), the agent's home, and the socket
-            directories. None of them may hold the key, in any file, under any name. The session
-            here really starts with a key in its environment and really writes all of these, so
-            this checks the files the container would be given, not a description of them.
+            Everything the container is given comes from four places in the lamp: the session's
+            settings in `.oillamp/session`, among them `runtime.env`; the agent's home, with
+            `AGENTS.md`; the socket directories in `.oillamp/sockets`; and the recordings in
+            `.oillamp/recordings`. None of their files may hold the key. The session here really
+            starts with a key in its environment, and really writes all of them, so the scenario
+            checks the files the container would be given, not a description of them.
         """
-        given:
+        given: 'the key `EDENAI_API_KEY` in the environment, and a session'
             host.machine { it.environmentVariable('EDENAI_API_KEY', KEY) }
             startASession()
 
@@ -132,25 +138,25 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             var files = given.findAll { Files.exists(it) }.collectMany { place ->
                 Files.walk(place).filter { Files.isRegularFile(it) }.toList() }
 
-        then: 'there are files to check, including the settings and the guide'
+        then: 'among them are `runtime.env` and `AGENTS.md`'
             files.any { it.fileName.toString() == 'runtime.env' }
             files.any { it.fileName.toString() == 'AGENTS.md' }
 
         and: 'none of them holds the key'
             files.findAll { Files.readString(it, java.nio.charset.StandardCharsets.ISO_8859_1).contains(KEY) }.isEmpty()
 
-        and: 'the settings do not even name it'
+        and: '`runtime.env` does not even name `EDENAI_API_KEY`'
             !Files.readString(lamp.resolve('.oillamp/session/runtime.env')).contains('EDENAI_API_KEY')
     }
 
-    def 'The key can come from any variable the user names, for a service the user chooses'() {
+    def '`model.service` and `model.key_env` choose the service and the variable that holds its key'() {
         reportInfo """
             The model service and its key are the user's choice, made on the host: a company's own
-            model gateway, a second account for a particular project. `model.service` and
-            `model.key_env` in the lamp's configuration say where requests go and which variable
-            holds the key. The agent cannot see either setting.
+            model gateway, say, or a second account for one project. `model.service` and
+            `model.key_env` in the lamp's `oillamp.toml` say where requests go and which
+            environment variable holds the key. The agent can see neither setting.
         """
-        given:
+        given: 'the key `sk-campaign` in `CAMPAIGN_KEY`, and a lamp with `key_env = "CAMPAIGN_KEY"`'
             host.machine { it.environmentVariable('CAMPAIGN_KEY', 'sk-campaign').environmentVariable('EDENAI_API_KEY', KEY) }
             host.givenConfig(host.lampPath(), """
                 schema_version = 1
@@ -160,21 +166,21 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             """.stripIndent())
             startASession(false)
 
-        when:
+        when: 'the sandbox sends `GET /v3/models`'
             ask(request('GET', '/v3/models', '', 'Authorization: Bearer placeholder'))
 
-        then:
+        then: 'the service received the key from `CAMPAIGN_KEY`'
             received.first().authorization == 'Bearer sk-campaign'
     }
 
-    def 'The command line can name another service and key variable, for this one session'() {
+    def '`oillamp at --model-service` and `--model-key-env` name another service and key variable for one session'() {
         reportInfo """
-            An application, a program built on oillamp that starts its engine for its own users,
-            has its own settings screen: the user types in a service and a key there, not into the
-            lamp's configuration file. So `oillamp at` takes `--model-service` and
-            `--model-key-env`, which replace the lamp's `[model]` settings for this session and
-            leave the file alone. The key itself is never an argument, because every user of the
-            machine can read a process's arguments: the option names the variable that holds it.
+            A program built on oillamp that starts the engine for its own users has its own
+            settings screen: its user types a service and a key there, not into the lamp's
+            `oillamp.toml`. So `oillamp at` takes `--model-service` and `--model-key-env`, which
+            replace the lamp's `[model]` settings for this session, and leave the file alone. The
+            key itself is never an argument, because every user of the machine can read a
+            process's arguments: the option names the variable that holds it.
         """
         given: 'a lamp configured for one service and key, and another key in the environment'
             host.machine { it.environmentVariable('APP_MODEL_KEY', 'sk-from-the-app').environmentVariable('EDENAI_API_KEY', KEY) }
@@ -184,7 +190,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
                 service = "https://api.eu.edenai.run"
             '''.stripIndent())
 
-        when: 'the session is started with the other service and the other key'
+        when: 'a session is started with `--model-service` and `--model-key-env=APP_MODEL_KEY`, and the sandbox sends `GET /v3/models`'
             startASession(false, '--model-service', "http://127.0.0.1:${service.address.port}".toString(),
                           '--model-key-env=APP_MODEL_KEY')
             ask(request('GET', '/v3/models', '', 'Authorization: Bearer placeholder'))
@@ -193,7 +199,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             received.size() == 1
             received.first().authorization == 'Bearer sk-from-the-app'
 
-        and: 'the lamp\'s own configuration is unchanged'
+        and: '`oillamp.toml` still names its own service'
             Files.readString(host.lampPath().resolve('oillamp.toml')).contains('https://api.eu.edenai.run')
     }
 
@@ -204,10 +210,10 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             runs on this machine, and the variable must be a name, not a key. Oillamp reports a
             mistake as a usage error before anything starts, and makes no lamp.
         """
-        when:
+        when: '`oillamp at` is run with the option the row gives'
             var outcome = host.oillamp.run(['at', host.lampPath().toString(), *given] as String[])
 
-        then:
+        then: 'it exits with `USAGE`, says what is wrong, and makes no lamp'
             outcome.status() == LampExitStatus.USAGE
             outcome.console().contains(complaint)
             !Files.exists(host.lampPath())
@@ -223,13 +229,13 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
     def 'The model relay sends requests to a model server on this machine under the path of that server\'s API'() {
         reportInfo """
             Local model servers such as Ollama, LM Studio or llama.cpp's server answer
-            OpenAI-style requests under /v1, while the address inside the sandbox is always
-            http://127.0.0.1:3129/v3, the same in every sandbox. So the service can be given with
-            a path, http://127.0.0.1:11434/v1 for Ollama, and the relay puts that path in place of
-            /v3. A request outside /v3 has no place on such a service, and the relay itself
-            answers it with 404.
+            OpenAI-style requests under `/v1`, while the address inside the sandbox is always
+            `http://127.0.0.1:3129/v3`, the same in every sandbox. So `model.service` can be given
+            with a path, `http://127.0.0.1:11434/v1` for Ollama, and the relay puts that path in
+            place of `/v3`. A request outside `/v3` has no place on such a service, and the relay
+            itself answers it with 404.
         """
-        given:
+        given: 'a lamp whose service is the stand-in, under `/v1`'
             host.machine { it.environmentVariable('EDENAI_API_KEY', 'local') }
             host.givenConfig(host.lampPath(), """
                 schema_version = 1
@@ -238,39 +244,40 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             """.stripIndent())
             startASession(false)
 
-        when:
+        when: 'the sandbox sends `POST /v3/chat/completions`, `GET /v3/models` and `GET /metrics`'
             ask(request('POST', '/v3/chat/completions', '{}', 'Authorization: Bearer placeholder'))
             ask(request('GET', '/v3/models', ''))
             var elsewhere = ask(request('GET', '/metrics', ''))
 
-        then:
+        then: 'the first two arrived under `/v1`; the relay answered the third with 404, saying requests go under `/v3`'
             received*.path == ['/v1/chat/completions', '/v1/models']
             elsewhere.startsWith('HTTP/1.1 404')
             elsewhere.contains('under /v3')
     }
 
-    def 'Only Eden AI\'s models are filtered by region; a service of the user\'s own is not'() {
+    def 'Oillamp has the harness filter only Eden AI\'s models by region, not those of a service of the user\'s own'() {
         reportInfo """
-            Eden AI is used only for models served in the EU, and its model list says where each
-            model is served, so the harness filters it. A model server of the user's own, such
-            as one on this machine, lists no regions, and filtering it would leave nothing. So
-            oillamp decides on the host, from the service, and tells the sandbox in
-            OILLAMP_MODEL_EU_ONLY; the agent's guide says what it means.
+            Oillamp uses Eden AI only for models served in the EU, and Eden AI's model list says
+            where each model is served, so the harness in the sandbox filters it. A model server of
+            the user's own, such as one on this machine, lists no regions, and filtering its list
+            would leave nothing. So oillamp decides on the host, from `model.service`, and tells
+            the sandbox in `OILLAMP_MODEL_EU_ONLY`. The agent's guide, `AGENTS.md`, says what that
+            means.
         """
-        given:
+        given: 'a lamp whose service is Eden AI, or a model server on this machine, as the row says'
             if (local) host.givenConfig(host.lampPath(), """
                 schema_version = 1
                 [model]
                 service = "http://127.0.0.1:11434/v1"
             """.stripIndent())
 
-        when: 'the lamp is set up for a session, which writes the settings the sandbox reads'
+        when: 'a session starts, which writes `runtime.env` and `AGENTS.md`'
             startASession(false)
             var settings = Files.readString(host.lampPath().resolve('.oillamp/session/runtime.env'))
             var agentHome = Files.list(host.lampPath()).filter { it.fileName.toString().startsWith('agent-lamp-') }.findFirst().orElseThrow()
             var guide = Files.readString(agentHome.resolve('AGENTS.md'))
 
-        then:
+        then: '`OILLAMP_MODEL_EU_ONLY` is 1 for Eden AI and 0 for the local server, and `AGENTS.md` says the same in words'
             settings.contains("OILLAMP_MODEL_EU_ONLY='${euOnly}'")
             guide.contains(local ? 'it is not Eden AI' : 'Only models served in the EU are offered')
 
@@ -286,24 +293,25 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
     def 'Without a model key, the model relay answers 401 with what to do, and sends nothing to the service'() {
         reportInfo """
             A session started without the key in its environment still starts: the agent can do
-            everything except use the model. When its harness tries, the model relay answers 401
-            and says exactly what to do, so the user does not go looking for a network problem.
-            Oillamp prints the same in the terminal it runs in.
+            everything except use the model. When its harness tries, the model relay answers 401,
+            and says exactly what to do, so that the user does not go looking for a network
+            problem. The session also reports, in the terminal oillamp runs in, that there is no
+            model key.
         """
         given: 'no key anywhere'
             startASession()
 
-        when:
+        when: 'the sandbox sends a chat request'
             var answer = ask(request('POST', '/v3/chat/completions', '{}', 'Authorization: Bearer placeholder'))
 
-        then: 'the harness is told why, in words that say what to do'
+        then: 'the relay answered 401, saying to set `EDENAI_API_KEY` in the environment oillamp is started from'
             answer.startsWith('HTTP/1.1 401')
             answer.contains('set EDENAI_API_KEY in the environment oillamp is started from')
 
         and: 'nothing was sent to the service'
             received.isEmpty()
 
-        and: 'the terminal oillamp runs in says so'
+        and: 'the session reports that there is no model key'
             waitUntil { reported.any { it instanceof LampEvent.Info && it.area() == 'network'
                                        && it.text().contains('no model key') } }
     }
@@ -329,7 +337,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             host.machine { it.environmentVariable('EDENAI_API_KEY', KEY) }
             startASession()
 
-        when:
+        when: 'the sandbox sends a streaming chat request, and reads until the first part arrives'
             var channel = SocketChannel.open(UnixDomainSocketAddress.of(modelSocket()))
             channel.write(ByteBuffer.wrap(request('POST', '/v3/chat/completions', '{"stream":true}',
                                                   'Authorization: Bearer placeholder').getBytes(StandardCharsets.UTF_8)))
@@ -344,22 +352,22 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             soFar.toString().contains('data: second')
     }
 
-    def 'The model relay refuses a request that names a host of its own, so the key cannot be sent anywhere else'() {
+    def 'The model relay refuses a request that names a host of its own, so that the key cannot be sent anywhere else'() {
         reportInfo """
-            oillamp's model relay, on the host, decides where a model request goes. A request that
+            Oillamp's model relay, on the host, decides where a model request goes. A request that
             names a host of its own, as a request to a proxy does, or asks for a tunnel with
-            CONNECT, could otherwise have the relay send the key to that host. The relay answers
-            such requests, and one with a malformed header, with 400 before it sends anything to
+            `CONNECT`, could otherwise have the relay send the key to that host. The relay answers
+            such requests, and one with a malformed header, with 400, before it sends anything to
             the service.
         """
-        given:
+        given: 'a key and a session'
             host.machine { it.environmentVariable('EDENAI_API_KEY', KEY) }
             startASession()
 
-        when:
+        when: 'the sandbox sends the request the row gives'
             var answer = ask(line)
 
-        then:
+        then: 'the relay answered 400, and sent nothing to the service'
             answer.startsWith('HTTP/1.1 400')
             received.isEmpty()
 
@@ -380,12 +388,12 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             host.machine { it.environmentVariable('EDENAI_API_KEY', KEY) }
             startASession()
 
-        when:
+        when: 'the sandbox sends a chat request, and `oillamp stop` ends the session'
             ask(request('POST', '/v3/chat/completions', '{}', 'Authorization: Bearer placeholder'))
             host.oillamp.run('stop', host.lampPath().toString())
             session.join(20_000)
 
-        then:
+        then: 'the logs hold a `model` entry, and not the key'
             var logs = Files.list(host.lampPath().resolve('.oillamp/logs')).toList()
             var text = logs.collect { Files.readString(it) }.join('\n')
             text.contains('"channel":"model"')
@@ -395,10 +403,10 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
     def 'When the model service cannot be reached, the model relay answers 502, and the network log has the request'() {
         reportInfo """
             The model service can be down, or the host offline. The model relay then answers the
-            harness with 502, saying it cannot reach the model service, which it shows the user,
-            instead of a connection cut off without a word. A request carries the whole
-            conversation, often more than the socket holds at once, so the relay reads it to the
-            end before it closes: closing with part of it unread would make the connection reset,
+            harness with 502, saying that it cannot reach the model service, which the harness can
+            show the user, rather than a connection cut off without a word. A request carries the
+            whole conversation, often more than the socket holds at once, so the relay reads it to
+            the end before it closes: closing with part of it unread would reset the connection,
             and the answer could be lost.
         """
         given: 'a service that is no longer there, and a key'
@@ -406,16 +414,16 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             startASession()
             service.stop(0)
 
-        when: 'a request of a megabyte'
+        when: 'the sandbox sends a request of a megabyte, and `oillamp stop` ends the session'
             var answer = ask(request('POST', '/v3/chat/completions', 'x' * 1_000_000))
             host.oillamp.run('stop', host.lampPath().toString())
             session.join(20_000)
 
-        then:
+        then: 'the relay answered 502: it cannot reach the model service'
             answer.startsWith('HTTP/1.1 502')
             answer.contains('cannot reach the model service')
 
-        and:
+        and: 'the network log has the request'
             var logs = Files.list(host.lampPath().resolve('.oillamp/logs')).toList()
             logs.collect { Files.readString(it) }.join('\n').contains('"channel":"model"')
     }
@@ -436,12 +444,12 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             }
             Files.setPosixFilePermissions(logs, PosixFilePermissions.fromString('r-x------'))
 
-        when: 'two requests, each of which is logged'
+        when: 'the sandbox sends two requests, each of which oillamp logs'
             ask(request('POST', '/v3/chat/completions', '{}'))
             ask(request('POST', '/v3/chat/completions', '{}'))
             waitUntil { reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-011' } }
 
-        then: 'one warning, and the session still runs'
+        then: 'oillamp warned with `OIL-NET-011` once, and the session still runs'
             reported.count { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-011' } == 1
             session.alive
 
@@ -449,7 +457,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             Files.setPosixFilePermissions(logs, PosixFilePermissions.fromString('rwx------'))
     }
 
-    def 'Oillamp\'s `config check` refuses a model service that is not https, unless it runs on this machine'() {
+    def '`oillamp config check` refuses a model service that is not https, unless it runs on this machine'() {
         reportInfo """
             The key goes with every request to the model service. Over plain http, anyone on the
             network path could read it. So oillamp refuses an http:// service unless it is on this
@@ -457,17 +465,17 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             server whose API is under one; a user, query or fragment is not. Oillamp reports a
             refused `model.service` as `OIL-CONFIG-004`.
         """
-        given:
+        given: 'a lamp whose `model.service` is the row\'s address'
             host.givenConfig(host.lampPath(), """
                 schema_version = 1
                 [model]
                 service = "${address}"
             """.stripIndent())
 
-        when:
+        when: '`oillamp config check` is run'
             var outcome = host.oillamp.run('config', host.lampPath().toString(), 'check')
 
-        then:
+        then: 'it reports `OIL-CONFIG-004` for exactly the addresses it refuses'
             outcome.reported('OIL-CONFIG-004') != accepted
 
         where:
