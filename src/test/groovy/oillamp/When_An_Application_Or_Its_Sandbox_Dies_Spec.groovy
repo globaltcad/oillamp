@@ -25,7 +25,7 @@ import static oillamp.RealLamps.*
  */
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
-class WhenAnApplicationOrItsSandboxDiesSpec extends Specification {
+class When_An_Application_Or_Its_Sandbox_Dies_Spec extends Specification {
 
     Path directory
     Lamp lamp

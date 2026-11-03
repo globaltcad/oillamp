@@ -263,7 +263,7 @@ started as a separate process from the test's own classpath, as an application w
 | `close()` with `sleep 600` running | returns in seconds; container, `session.json` and lock gone |
 | opening the lamp again | same agent id, its files still there |
 
-`WhenAnApplicationOrItsSandboxDiesSpec` (a spike) ends a lamp without asking:
+`When_An_Application_Or_Its_Sandbox_Dies_Spec` (a spike) ends a lamp without asking:
 
 | What happened | Result |
 |---|---|
