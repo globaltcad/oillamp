@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
  *  oillamp's standard input after a while, as a real one does when it is done or when it dies.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class EmbeddingASessionSpec extends Specification {
+class Embedding_A_Session_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
