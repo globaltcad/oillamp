@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
  *  checking.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class DecidingWhatTheSandboxMayReachSpec extends Specification {
+class Deciding_What_The_Sandbox_May_Reach_Spec extends Specification {
 
     static final String PRIVATE_RANGES = 'block private, internal and loopback ranges'
 

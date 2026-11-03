@@ -130,7 +130,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `SupervisingASessionSpec` | a whole session: windows, shutdown, failures |
 | `TheSessionCommandsSpec` | `status`, `stop`, `shell`, `view`, `list` |
 | `WakingTheAgentSpec` | the schedule, `ask`, runs and their snapshots, and the agent's scheduling tools, with a stand-in pi |
-| `DecidingWhatTheSandboxMayReachSpec` | the egress proxy and policy, over the real socket |
+| `Deciding_What_The_Sandbox_May_Reach_Spec` | the egress proxy and policy, over the real socket |
 | `Using_The_Command_Line_Spec` | usage errors, version, crash handling |
 | `TheLampCommandSpec` | the `lamp` script, with stub tools on `PATH` |
 | `ThePointerSpec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
