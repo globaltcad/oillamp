@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
  *  tested exactly as an application uses it.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class HoldingALampSpec extends Specification {
+class Holding_A_Lamp_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
