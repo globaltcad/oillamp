@@ -63,7 +63,7 @@ the user. The engine writes pi's files without following a symbolic link anywher
 so the agent cannot make it write elsewhere on the machine.
 ''')
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class GivingTheAgentInstructionsSpec extends Specification {
+class Giving_The_Agent_Instructions_Spec extends Specification {
 
     /** Instructions as an application writes them: several lines of Markdown. */
     static final String INSTRUCTIONS = '''\
