@@ -6,6 +6,8 @@ import dev.lamp.LampEvent
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
 import dev.lamp.LampConversation
+import dev.lamp.LampDirectory
+import dev.oillamp.OilLamp
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Narrative
@@ -14,6 +16,7 @@ import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -22,11 +25,12 @@ import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
+@Title('Choosing the agent\'s model')
 @Narrative('''
-Choosing the model the agent answers with: `oillamp at --model` and `oillamp model` by hand, and
-`LampDirectory.model` and `Lamp.useModel` in an application: a program built on oillamp's Java API
-(`dev.lamp`), such as Genies, a desktop app that gives each of its agents, its genies, a lamp of
-its own.
+The model the agent answers with is chosen with `oillamp at --model` and `oillamp model` on the
+command line, and with `LampDirectory.model` and `Lamp.useModel` in a program built on oillamp's
+Java API, `dev.lamp`. Genies is such a program: a desktop app that gives each of its agents, its
+genies, a lamp of its own.
 
 ## How a model gets from the application to an answer
 
@@ -98,6 +102,7 @@ and writes into each answer the model that gave it. The scenarios read the conve
 `model_change`: one that pi writes itself when a conversation starts, and one more for every
 switch.
 ''')
+@Subject([OilLamp, Lamp, LampDirectory])
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class Choosing_The_Agents_Model_Spec extends Specification {
 
@@ -117,7 +122,7 @@ class Choosing_The_Agents_Model_Spec extends Specification {
     static final Instant NOW = Instant.parse('2026-09-22T14:15:03Z')
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     Path lamp
     final List<LampEvent> reported = new CopyOnWriteArrayList<>()
@@ -165,9 +170,9 @@ class Choosing_The_Agents_Model_Spec extends Specification {
 
     def 'An old conversation that was on another model is answered by the session\'s model from then on, after one switch'() {
         reportInfo """
-            This is what happened to a user whose model service stopped offering the model their
-            old chat had started on: every question in that chat failed, although the
-            application's settings named a model that worked. pi goes back to the model a
+            Let's consider someone whose model service stopped offering the model their old chat
+            had started on. Every question in that chat failed, although the settings of the
+            program they used named a model that worked. pi goes back to the model a
             conversation's file names whenever it opens the conversation, whatever its default
             says, so the default alone cannot help. The session asks pi which model it is on
             before each run, and tells it to switch when that is another one. The earlier answers
@@ -215,23 +220,23 @@ class Choosing_The_Agents_Model_Spec extends Specification {
 
     def 'A running session is given another model, and the next question is answered by it, in an old conversation too'() {
         reportInfo """
-            Let's consider a user who changes the model in the settings of an application, a
-            program built on oillamp's Java API. They expect the next answer to come from the new
-            model, without the sandbox starting again: whatever runs on the agent's desktop would
-            be gone. `oillamp model` on the command line, and `Lamp.useModel` in the Java API,
-            tell the running session; the next run uses the new model, whether it continues a
-            conversation or starts one. pi is told to switch only once per conversation, just as
-            for a model given with `oillamp at --model`.
+            Let's consider someone who changes the model on the settings screen of a program built
+            on oillamp. They expect the next answer to come from the new model, without the
+            sandbox starting again: whatever runs on the agent's desktop would be gone.
+            `oillamp model` on the command line, and `Lamp.useModel` in the Java API, tell the
+            running session; the next run uses the new model, whether it continues a conversation
+            or starts one. pi is told to switch only once per conversation, just as for a model
+            given with `oillamp at --model`.
         """
         given: 'a session given DeepSeek, and a conversation DeepSeek answered'
             aLampWhosePiDefaultsTo(DEEPSEEK)
             startASession('--model', DEEPSEEK)
             var conversation = conversationOf(host.oillamp.run('ask', lamp.toString(), 'Name a colour'))
 
-        when: 'the session is given GPT'
+        when: '`oillamp model` gives the session GPT'
             var changed = host.oillamp.run('model', lamp.toString(), GPT)
 
-        then: 'it says so, and so does the session to whoever follows it'
+        then: 'it says the agent answers with GPT from its next run on, and the session reports the same in an `Ok` event'
             changed.succeeded()
             changed.console().contains("the agent answers with ${GPT} from its next run on")
             waitFor(LampEvent.Ok) { it.text().contains("answers with ${GPT}") }
@@ -244,7 +249,7 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             answeredBy(conversation) == [DEEPSEEK, GPT, GPT]
             modelsRecorded(conversation) == [DEEPSEEK, GPT]
 
-        when: 'an application holding the lamp goes back to DeepSeek, and the conversation goes on'
+        when: 'a program goes back to DeepSeek with `Lamp.useModel`, and the conversation goes on'
             Lamp.at(lamp).launchedBy(host.launcher).join().withCloseable { it.useModel(DEEPSEEK) }
             assert host.oillamp.run('ask', lamp.toString(), '--in', conversation, 'Name a river').succeeded()
 
@@ -324,19 +329,19 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             answeredBy(finished.conversation().orElseThrow()) == [GPT]
     }
 
-    def 'An application gives the model with LampDirectory.model, and its questions are answered by it'() {
+    def 'A program built on oillamp gives the model with `LampDirectory.model`, and that model answers its questions'() {
         reportInfo """
-            An application is a program built on oillamp's Java API (`dev.lamp`). Let's consider
-            Genies, a desktop app whose agents, its genies, each have a lamp. Genies has one model
-            setting for all its genies, and starts a genie's lamp, with `Lamp.at(...).start()`,
-            each time the genie is woken. It hands the model to the lamp the way it hands over the
-            model service and the key. The engine gets the model on its command line, which is
-            fine, since a model's name is no secret; the key goes in the environment instead.
+            Let's consider Genies, a desktop app built on oillamp whose agents, its genies, each
+            have a lamp. Genies has one model setting for all its genies, and starts a genie's lamp
+            with `Lamp.at(...).start()` each time the genie is woken. It hands the model to the
+            lamp with `LampDirectory.model`, as it hands over the model service and the key. The
+            engine gets the model on its command line, which is fine, since a model's name is no
+            secret; the key goes into the engine's environment instead.
         """
         given: 'a lamp whose pi defaults to DeepSeek'
             aLampWhosePiDefaultsTo(DEEPSEEK)
 
-        when: 'an application starts the lamp with GPT, asks a question, and closes the lamp'
+        when: 'the program starts the lamp with GPT, asks a question with `Lamp.ask`, and closes the lamp'
             var running = Lamp.at(lamp).model(GPT).launchedBy(host.launcher).start()
             assert running.awaitRunning(Duration.ofSeconds(30))
             var answer = running.ask(LampPrompt.fresh('Name a colour'))
@@ -438,12 +443,12 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             Files.readString(usersOwnFile) == 'export EDITOR=vim\n'
     }
 
-    def 'Without a model, pi decides as before, and its settings are left alone'() {
+    def 'Without `--model`, pi decides as before, and its settings are left alone'() {
         reportInfo """
-            A session started without --model leaves the model to pi, as before there was such
+            A session started without `--model` leaves the model to pi, as before there was such
             an option: pi's default for a new conversation, the conversation's own model for an
-            old one. It does not touch pi's settings either, so a user who sets pi's default with
-            pi's own /model command keeps it.
+            old one. It does not touch pi's settings either, so someone who sets pi's default with
+            pi's own `/model` command keeps it.
         """
         given: 'a conversation DeepSeek answered, in a session given no model'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -470,12 +475,12 @@ class Choosing_The_Agents_Model_Spec extends Specification {
 
     def 'A model the service does not offer fails the run, and the answer names the model'() {
         reportInfo """
-            A model can disappear from a service, or be mistyped in an application's settings.
+            A model can disappear from a service, or be mistyped on a program's settings screen.
             pi passes over a default it cannot find, so a new conversation starts on another
-            model, and the session tells pi to switch, which pi refuses. Continuing silently on
-            that other model would hide the problem. So the run fails before the question reaches
-            the agent, and says which model could not be used and why. The conversation keeps no
-            trace of the model, and the session goes on.
+            model, and the session tells pi to switch, which pi refuses. Going on quietly with that
+            other model would hide the problem. So the run fails before the question reaches the
+            agent, and its answer says which model could not be used and why. The conversation
+            keeps no trace of the model, and the session goes on.
         """
         given: 'a service that offers GPT and DeepSeek, and a session given a model it does not offer'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -500,11 +505,12 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             session.alive
     }
 
-    def 'The conversations say which model wrote each answer, and so does each answer as it comes'() {
+    def '`Lamp.conversation` names the model of each answer, and so does each `Answered` progress event'() {
         reportInfo """
-            pi records the model with every answer. An application can show it, for instance
-            when the user points at an answer, which matters most in a conversation that changed
-            model: each answer says where it came from, and old answers keep their model.
+            pi records the model with every answer. A program built on oillamp can show it, for
+            instance when someone points at an answer. That matters most in a conversation that
+            changed model: each answer says which model gave it, and the old answers keep their
+            model.
         """
         given: 'a conversation DeepSeek answered, and then the session given GPT'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -525,14 +531,14 @@ class Choosing_The_Agents_Model_Spec extends Specification {
                     *.progress()*.model() == [Optional.of(DEEPSEEK), Optional.of(GPT)]
     }
 
-    def 'Oillamp\'s `model` command needs a running session, and `Lamp.useModel` refuses a name no service could have'() {
+    def '`oillamp model` needs a running session, and `Lamp.useModel` refuses a name no service could have'() {
         reportInfo """
             `oillamp model <lamp> <id>` changes the model of a running session. For a lamp with no
             session running there is nothing to change: oillamp reports `OIL-SESSION-001` rather
-            than keeping the model for later. An application, a program built on oillamp's Java
-            API, changes the model with `Lamp.useModel`, which follows the same rule as `oillamp
-            at --model`: it throws `IllegalArgumentException` for a name with a space, or outside
-            ASCII, before it asks the session.
+            than keeping the model for later. A program built on oillamp changes the model with
+            `Lamp.useModel`, which follows the same rule as `oillamp at --model`: it throws
+            `IllegalArgumentException` for a name with a space, or outside ASCII, before it asks
+            the session.
         """
         given: 'a lamp with no session running'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -543,7 +549,7 @@ class Choosing_The_Agents_Model_Spec extends Specification {
         then: 'it says no session is running'
             noSession.reported('OIL-SESSION-001')
 
-        when: 'an application holding the lamp gives a model with a space in it'
+        when: 'a program calls `Lamp.useModel` with a model name that holds a space'
             Lamp.at(lamp).launchedBy(host.launcher).join().withCloseable { it.useModel('azure/gpt 6.1') }
 
         then: 'the lamp refuses it before asking any session'
@@ -551,14 +557,14 @@ class Choosing_The_Agents_Model_Spec extends Specification {
     }
 
     @Rollup
-    def 'Lamp.model refuses a model name no service could have, before any engine starts'() {
+    def '`LampDirectory.model` refuses a model name no service could have, before any engine starts'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, may take the model's name from
-            a settings field. An empty field, or a model name with a space pasted into it, would
-            only fail each run later. `Lamp.at(dir).model(name)` throws `IllegalArgumentException`
-            at once, so the application can point at the field, and no engine is started.
+            A program built on oillamp may take the model's name from a settings field. An empty
+            field, or a name with a space or a pasted line break in it, would only make each run
+            fail later. `Lamp.at(dir).model(name)` throws `IllegalArgumentException` at once, so
+            that the program can point at the field, and no engine is started.
         """
-        when: 'an application gives the lamp the model the row below describes'
+        when: 'the program gives the lamp the model name the row describes'
             Lamp.at(lamp).model(UNUSABLE_MODELS[model])
 
         then: 'the lamp refuses it, and no engine was started'
@@ -569,13 +575,13 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             model << UNUSABLE_MODELS.keySet()
     }
 
-    def 'Oillamp\'s `help` command says what --model does, and what happens without it'() {
+    def '`oillamp help` says what `--model` does, and what happens without it'() {
         reportInfo """
-            Whoever starts a session by hand needs to know, before choosing, that the model
-            applies to old conversations too and becomes pi's default, and what a session without
-            one does.
+            Someone who starts a session from the command line needs to know, before choosing a
+            model, that it applies to old conversations too and becomes pi's default, and what a
+            session without one does.
         """
-        when: 'a person asks for help'
+        when: '`oillamp help` is run'
             var help = host.oillamp.run('help')
 
         then: 'it shows the option, and says what it does with and without it'
