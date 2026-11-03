@@ -4,8 +4,13 @@ import dev.lamp.Lamp
 import dev.lamp.LampEvent
 import dev.lamp.LampExitStatus
 import dev.lamp.LampFailedException
+import dev.lamp.LampDirectory
+import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
+import spock.lang.Subject
 import spock.lang.TempDir
+import spock.lang.Title
 
 import java.nio.channels.FileChannel
 import java.nio.file.Files
@@ -18,16 +23,19 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.CompletableFuture
 
-/**
- * A lamp's history holds every snapshot whole, and a file that is the same in two snapshots, or on
- * two branches, is stored once. To keep the history within {@code history.max_growth_gb} on top of
- * the first snapshot, oillamp deletes the snapshots saved longest ago, and with them every stored
- * file that no remaining snapshot holds. The snapshots that remain keep their ids and their
- * content, even once the snapshot a branch was started at is gone.
- *
- * The scenarios set limits of a small fraction of a GB and save files of 64 KB of random bytes,
- * which do not compress, so that files really are deleted from disk without writing gigabytes.
- */
+@Title('Keeping the history within a disk budget')
+@Narrative('''
+A lamp's history holds every snapshot whole, and a file that is the same in two snapshots, or on two
+branches, is stored once. To keep the history within `history.max_growth_gb` on top of the first
+snapshot, oillamp deletes the snapshots saved longest ago, and with them every stored file that no
+remaining snapshot holds. The snapshots that remain keep their ids and their content, even once the
+snapshot a branch was started at is gone. `max_growth_gb = 0` means oillamp never deletes a
+snapshot.
+
+The scenarios set limits of a small fraction of a GB, and save files of 64 KB of random bytes,
+which do not compress, so that files really are deleted from disk without writing gigabytes.
+''')
+@Subject([OilLamp, LampDirectory])
 class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
     @TempDir Path tmp
     ScenarioHost host
@@ -62,7 +70,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def first = directory.save('').orElseThrow()
             def baseline = Long.parseLong(Files.readString(lamp.resolve('.oillamp/history/initial-bytes')).trim())
 
-        when: 'the user saves a second version of the file'
+        when: '`oillamp history save` saves a second version of the file'
             writeFileVersion(file, 2)
             def outcome = host.oillamp.run('history', lamp.toString(), 'save')
             def second = outcome.events().find { it instanceof LampEvent.Saved }.snapshot()
@@ -80,7 +88,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             !Files.exists(commitObjectFile(lamp, first.id()))
             LampEvent.fromJson(pruned.toJson()).orElseThrow() == pruned
 
-        when: 'the user saves a third version'
+        when: '`LampDirectory.save` saves a third version'
             writeFileVersion(file, 3)
             def third = directory.save('').orElseThrow()
 
@@ -116,7 +124,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def main = directory.save('').orElseThrow()
             assert host.oillamp.run('history', lamp.toString(), 'switch', 'other').succeeded()
 
-        when: 'the user saves a third version on other'
+        when: '`LampDirectory.save` saves a third version on `other`'
             writeFileVersion(file, 3)
             def other = directory.save('').orElseThrow()
 
@@ -127,13 +135,13 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             !Files.exists(commitObjectFile(lamp, fork.id()))
             directory.history()*.id() == [other.id()]
 
-        when: 'the user switches to main'
+        when: '`oillamp history switch main` is run'
             assert host.oillamp.run('history', lamp.toString(), 'switch', 'main').succeeded()
 
         then: 'the file is main\'s version'
             Files.readAllBytes(file) == fileVersion(2)
 
-        when: 'the user switches to other'
+        when: '`oillamp history switch other` is run'
             assert host.oillamp.run('history', lamp.toString(), 'switch', 'other').succeeded()
 
         then: 'the file is other\'s version'
@@ -160,7 +168,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             `prune --yes`, deletes the first snapshot and reports it in a `HistoryPruned` event, the same
             event a save sends when it deletes snapshots.
         '''
-        given: 'two snapshots, saved while max_growth_gb = 0'
+        given: 'two snapshots, saved while `max_growth_gb = 0`'
             def lamp = host.lampPath()
             host.givenConfig(lamp, 'schema_version = 1\n[history]\nmax_growth_gb = 0\n')
             assert host.oillamp.run('at', lamp.toString()).succeeded()
@@ -171,10 +179,10 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             writeFileVersion(file, 2)
             def newest = directory.save('').orElseThrow()
 
-        and: 'the user lowers the limit without saving'
+        and: 'the limit in `oillamp.toml` is lowered, without a save'
             Files.writeString(lamp.resolve('oillamp.toml'), 'schema_version = 1\n[history]\nmax_growth_gb = 0.00003\n')
 
-        when: 'the user runs oillamp history <dir> prune without --yes'
+        when: '`oillamp history <dir> prune` is run without `--yes`'
             def preview = host.oillamp.run('history', lamp.toString(), 'prune')
 
         then: 'it lists the first snapshot as the one it would delete, and both snapshots are still there'
@@ -183,10 +191,10 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             directory.history()*.id() == [newest.id(), first.id()]
             Files.exists(commitObjectFile(lamp, first.id()))
 
-        and: 'LampDirectory.wouldPruneHistory() gives a program that embeds oillamp the same preview'
+        and: '`LampDirectory.wouldPruneHistory()` gives a program that embeds oillamp the same preview'
             directory.wouldPruneHistory().orElseThrow().removed()*.snapshot()*.id() == [first.id()]
 
-        when: 'the program calls LampDirectory.pruneHistory()'
+        when: 'the program calls `LampDirectory.pruneHistory()`'
             def applied = directory.pruneHistory().orElseThrow()
 
         then: 'the first snapshot is deleted, and the second keeps its id'
@@ -194,17 +202,17 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             directory.history()*.id() == [newest.id()]
     }
 
-    def 'An application reads and changes `history.max_growth_gb` with `LampDirectory.historyMaxGrowthGb`, and only that line of `oillamp.toml` changes'() {
+    def 'A program built on oillamp reads and changes `history.max_growth_gb` with `LampDirectory.historyMaxGrowthGb`, and only that line of `oillamp.toml` changes'() {
         reportInfo '''
-            Let's consider an application, a program built on oillamp's Java API, whose settings page shows
-            how far a lamp's history may grow beyond its first snapshot, and lets its user change that.
+            Let's consider a program built on oillamp whose settings page shows how far a lamp's
+            history may grow beyond its first snapshot, and lets its user change that.
             `LampDirectory.historyMaxGrowthGb()` reads `max_growth_gb` under `[history]` in the lamp's
             `oillamp.toml`, and `LampDirectory.historyMaxGrowthGb(0.5)` writes it, each by running
             `oillamp history <dir> max-growth`. The file is also the user's, so the comment on that line
             stays, and every other line too.
 
             Writing the size deletes nothing by itself: the next save does, or `LampDirectory.pruneHistory()`,
-            so the application can first show what `LampDirectory.wouldPruneHistory()` would delete. A size
+            so the program can first show what `LampDirectory.wouldPruneHistory()` would delete. A size
             outside 0 to 10000 GB is refused before the engine starts, with an `IllegalArgumentException`,
             and `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
         '''
@@ -222,7 +230,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
         expect: 'the size a new lamp gets: 2 GB beyond the first snapshot'
             directory.historyMaxGrowthGb() == 2d
 
-        when: 'the application sets half a GB'
+        when: 'the program sets half a GB with `historyMaxGrowthGb(0.5)`'
             def written = directory.historyMaxGrowthGb(0.5)
 
         then: 'the file says so on the same line, with its comment, and nothing else in it changed'
@@ -238,33 +246,33 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             shown.events().find { it instanceof LampEvent.HistoryGrowthLimit } == new LampEvent.HistoryGrowthLimit(0.5)
             shown.console().contains('may grow 0.5 GB beyond its first snapshot')
 
-        when: 'the user sets about 32 KB on the command line, less than one more version of the file'
+        when: '`oillamp history <dir> max-growth 0.00003` sets about 32 KB, less than one more version of the file'
             def lowered = host.oillamp.run('history', lamp.toString(), 'max-growth', '0.00003')
 
-        then: 'nothing is deleted yet, and LampDirectory.wouldPruneHistory() names the first snapshot'
+        then: 'nothing is deleted yet, and `LampDirectory.wouldPruneHistory()` names the first snapshot'
             lowered.succeeded()
             directory.historyMaxGrowthGb() == 0.00003d
             directory.history()*.id() == [newest.id(), first.id()]
             directory.wouldPruneHistory().orElseThrow().removed()*.snapshot()*.id() == [first.id()]
 
-        when: 'the application asks for a size no lamp can have'
+        when: 'the program asks for -1 GB, a size no lamp can have'
             directory.historyMaxGrowthGb(-1)
 
         then: 'it is refused before the engine starts, and the file keeps its size'
             thrown(IllegalArgumentException)
             directory.historyMaxGrowthGb() == 0.00003d
 
-        when: 'the user types a word where the size goes'
+        when: '`oillamp history <dir> max-growth lots` is run'
             def wrong = host.oillamp.run('history', lamp.toString(), 'max-growth', 'lots')
 
-        then:
+        then: 'it is refused as a usage error that says what a size is'
             wrong.status() == LampExitStatus.USAGE
             wrong.console().contains('expected a size in GB from 0 to 10000, such as 2 or 0.5; 0 never deletes a snapshot')
     }
 
     def '`LampDirectory.historyMaxGrowthGb` refuses to change the size while a session runs'() {
         reportInfo '''
-            Let's consider an application that holds a running session of a lamp, and whose user changes
+            Let's consider a program built on oillamp that holds a running session of a lamp, and whose user changes
             how far the lamp's history may grow. A session reads `oillamp.toml` only as it starts, and its
             saves prune with the size it read then, so a new `max_growth_gb` would not reach it. So
             `LampDirectory.historyMaxGrowthGb(1)` throws a `LampFailedException` with the status
@@ -279,7 +287,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def running = directory.start()
             assert running.awaitRunning(Duration.ofSeconds(30))
 
-        when: 'the application sets 1 GB'
+        when: 'the program sets 1 GB'
             directory.historyMaxGrowthGb(1)
 
         then:
@@ -311,14 +319,14 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             writeFileVersion(file, 1)
             def first = directory.save('').orElseThrow()
 
-        when: 'the user saves again without changing anything'
+        when: '`oillamp history save` is run without a change'
             def unchanged = host.oillamp.run('history', lamp.toString(), 'save')
 
         then: 'the save succeeds and reports no deleted snapshots'
             unchanged.succeeded()
             !unchanged.events().any { it instanceof LampEvent.HistoryPruned }
 
-        when: 'a git tag points at the first snapshot, and the user saves a second version'
+        when: 'a git tag points at the first snapshot, and `oillamp history save` saves a second version'
             Files.writeString(lamp.resolve('.oillamp/history/refs/tags/keep'), first.id() + '\n')
             writeFileVersion(file, 2)
             def result = host.oillamp.run('history', lamp.toString(), 'save')
@@ -360,7 +368,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def answer = CompletableFuture.supplyAsync { lamp.ask('Work on it') }
             assert began.await(30, TimeUnit.SECONDS)
 
-        when: 'the user saves two newer versions during the run'
+        when: '`LampDirectory.save` saves two newer versions during the run'
             writeFileVersion(file, 2)
             assert directory.save('').isPresent()
             writeFileVersion(file, 3)
@@ -369,7 +377,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
         then: 'the snapshot the run started at is still there'
             directory.history()*.id().contains(first.id())
 
-        when: 'the run ends and the user saves a fourth version'
+        when: 'the run ends, and `LampDirectory.save` saves a fourth version'
             finish.countDown()
             def ran = answer.get(30, TimeUnit.SECONDS)
             lamp.close()
@@ -381,7 +389,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             !directory.history()*.id().contains(first.id())
             !directory.history()*.id().contains(ran.snapshot().get().id())
 
-        when: 'the user calls Lamp.ask again in the next session'
+        when: '`Lamp.ask` is called again in the next session'
             lamp = Lamp.at(lampPath).launchedBy(host.launcher).start()
             assert lamp.awaitRunning(Duration.ofSeconds(30))
             def next = lamp.ask('Again')
@@ -406,7 +414,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             restore among them. So the file is back at its first version, and restoring the save before the
             restore brings back the third version, which no snapshot held before.
         '''
-        given: 'two snapshots, saved while max_growth_gb = 0'
+        given: 'two snapshots, saved while `max_growth_gb = 0`'
             def lamp = host.lampPath()
             host.givenConfig(lamp, 'schema_version = 1\n[history]\nmax_growth_gb = 0\n')
             assert host.oillamp.run('at', lamp.toString()).succeeded()
@@ -421,7 +429,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             Files.writeString(lamp.resolve('oillamp.toml'), 'schema_version = 1\n[history]\nmax_growth_gb = 0.00003\n')
             writeFileVersion(file, 3)
 
-        when: 'the user restores the first snapshot'
+        when: '`oillamp history restore` restores the first snapshot'
             def result = host.oillamp.run('history', lamp.toString(), 'restore', target.id())
 
         then: 'the file is back at its first version, and the first snapshot is still there'
@@ -430,7 +438,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             Files.readAllBytes(file) == fileVersion(1)
             directory.history()*.id().contains(target.id())
 
-        when: 'the user restores the save oillamp made before the restore'
+        when: '`LampDirectory.restore` restores the save oillamp made before the restore'
             def safety = result.events().find { it instanceof LampEvent.Saved }.snapshot()
             directory.restore(safety.id())
 
@@ -438,7 +446,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             Files.readAllBytes(file) == fileVersion(3)
     }
 
-    def 'A user restores a saved oillamp.toml even when the current one is #damage'() {
+    def '`oillamp history restore` brings back a saved `oillamp.toml` even when the current one holds #damage'() {
         reportInfo '''
             Let's consider a user who saved a lamp, then edited its `oillamp.toml` and broke it. Restoring
             the snapshot is how they get the working file back. oillamp reads the limit for deleting
@@ -447,7 +455,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             and a warning says that pruning was skipped because the configuration is invalid. The save
             before the restore holds the broken file, so the restore can still be undone.
         '''
-        given: 'a snapshot of a working oillamp.toml, and then a broken edit'
+        given: 'a snapshot of a working `oillamp.toml`, and then a broken edit'
             def lamp = host.lampPath()
             def valid = 'schema_version = 1\n[history]\nmax_growth_gb = 2\n'
             host.givenConfig(lamp, valid)
@@ -456,7 +464,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def saved = directory.save('').orElseThrow()
             Files.writeString(lamp.resolve('oillamp.toml'), broken)
 
-        when: 'the user restores the snapshot'
+        when: '`oillamp history restore` restores the snapshot'
             def result = host.oillamp.run('history', lamp.toString(), 'restore', saved.id())
 
         then: 'the working file is back, with a warning that pruning was skipped'
@@ -471,7 +479,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             'an invalid size' | 'schema_version = 1\n[history]\nmax_growth_gb = -1\n'
     }
 
-    def 'oillamp deletes what a killed run left in the history, once the lamp is stopped'() {
+    def 'Oillamp deletes what a killed run left in the history, once the lamp is stopped'() {
         reportInfo '''
             Let's consider an oillamp process that was killed in the middle of a run. It leaves two files
             in the history: `active-base`, which holds the id of the snapshot the run started at, so that no
@@ -499,7 +507,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             Files.write(abandoned, fileVersion(3))
             Files.writeString(lamp.resolve('oillamp.toml'), 'schema_version = 1\n[history]\nmax_growth_gb = 0.00003\n')
 
-        when: 'the program calls LampDirectory.wouldPruneHistory()'
+        when: 'the program calls `LampDirectory.wouldPruneHistory()`'
             def preview = directory.wouldPruneHistory().orElseThrow()
 
         then: 'the preview lists the first snapshot, and both files are still there'
@@ -507,7 +515,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             Files.exists(pin)
             Files.exists(abandoned)
 
-        when: 'the program calls LampDirectory.pruneHistory()'
+        when: 'the program calls `LampDirectory.pruneHistory()`'
             def applied = directory.pruneHistory().orElseThrow()
 
         then: 'both files are deleted too, and their bytes are counted as freed'
@@ -538,7 +546,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
                     refreshed << host.oillamp.run('history', lamp.toString())
             }
 
-        when: 'the user saves a second version, which deletes the first'
+        when: '`oillamp history save` saves a second version, which deletes the first'
             writeFileVersion(file, 2)
             def result = CompletableFuture.supplyAsync { engine.run('history', lamp.toString(), 'save') }
                     .get(15, TimeUnit.SECONDS)
@@ -550,7 +558,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             refreshed.first().events().find { it instanceof LampEvent.History }.snapshots().size() == 1
     }
 
-    def 'With max_growth_gb = 0 a save does not look through the history\'s files'() {
+    def 'With `history.max_growth_gb = 0`, a save does not look through the history\'s files'() {
         reportInfo '''
             Let's consider a lamp with `history.max_growth_gb = 0`, which never deletes a snapshot. To decide
             what to delete, oillamp looks at every file in the history's `objects/` directory, and it refuses
@@ -559,7 +567,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             file oillamp does not know, `objects/pack/unsupported.pack`, causes no warning, and the save
             succeeds as usual.
         '''
-        given: 'a lamp with max_growth_gb = 0, and a file in objects/ that oillamp does not know'
+        given: 'a lamp with `max_growth_gb = 0`, and a file in `objects/` that oillamp does not know'
             def lamp = host.lampPath()
             host.givenConfig(lamp, 'schema_version = 1\n[history]\nmax_growth_gb = 0\n')
             assert host.oillamp.run('at', lamp.toString()).succeeded()
@@ -571,7 +579,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def file = Lamp.agentHome(lamp).orElseThrow().resolve('workspace/data.bin')
             writeFileVersion(file, 1)
 
-        when: 'the user saves a changed file'
+        when: '`oillamp history save` saves a changed file'
             def result = host.oillamp.run('history', lamp.toString(), 'save')
 
         then: 'the save succeeds, with no warning and no deleted snapshots'
@@ -592,7 +600,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             warning says why. Once the user makes the directories writable again, the next prune deletes
             those files, and its event does not list the first snapshot a second time.
         '''
-        given: 'two snapshots, and directories in objects/ that cannot be written'
+        given: 'two snapshots, and directories in `objects/` that cannot be written'
             def lamp = host.lampPath()
             host.givenConfig(lamp, 'schema_version = 1\n[history]\nmax_growth_gb = 0\n')
             assert host.oillamp.run('at', lamp.toString()).succeeded()
@@ -606,7 +614,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             def dirs = Files.list(lamp.resolve('.oillamp/history/objects')).withCloseable { it.filter { Files.isDirectory(it) }.toList() }
             dirs.each { Files.setPosixFilePermissions(it, PosixFilePermissions.fromString('r-x------')) }
 
-        when: 'the user has the first snapshot deleted'
+        when: '`oillamp history prune --yes` deletes the first snapshot'
             def result = host.oillamp.run('history', lamp.toString(), 'prune', '--yes')
             def cut = result.events().find { it instanceof LampEvent.HistoryPruned }
 
@@ -617,7 +625,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             result.events().any { it instanceof LampEvent.Warning }
             directory.history()*.id() == [last.id()]
 
-        when: 'the user makes the directories writable again and prunes once more'
+        when: 'the directories are writable again, and `LampDirectory.pruneHistory()` prunes once more'
             dirs.each { Files.setPosixFilePermissions(it, PosixFilePermissions.fromString('rwx------')) }
             def retried = directory.pruneHistory().orElseThrow()
 
@@ -629,7 +637,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             dirs?.each { Files.setPosixFilePermissions(it, PosixFilePermissions.fromString('rwx------')) }
     }
 
-    def 'oillamp prunes the snapshots saved longest ago first, whichever branch they are on'() {
+    def 'Oillamp prunes the snapshots saved longest ago first, whichever branch they are on'() {
         reportInfo '''
             Let's consider a lamp whose agent has worked on the branch `main` for six days, and
             the lamp was saved once on each of those days. On the seventh day the user wants to try
@@ -671,7 +679,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
                 directory.save('').orElseThrow()
             }
 
-        when: 'the user lowers the limit and saves experiment a third time'
+        when: 'the limit is lowered, and `oillamp history save` saves `experiment` a third time'
             Files.writeString(lamp.resolve('oillamp.toml'), 'schema_version = 1\n[history]\nmax_growth_gb = 0.0003\n')
             host.machine { it.clockAt(Instant.parse('2026-09-07T15:00:00Z')) }
             writeFileVersion(file, 115)
@@ -687,7 +695,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             directory.historyOfAllBranches()*.snapshot()*.id() as Set == (experiment + main[4..5])*.id() as Set
     }
 
-    def 'oillamp lists a lamp\'s history while another oillamp process is saving it'() {
+    def 'Oillamp lists a lamp\'s history while another oillamp process is saving it'() {
         reportInfo '''
             Let's consider a lamp whose agent home is large, so that saving it takes minutes.
             While oillamp saves, it holds the lock `.oillamp/history.lock`, so that no second
@@ -716,7 +724,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE)
             def held = channel.lock()
 
-        when: 'the program calls LampDirectory.history()'
+        when: 'the program calls `LampDirectory.history()`'
             def listed = CompletableFuture.supplyAsync { directory.history() }.get(15, TimeUnit.SECONDS)
 
         then: 'it gets them without waiting for the save'
