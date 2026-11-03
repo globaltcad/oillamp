@@ -1,18 +1,21 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.time.Duration
 
-/**
- * Checks the terminal table in {@code TerminalEmulatorUtil.java}, and why a session is tied to the SSH
- * connection rather than to the terminal program.
- *
- * <p>Runs on the host, not in a container. It can only check the terminals installed on this
- * machine and reports which it could not check.
- */
+@Title('Verifying terminal profiles')
+@Narrative('''
+Checks the terminal table in `TerminalEmulatorUtil.java`, and why a session is tied to the ssh
+connection rather than to the terminal program.
+
+This spike runs on the host, not in a container. It can check only the terminals installed on this
+machine, and reports which it could not check.
+''')
 @Tag('spike')
 class Verifying_Terminal_Profiles_Spec extends Specification {
 
@@ -31,14 +34,14 @@ class Verifying_Terminal_Profiles_Spec extends Specification {
 
     def 'The terminals installed here accept the arguments oillamp gives them'() {
         reportInfo """
-            The profile table is nine argument templates, each one a guess until something runs
-            it. A wrong template is not a subtle bug: the terminal window simply never opens, and
-            the session ends while oillamp waits for the shell window to connect, with
-            OIL-TERM-002 telling the user their terminal failed - which is true and unhelpful.
+            The terminal table in `TerminalEmulatorUtil.java` holds nine argument templates, each
+            one a guess until something runs it. A wrong template shows only as a window that never
+            opens: the session ends while oillamp waits for the shell window to connect, with
+            `OIL-TERM-002`, which says that the terminal failed, but not which argument was wrong.
 
-            This checks the installed terminals by reading their own `--help`, rather than by
-            launching windows, so it can run unattended. It reports which terminals it could not
-            check at all, because a green result that only covered one row would be misleading.
+            This scenario checks the installed terminals by reading their own `--help`, rather than
+            by opening windows, so that it can run unattended. It reports which terminals it could
+            not check, because a passing result that covered only one row would mislead.
         """
         given: 'the terminals from the table that exist on this machine'
             var installed = TITLE_OPTION.keySet().findAll { Spike.run('command', '-v', it).ok ||
@@ -62,7 +65,7 @@ class Verifying_Terminal_Profiles_Spec extends Specification {
                 reportInfo("$terminal: `$option` accepted.")
             }
 
-        and: 'and the table records which rows nobody has verified yet'
+        and: 'it reports which rows of the table nobody has checked yet'
             var unchecked = TITLE_OPTION.keySet() - installed
             reportInfo(unchecked.isEmpty()
                     ? 'Every terminal in the table was verified on this machine.'
@@ -71,24 +74,25 @@ class Verifying_Terminal_Profiles_Spec extends Specification {
     }
 
     @Requires({ Spike.run('command', '-v', 'gnome-terminal').ok || Spike.run('which', 'gnome-terminal').ok })
-    def 'A terminal emulator returns long before its child exits, so its process id proves nothing'() {
+    def 'A terminal program returns long before its child exits, so its process id says nothing about the session'() {
         reportInfo """
-            oillamp decides that a session has ended by watching the SSH connection it relays to
-            the terminal window, and deliberately *not* by watching the terminal program it
-            started. The stated reason is that many terminal emulators do not stay running: they
-            hand the new window to a separate, already-running server process and exit at once, so
-            the process id oillamp holds means nothing a moment later.
+            Oillamp decides that a session has ended by watching the ssh connection it relays to
+            the shell window, and on purpose not by watching the terminal program it started. The
+            reason is that many terminal programs do not stay running: they hand the new window to
+            a separate server process that already runs, and exit at once, so the process id
+            oillamp holds means nothing a moment later.
 
-            The whole design of how a session ends depends on this. This measures it: gnome-terminal is asked to run a child that sleeps, and
-            the launch returns in a fraction of that time.
+            How a session ends depends on this, so this scenario measures it: gnome-terminal is
+            asked to run a child that sleeps for three seconds, and the launch must return before
+            that.
 
-            If this scenario ever *fails* - if a terminal really did stay running until its child
-            exited - watching the connection would still be right for the other emulators, but the
-            simpler design that was rejected would deserve a second look. That is worth knowing, so the check stays.
+            Should this scenario ever fail, because a terminal did stay running until its child
+            exited, watching the connection would still be right for the other terminal programs,
+            but the simpler design that was rejected would deserve a second look.
 
-            Note `--wait` exists and would make gnome-terminal block. oillamp deliberately does not
-            use it: relying on it would make the design correct for gnome-terminal and wrong for
-            every terminal without an equivalent flag.
+            gnome-terminal has `--wait`, which would make it block. Oillamp does not use it: the
+            design would then be right for gnome-terminal, and wrong for every terminal program
+            without such an option.
         """
         given: 'a child that takes clearly longer than the terminal needs to start'
             var childSeconds = 3
