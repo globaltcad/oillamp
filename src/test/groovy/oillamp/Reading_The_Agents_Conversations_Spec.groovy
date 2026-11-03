@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
  *  <p>The files here are written the way pi writes them, into the agent's home of a real lamp.
  */
 @Timeout(value = 60, unit = TimeUnit.SECONDS)
-class ReadingTheAgentsConversationsSpec extends Specification {
+class Reading_The_Agents_Conversations_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host

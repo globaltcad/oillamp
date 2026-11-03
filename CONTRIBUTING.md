@@ -148,7 +148,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Travelling_Back_In_Time_Spec` | `save`, `history` and `restore` |
 | `Keeping_History_Within_A_Disk_Budget_Spec` | the initial-size allowance, automatic pruning, shallow branches, previews, active-run bases and retained run numbers |
 | `Asking_In_A_Conversation_Spec` | `ask --in`, `--after`, `--instead-of` |
-| `ReadingTheAgentsConversationsSpec` | `conversations` and `Lamp.conversations` |
+| `Reading_The_Agents_Conversations_Spec` | `conversations` and `Lamp.conversations` |
 | `FollowingARunSpec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
 | `Following_A_Session_Spec` | `follow` |
 | `EmbeddingASessionSpec` | `oillamp at --embedded`, started by another application |
