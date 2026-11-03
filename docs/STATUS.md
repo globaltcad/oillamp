@@ -237,7 +237,7 @@ local model's name.
 `oillamp update <lamp>` installs opencode and pi again, at `latest` or the release pinned in
 `agent_tools.versions`, and downloads opencode's model list again. The lamp switches to the new
 image only if the build succeeds. `--system` builds the whole image again, from the newest base
-image, and a start from an image older than 30 days warns. `UpdatingTheAgentToolsSpec` checks
+image, and a start from an image older than 30 days warns. `Updating_The_Agent_Tools_Spec` checks
 this with podman simulated,
 and runs the installer script with stand-in npm, node and pi. No update has been run against a
 real registry yet.

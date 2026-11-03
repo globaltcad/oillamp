@@ -40,7 +40,7 @@ same tag, and finds the updated image.
 Podman is simulated here, so no image is really built. The last scenario runs the real installer
 script, with stand-in `npm`, `node` and `pi` commands.
 ''')
-class UpdatingTheAgentToolsSpec extends Specification {
+class Updating_The_Agent_Tools_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
