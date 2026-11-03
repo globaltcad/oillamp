@@ -6,10 +6,13 @@ import dev.lamp.LampEvent
 import dev.lamp.LampAgentProgress
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampFailedException
+import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,23 +20,24 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- *  Following a run as it happens, and stopping it: {@code Lamp.send}, {@code RunProgress},
- *  {@code Lamp.cancel}, {@code Lamp.agentStatus}, and {@code oillamp ask --no-wait} and
- *  {@code oillamp cancel}.
- *
- *  <p>A chat app does not wait in silence while the agent works. It hands over the question,
- *  gets back the run that answers it, and then draws the answer as it is written, each tool as
- *  it runs, and the end. It shows whether the agent is busy, and has a button to stop it.
- *
- *  <p>The application here holds its lamp through the {@code Lamp} API, as a real one would. The
- *  stand-in pi streams its answers the way pi does.
- */
+@Title('Following a run')
+@Narrative('''
+Following a run as it happens, and stopping it: `Lamp.send`, `RunProgress`, `Lamp.cancel` and
+`Lamp.agentStatus`, and on the command line `oillamp ask --no-wait` and `oillamp cancel`.
+
+A chat app does not wait in silence while the agent works. It hands over the question, gets back
+the run that answers it, and then draws the answer as it is written, each tool as it runs, and the
+end. It shows whether the agent is busy, and has a button to stop it.
+
+The program here holds its lamp through the `Lamp` API, as a real chat app would. The stand-in pi
+streams its answers the way pi does.
+''')
+@Subject([Lamp, OilLamp])
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class Following_A_Run_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     Path lamp
     Lamp held
@@ -67,24 +71,24 @@ class Following_A_Run_Spec extends Specification {
         held?.close()
     }
 
-    def 'An application follows a run as it happens: the answer as it is written, and each tool as it runs'() {
+    def 'A program built on oillamp follows a run with `Lamp.send` and `RunProgress`: the answer as it is written, and each tool as it runs'() {
         reportInfo """
-            Let's consider an application, a program such as a chat app that holds its lamp
-            through oillamp's Java API, `Lamp`. It hands over a question with `Lamp.send`, which
-            returns the run that will answer it at once. The events of that run come to every
-            listener the lamp was given with `onEvent`, whoever asked: which conversation it is
-            in, each tool the agent runs and what it put out, what the model thinks, the answer
-            piece by piece, and the complete message. Put together, the pieces are exactly the
-            answer the run ends with.
+            Let's consider a chat app built on oillamp, which holds its lamp through oillamp's Java
+            API, `Lamp`. It hands over a question with `Lamp.send`, which at once returns the run
+            that will answer it. The events of that run reach every listener the lamp was given
+            with `onEvent`, whoever asked: which conversation the run is in, each tool the agent
+            runs and what the tool put out, what the model thinks, the answer piece by piece, and
+            the complete message. Put together, the pieces are exactly the answer the run ends
+            with.
         """
-        when:
+        when: '`Lamp.send` hands over "files, please", and the run finishes'
             var run = held.send(LampPrompt.fresh('files, please'))
             var finished = waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
 
         then: 'the send came back with the run, before the run was done'
             run.prompt() == 'files, please'
 
-        and: 'the progress came in the order it happened'
+        and: 'the `RunProgress` events came in the order it happened: opened, the tool, the thought, the pieces of the answer, the answer'
             var steps = progressOf(run.id())
             steps.first() instanceof LampAgentProgress.Opened
             steps.first().conversation() == finished.conversation().orElseThrow()
@@ -97,19 +101,19 @@ class Following_A_Run_Spec extends Specification {
             steps.last() instanceof LampAgentProgress.Answered
             steps.last().text() == 'There are two files here.'
 
-        and: 'the run ends with the same answer, and a snapshot with the agent\'s file'
+        and: 'the run ends with the same answer, and with a snapshot'
             finished.outcome() == LampRunOutcome.FINISHED
             finished.answer() == 'There are two files here.'
             finished.snapshot().isPresent()
     }
 
-    def 'Lamp.agentStatus names the run the agent works on, and the runs waiting behind it'() {
+    def '`Lamp.agentStatus` names the run the agent works on, and the runs waiting behind it'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, shows whether the agent is
-            busy, for example to mark a question as waiting. `Lamp.agentStatus` names the run in
-            progress and the ones queued behind it, and says the agent is idle once they are done.
+            A program built on oillamp shows whether the agent is busy, for example to mark a
+            question as waiting. `Lamp.agentStatus` names the run in progress and the ones queued
+            behind it, and says the agent is idle once they are done.
         """
-        when:
+        when: '`Lamp.send` hands over a question the agent works on until it is let go, then a second; `agentStatus` is asked while the agent works, and again once both are done'
             var first = held.send(LampPrompt.fresh('wait for me'))
             waitFor(LampEvent.RunStarted) { it.run().id() == first.id() }
             var second = held.send(LampPrompt.fresh('then me'))
@@ -118,26 +122,26 @@ class Following_A_Run_Spec extends Specification {
             waitFor(LampEvent.RunFinished) { it.run().id() == second.id() }
             var idle = held.agentStatus()
 
-        then:
+        then: 'while it worked, the agent was busy with the first run, and the second waited'
             busy.busy()
             busy.current().map { it.id() } == Optional.of(first.id())
             busy.waiting()*.id() == [second.id()]
             heard.any { it instanceof LampEvent.RunQueued && it.run().id() == second.id() }
 
-        and:
+        and: 'once both were done, the agent was idle'
             !idle.busy()
     }
 
-    def 'Lamp.cancel stops the run in progress, and a run still waiting never reaches the agent'() {
+    def '`Lamp.cancel` stops the run in progress, and a run still waiting never reaches the agent'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, has a stop button that calls
-            `Lamp.cancel`. The session tells the run in progress to stop, and saves what it did
-            until then in a snapshot, as for any run, with a message that says it was cancelled.
-            Given a run's id, `Lamp.cancel` takes a run still waiting out of the queue, and the
-            agent never sees its question. Called when nothing runs, it throws
-            `LampFailedException`, saying the agent is not working on anything.
+            A program built on oillamp has a stop button that calls `Lamp.cancel`. The session
+            tells the run in progress to stop, and saves what it did until then in a snapshot, as
+            for any run, with a message that says it was cancelled. Given a run's id,
+            `Lamp.cancel` takes a run that still waits out of the queue, and the agent never sees
+            its question. Called when nothing runs, it throws `LampFailedException`, saying the
+            agent is not working on anything.
         """
-        when:
+        when: 'a question the agent works on for a minute is sent, then a second; `Lamp.cancel` is given the second\'s id, and then called without one'
             var working = held.send(LampPrompt.fresh('forever and ever'))
             waitFor(LampEvent.RunStarted) { it.run().id() == working.id() }
             var waiting = held.send(LampPrompt.fresh('never asked'))
@@ -145,31 +149,31 @@ class Following_A_Run_Spec extends Specification {
             held.cancel()
             var stopped = waitFor(LampEvent.RunFinished) { it.run().id() == working.id() }
 
-        then: 'the waiting one ended without the agent seeing it'
+        then: 'the waiting run ended `CANCELLED`, without the agent seeing its question'
             var skipped = heard.find { it instanceof LampEvent.RunFinished && it.run().id() == waiting.id() }
             skipped.outcome() == LampRunOutcome.CANCELLED
             !prompts.contains('never asked')
 
-        and: 'the one in progress stopped, and was saved'
+        and: 'the run in progress ended `CANCELLED`, and its snapshot says it was cancelled'
             stopped.outcome() == LampRunOutcome.CANCELLED
             stopped.snapshot().map { it.message().contains('cancelled') } == Optional.of(true)
 
-        when: 'nothing runs any more'
+        when: 'nothing runs any more, and `Lamp.cancel` is called'
             held.cancel()
 
-        then:
+        then: 'it throws `LampFailedException`: the agent is not working on anything'
             var failed = thrown(LampFailedException)
             failed.problem().whatHappened().contains('the agent is not working on anything')
     }
 
     def 'From a terminal, `oillamp ask --no-wait` hands over a question and `oillamp cancel` stops its run'() {
         reportInfo """
-            A person or a script at a terminal can follow and stop a run too: `oillamp ask
-            --no-wait` says which run will answer and returns at once, `oillamp status` says which
-            run the agent is working on, and `oillamp cancel` stops it. Cancelling again, when
-            nothing runs, is reported as `OIL-SESSION-003`.
+            Someone at a terminal, or a script, can follow and stop a run too:
+            `oillamp ask --no-wait` says which run will answer, and returns at once;
+            `oillamp status` says which run the agent is working on; and `oillamp cancel` stops it.
+            Cancelling again, when nothing runs, is reported as `OIL-SESSION-003`.
         """
-        when:
+        when: '`oillamp ask --no-wait` hands over a long question, `oillamp status` and `oillamp cancel` are run while the agent works on it, and `oillamp cancel` once more after the run ended'
             var asked = host.oillamp.run('ask', lamp.toString(), '--no-wait', 'forever, please')
             var run = asked.events().find { it instanceof LampEvent.RunAccepted }.run()
             waitFor(LampEvent.RunStarted) { it.run().id() == run.id() }
@@ -178,7 +182,7 @@ class Following_A_Run_Spec extends Specification {
             waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
             var nothing = host.oillamp.run('cancel', lamp.toString())
 
-        then:
+        then: 'each command says what it did, and the second `cancel` reports `OIL-SESSION-003`'
             asked.succeeded()
             asked.console().contains('the agent answers this as ' + run.id())
             status.console().contains('working on ' + run.id())
