@@ -244,7 +244,7 @@ real registry yet.
 
 ### An application holding a lamp
 
-`RunningALampForAnApplicationSpec` (a spike) runs one lamp through `dev.lamp.Lamp`, with the engine
+`Running_A_Lamp_For_An_Application_Spec` (a spike) runs one lamp through `dev.lamp.Lamp`, with the engine
 started as a separate process from the test's own classpath, as an application would start it
 (checked on 2026-09-28):
 

@@ -34,7 +34,7 @@ import static oillamp.RealLamps.*
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
-class RunningALampForAnApplicationSpec extends Specification {
+class Running_A_Lamp_For_An_Application_Spec extends Specification {
 
     @Shared Path directory = newLampPath('application')
     @Shared Lamp lamp

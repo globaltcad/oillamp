@@ -181,7 +181,7 @@ same code path oillamp uses.
 | `VerifyingTheImageBaseSpec` | every package the image needs exists in Debian trixie |
 | `VerifyingTerminalProfilesSpec` | installed terminals accept oillamp's arguments; terminal emulators return before their window closes |
 | `VerifyingTheSandboxDesktopSpec` | the real image: readiness, SSH login as `agent`, screen size and rendering, vncviewer on a Unix socket, clicking and typing with `lamp`, a playable recording, a clean second session |
-| `RunningALampForAnApplicationSpec` | a lamp's whole life through `dev.lamp.Lamp`, with the engine as a separate process |
+| `Running_A_Lamp_For_An_Application_Spec` | a lamp's whole life through `dev.lamp.Lamp`, with the engine as a separate process |
 | `TwoLampsAtOnceSpec` | one application holding two lamps that must not see each other |
 | `WhenAnApplicationOrItsSandboxDiesSpec` | the application crashing, or the container dying |
 | `KeepingTheModelKeyOutOfARealSandboxSpec` | the model key absent from a real sandbox; real model requests when `EDENAI_API_KEY` is set |
