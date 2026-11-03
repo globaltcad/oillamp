@@ -124,7 +124,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | Spec | About |
 |---|---|
 | `CheckingTheMachineSpec` | `doctor` and host prerequisites |
-| `SettingUpALampSpec` | creating, reusing, refusing and removing lamps; recordings |
+| `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
 | `ConfiguringALampSpec` | the configuration file and its validation |
 | `StartingTheSandboxSpec` | readiness and socket checks |
 | `SupervisingASessionSpec` | a whole session: windows, shutdown, failures |

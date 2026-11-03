@@ -18,7 +18,7 @@ import java.time.Instant
  *  agent's persistent home. These scenarios are about what `oillamp at <dir>` puts there, and -
  *  more importantly - about what it refuses to put there.
  */
-class SettingUpALampSpec extends Specification {
+class Setting_Up_A_Lamp_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
