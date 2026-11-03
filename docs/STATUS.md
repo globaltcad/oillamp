@@ -220,7 +220,7 @@ The bundled Java runtime of the single-file build completes a TLS 1.3 handshake 
 `api.eu.edenai.run`, checking the certificate against the host name, with no modules beyond those
 it already has.
 
-`UsingAModelOnThisMachineSpec` (a spike) starts a lamp through `dev.lamp.Lamp` with
+`Using_A_Model_On_This_Machine_Spec` (a spike) starts a lamp through `dev.lamp.Lamp` with
 `modelService("http://127.0.0.1:11434/v1")` and Ollama running `qwen2.5:0.5b` (checked on
 2026-09-28):
 

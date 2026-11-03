@@ -185,7 +185,7 @@ same code path oillamp uses.
 | `TwoLampsAtOnceSpec` | one application holding two lamps that must not see each other |
 | `WhenAnApplicationOrItsSandboxDiesSpec` | the application crashing, or the container dying |
 | `KeepingTheModelKeyOutOfARealSandboxSpec` | the model key absent from a real sandbox; real model requests when `EDENAI_API_KEY` is set |
-| `UsingAModelOnThisMachineSpec` | a lamp using Ollama on this machine |
+| `Using_A_Model_On_This_Machine_Spec` | a lamp using Ollama on this machine |
 | `RunningARealGenieSpec` | a genie as Genies runs one: real lamp, real pi, real desktop |
 | `UsingGeniesForRealSpec` | the Genies app's actions, as its buttons call them, against real lamps |
 

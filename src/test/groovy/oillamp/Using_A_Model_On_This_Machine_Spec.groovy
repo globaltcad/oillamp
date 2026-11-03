@@ -26,8 +26,8 @@ import static oillamp.RealLamps.*
  */
 @Tag('spike')
 @Stepwise
-@Requires({ Spike.containerNetworkWorks() && UsingAModelOnThisMachineSpec.ollamaHas(UsingAModelOnThisMachineSpec.MODEL) })
-class UsingAModelOnThisMachineSpec extends Specification {
+@Requires({ Spike.containerNetworkWorks() && Using_A_Model_On_This_Machine_Spec.ollamaHas(Using_A_Model_On_This_Machine_Spec.MODEL) })
+class Using_A_Model_On_This_Machine_Spec extends Specification {
 
     static final String MODEL = System.getenv('OILLAMP_SPIKE_LOCAL_MODEL') ?: 'qwen2.5:0.5b'
     static final String OLLAMA = 'http://127.0.0.1:11434'
