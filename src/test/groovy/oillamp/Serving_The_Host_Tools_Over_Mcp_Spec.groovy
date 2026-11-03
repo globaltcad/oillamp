@@ -43,13 +43,14 @@ The engine runs in this JVM against the simulated machine. The scenarios speak M
 session's socket directly, as `socat` would, and a stand-in model service on loopback plays the
 checker.
 ''')
+@Subject(Lamp)
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
 
     static final String MODEL = 'azure/gpt-6.1-sol'
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
     StandInChecker checker
     final List<LampEvent> events = new CopyOnWriteArrayList<>()
     Lamp lamp
@@ -172,8 +173,8 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
             name, or the arguments do not fit the tool's schema, there is no request to judge,
             so the checker is not asked. The server answers with the JSON-RPC error `-32602`,
             invalid params, whose message says what did not fit, so that the model can correct
-            the call. The session reports each as a `HostAccessRefused` event all the same, so an
-            application can show the user that the agent tried.
+            the call. The session reports each as a `HostAccessRefused` event all the same, so that a
+            program built on oillamp can show the user that the agent tried.
         """
         given: 'a running lamp with host access on'
             givenHostAccess()
@@ -312,7 +313,7 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
         then: 'the call is refused as withdrawn'
             waitFor(LampEvent.HostAccessRefused) { it.why().contains('withdrew') }
 
-        when: 'the application gives the person\'s yes anyway'
+        when: 'the program gives the person\'s yes anyway, with `Lamp.decidePermission`'
             lamp.decidePermission(asked.what(), true)
 
         then: 'the session says no question waits with that text, and the command never ran'
@@ -333,7 +334,7 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
             var socket = hostAccessSocket()
             var client = McpClient.initialized(socket)
 
-        when: 'the application ends the session'
+        when: 'the program ends the session with `Lamp.close`'
             lamp.close()
             lamp = null
 
