@@ -1,16 +1,19 @@
 package oillamp
 
 import dev.lamp.LampExitStatus
+import dev.oillamp.OilLamp
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
+import spock.lang.Title
 
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
+@Title('Updating the agent tools')
 @Narrative('''
 `oillamp update <dir>` gets newer agent harnesses and a fresh model list, without touching the
 agent's home.
@@ -37,13 +40,14 @@ A successful update writes a revision into `.oillamp/image/tools-revision`. The 
 build argument, so it is part of the image's hash. Every later start reads the file, computes the
 same tag, and finds the updated image.
 
-Podman is simulated here, so no image is really built. The last scenario runs the real installer
-script, with stand-in `npm`, `node` and `pi` commands.
+Podman is simulated here, so no image is really built. The installer scenarios run the real
+installer script, with stand-in `npm`, `node` and `pi` commands.
 ''')
+@Subject(OilLamp)
 class Updating_The_Agent_Tools_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
     Path lamp
 
     def setup() {
@@ -54,7 +58,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
         assert host.oillamp.run('at', lamp.toString()).status() == LampExitStatus.SUCCESS
     }
 
-    def 'Oillamp\'s `update` command builds a new image that the following sessions start from'() {
+    def '`oillamp update` builds a new image that the following sessions start from'() {
         reportInfo """
             The point of an update is that the next session runs the newer tools. So update builds
             an image and starts nothing, and the next `oillamp at` must start from that image,
@@ -76,7 +80,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
         and: 'the lamp asks for pi 1.2.0'
             pinPiTo('1.2.0')
 
-        when:
+        when: '`oillamp update --verbose` is run'
             var update = host.oillamp.run('update', lamp.toString(), '--verbose')
 
         then: 'an image was built, but no sandbox was started'
@@ -123,12 +127,12 @@ class Updating_The_Agent_Tools_Spec extends Specification {
         given: 'the lamp was updated'
             assert host.oillamp.run('update', lamp.toString()).status() == LampExitStatus.SUCCESS
 
-        and: 'then the user adds a system package, so the next start must build the image again'
+        and: 'then `jq` is added to `image.extra_apt_packages`, so the next start must build the image again'
             var config = lamp.resolve('oillamp.toml')
             Files.writeString(config, Files.readString(config)
                     .replace('extra_apt_packages = []', 'extra_apt_packages = ["jq"]'))
 
-        when:
+        when: '`oillamp at --dry-run` plans the next session'
             var next = host.oillamp.run('at', lamp.toString(), '--dry-run', '--verbose')
 
         then: 'the image is built again'
@@ -175,18 +179,18 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             the time. If the clock has not moved on between two updates (here it is stopped), the
             revision must change all the same.
         """
-        when:
+        when: '`oillamp update` runs twice, with the clock stopped'
             var first = host.oillamp.run('update', lamp.toString())
             var firstRevision = Files.readString(revisionFile())
             var second = host.oillamp.run('update', lamp.toString())
 
-        then:
+        then: 'both succeed, with different revisions'
             first.status() == LampExitStatus.SUCCESS
             second.status() == LampExitStatus.SUCCESS
             Files.readString(revisionFile()) != firstRevision
     }
 
-    def 'Oillamp\'s `update --dry-run` shows the update and changes nothing'() {
+    def '`oillamp update --dry-run` shows the update and changes nothing'() {
         reportInfo """
             `--dry-run` works the same way for every oillamp command: it prints the plan and does
             nothing. For update, that means no image is built and the lamp keeps the image it
@@ -196,10 +200,10 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             assert host.oillamp.run('update', lamp.toString()).status() == LampExitStatus.SUCCESS
             var current = Files.readString(revisionFile())
 
-        when:
+        when: '`oillamp update --dry-run` is run'
             var dry = host.oillamp.run('update', lamp.toString(), '--dry-run')
 
-        then:
+        then: 'it succeeds, and the lamp\'s revision is the same'
             dry.status() == LampExitStatus.SUCCESS
             Files.readString(revisionFile()) == current
     }
@@ -218,7 +222,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
         and: 'the next build will fail'
             host.machine { it.commandFailing('podman build', 1, 'catalog fetch failed') }
 
-        when:
+        when: '`oillamp update` is run'
             var failed = host.oillamp.run('update', lamp.toString())
 
         then: 'the update reports the failure'
@@ -246,7 +250,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             Files.writeString(lamp.resolve('.oillamp/session.json'),
                     '{"supervisorPid": 4242, "startedAt": "2026-10-15T09:00:00Z"}')
 
-        when:
+        when: '`oillamp update` is run'
             var outcome = host.oillamp.run('update', lamp.toString())
 
         then: 'nothing is built, and the lamp is unchanged'
@@ -254,7 +258,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             !outcome.stepKinds().contains('BuildImage')
             !Files.exists(revisionFile())
 
-        and: 'the user is told which session holds it'
+        and: 'it names the process id and the start of the session that holds the lamp'
             outcome.console().contains('4242')
             outcome.console().contains('2026-10-15T09:00:00Z')
 
@@ -271,13 +275,13 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             straight away as a configuration error, with the usage exit status, and leaves the
             lamp unchanged.
         """
-        given:
+        given: 'the lamp asks for the pi version `some release`'
             pinPiTo('some release')
 
-        when:
+        when: '`oillamp update` is run'
             var update = host.oillamp.run('update', lamp.toString())
 
-        then:
+        then: 'it exits with `USAGE`, says it expected `latest` or an exact version, and builds nothing'
             update.status() == LampExitStatus.USAGE
             update.console().contains('expected latest or an exact version')
             !update.stepKinds().contains('BuildImage')
@@ -347,7 +351,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             installer(bin, true, '@earendil-works/pi-coding-agent@1.3.0').exit == 1
     }
 
-    def 'Oillamp\'s `update --system` builds the whole image again, from a freshly pulled Debian'() {
+    def '`oillamp update --system` builds the whole image again, from a freshly pulled Debian'() {
         reportInfo """
             A plain update renews only the agent tools. Everything else in the image, Debian
             itself, Firefox, openssh, Mesa's graphics libraries and the JDK, stays as it was on
@@ -363,7 +367,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             follows the same rules as a plain update: the lamp switches only if the build
             succeeds, and the agent's home is not touched.
         """
-        when:
+        when: '`oillamp update --system --verbose` is run'
             var update = host.oillamp.run('update', lamp.toString(), '--system', '--verbose')
 
         then: 'the image is built from scratch, with the newest base image'
@@ -379,16 +383,16 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             host.oillamp.run('at', lamp.toString(), '--dry-run', '--verbose').console().contains(built)
     }
 
-    def 'A plain update leaves the cache and the base image alone'() {
+    def 'A plain `oillamp update` leaves the cache and the base image alone'() {
         reportInfo """
             A plain update should take a minute or two, not the full time of a first build. So it
             uses podman's cache for everything before the harness layer, and does not ask
             podman for a newer base image.
         """
-        when:
+        when: '`oillamp update --verbose` is run'
             var update = host.oillamp.run('update', lamp.toString(), '--verbose')
 
-        then:
+        then: 'no build step pulls the base image or skips the cache'
             update.status() == LampExitStatus.SUCCESS
             update.stepDetails().every { !it.contains('--pull=always') && !it.contains('--no-cache') }
     }
@@ -408,7 +412,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             host.machine { it.commandSucceeding('podman image exists', '')
                               .commandSucceeding('podman image inspect', '[{"Created": "2026-08-08T16:15:03+02:00"}]') }
 
-        when:
+        when: '`oillamp at` starts a session'
             var started = host.oillamp.run('at', lamp.toString())
 
         then: 'the session starts'
@@ -429,10 +433,10 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             host.machine { it.commandSucceeding('podman image exists', '')
                               .commandSucceeding('podman image inspect', '[{"Created": "2026-09-12T14:15:03Z"}]') }
 
-        when:
+        when: '`oillamp at` starts a session'
             var started = host.oillamp.run('at', lamp.toString())
 
-        then:
+        then: 'the session starts without `OIL-IMAGE-002`'
             started.status() == LampExitStatus.SUCCESS
             !started.reported('OIL-IMAGE-002')
     }
@@ -449,10 +453,10 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             user about the problem, and names the podman commands that find and remove old images.
             A start that reuses an existing image builds nothing, and says nothing about it.
         """
-        when: 'an update builds a new image'
+        when: '`oillamp update` builds a new image'
             var update = host.oillamp.run('update', lamp.toString())
 
-        then: 'the user is told, with the commands that help'
+        then: 'it reports `OIL-IMAGE-003`, with the podman commands that help'
             update.status() == LampExitStatus.SUCCESS
             update.reported('OIL-IMAGE-003')
             update.console().contains('podman images localhost/oillamp/sandbox')
@@ -460,7 +464,7 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             update.console().contains('podman image prune')
             update.console().contains('podman system df')
 
-        when: 'the user adds a package, so the next start builds an image too'
+        when: '`jq` is added to `image.extra_apt_packages`, so the next start builds an image too'
             var config = lamp.resolve('oillamp.toml')
             Files.writeString(config, Files.readString(config)
                     .replace('extra_apt_packages = []', 'extra_apt_packages = ["jq"]'))
@@ -481,15 +485,15 @@ class Updating_The_Agent_Tools_Spec extends Specification {
             !reused.reported('OIL-IMAGE-003')
     }
 
-    def 'Oillamp\'s `update --dry-run` does not warn about old images, since it builds none'() {
+    def '`oillamp update --dry-run` does not warn about old images, since it builds none'() {
         reportInfo """
             `--dry-run` shows what would happen and does nothing. No image is made, so there is
             nothing new on the disk to warn about.
         """
-        when:
+        when: '`oillamp update --dry-run` is run'
             var dry = host.oillamp.run('update', lamp.toString(), '--dry-run')
 
-        then:
+        then: 'it succeeds without `OIL-IMAGE-003`'
             dry.status() == LampExitStatus.SUCCESS
             !dry.reported('OIL-IMAGE-003')
     }
