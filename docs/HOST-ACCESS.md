@@ -375,7 +375,7 @@ lamp.hostAccess(true, requirementsText);                // only while the lamp s
 
 These go through the control socket to `oillamp follow` and to a `Lamp` like every other event, so
 Genies can show them without a second channel. They are one line of JSON each, and
-`TheEventWireFormatSpec` grows a case for every one of them.
+`The_Event_Wire_Format_Spec` grows a case for every one of them.
 
 ---
 

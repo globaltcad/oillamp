@@ -36,7 +36,7 @@ import java.time.Instant
  *  application reads them in another. If the two ever disagreed, the application would show its
  *  user nonsense or nothing at all, so every kind of event is written and read back here.
  */
-class TheEventWireFormatSpec extends Specification {
+class The_Event_Wire_Format_Spec extends Specification {
 
     static final LampProblem PROBLEM = new LampProblem(
             new LampProblem.Code('OIL-SANDBOX-002'), LampProblem.Severity.ERROR,

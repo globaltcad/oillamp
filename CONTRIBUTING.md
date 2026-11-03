@@ -152,7 +152,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Following_A_Run_Spec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
 | `Following_A_Session_Spec` | `follow` |
 | `Embedding_A_Session_Spec` | `oillamp at --embedded`, started by another application |
-| `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
+| `The_Event_Wire_Format_Spec` | the one-line JSON events between the engine and an application |
 | `Holding_A_Lamp_Spec` | an application holding a lamp through `dev.lamp.Lamp` |
 | `Choosing_The_Model_For_A_Lamp_Spec` | an application choosing the model service and key |
 | `Choosing_The_Agents_Model_Spec` | `--model`, `oillamp model` and the Lamp API's: one model for every run, old conversations too, written as pi's default; how a model gets from an application to an answer; with a stand-in pi that keeps track of its model |
