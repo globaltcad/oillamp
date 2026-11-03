@@ -1,20 +1,23 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 
-/**
- *  The single-file launcher, {@code src/packaging/launcher.sh}: a shell script with a compressed
- *  archive attached, which unpacks itself into the cache directory once and then runs the Java
- *  runtime it unpacked.
- *
- *  <p>These scenarios build a small launcher from the real script, with a stand-in for the Java
- *  runtime that only says it was started, and run it the way a user does.
- */
+@Title('The launcher')
+@Narrative('''
+The single-file launcher, `src/packaging/launcher.sh`: a shell script with a compressed archive
+attached, which unpacks itself into the cache directory once, and then runs the Java runtime it
+unpacked.
+
+These scenarios build a small launcher from the real script, with a stand-in for the Java runtime
+that only says it was started, and run it the way a user does.
+''')
 class The_Launcher_Spec extends Specification {
 
     @TempDir Path tmp
@@ -22,17 +25,17 @@ class The_Launcher_Spec extends Specification {
     def 'The launcher replaces a cache directory that an earlier run left without a Java runtime'() {
         reportInfo """
             The launcher unpacks into a directory named after its exact build, and skips unpacking
-            when that directory already holds a Java runtime. A directory without one, left by
-            an unpack that was cut short or by someone tidying their cache, used to stay: the new
-            copy was moved inside it rather than in its place, and every run then failed with
-            "found no Java runtime", whatever the user did short of deleting the cache by hand.
+            when that directory already holds a Java runtime. A directory without one, left by an
+            unpack that was cut short or by someone tidying their cache, once stayed: the new copy
+            was moved inside it rather than in its place, and every run then failed with "found no
+            Java runtime", until the user deleted the cache by hand.
         """
         given: 'a launcher, and a cache directory for its build with no Java runtime in it'
             var launcher = aLauncher()
             var unpacked = whereItUnpacks(launcher)
             Files.createDirectories(unpacked.resolve('lib'))
 
-        when:
+        when: 'the launcher is run with `version`'
             var run = start(launcher, 'version')
 
         then: 'it unpacks again and runs'
@@ -47,15 +50,15 @@ class The_Launcher_Spec extends Specification {
     def 'Launchers started at the same moment leave one unpacked copy, not a stray one each'() {
         reportInfo """
             The first run of a new build unpacks about 100 MB. Two oillamp commands started at the
-            same moment, say a session and a `status` in another terminal, both unpack, and the
+            same moment, such as a session and a `status` in another terminal, both unpack, and the
             second to finish finds the directory already there. It was meant to give up quietly;
-            instead its copy was moved inside the first one's, and stayed there for good.
+            instead, its copy was once moved inside the first one's, and stayed there.
         """
-        given:
+        given: 'a launcher, and an empty cache'
             var launcher = aLauncher()
             var unpacked = whereItUnpacks(launcher)
 
-        when: 'five start at once on an empty cache'
+        when: 'five launchers start at once'
             var runs = (1..5).collect { start(launcher, 'version') }
 
         then: 'every one of them runs'
