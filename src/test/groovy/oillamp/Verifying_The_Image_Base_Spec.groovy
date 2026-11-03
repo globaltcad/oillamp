@@ -15,7 +15,7 @@ import spock.lang.Tag
  */
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
-class VerifyingTheImageBaseSpec extends Specification {
+class Verifying_The_Image_Base_Spec extends Specification {
 
     /** The desktop packages in the Containerfile, and what oillamp loses if each is absent. */
     static final Map<String, String> REQUIRED = [
