@@ -138,7 +138,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `TheSandboxImageSpec` | static checks of the image files |
 | `UpdatingTheAgentToolsSpec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |
 | `TheShapeOfTheCodeSpec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
-| `KeepingTheModelKeyOnTheHostSpec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
+| `Keeping_The_Model_Key_On_The_Host_Spec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
 | `ReachingTheHostSpec` | host access: every request judged by a stand-in checker before it happens; tiers, roots, the person, the log |
 | `WorkingOnTheHostSpec` | `host_edit_file` and `host_bash` on the host, with `host_access.commands`, timeouts and cancellation |
 | `ServingTheHostToolsOverMcpSpec` | the host tools as an MCP server: initialize, tools/list, JSON-RPC errors, connections |

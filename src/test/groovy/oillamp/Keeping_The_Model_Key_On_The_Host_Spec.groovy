@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit
  *  the relay's socket exactly as the relay inside the container does.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class KeepingTheModelKeyOnTheHostSpec extends Specification {
+class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
 
     static final String KEY = 'sk-the-real-key-0123456789'
 
