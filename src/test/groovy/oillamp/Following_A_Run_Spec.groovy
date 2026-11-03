@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
  *  stand-in pi streams its answers the way pi does.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class FollowingARunSpec extends Specification {
+class Following_A_Run_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host

@@ -149,7 +149,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Keeping_History_Within_A_Disk_Budget_Spec` | the initial-size allowance, automatic pruning, shallow branches, previews, active-run bases and retained run numbers |
 | `Asking_In_A_Conversation_Spec` | `ask --in`, `--after`, `--instead-of` |
 | `Reading_The_Agents_Conversations_Spec` | `conversations` and `Lamp.conversations` |
-| `FollowingARunSpec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
+| `Following_A_Run_Spec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
 | `Following_A_Session_Spec` | `follow` |
 | `Embedding_A_Session_Spec` | `oillamp at --embedded`, started by another application |
 | `TheEventWireFormatSpec` | the one-line JSON events between the engine and an application |
