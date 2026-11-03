@@ -20,7 +20,7 @@ import java.nio.file.Path
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.podmanAvailable() })
-class VerifyingPodmanAssumptionsSpec extends Specification {
+class Verifying_Podman_Assumptions_Spec extends Specification {
 
     @Shared Path scratch
 

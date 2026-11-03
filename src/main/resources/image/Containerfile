@@ -103,7 +103,7 @@ RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
 # agent (1000) is who the human's agent runs as. lamp (1001) runs the compositor, the VNC server
 # and the recorder. The agent must not be able to signal lamp's processes or reach its sockets;
 # that is what makes the recording trustworthy. The uid mapping that keeps them apart on the host
-# is checked by VerifyingPodmanAssumptionsSpec.
+# is checked by Verifying_Podman_Assumptions_Spec.
 RUN groupadd -g 1000 agent && useradd -u 1000 -g 1000 -d /home/agent -M -s /bin/bash agent \
  && groupadd -g 1001 lamp  && useradd -u 1001 -g 1001 -d /var/lib/lamp -M -s /usr/sbin/nologin lamp \
  && mkdir -p /oillamp/session /oillamp/sockets /oillamp/recordings /home/agent /var/lib/lamp \
