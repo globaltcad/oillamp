@@ -9,10 +9,12 @@ import dev.lamp.LampRun
 import dev.oillamp.OilLamp
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
@@ -26,23 +28,37 @@ import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- *  {@code schedule} and {@code ask}: waking the agent while a session runs.
- *
- *  <p>A session holds one agent: pi, in the sandbox, which oillamp starts and talks to. Jobs on the
- *  lamp's schedule wake it at set times, and {@code oillamp ask} wakes it at once. Every run begins
- *  a new conversation, so what the agent should remember is put into its prompt: its own notes,
- *  what recent runs changed, and what the last one said. The lamp is saved just before and just
- *  after each run, so the history shows what each run did, and any run can be undone.
- *
- *  <p>The agent here is a stand-in that answers the way pi does, given what each scenario wants it
- *  to do. Everything else is real: the session, the sockets, the schedule file and the history.
- */
+@Title('Waking the agent')
+@Narrative('''
+A session holds one agent: pi, in the sandbox, which oillamp starts and talks to. Two things wake
+it:
+
+- a *job* on the lamp's schedule, at the time the job names. Jobs are added with
+  `oillamp schedule add`, by a program through the `Lamp` API, or by the agent itself through
+  its scheduling tools;
+- a question sent with `oillamp ask`, at once.
+
+Each time the agent is woken is a *run*, named `run-1`, `run-2` and so on, and each run begins a
+new pi conversation. So that the agent can carry on where it left off, a job's prompt carries the
+agent's notes, `~/workspace/NOTES.md`, the files the recent runs changed, and what the last run
+said. Oillamp saves the lamp just before and just after each job's run, and the questions of a
+chat together once the chat has been quiet, so `oillamp history` shows what each run did, and any
+run can be undone.
+
+The schedule is off until `schedule.enabled = true` is set in `oillamp.toml`, because every run
+costs model tokens.
+
+The agent in these scenarios is a stand-in that answers as pi does, and does what each scenario
+has it do. Everything else is real: the session, the sockets, the schedule file and the history.
+The host's clock is simulated, and stands at Tuesday 22 September 2026, 16:15 in Berlin, unless a
+scenario moves it.
+''')
+@Subject([OilLamp, Lamp])
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class Waking_The_Agent_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     /** A Tuesday afternoon: 16:15 in Berlin. */
     static final Instant NOW = Instant.parse('2026-09-22T14:15:03Z')
@@ -67,20 +83,25 @@ class Waking_The_Agent_Spec extends Specification {
 
     // ─── the schedule, from the command line ───────────────────────────────────────────────
 
-    def 'A job the user adds is listed with when it runs next, on this machine\'s clock'() {
+    def '`oillamp schedule` lists a job with its next time on the host\'s clock'() {
         reportInfo """
-            "0 9 * * 1-5" means nine in the morning on weekdays, and the person who wrote it meant
-            nine on their own clock. So a schedule is read in the host's time zone, and listed in
-            it. The schedule is kept beside the history, where the agent cannot edit it.
+            Let's consider a lamp whose schedule is on, on a host in Berlin, on Tuesday at 16:15.
+            A job is added with `oillamp schedule add --cron "0 9 * * 1-5"`: nine in the morning on
+            weekdays. Whoever writes "9" means nine on their own clock, so oillamp reads a cron
+            expression in the host's time zone, and `oillamp schedule` lists the job's times in it,
+            naming the zone.
+
+            Oillamp keeps the schedule in the lamp's `.oillamp/schedule.json`, outside the agent's
+            home, so the agent cannot edit it.
         """
-        given:
+        given: 'a lamp whose schedule is on'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: '`oillamp schedule add` adds the job, and `oillamp schedule` lists the schedule'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '0 9 * * 1-5', 'Check the nightly build and fix what broke')
             var listed = host.oillamp.run('schedule', lamp.toString())
 
-        then: 'it runs next on Wednesday at nine, Berlin time'
+        then: 'the `JobAdded` event names `job-1`, added by the user, next due on Wednesday at 9:00 Berlin time, with no end'
             added.succeeded()
             var job = added.events().find { it instanceof LampEvent.JobAdded }.job()
             job.id() == 'job-1'
@@ -88,27 +109,32 @@ class Waking_The_Agent_Spec extends Specification {
             job.next() == Optional.of(Instant.parse('2026-09-23T07:00:00Z'))
             job.expires().isEmpty()
 
-        and: 'the listing shows it on the local clock'
+        and: 'the listing shows `job-1` at `2026-09-23 09:00` in `Europe/Berlin`'
             listed.console().contains('job-1')
             listed.console().contains('2026-09-23 09:00')
             listed.console().contains('Europe/Berlin')
 
-        and: 'the schedule lives in the lamp\'s state, out of the agent\'s home'
+        and: 'the schedule is in `.oillamp/schedule.json`, not in the agent\'s home'
             Files.exists(lamp.resolve('.oillamp/schedule.json'))
             !Files.exists(home(lamp).resolve('schedule.json'))
     }
 
-    def 'The schedule lists when each job runs over the coming week, so it can be drawn as a timeline'() {
+    def '`oillamp schedule` lists every time a job runs in the coming seven days'() {
         reportInfo """
-            An application that shows the schedule on a timeline needs every time a job runs, not
-            just the next one, and cannot work them out itself without reading cron. So each job
-            comes with its times over the next seven days, up to when it expires. A job switched
-            off has none.
+            Let's consider a program built on oillamp that draws a lamp's schedule as a timeline.
+            It needs every time a job runs, not only the next one, and should not have to read cron
+            expressions to work them out. So each job in the `Schedule` event lists its `upcoming`
+            times over the next seven days, and none after the job's end. A job that is switched
+            off lists none.
+
+            On Tuesday at 16:15 Berlin time, the scenario adds four jobs: one at nine on weekdays,
+            one at nine every day that ends in three days, one that runs once in two hours, and an
+            hourly one that it switches off.
         """
-        given: 'Tuesday, 16:15 in Berlin'
+        given: 'Tuesday, 16:15 in Berlin, on a lamp whose schedule is on'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: '`oillamp schedule add` adds the four jobs, `oillamp schedule disable` switches off the fourth, and `oillamp schedule` lists them'
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '0 9 * * 1-5', 'Weekday check')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '0 9 * * *', '--expires', 'in 3d', 'Daily, for three days')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2h', 'Once')
@@ -117,51 +143,55 @@ class Waking_The_Agent_Spec extends Specification {
             var listing = host.oillamp.run('schedule', lamp.toString())
             var listed = listing.events().find { it instanceof LampEvent.Schedule }.jobs()
 
-        then: 'nine on each weekday of the week ahead, which ends next Tuesday at 16:15'
+        then: 'the weekday job runs at nine on each weekday until next Tuesday at 16:15'
             listed[0].upcoming().collect() == ['2026-09-23', '2026-09-24', '2026-09-25', '2026-09-28', '2026-09-29']
                     .collect { Instant.parse(it + 'T07:00:00Z') }
 
-        and: 'the daily job only until it expires on Friday afternoon'
+        and: 'the daily job runs three times, the last on Friday morning, before it ends on Friday afternoon'
             listed[1].upcoming().size() == 3
             listed[1].upcoming().last() == Instant.parse('2026-09-25T07:00:00Z')
 
-        and: 'the job that runs once, once; the one switched off, never'
+        and: 'the one-time job runs once, in two hours; the job switched off never runs'
             listed[2].upcoming().collect() == [NOW.plus(Duration.ofHours(2))]
             listed[3].upcoming().isEmpty()
     }
 
-    def 'A time oillamp cannot read, or one that has passed, is refused, and says why'() {
+    def '`oillamp schedule add` refuses a time it cannot use, and says why'() {
         reportInfo """
-            A schedule that silently never runs is worse than an error: the person finds out days
-            later. So anything oillamp cannot turn into a time is refused at once, with what was
-            wrong, and the schedule stays as it was.
+            A job that never runs because its time was wrong is found out only days later. So
+            `oillamp schedule add` refuses at once a time it cannot use, reports `OIL-SCHEDULE-001`
+            with what was wrong, and adds nothing. The scenario tries three: the cron expression
+            `0 25 * * *`, whose hour does not exist; `--at "2026-01-01 09:00"`, which has passed;
+            and a job given both `--cron` and `--at`.
         """
-        given:
+        given: 'a lamp whose schedule is on'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: '`oillamp schedule add` is run with hour 25, with a date that has passed, and with both `--cron` and `--at`'
             var badHour = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '0 25 * * *', 'x')
             var passed = host.oillamp.run('schedule', lamp.toString(), 'add', '--at', '2026-01-01 09:00', 'x')
             var both = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', '--at', 'in 2h', 'x')
 
-        then:
+        then: 'each is refused with `OIL-SCHEDULE-001`; the first says "the hour 25 is not between 0 and 23", the second "has already passed"'
             [badHour, passed, both].every { !it.succeeded() && it.reported('OIL-SCHEDULE-001') }
             badHour.problems().first().whatHappened().contains('the hour 25 is not between 0 and 23')
             passed.problems().first().whatHappened().contains('has already passed')
 
-        and: 'nothing was added'
+        and: '`oillamp schedule` lists no job'
             var listing = host.oillamp.run('schedule', lamp.toString())
             var jobs = listing.events().find { it instanceof LampEvent.Schedule }.jobs()
             jobs.isEmpty()
     }
 
-    def 'A job can be switched off and on, and removed, and the whole schedule paused'() {
+    def '`oillamp schedule` switches a job off and on, pauses the whole schedule, and removes a job'() {
         reportInfo """
-            A person who wants the agent to leave a job alone for a week switches it off rather
-            than deleting it and writing it again later. A person going on holiday pauses the whole
-            schedule. Both only change what runs; the jobs stay as they were written.
+            Someone who wants the agent to leave a job alone for a week switches it off with
+            `oillamp schedule disable`, rather than removing it and writing it again later.
+            Someone going on holiday pauses the whole schedule with `oillamp schedule pause`. Both
+            only change whether jobs run. `oillamp schedule remove` takes a job off the schedule,
+            and reports `OIL-SCHEDULE-003` for a job that does not exist.
         """
-        given:
+        given: 'a lamp with two jobs: `job-1`, hourly, and `job-2`, which runs once'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@hourly', 'Look at the queue')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2h', 'Send the summary')
@@ -171,7 +201,7 @@ class Waking_The_Agent_Spec extends Specification {
                 listing.events().find { it instanceof LampEvent.Schedule }.jobs()
             }
 
-        when:
+        when: '`job-1` is switched off and on again, the schedule is paused and resumed, and `job-2` and then `job-9`, which does not exist, are removed'
             var off = host.oillamp.run('schedule', lamp.toString(), 'disable', 'job-1')
             var switchedOff = jobsOnTheSchedule()
             host.oillamp.run('schedule', lamp.toString(), 'enable', 'job-1')
@@ -181,7 +211,7 @@ class Waking_The_Agent_Spec extends Specification {
             var removed = host.oillamp.run('schedule', lamp.toString(), 'remove', 'job-2')
             var missing = host.oillamp.run('schedule', lamp.toString(), 'remove', 'job-9')
 
-        then:
+        then: 'switched off, `job-1` had no next time; paused, the listing said `paused`; `job-2` was removed; `job-9` was refused with `OIL-SCHEDULE-003`'
             off.succeeded()
             !switchedOff.find { it.id() == 'job-1' }.enabled()
             switchedOff.find { it.id() == 'job-1' }.next().isEmpty()
@@ -190,26 +220,27 @@ class Waking_The_Agent_Spec extends Specification {
             removed.events().any { it instanceof LampEvent.JobRemoved && it.job().id() == 'job-2' }
             missing.reported('OIL-SCHEDULE-003')
 
-        and: 'only the first job is left, switched on again'
+        and: 'only `job-1` is left, switched on again'
             var jobs = jobsOnTheSchedule()
             jobs*.id() == ['job-1']
             jobs.first().enabled()
     }
 
-    def 'An hourly job switched off on Tuesday and back on on Friday runs at the next full hour, not immediately'() {
+    def 'An hourly job switched off on Tuesday and on again on Friday runs next at the coming full hour, not at once'() {
         reportInfo """
-            oillamp computes the next time of a repeating job from the time it last ran, or, if it never
-            ran, from the time it was added. A job that is switched off never runs, but that starting point
-            stays where it was while the job is off.
+            Oillamp works out the next time of a repeating job from when it last ran, or, if it
+            never ran, from when it was added. While a job is switched off, that starting point
+            stays where it was.
 
-            Let's consider an `@hourly` job that the user added on Tuesday at 16:15 and switched off at
-            once. On Friday at 16:15 they switch it on again. Counted from Tuesday, its next time would be
-            Tuesday at 17:00, which has passed, so the next session would run the job as soon as it
-            started. The user did not ask for that run.
+            Let's consider an `@hourly` job added on Tuesday at 16:15 and switched off at once with
+            `oillamp schedule disable`. On Friday at 16:15 it is switched on again with
+            `oillamp schedule enable`. Counted from Tuesday, its next time would be Tuesday at
+            17:00, which has passed, so the next session would run the job as soon as it started:
+            a run nobody asked for.
 
-            So when a repeating job is switched on, oillamp sets its last run to that moment. In the
-            scenario, `oillamp schedule` lists the job after `enable`, and its next time must be Friday at
-            17:00 Berlin time, the first full hour after it was switched on.
+            So `enable` counts a repeating job as if it had just run. `oillamp schedule` must then
+            list the job's next time as Friday at 17:00 Berlin time, the first full hour after it
+            was switched on.
         """
         given: 'an hourly job, added on Tuesday at 16:15 and switched off at once'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
@@ -227,22 +258,23 @@ class Waking_The_Agent_Spec extends Specification {
             job.next() == Optional.of(Instant.parse('2026-09-25T15:00:00Z'))
     }
 
-    def 'Oillamp reads a time written as a span from now: #written'() {
+    def '`oillamp schedule add --at` reads a time written as a span from now: #written'() {
         reportInfo """
-            `--at` and `--expires` accept a time written as a span from now, such as "in 2h", as well as a
-            date such as "2026-10-01 09:00". A span is a number and a unit: m, min or minutes; h or hours;
-            d or days; w or weeks. A week is 7 days. "+2h" means the same as "in 2h".
+            `--at` and `--expires` accept a time written as a span from now, such as "in 2h", as
+            well as a date such as "2026-10-01 09:00". A span is a number and a unit: m, min or
+            minutes; h or hours; d or days; w or weeks. A week is 7 days. "+2h" means the same as
+            "in 2h".
 
-            The scenario adds one job for each unit at a fixed moment, and checks that the job's next time
-            is that moment plus the span: 90 minutes, 2 hours, 3 days and 7 days.
+            On Tuesday at 16:15, the scenario adds one job with each unit, and checks that the
+            job's next time is 16:15 plus the span: 90 minutes, 2 hours, 3 days or 7 days.
         """
         given: 'Tuesday, 16:15 in Berlin'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: 'a job is added with `oillamp schedule add --at` and the span'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--at', written, 'Look again')
 
-        then:
+        then: 'it runs next at 16:15 plus the span'
             added.succeeded()
             added.events().find { it instanceof LampEvent.JobAdded }.job().next() == Optional.of(NOW.plus(span))
 
@@ -254,38 +286,42 @@ class Waking_The_Agent_Spec extends Specification {
             'in 1w'       || Duration.ofDays(7)
     }
 
-    def 'Oillamp reads a so-called "cron expression" the way the Linux scheduler cron reads it: #meaning'() {
+    def '`oillamp schedule add --cron` reads a cron expression as the Linux scheduler cron does: #meaning'() {
         reportInfo """
-            Unix systems have run commands at set times with a program called cron since the 1970s. Each line of its configuration file, the crontab, starts with five fields that say
-            when to run: the minute, the hour, the day of the month, the month and the day of the week.
-            `0 9 * * 1-5`, for example, means 9:00 on Monday to Friday. Those five fields are called a
-            "cron expression", and many other tools use the same notation, among them GitHub Actions and
-            Kubernetes.
+            Unix systems have run commands at set times with a program called cron since the
+            1970s. Each line of its configuration file, the crontab, starts with five fields that
+            say when to run: the minute, the hour, the day of the month, the month and the day of
+            the week. `0 9 * * 1-5`, for example, means 9:00 on Monday to Friday. Those five fields
+            are called a "cron expression", and many other tools use the same notation, among them
+            GitHub Actions and Kubernetes.
 
-            oillamp uses it for a repeating job's time, because people already know it and copy it from
-            crontabs and documentation. The basic format is standardised in POSIX. Most Linux systems run
-            Vixie cron, which adds a few rules to it, and expressions found in the wild rely on them. So
-            oillamp reads an expression the way Vixie cron does. Two of those rules are easy to get wrong:
+            Oillamp uses it for a repeating job's time, because people already know it and copy it
+            from crontabs and documentation. The basic format is standardised in POSIX. Most Linux
+            systems run Vixie cron, which adds a few rules to it, and expressions found in the wild
+            rely on them. So oillamp reads an expression the way Vixie cron does. Two of those
+            rules are easy to get wrong:
 
-            - In the day-of-week field, Sunday may be written as 0, as 7, or as `sun`. Some crons count
-              Sunday as 0, others as 7, and both spellings are in use. `0 9 * * 7` must run on Sundays at
-              9:00. If oillamp knew only 0, the expression would match no day at all, and
-              `oillamp schedule add` would refuse it as naming no time.
-            - A step after a number, as in `5/20` in the minute field, starts at that number and goes on to
-              the end of the field: minutes 5, 25 and 45. `*/20` starts at 0: minutes 0, 20 and 40. Read as
-              "minute 5 only", `5/20` would run once an hour instead of three times.
+            - In the day-of-week field, Sunday may be written as 0, as 7, or as `sun`. Some crons
+              count Sunday as 0, others as 7, and both spellings are in use. `0 9 * * 7` must run
+              on Sundays at 9:00. If oillamp knew only 0, the expression would match no day at all,
+              and `oillamp schedule add` would refuse it as naming no time.
+            - A step after a number, as in `5/20` in the minute field, starts at that number and
+              goes on to the end of the field: minutes 5, 25 and 45. `*/20` starts at 0: minutes 0,
+              20 and 40. Read as "minute 5 only", `5/20` would run once an hour instead of three
+              times.
 
-            The scenario adds each expression with `oillamp schedule add --cron` on Tuesday 22 September
-            2026 at 16:15 in Berlin, and compares the first runs the job lists with the runs cron makes.
-            Berlin is two hours ahead of UTC in September, so 9:00 there is 07:00Z.
+            The scenario adds each expression with `oillamp schedule add --cron` on Tuesday
+            22 September 2026 at 16:15 in Berlin, and compares the first runs the job lists with
+            the runs cron makes. Berlin is two hours ahead of UTC in September, so 9:00 there is
+            07:00Z.
         """
         given: 'Tuesday, 16:15 in Berlin'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: 'a job is added with `oillamp schedule add --cron` and the expression'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', cron, 'Look again')
 
-        then: 'the first runs are the ones cron would make'
+        then: 'the first times the job lists are the ones cron would run it at'
             added.succeeded()
             var upcoming = added.events().find { it instanceof LampEvent.JobAdded }.job().upcoming()
             upcoming.collect().take(expected.size()) == expected.collect { Instant.parse(it) }
@@ -299,11 +335,11 @@ class Waking_The_Agent_Spec extends Specification {
             'a step over the whole hour'             | '*/20 9 * * *'  || ['2026-09-23T07:00:00Z', '2026-09-23T07:20:00Z', '2026-09-23T07:40:00Z']
     }
 
-    def 'Oillamp reads the two day fields of a cron expression the way cron does: #meaning'() {
+    def '`oillamp schedule add --cron` combines the two day fields of a cron expression as cron does: #meaning'() {
         reportInfo """
             A cron expression has two fields that name days: the third, the day of the month, and
             the fifth, the day of the week. Cron, the Linux scheduler, combines them in a way that
-            surprises people, and oillamp reads them the same way, so that an expression copied
+            surprises people, and oillamp combines them the same way, so that an expression copied
             from a crontab runs when it did there:
 
             - When both fields are restricted, a day counts when either one matches.
@@ -314,17 +350,16 @@ class Waking_The_Agent_Spec extends Specification {
               only Mondays: both fields must match.
 
             The scenario adds each expression with `oillamp schedule add --cron` on Tuesday
-            22 September 2026 at 16:15 in Berlin, and reads when the job says it runs next.
-            Berlin is two hours ahead of UTC in September, so midnight there is 22:00Z the day
-            before.
+            22 September 2026 at 16:15 in Berlin, and reads the job's next time. Berlin is two
+            hours ahead of UTC in September, so midnight there is 22:00Z the day before.
         """
         given: 'Tuesday 22 September, 16:15 in Berlin'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when: 'the user adds a job with the expression'
+        when: 'a job is added with `oillamp schedule add --cron` and the expression'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', cron, 'Look again')
 
-        then: 'it runs next on the day cron would run it'
+        then: 'its next time is the day cron would run it'
             added.succeeded()
             added.events().find { it instanceof LampEvent.JobAdded }.job().next() == Optional.of(Instant.parse(next))
 
@@ -334,48 +369,49 @@ class Waking_The_Agent_Spec extends Specification {
             'Monday the 28th is an even day, so the next is Monday 5 October' | '0 0 */2 * 1' || '2026-10-04T22:00:00Z'
     }
 
-    def 'A job can be written with --cron=, --at= and --expires=, and a prompt that starts with a dash goes after --'() {
+    def '`oillamp schedule add` takes `--cron=`, `--at=` and `--expires=`, and a prompt that starts with a dash after `--`'() {
         reportInfo """
-            `--cron=@daily` means the same as `--cron @daily`, so a job comes out the same
-            whichever way it was typed. A prompt is often a list of things to do, and a list
-            starts with a dash, which oillamp would take for an option it does not know. After
-            `--`, every argument is taken as it is written.
+            `--cron=@daily` means the same as `--cron @daily`. Both spellings are common, and a job
+            comes out the same whichever was typed. A prompt is often a list of things to do, and a
+            list starts with a dash, which oillamp would read as an option it does not know. After
+            `--`, oillamp takes every argument as it is written.
         """
         given: 'Tuesday, 16:15 in Berlin'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
 
-        when:
+        when: '`oillamp schedule add` adds two jobs written with `=`, and a third whose prompt, a list, follows `--`'
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron=0 9 * * 1-5', '--expires=in 3d', 'Weekday check')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at=in 2h', 'Once')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', '--', '- read the inbox\n- answer what is urgent')
             var listing = host.oillamp.run('schedule', lamp.toString())
             var listed = listing.events().find { it instanceof LampEvent.Schedule }.jobs()
 
-        then: 'the first runs at nine on weekdays, and only until Friday afternoon'
+        then: 'the first job runs at nine on weekdays, and ends on Friday afternoon'
             listed[0].when().contains('0 9 * * 1-5')
             listed[0].next() == Optional.of(Instant.parse('2026-09-23T07:00:00Z'))
             listed[0].expires() == Optional.of(NOW.plus(Duration.ofDays(3)))
 
-        and: 'the second runs once, two hours from now'
+        and: 'the second job runs once, two hours from now'
             listed[1].next() == Optional.of(NOW.plus(Duration.ofHours(2)))
 
-        and: 'the third has its prompt exactly as written'
+        and: 'the third job\'s prompt is exactly the list that was written'
             listed[2].prompt() == '- read the inbox\n- answer what is urgent'
     }
 
-    def 'With the schedule switched off, a job is kept, but the user is told it will not run'() {
+    def 'With the schedule off, `oillamp schedule add` keeps the job, and reports `OIL-SCHEDULE-004`: it will not run'() {
         reportInfo """
-            Waking the agent costs model tokens, so a lamp's schedule is off until its owner turns
-            it on. Adding a job to a lamp whose schedule is off is allowed, since the person may be
-            setting things up first, but they are told plainly that nothing will run yet.
+            Waking the agent costs model tokens, so a lamp's schedule is off until
+            `schedule.enabled = true` is set in its `oillamp.toml`. `oillamp schedule add` still adds a
+            job to such a lamp, since someone may set up the jobs before turning the schedule on.
+            But it reports `OIL-SCHEDULE-004`, which says that no job runs yet.
         """
-        given:
+        given: 'a lamp whose schedule is off'
             var lamp = aLampThatHasRun('')
 
-        when:
+        when: '`oillamp schedule add` adds a daily job'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'Tidy up')
 
-        then:
+        then: 'it succeeds and reports `OIL-SCHEDULE-004`, and `oillamp schedule` lists the job'
             added.succeeded()
             added.reported('OIL-SCHEDULE-004')
             var listing = host.oillamp.run('schedule', lamp.toString())
@@ -383,12 +419,13 @@ class Waking_The_Agent_Spec extends Specification {
             jobs.size() == 1
     }
 
-    def 'A session started with --enable-scheduling runs the jobs, and leaves oillamp.toml as it is'() {
+    def '`oillamp at --enable-scheduling` runs the jobs for one session, and leaves `oillamp.toml` as it is'() {
         reportInfo """
-            Turning the schedule on for one session should not mean editing a file. With
-            --enable-scheduling, the session runs the jobs as if `enabled = true` were set, and
-            `oillamp schedule` says so while it runs. The lamp's own setting is untouched, so the
-            next session without the flag runs no jobs again.
+            Someone who wants the schedule on for one session should not have to edit
+            `oillamp.toml` and change it back afterwards. With `--enable-scheduling`, `oillamp at`
+            runs the jobs as if `schedule.enabled = true` were set, and `oillamp schedule` says the
+            schedule is on while that session runs. `oillamp.toml` is not changed, so once the
+            session has ended, `oillamp schedule` says the schedule is off again.
         """
         given: 'a lamp whose schedule is off, with a job for five minutes from now'
             var lamp = aLampThatHasRun('')
@@ -396,7 +433,7 @@ class Waking_The_Agent_Spec extends Specification {
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 5m', 'Tidy up')
             anAgent { prompt -> 'Tidied up.' }
 
-        when: 'a session starts ten minutes later with the flag'
+        when: 'ten minutes later, `oillamp at --enable-scheduling` starts a session, which `oillamp stop` ends after the run'
             host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
             startASession(lamp, '--enable-scheduling')
             var finished = waitFor(LampEvent.RunFinished)
@@ -406,7 +443,7 @@ class Waking_The_Agent_Spec extends Specification {
             assert !session.alive
             var after = host.oillamp.run('schedule', lamp.toString())
 
-        then: 'the job ran'
+        then: 'the job ran, and finished'
             finished.run().job() == Optional.of('job-1')
             finished.outcome() == LampRunOutcome.FINISHED
 
@@ -414,23 +451,26 @@ class Waking_The_Agent_Spec extends Specification {
             during.events().find { it instanceof LampEvent.Schedule }.enabled()
             !after.events().find { it instanceof LampEvent.Schedule }.enabled()
 
-        and: 'the lamp\'s configuration was not changed'
+        and: '`oillamp.toml` was not changed'
             Files.readString(lamp.resolve('oillamp.toml')) == toml
     }
 
     // ─── runs ──────────────────────────────────────────────────────────────────────────────
 
-    def 'A job whose time has come wakes the agent, and the run is saved as a snapshot of its own'() {
+    def 'A job whose time has come wakes the agent with its prompt, and the run is saved in a snapshot of its own'() {
         reportInfo """
-            The whole point: the agent is woken with the job's prompt, works, and says what it did.
-            The lamp is saved as the run ends, whatever happened, with the run's name and the
-            agent's last words in the snapshot's message, so the history reads as a log of what
-            the agent did and when. A job meant to run once is then off the schedule.
+            Let's consider a job, due in five minutes, that asks the agent to write the weekly
+            report into `~/workspace/report.md`, and a session that starts ten minutes later. The
+            job is due as the session starts, so it runs at once, but only after the session has
+            reported `SessionOpened`: a program that waits for that event hears of the run after it.
 
-            A job that is due as the session starts runs at once, but only after the session has
-            said it is open, so an application that waits for that hears of the run after it.
+            The session wakes the agent with the job's prompt, and the agent works and says what it
+            did. As the run ends, oillamp saves the lamp. The snapshot names the run, and its
+            message holds the agent's last words, so `oillamp history` reads as a log of what the
+            agent did and when. A job added with `--at` runs once, and is then taken off the
+            schedule.
         """
-        given: 'a job for five minutes from now'
+        given: 'a job, added with `--at`, for five minutes from now'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 5m', 'Write the weekly report into ~/workspace/report.md')
 
@@ -440,7 +480,7 @@ class Waking_The_Agent_Spec extends Specification {
                 'I wrote the weekly report to ~/workspace/report.md.'
             }
 
-        when: 'a session runs ten minutes later'
+        when: 'a session starts ten minutes later, and `oillamp stop` ends it after the run'
             host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
             startASession(lamp)
             var finished = waitFor(LampEvent.RunFinished)
@@ -448,12 +488,12 @@ class Waking_The_Agent_Spec extends Specification {
             session.join(30_000)
             assert !session.alive
 
-        then: 'the session said it was open before anything of the run'
+        then: 'the session reported `SessionOpened` before the run was queued or started'
             reported.any { it instanceof LampEvent.SessionOpened }
             reported.findIndexOf { it instanceof LampEvent.SessionOpened } <
                     reported.findIndexOf { it instanceof LampEvent.RunQueued || it instanceof LampEvent.RunStarted }
 
-        and: 'the agent was woken with the job\'s prompt, as the job\'s first run'
+        and: 'the agent was woken for `run-1` of `job-1`, with the job\'s prompt, word that it has no notes yet, and that this is the first run'
             reported.find { it instanceof LampEvent.RunStarted }.run() == new LampRun('run-1', Optional.of('job-1'),
                     'Write the weekly report into ~/workspace/report.md', Optional.empty())
             prompts.size() == 1
@@ -462,11 +502,11 @@ class Waking_The_Agent_Spec extends Specification {
             prompts[0].contains('You have no notes yet')
             prompts[0].contains('This is the first run.')
 
-        and: 'it finished, and said what it did'
+        and: 'the run finished, and the agent said what it did'
             finished.outcome() == LampRunOutcome.FINISHED
             finished.answer() == 'I wrote the weekly report to ~/workspace/report.md.'
 
-        and: 'the run is a snapshot, named after it and holding the agent\'s words'
+        and: 'the run\'s snapshot is a `RUN` snapshot named `run-1`, holds the agent\'s words, and is the newest in `oillamp history`'
             var snapshot = finished.snapshot().orElseThrow()
             snapshot.kind() == LampSaveKind.RUN
             snapshot.run() == Optional.of('run-1')
@@ -475,7 +515,7 @@ class Waking_The_Agent_Spec extends Specification {
             var newest = history.events().find { it instanceof LampEvent.History }.snapshots().first()
             newest.id() == snapshot.id()
 
-        and: 'the history says which job it was, how it ended, and where its conversation is'
+        and: '`oillamp history` lists the snapshot with the job, the run\'s outcome and its pi conversation'
             with (newest) {
                 job() == Optional.of('job-1')
                 outcome() == Optional.of(LampRunOutcome.FINISHED)
@@ -483,21 +523,25 @@ class Waking_The_Agent_Spec extends Specification {
                 conversation() == finished.conversation()
             }
 
-        and: 'the job ran once, as it was meant to, and is gone'
+        and: '`job-1` was removed after its one run, and `oillamp schedule` lists no job'
             reported.any { it instanceof LampEvent.JobRemoved && it.job().id() == 'job-1' }
             var listing = host.oillamp.run('schedule', lamp.toString())
             var jobs = listing.events().find { it instanceof LampEvent.Schedule }.jobs()
             jobs.isEmpty()
     }
 
-    def 'The next run is told what the last one did: its notes, the files it changed and its last words'() {
+    def 'A job\'s prompt carries the agent\'s notes, the files the last run changed, and the last run\'s final words'() {
         reportInfo """
-            A job wakes the agent in a new conversation, so on its own it would remember nothing.
-            Its prompt therefore carries what it needs: the notes it left itself in
-            ~/workspace/NOTES.md, which files the recent runs changed, and what the last run said
-            at its end. The notes are marked as the agent's own, not as the user's instructions.
+            Each job wakes the agent in a new pi conversation, so on its own the agent would
+            remember nothing of the runs before. The prompt therefore carries what it needs: the
+            notes the agent left itself in `~/workspace/NOTES.md`, which files the recent runs
+            changed, and what the last run said at its end. The notes are in `<notes>`, marked as
+            the agent's own, not as the user's instructions.
+
+            Let's consider two one-time jobs, due a minute apart. In the first run, the agent
+            writes its notes and `~/workspace/data.csv`, and answers "Collected the data.".
         """
-        given: 'two jobs, one after the other'
+        given: 'two one-time jobs, a minute apart; in the first run, the agent writes its notes and `data.csv`'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Do the first task')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2m', 'Do the second task')
@@ -510,7 +554,7 @@ class Waking_The_Agent_Spec extends Specification {
                 'Added the chart.'
             }
 
-        when: 'a session runs once both are due'
+        when: 'a session starts once both are due, and ends after the second run'
             host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
             startASession(lamp)
             waitFor(LampEvent.RunFinished) { it.run().id() == 'run-2' }
@@ -518,7 +562,7 @@ class Waking_The_Agent_Spec extends Specification {
             session.join(30_000)
             assert !session.alive
 
-        then: 'the second run was given the notes, the changes and the last words of the first'
+        then: 'the second run\'s prompt holds the notes in `<notes>`, both files as added in `run-1`, and the first run\'s last words in `<last-message>`'
             prompts.size() == 2
             prompts[1].contains('You were woken by job-2')
             prompts[1].contains('<notes>\nNext: add the chart.\n</notes>')
@@ -528,11 +572,13 @@ class Waking_The_Agent_Spec extends Specification {
             prompts[1].contains('<last-message>\nCollected the data.\n</last-message>')
     }
 
-    def 'With the saves around runs switched off, a run makes no snapshot, and the next is told nothing of it'() {
+    def 'With `autosave.before_run` and `autosave.after_run` off, a run makes no snapshot, and the next job\'s prompt says nothing of it'() {
         reportInfo """
-            The saves just before and just after every run are on unless `autosave.before_run`
-            and `autosave.after_run` are off. Off, the history holds no runs, so the next job's
-            prompt cannot say what the last run changed or said. The agent still has its notes.
+            Oillamp saves the lamp just before and just after every run, unless
+            `autosave.before_run` and `autosave.after_run` are set to `false`. With both off, the
+            history holds no runs, so the next job's prompt cannot say what the last run changed or
+            said. It still carries the agent's notes, a file in the agent's home, and says that the
+            saves after runs are switched off.
         """
         given: 'two jobs, one after the other, on a lamp that does not save around runs'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nbefore_run = false\nafter_run = false\n')
@@ -554,49 +600,50 @@ class Waking_The_Agent_Spec extends Specification {
             session.join(30_000)
             assert !session.alive
 
-        then: 'neither run was saved'
+        then: 'neither run made a snapshot, and `oillamp history` lists none'
             finished.snapshot().isEmpty()
             !reported.any { it instanceof LampEvent.Saved }
             host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots().isEmpty()
 
-        and: 'the second run was given the notes, but nothing of the first run'
+        and: 'the second run\'s prompt holds the notes, and says the saves after runs are off, but not the first run\'s last words'
             prompts.size() == 2
             prompts[1].contains('<notes>\nNext: add the chart.\n</notes>')
             !prompts[1].contains('Collected the data.')
             prompts[1].contains('The user has switched off the saves after runs')
     }
 
-    def 'What a person asks goes to the agent exactly as they wrote it'() {
+    def '`oillamp ask` sends the question to the agent exactly as it was written'() {
         reportInfo """
-            A question someone asks is what a chat shows as their message, so it is never wrapped
-            in notes or recent runs. The agent's guide already tells it to read its notes.
+            A job's prompt carries the agent's notes and its recent runs. A question sent with
+            `oillamp ask` does not: a chat shows the prompt as the person's message, so it must be
+            what they wrote. The agent's guide, `AGENTS.md`, already tells it to read its notes.
         """
-        given:
+        given: 'a session on a lamp whose schedule is on'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             anAgent { prompt -> 'Fine.' }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends "How are you?"'
             host.oillamp.run('ask', lamp.toString(), 'How are you?')
 
-        then:
+        then: 'the agent received "How are you?" and nothing else'
             prompts == ['How are you?']
     }
 
-    def 'A person\'s questions are saved together, once the chat has been quiet for ten minutes'() {
+    def 'Oillamp saves the questions sent with `oillamp ask` together, once the chat has been quiet for ten minutes'() {
         reportInfo """
-            Saving a lamp reads its whole agent directory, which takes a while when that is large.
-            A job's run is saved just before and as it ends, but a chat would wait for that twice
-            with every question. So the questions someone asks are saved together instead, once
-            no run has begun for `autosave.chat_quiet_minutes`, ten unless the lamp says otherwise.
-            That snapshot is a `chat save`, named after the last question's run, so the run
-            numbers in the history stay unique.
+            Saving a lamp reads the agent's whole home, which takes a while when it is large. A
+            job's run is saved just before it begins and as it ends, but saving each question that
+            way would make every answer in a chat wait twice. So oillamp saves the questions sent
+            with `oillamp ask` together, once no run has begun for `autosave.chat_quiet_minutes`,
+            ten by default. That snapshot is a `CHAT` snapshot, named after the run of the last
+            question, and its message names the runs of all of them.
 
-            The session runs on a clock sixty times faster than it should, so ten quiet minutes
-            pass in ten seconds, and two questions asked one after the other fall into one chat.
+            The session runs on a clock sixty times faster than real time, so ten quiet minutes
+            pass in ten seconds, and two questions sent one after the other fall into one chat.
         """
-        given: 'an agent that writes down every question, on a clock that runs a minute a second'
+        given: 'an agent that writes each question into a file, on a clock that runs a minute a second'
             var lamp = aLampThatHasRun('')
             anAgent { prompt ->
                 Files.writeString(home(lamp).resolve('workspace/' + prompt + '.md'), prompt)
@@ -605,42 +652,43 @@ class Waking_The_Agent_Spec extends Specification {
             host.machine { it.clockRunsFaster(60) }
             startASession(lamp)
 
-        when: 'a person asks two questions'
+        when: '`oillamp ask` sends "first", then "second"'
             assert host.oillamp.run('ask', lamp.toString(), 'first').succeeded()
             assert host.oillamp.run('ask', lamp.toString(), 'second').succeeded()
             var finished = reported.findAll { it instanceof LampEvent.RunFinished }
 
-        then: 'neither run was saved by itself'
+        then: 'neither run made a snapshot of its own'
             finished*.run()*.id() == ['run-1', 'run-2']
             finished*.snapshot().every { it.isEmpty() }
             !reported.any { it instanceof LampEvent.Saved }
 
-        when: 'the chat stays quiet'
+        when: 'the chat stays quiet for ten minutes'
             var saved = waitFor(LampEvent.Saved).snapshot()
 
-        then: 'both questions are saved in one snapshot, named after the last'
+        then: 'both questions are in one `CHAT` snapshot, named `run-2`, with the message `run-1 to run-2 (asked)`'
             saved.kind() == LampSaveKind.CHAT
             saved.run() == Optional.of('run-2')
             saved.message() == 'run-1 to run-2 (asked)'
             reported.count { it instanceof LampEvent.Saved } == 1
 
-        and: 'it is the newest snapshot, with the chat\'s conversation'
+        and: 'it is the newest snapshot, and holds the chat\'s pi conversation'
             var newest = host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots().first()
             newest.id() == saved.id()
             newest.conversation() == finished.last().conversation()
     }
 
-    def 'A chat a job interrupts keeps a snapshot of its own, #saves'() {
+    def 'Oillamp saves a chat that a job interrupts in a `CHAT` snapshot of its own, #saves'() {
         reportInfo """
-            Let's consider a person who asks the agent to write a plan, and a job that comes due a
-            moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`. Oillamp
-            saves the chat first, in a `chat save` of its own, which names the question's run and
-            conversation, and only then begins the job's run. So the history says that the person
-            asked for the plan, and the job's snapshots hold only what the job did, also when
-            there is no save just before the job's run.
+            Let's consider someone who sends "Make a plan" with `oillamp ask`, and a job that comes
+            due a moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`.
+            Oillamp saves the chat first, in a `CHAT` snapshot of its own, which names the
+            question's run and pi conversation, and only then begins the job's run. So
+            `oillamp history` shows that someone asked for the plan, and the job's snapshots hold
+            only what the job did. That holds with the save just before the job's run,
+            `autosave.before_run`, and without it.
 
-            The session runs on a clock sixty times faster than it should, so the job, due a
+            The session runs on a clock sixty times faster than real time, so the job, due a
             minute after it is added, runs a second later.
         """
         given: 'an agent that writes a file of its own for every prompt'
@@ -653,13 +701,13 @@ class Waking_The_Agent_Spec extends Specification {
             host.machine { it.clockRunsFaster(60) }
             startASession(lamp)
 
-        when: 'a person asks a question, and a job comes due at once'
+        when: '`oillamp ask` sends "Make a plan", and a job is added for a minute later'
             assert host.oillamp.run('ask', lamp.toString(), 'Make a plan').succeeded()
             var asked = reported.find { it instanceof LampEvent.RunFinished }
             assert host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Tidy up').succeeded()
             var job = waitFor(LampEvent.RunFinished) { it.run().job().isPresent() }
 
-        then: 'the newest snapshots are the job\'s, and before them the chat\'s'
+        then: 'the newest snapshots are the job\'s, and before them the `CHAT` snapshot of `run-1`, with the question\'s conversation'
             var snapshots = host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots()
             snapshots.take(kinds.size())*.kind() == kinds
@@ -668,7 +716,7 @@ class Waking_The_Agent_Spec extends Specification {
             chat.message() == 'run-1 (asked)'
             chat.conversation() == asked.conversation()
 
-        and: 'the job\'s run is counted from the chat\'s snapshot on'
+        and: 'the job\'s `RUN` snapshot is the newest'
             job.snapshot().isPresent()
             snapshots.first().id() == job.snapshot().get().id()
 
@@ -679,27 +727,27 @@ class Waking_The_Agent_Spec extends Specification {
             saves = beforeRun ? 'with a save just before the job\'s run' : 'without a save just before the job\'s run'
     }
 
-    def 'Oillamp still saves a chat when the saves of a job\'s run after it fail'() {
+    def 'Oillamp saves a chat later when the saves of the job\'s run that interrupts it fail'() {
         reportInfo """
-            Let's consider a person who asks the agent a question, and a job that comes due a
-            moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`. The
-            chat is saved as the job's run begins, and when that fails, the job's snapshots hold
-            what the question changed too. But only if they were made: in the rare case that the
-            lamp's history, `.oillamp/history`, cannot be written while the job runs, here because
-            it is read-only, all three saves fail, and the chat must still be saved later, at the
-            latest as the session ends.
+            Let's consider someone who sends a question with `oillamp ask`, and a job that comes
+            due a moment later, before the chat has been quiet for `autosave.chat_quiet_minutes`.
+            Oillamp saves the chat as the job's run begins. Should that save alone fail, the job's
+            own snapshots would still hold what the question changed. In the rare case that the
+            lamp's history, `.oillamp/history`, cannot be written at all while the job runs, here
+            because it is read-only, the chat save and both saves of the job's run fail. The chat
+            must then be saved later, at the latest as the session ends.
 
-            The session runs on a clock sixty times faster than it should, so the job, due a
+            The session runs on a clock sixty times faster than real time, so the job, due a
             minute after it is added, runs a second later.
         """
-        given: 'a lamp saved once by hand, and a session whose agent answers everything'
+        given: 'a lamp saved once with `oillamp history save`, and a session whose agent answers everything'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
             assert host.oillamp.run('history', lamp.toString(), 'save', '-m', 'to begin with').succeeded()
             anAgent { prompt -> 'Done.' }
             host.machine { it.clockRunsFaster(60) }
             startASession(lamp)
 
-        when: 'a person asks a question, and a job runs while the history cannot be written'
+        when: '`oillamp ask` sends a question, and a job runs while `.oillamp/history` is read-only'
             assert host.oillamp.run('ask', lamp.toString(), 'Make a plan').succeeded()
             var writable = readOnly(lamp.resolve('.oillamp/history'))
             assert host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Tidy up').succeeded()
@@ -708,12 +756,12 @@ class Waking_The_Agent_Spec extends Specification {
         then: 'the job\'s run made no snapshot'
             job.snapshot().isEmpty()
 
-        when: 'the history can be written again, and the session ends'
+        when: '`.oillamp/history` can be written again, and `oillamp stop` ends the session'
             writable()
             assert host.oillamp.run('stop', lamp.toString()).succeeded()
             session.join(30_000)
 
-        then: 'the question is saved in a chat snapshot of its own'
+        then: 'the question is in a `CHAT` snapshot named `run-1`'
             var snapshots = host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots()
             snapshots.any { it.kind() == LampSaveKind.CHAT && it.run() == Optional.of('run-1') }
@@ -722,23 +770,24 @@ class Waking_The_Agent_Spec extends Specification {
             writable?.call()
     }
 
-    def 'A question asked just before the session ends is saved as it ends'() {
+    def 'Oillamp saves a question sent just before the session ends as the session ends'() {
         reportInfo """
-            A chat that has not been quiet long enough when the session ends is over all the
-            same, so it is saved then, with the sandbox still there, whether or not
-            `autosave.shutdown` is on.
+            Let's consider a question sent with `oillamp ask`, and `oillamp stop` run right after
+            it, before the chat has been quiet for `autosave.chat_quiet_minutes`. The chat is over
+            all the same, so oillamp saves it as the session ends, while the sandbox is still
+            there, whether or not `autosave.shutdown` is on.
         """
-        given:
+        given: 'a session'
             var lamp = aLampThatHasRun('')
             anAgent { prompt -> 'Fine.' }
             startASession(lamp)
 
-        when: 'a person asks a question, and stops the session at once'
+        when: '`oillamp ask` sends "How are you?", and `oillamp stop` ends the session at once'
             assert host.oillamp.run('ask', lamp.toString(), 'How are you?').succeeded()
             assert host.oillamp.run('stop', lamp.toString()).succeeded()
             session.join(30_000)
 
-        then: 'the question is the newest snapshot'
+        then: 'the newest snapshot is a `CHAT` snapshot named `run-1`'
             var newest = host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots().first()
             newest.kind() == LampSaveKind.CHAT
@@ -746,13 +795,17 @@ class Waking_The_Agent_Spec extends Specification {
             newest.message() == 'run-1 (asked)'
     }
 
-    def 'Asking a busy agent waits its turn'() {
+    def 'A question sent with `oillamp ask` while the agent is busy waits its turn'() {
         reportInfo """
-            The agent works on one thing at a time. A second question, or a job that comes due,
-            while it is busy is not refused and not run alongside: it waits, and the session says
-            so, and it runs as soon as the agent is free.
+            The agent works on one thing at a time. A question sent while it is busy is neither
+            refused nor run alongside: it waits, the session reports a `RunQueued` event, and the
+            question runs as soon as the agent is free. A job that comes due while the agent is
+            busy waits the same way.
+
+            Let's consider an agent that works on the question "slow" until the scenario lets it
+            finish, and a second question, "quick", sent meanwhile.
         """
-        given:
+        given: 'an agent that works on "slow" until it is let go'
             var lamp = aLampThatHasRun('')
             var release = new CountDownLatch(1)
             anAgent { prompt ->
@@ -761,7 +814,7 @@ class Waking_The_Agent_Spec extends Specification {
             }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends "slow", then "quick" while the agent works on it, and the agent is let go'
             var slow = Thread.start { assert host.oillamp.run('ask', lamp.toString(), 'slow').succeeded() }
             waitFor(LampEvent.RunStarted)
             var quick = null
@@ -771,18 +824,18 @@ class Waking_The_Agent_Spec extends Specification {
             slow.join(20_000)
             second.join(20_000)
 
-        then:
+        then: '"quick" was queued, and answered after "slow"'
             queued.run().prompt() == 'quick'
             quick.succeeded()
             quick.console().contains('answered: quick')
             prompts == ['slow', 'quick']
     }
 
-    def 'A run that takes too long is stopped, and what it did so far is saved'() {
+    def 'Oillamp stops a run that takes longer than `schedule.max_run_minutes`, and saves it'() {
         reportInfo """
             An agent can loop, or wait for something that never comes, and every minute it does
-            costs money. A run is therefore stopped after schedule.max_run_minutes. What it had
-            done by then is saved like any run, marked as stopped, so it can be looked at or undone.
+            costs model tokens. So oillamp stops a run after `schedule.max_run_minutes`. It saves
+            the run like any other, marked as timed out, so that it can be looked at or undone.
         """
         given: 'runs of at most one minute, on a clock that runs ten minutes a second'
             var lamp = aLampThatHasRun('''
@@ -804,29 +857,31 @@ class Waking_The_Agent_Spec extends Specification {
             host.machine { it.clockRunsFaster(600) }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends "Work forever"'
             var asked = host.oillamp.run('ask', lamp.toString(), 'Work forever')
 
-        then:
+        then: '`oillamp ask` fails, the run ended `TIMED_OUT`, and the console says it ran out of time'
             !asked.succeeded()
             var finished = asked.events().find { it instanceof LampEvent.RunFinished }
             finished.outcome() == LampRunOutcome.TIMED_OUT
             asked.console().contains('ran out of time')
 
-        and: 'the half-done work is in the run\'s snapshot'
+        and: 'the newest snapshot is the run\'s, marked as timed out'
             var history = host.oillamp.run('history', lamp.toString())
             var snapshot = history.events().find { it instanceof LampEvent.History }.snapshots().first()
             snapshot.kind() == LampSaveKind.RUN
             snapshot.message().contains('timed out')
     }
 
-    def 'Ending the session in the middle of a run stops it, and saves it first'() {
+    def '`oillamp stop` in the middle of a run stops the run, and saves it'() {
         reportInfo """
-            Ctrl-C, closing the terminal or oillamp stop must not lose a run's work, and must not
-            leave the agent working in a sandbox that is about to disappear. The session tells the
-            agent to stop, saves the run, and only then stops the sandbox.
+            Ending a session, with `oillamp stop`, Ctrl-C or by closing its terminal, must not lose
+            the work of a run in progress, nor leave the agent working in a sandbox that is about to
+            be removed. So the session tells the agent to stop, and saves the run, marked as
+            interrupted, before the sandbox goes. The scenario ends the session with
+            `oillamp stop`.
         """
-        given:
+        given: 'a session whose agent works on any question for a minute'
             var lamp = aLampThatHasRun('[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt ->
                 Files.writeString(home(lamp).resolve('workspace/partial.txt'), 'some of it\n')
@@ -835,7 +890,7 @@ class Waking_The_Agent_Spec extends Specification {
             }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends "A long task", and `oillamp stop` ends the session while the agent works on it'
             Thread.start { host.oillamp.run('ask', lamp.toString(), 'A long task') }
             waitFor(LampEvent.RunStarted)
             Thread.sleep(300)
@@ -843,7 +898,7 @@ class Waking_The_Agent_Spec extends Specification {
             session.join(30_000)
             assert !session.alive
 
-        then:
+        then: 'the run ended `INTERRUPTED`, its `RUN` snapshot is marked as interrupted, and no failure was reported'
             var finished = reported.find { it instanceof LampEvent.RunFinished }
             finished.outcome() == LampRunOutcome.INTERRUPTED
             var history = host.oillamp.run('history', lamp.toString())
@@ -853,20 +908,20 @@ class Waking_The_Agent_Spec extends Specification {
             !reported.any { it instanceof LampEvent.Failure }
     }
 
-    def 'Without pi in the sandbox, a run fails and says why, and the session carries on'() {
+    def 'Without pi in the sandbox, a run fails with `OIL-SCHEDULE-005`, and the session keeps running'() {
         reportInfo """
-            A lamp whose image has no pi, or a pi that crashes at start, cannot do a run. That is
-            reported where the user looks, with what pi said, and the session stays up: the
-            sandbox itself is fine.
+            A lamp whose image has no pi, or whose pi crashes as it starts, cannot do a run.
+            Oillamp reports `OIL-SCHEDULE-005` with what pi printed, and keeps the session running,
+            since the sandbox itself works.
         """
-        given: 'a sandbox without an agent'
+        given: 'a session in a sandbox without pi'
             var lamp = aLampThatHasRun('')
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends "Hello?"'
             var asked = host.oillamp.run('ask', lamp.toString(), 'Hello?')
 
-        then:
+        then: 'the run `FAILED`, the warning `OIL-SCHEDULE-005` quotes "pi: command not found", and the session still runs'
             !asked.succeeded()
             asked.events().find { it instanceof LampEvent.RunFinished }.outcome() == LampRunOutcome.FAILED
             reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-SCHEDULE-005'
@@ -874,34 +929,34 @@ class Waking_The_Agent_Spec extends Specification {
             session.alive
     }
 
-    def 'What the agent says cannot take over the user\'s terminal'() {
+    def '`oillamp ask` prints the agent\'s answer with its terminal escape sequences made harmless'() {
         reportInfo """
-            The agent's answer is printed in the terminal the user started oillamp from, on the
-            host. A terminal obeys escape sequences in what it prints: they can clear the screen,
-            rewrite lines, or change the window's title. So everything the agent wrote is printed
-            with such sequences made harmless, as the output of any program in the sandbox is.
+            `oillamp ask` prints the agent's answer in the terminal it was run from, on the host. A
+            terminal obeys escape sequences in what it prints: they can clear the screen, rewrite
+            lines, or change the window's title. So oillamp makes such sequences harmless before it
+            prints the answer, as it does with the output of any program in the sandbox.
         """
-        given:
+        given: 'an agent whose answer holds the escape sequences that clear the screen and set the window title'
             var lamp = aLampThatHasRun('')
             anAgent { prompt -> 'Done.\u001B[2J\u001B]0;owned\u0007 All fine.' }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` sends a question'
             var asked = host.oillamp.run('ask', lamp.toString(), 'Anything')
 
-        then:
+        then: 'the console shows the answer\'s text, without either sequence'
             asked.succeeded()
             asked.console().contains('Done.')
             !asked.console().contains('\u001B[2J')
             !asked.console().contains('\u001B]0;')
     }
 
-    def 'A long answer in any language comes back to `oillamp ask` exactly as the agent wrote it'() {
+    def '`oillamp ask` receives a long answer in any language exactly as the agent wrote it'() {
         reportInfo """
-            The answer travels from the session to `oillamp ask` over a socket, which hands it over
-            in pieces of 64 kB. A letter such as € takes three bytes, and a piece can end in the
-            middle of one. The pieces are joined before they are read as text, so no letter is
-            broken at such a seam.
+            The session sends the answer to `oillamp ask` over its control socket, which hands it
+            over in pieces of 64 kB. A character such as € takes three bytes in UTF-8, and a piece
+            can end in the middle of one. Oillamp joins the pieces before it decodes them as text,
+            so no character is broken at such a seam.
         """
         given: 'answers of 90 kB of euro signs, after one, two and three spaces, so that one of them has a seam inside a €'
             var lamp = aLampThatHasRun('')
@@ -909,27 +964,27 @@ class Waking_The_Agent_Spec extends Specification {
             anAgent { prompt -> answers[prompt.toInteger()] }
             startASession(lamp)
 
-        when:
+        when: '`oillamp ask` asks for each of the three answers'
             var heard = (0..2).collect { which ->
                 host.oillamp.run('ask', lamp.toString(), which.toString())
                         .events().find { it instanceof LampEvent.RunFinished }.answer()
             }
 
-        then:
+        then: 'each answer arrived exactly as the agent wrote it'
             heard == answers
     }
 
-    def 'A schedule file that is not valid JSON is reported once, and again once it is fixed'() {
+    def 'Oillamp warns once with `OIL-SCHEDULE-002` about a schedule file that is not valid JSON, and says when it can be read again'() {
         reportInfo """
-            The lamp's jobs are kept in .oillamp/schedule.json. oillamp writes it, but a person
-            may edit it by hand, and a typo leaves text that is not valid JSON: here, `{ not json`.
-            oillamp cannot tell which jobs that file holds, so no job runs until it is fixed, and
-            the user is told.
+            Oillamp keeps a lamp's jobs in `.oillamp/schedule.json`. Oillamp writes it, but someone
+            may edit it by hand, and a typo can leave text that is not valid JSON: here,
+            `{ not json`. Oillamp cannot tell which jobs such a file holds, so it runs none of them
+            until the file is fixed, and warns with `OIL-SCHEDULE-002`.
 
-            The session reads the file every half minute, and whenever someone changes the
-            schedule. Repeating the same warning at every reading would bury everything else the
-            session reports. So the warning comes once. When the file is valid JSON again, the
-            session says it can read the schedule again, and the jobs run as before.
+            A running session reads the file every 30 seconds, and whenever someone changes the
+            schedule. The same warning at every reading would bury everything else the session
+            reports, so the session warns once. When the file is valid JSON again, the session says
+            that the schedule can be read again.
         """
         given: 'a session with the schedule on'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
@@ -948,46 +1003,51 @@ class Waking_The_Agent_Spec extends Specification {
                 reported.count { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-SCHEDULE-002' }
             }
 
-        when: 'someone leaves text in the file that is not JSON, and the session reads it four times'
+        when: '`{ not json` is written into the file, and the session reads it four times'
             Files.writeString(file, '{ not json')
             readNow()
             waitFor(LampEvent.Warning) { it.problem().code().value() == 'OIL-SCHEDULE-002' }
             3.times { readNow(); Thread.sleep(300) }
 
-        then: 'the user was warned once'
+        then: 'the session warned with `OIL-SCHEDULE-002` once'
             warnings() == 1
 
-        when: 'the file holds valid JSON again: an empty schedule'
+        when: '`{}`, an empty schedule, is written into the file'
             Files.writeString(file, '{}')
             readNow()
 
-        then: 'the session says it can read the schedule again, and warns no more'
+        then: 'the session says "the schedule can be read again", and has warned no more'
             waitFor(LampEvent.Ok) { it.text() == 'the schedule can be read again' }
             warnings() == 1
     }
 
     // ─── the agent's side ──────────────────────────────────────────────────────────────────
 
-    def 'The agent adds and removes its own jobs through the session, within the limits the user set'() {
+    def 'The agent adds and removes its own jobs over the session\'s schedule socket, within the limits in `oillamp.toml`'() {
         reportInfo """
-            The agent's tools do not write the schedule. They ask the session over a socket, and
-            the session applies the rules: the agent may have only so many jobs, which may not run
-            too often, and which expire. It can read the user's jobs, but not remove them. A
-            refusal says what the rule is, so the agent can adjust.
+            The agent's scheduling tools do not write the schedule file. They send a request over
+            the session's schedule socket, and the session applies the limits set in
+            `oillamp.toml`: the agent may have at most `schedule.max_agent_jobs` jobs, none of them
+            may run more often than every `schedule.min_agent_interval_minutes`, and each ends after
+            `schedule.max_agent_days`. The agent can list the user's jobs, but not remove them. A
+            refusal states the limit, so that the agent can change its request.
+
+            The scenario sends the requests as the agent's tools do, on a lamp that allows the
+            agent one job, and that already has a daily job the user added.
         """
-        given:
+        given: 'a lamp whose agent may have one job, with a daily job the user added'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_jobs = 1\n')
             host.oillamp.run('schedule', lamp.toString(), 'add', '--cron', '@daily', 'The user\'s own job')
             startASession(lamp)
 
-        when:
+        when: 'the agent asks for a job every five minutes, an hourly job and a one-time job, to remove the user\'s `job-1`, and for the list of jobs'
             var tooOften = agentAsks(op: 'add', cron: '*/5 * * * *', prompt: 'Check the build')
             var hourly = agentAsks(op: 'add', cron: '0 * * * *', prompt: 'Check the build')
             var oneTooMany = agentAsks(op: 'add', at: 'in 2h', prompt: 'Another one')
             var usersJob = agentAsks(op: 'remove', id: 'job-1')
             var listed = agentAsks(op: 'list')
 
-        then:
+        then: 'only the hourly job is added, as `job-2`; each refusal names its limit; the list says whose each job is'
             !tooOften.ok
             tooOften.error.contains('may run at most every 15 minutes')
             hourly.ok
@@ -1035,7 +1095,7 @@ class Waking_The_Agent_Spec extends Specification {
             asked.error.contains('may run at most every 15 minutes')
     }
 
-    def 'Oillamp ends the agent\'s jobs within schedule.max_agent_days, whatever end or time the agent asks for'() {
+    def 'Oillamp ends the agent\'s jobs within `schedule.max_agent_days`, whatever end or time the agent asks for'() {
         reportInfo """
             The agent can add jobs to the lamp's schedule through the session. Each of its jobs ends after
             `schedule.max_agent_days` at the latest: 14 days, unless the user set another number. Without
@@ -1044,9 +1104,9 @@ class Waking_The_Agent_Spec extends Specification {
 
             The agent can ask for something past 14 days in two ways, and oillamp handles both:
 
-            - It asks for a repeating job that ends in 30 days. oillamp adds the job, but sets its end to
+            - It asks for a repeating job that ends in 30 days. Oillamp adds the job, but sets its end to
               14 days from now.
-            - It asks for a single run in 20 days. oillamp refuses, and the refusal says "at most 14 days
+            - It asks for a single run in 20 days. Oillamp refuses, and the refusal says "at most 14 days
               ahead", so the agent learns the limit.
 
             The scenario sends both requests over the session's schedule socket, as the agent's tools do,
@@ -1076,12 +1136,12 @@ class Waking_The_Agent_Spec extends Specification {
     def 'Oillamp runs a one-time job that came due during a short pause once the schedule is resumed'() {
         reportInfo """
             `oillamp schedule pause` stops every job from running, without changing or removing
-            any. Prompts sent with `oillamp ask` are answered as usual, paused or not. Let's
-            consider a user who pauses the schedule for a few minutes, during which a job added
+            any. Questions sent with `oillamp ask` are answered as usual, paused or not. Let's
+            consider someone who pauses the schedule for a few minutes, during which a job added
             with `--at` comes due.
 
             A one-time job keeps its time through a pause: it has no later time it could wait for.
-            When the user resumes the schedule, the job is due, and five minutes late, which
+            When the schedule is resumed, the job is due, and five minutes late, which
             `schedule.max_delay_minutes` (30 by default) allows, so it runs at once. A repeating
             job is different: resuming counts it as if it had just run, so it waits for its next
             time.
@@ -1089,9 +1149,9 @@ class Waking_The_Agent_Spec extends Specification {
             A running session checks the schedule as it starts, every 30 seconds after that, and
             whenever someone changes the schedule. In the scenario the job's time is five minutes
             before the session starts, so the job is due when the session first checks. The
-            schedule is paused, so the job must not run: the prompt the user sends next must be
-            the first and only prompt the agent receives. Then the user runs `oillamp schedule
-            resume`, the session checks again, and the job runs.
+            schedule is paused, so the job must not run: the question sent next must be the first
+            and only prompt the agent receives. Then `oillamp schedule resume` resumes the
+            schedule, the session checks again, and the job runs.
         """
         given: 'a job that was due five minutes before the session starts, on a paused schedule'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
@@ -1101,13 +1161,13 @@ class Waking_The_Agent_Spec extends Specification {
             host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
             startASession(lamp)
 
-        when: 'the person asks something while the schedule is paused'
+        when: '`oillamp ask` sends "Are you there?" while the schedule is paused'
             assert host.oillamp.run('ask', lamp.toString(), 'Are you there?').succeeded()
 
         then: 'only the question reached the agent'
             prompts == ['Are you there?']
 
-        when: 'the schedule is resumed'
+        when: '`oillamp schedule resume` resumes the schedule'
             host.oillamp.run('schedule', lamp.toString(), 'resume')
             var ran = waitFor(LampEvent.RunFinished) { it.run().job() == Optional.of('job-1') }
 
@@ -1117,7 +1177,7 @@ class Waking_The_Agent_Spec extends Specification {
             prompts[1].contains('Write the weekly report')
     }
 
-    def 'With schedule.max_agent_runs_per_day = 0, oillamp skips the agent\'s due job and says why'() {
+    def 'With `schedule.max_agent_runs_per_day = 0`, Oillamp skips the agent\'s due job, and says why'() {
         reportInfo """
             `schedule.max_agent_runs_per_day` limits how many runs of the agent's own jobs may start in 24
             hours. It does not limit the user's jobs, nor questions asked with `oillamp ask`. When one of
@@ -1149,7 +1209,7 @@ class Waking_The_Agent_Spec extends Specification {
             startASession(lamp)
             var skipped = waitFor(LampEvent.Info) { it.text().contains('was skipped') }
 
-        then: 'the user is told why it did not run, and which setting decides'
+        then: 'the session reports that `job-1` was skipped, and names `schedule.max_agent_runs_per_day`'
             skipped.text().contains('job-1 was due')
             skipped.text().contains('schedule.max_agent_runs_per_day')
 
@@ -1158,13 +1218,15 @@ class Waking_The_Agent_Spec extends Specification {
             !reported.any { it instanceof LampEvent.RunStarted }
     }
 
-    def 'The agent looks back at an earlier run, as the host\'s history holds it'() {
+    def 'The agent reads an earlier run from the history on the host with its `run_history` tool'() {
         reportInfo """
-            The prompt describes only the last few runs. To look further back, the agent asks for a
-            run by name, and gets what it changed and what it said at its end, from the history on
-            the host, which the agent cannot see or change.
+            A job's prompt describes only the last few runs. To look further back, the agent's
+            `run_history` tool asks the session for a run by name, such as `run-1`, and gets what
+            the run changed and what the agent said at its end. The session reads both from the
+            lamp's history on the host, which the agent cannot see or change. Without a name, the
+            tool lists the runs.
         """
-        given:
+        given: 'a session in which `oillamp ask` sent a question, and the agent wrote `answer.txt`'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt ->
                 Files.writeString(home(lamp).resolve('workspace/answer.txt'), '42\n')
@@ -1173,58 +1235,63 @@ class Waking_The_Agent_Spec extends Specification {
             startASession(lamp)
             host.oillamp.run('ask', lamp.toString(), 'Find the answer')
 
-        when:
+        when: 'the agent asks for all runs, for `run-1`, and for `run-7`, which does not exist'
             var all = agentAsks(op: 'history')
             var one = agentAsks(op: 'history', run: 'run-1')
             var none = agentAsks(op: 'history', run: 'run-7')
 
-        then:
+        then: 'the list names `run-1`; `run-1` added `answer.txt` and ended with the agent\'s answer; of `run-7` the session says there is no such run'
             all.text.contains('run-1')
             one.text.contains('~/workspace/answer.txt (added)')
             one.text.contains('The answer is in answer.txt.')
             none.text.contains('There is no run called \'run-7\'')
     }
 
-    def 'With the schedule on, the agent is told how it works, and pi is given the tools'() {
+    def 'With the schedule on, `AGENTS.md` tells the agent how scheduling works, and pi gets the scheduling tools'() {
         reportInfo """
-            AGENTS.md is what the agent reads about the machine it is on. With the schedule on, it
-            also says what the scheduling tools do, what limits apply, and that the agent's notes
-            are its only memory between runs. The tools themselves are a pi extension that oillamp
-            puts in pi's directory each session, and takes away again when the schedule is off.
+            `AGENTS.md`, in the agent's home, is what the agent reads about the machine it is on.
+            With the schedule on, oillamp adds a section on working on a schedule: what the
+            scheduling tools do, which limits apply, and that the agent's notes,
+            `~/workspace/NOTES.md`, are its only memory between runs. The tools themselves are a pi
+            extension, which oillamp puts into pi's directory as each session starts, and removes
+            when the schedule is off.
         """
-        given:
+        given: 'a lamp whose schedule is on, which allows the agent three jobs, after one session'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_jobs = 3\n')
             var guide = Files.readString(home(lamp).resolve('AGENTS.md'))
             var tools = home(lamp).resolve('.pi/agent/extensions/oillamp-schedule.js')
 
-        expect:
+        expect: '`AGENTS.md` has the section `## Working on a schedule`, names the limit of 3 jobs and the notes, and the extension talks to the schedule socket'
             guide.contains('## Working on a schedule')
             guide.contains('at most 3 jobs at once')
             guide.contains('~/workspace/NOTES.md')
             Files.readString(tools).contains('/oillamp/sockets/host/schedule.sock')
 
-        when: 'the schedule is switched off again'
+        when: 'the schedule is switched off in `oillamp.toml`, and `oillamp at` runs a session'
             Files.writeString(lamp.resolve('oillamp.toml'),
                     Files.readString(lamp.resolve('oillamp.toml')).replace('enabled = true', 'enabled = false'))
             host.oillamp.run('at', lamp.toString())
 
-        then:
+        then: 'the section and the extension are gone'
             !Files.readString(home(lamp).resolve('AGENTS.md')).contains('## Working on a schedule')
             !Files.exists(tools)
     }
 
-    def 'An application schedules jobs and asks the agent through the Lamp API'() {
+    def 'A program built on oillamp schedules jobs and asks the agent through the `Lamp` API'() {
         reportInfo """
-            An application that holds a lamp offers the same with its own controls: it reads and
-            changes the schedule, and asks the agent something and gets the answer back as a
-            value, with the snapshot that recorded the run.
+            A program built on oillamp, such as a desktop app, offers what `oillamp schedule` and
+            `oillamp ask` do with its own controls, through the `Lamp` API. `repeat` and `once` add
+            jobs, `schedule` lists them, `unschedule` removes one, `disable` and `enable` switch one
+            off and on, and `pause` and `resume` act on the whole schedule. In a running session,
+            `ask` wakes the agent and returns a `RunFinished` event with the agent's answer, the
+            run's outcome and the snapshot that saved the run.
         """
-        given:
+        given: 'a lamp whose schedule is on, and a `Lamp` for it'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n[autosave]\nchat_quiet_minutes = 0\n')
             anAgent { prompt -> 'Hello from the sandbox.' }
             var lamps = Lamp.at(lamp).launchedBy(host.launcher)
 
-        when:
+        when: 'the program adds, lists, switches off and on, pauses, resumes and removes jobs, then starts a session and asks "Say hello"'
             var job = lamps.repeat('0 8 * * *', 'Morning check')
             var once = lamps.once('in 1h', '- starts with a dash')
             var listed = lamps.schedule()
@@ -1244,7 +1311,7 @@ class Waking_The_Agent_Spec extends Specification {
             var answer = running.ask('Say hello')
             running.close()
 
-        then:
+        then: 'each call did what it names, and `ask` returned the agent\'s answer with a snapshot'
             job.when() == '0 8 * * *'
             once.prompt() == '- starts with a dash'
             listed.jobs()*.id() == ['job-1', 'job-2']
@@ -1258,35 +1325,32 @@ class Waking_The_Agent_Spec extends Specification {
             answer.answer() == 'Hello from the sandbox.'
             answer.snapshot().isPresent()
 
-        and: 'the run happened in the session the application holds'
+        and: 'the run happened in the session the program started'
             reported.any { it instanceof LampEvent.RunStarted && it.run().prompt() == 'Say hello' }
     }
 
     // ─── run numbers ───────────────────────────────────────────────────────────────────────
 
-    def 'Oillamp gives a prompt sent with `oillamp ask` its own number while the run before it has no snapshot yet'() {
+    def 'Oillamp gives a question sent with `oillamp ask` its own number while the run before it has no snapshot yet'() {
         reportInfo """
             Every run has a name, such as `run-12`. The name is in the run's snapshots, in the
             name of its pi conversation, and in `oillamp history`, so two runs must never share
             one.
 
             Oillamp takes the next number from the lamp's history. Each snapshot of a run carries
-            the run's name in a trailer: a `key: value` line at the end of the snapshot's commit
-            message, such as `Oillamp-Run: run-12`, which `oillamp history` reads. The next run
-            gets the number one above the highest such line. A run is numbered when it is queued,
-            but its snapshots are made later: the `before-run` snapshot as it begins, and only
-            when `autosave.before_run` is on and something changed, and the `run` snapshot only as
-            it ends. So while the first run of a lamp works, the history may name no run yet. If
-            oillamp looked at the history alone, a prompt sent at that moment would get the name
-            `run-1` a second time. Oillamp therefore also remembers the highest number the session
-            has given out, and takes the higher of the two.
+            the run's name in a trailer, a `key: value` line at the end of the snapshot's commit
+            message, such as `Oillamp-Run: run-12`. The next run gets the number one above the
+            highest. But a run is numbered when it is queued, and its snapshots are made later:
+            the `BEFORE_RUN` snapshot as it begins, when `autosave.before_run` is on and something
+            changed, and the `RUN` snapshot as it ends. So while the first run of a lamp works, the
+            history may name no run yet, and a question sent at that moment would be named `run-1`
+            as well. Oillamp therefore also remembers the highest number the session has given out,
+            and takes the higher of the two.
 
             The scenario makes that moment certain with `autosave.before_run = false`, so that a
-            run's only snapshot is the one made as it ends. The agent works on a first prompt
-            until the scenario lets it finish. A second prompt is sent with `oillamp ask`
-            meanwhile, and waits. Its `RunQueued` event, which says that a run waits its turn,
-            must name it `run-2`, and the history must hold one `run` snapshot for each of the
-            two.
+            run's only snapshot is made as it ends. While the agent works on a first question, a
+            second is sent with `oillamp ask`, and waits. Its `RunQueued` event must name it
+            `run-2`, and the history must hold one `RUN` snapshot for each of the two.
         """
         given: 'a session whose agent keeps working on "slow" until it is let go, on a lamp that saves runs only as they end'
             var lamp = aLampThatHasRun('[autosave]\nbefore_run = false\nchat_quiet_minutes = 0\n')
@@ -1297,7 +1361,7 @@ class Waking_The_Agent_Spec extends Specification {
             }
             startASession(lamp)
 
-        when: 'a second question is asked while the agent works on the first'
+        when: '`oillamp ask` sends a second question while the agent works on the first'
             var slow = Thread.start { assert host.oillamp.run('ask', lamp.toString(), 'slow').succeeded() }
             var first = waitFor(LampEvent.RunStarted)
             var quick = Thread.start { assert host.oillamp.run('ask', lamp.toString(), 'quick').succeeded() }
@@ -1310,7 +1374,7 @@ class Waking_The_Agent_Spec extends Specification {
             first.run().id() == 'run-1'
             queued.run().id() == 'run-2'
 
-        and: 'the history has one run snapshot for each'
+        and: 'the history has one `RUN` snapshot for each'
             var snapshots = host.oillamp.run('history', lamp.toString()).events()
                     .find { it instanceof LampEvent.History }.snapshots()
             snapshots.findAll { it.kind() == LampSaveKind.RUN }*.run()*.get().sort() == ['run-1', 'run-2']
@@ -1319,23 +1383,21 @@ class Waking_The_Agent_Spec extends Specification {
     def 'Oillamp numbers the runs of a session one after another when it saves none of them'() {
         reportInfo """
             Oillamp takes a run's number from the lamp's history. Each snapshot of a run carries
-            the run's name as a `key: value` line at the end of the snapshot's commit message,
-            such as `Oillamp-Run: run-12`, which `oillamp history` reads, and the next run gets
-            the number one above the highest. With `autosave.before_run = false` and
-            `autosave.after_run = false`, a run makes no snapshot, so the history never names one.
-            The session still remembers the numbers it has given out, and the next run gets the
-            number above the highest of them.
+            the run's name in a `key: value` line at the end of the snapshot's commit message, such
+            as `Oillamp-Run: run-12`, and the next run gets the number one above the highest. With
+            `autosave.before_run = false` and `autosave.after_run = false`, a run makes no
+            snapshot, so the history never names one. The session still remembers the numbers it
+            has given out, and the next run gets the number above the highest of them.
 
-            The scenario sends two prompts with `oillamp ask`, one after the other, on a lamp that
-            saves no runs. The first must be `run-1` and the second `run-2`, and the history stays
-            empty.
+            The scenario sends two questions with `oillamp ask`, one after the other. The first
+            must be `run-1` and the second `run-2`, and the history stays empty.
         """
         given: 'a session on a lamp that saves nothing around runs'
             var lamp = aLampThatHasRun('[autosave]\nbefore_run = false\nafter_run = false\n')
             anAgent { prompt -> 'Fine.' }
             startASession(lamp)
 
-        when: 'two questions are asked, one after the other'
+        when: '`oillamp ask` sends two questions, one after the other'
             var first = host.oillamp.run('ask', lamp.toString(), 'One?')
             var second = host.oillamp.run('ask', lamp.toString(), 'Two?')
 
@@ -1373,7 +1435,7 @@ class Waking_The_Agent_Spec extends Specification {
                      created: NOW.toString(), enabled: true]]]))
             anAgent { prompt -> 'Fine.' }
 
-        when: 'the user lists the schedule'
+        when: '`oillamp schedule` lists the schedule'
             var listed = host.oillamp.run('schedule', lamp.toString())
 
         then: 'oillamp reads it without a warning'
@@ -1381,14 +1443,14 @@ class Waking_The_Agent_Spec extends Specification {
             !listed.reported('OIL-SCHEDULE-002')
             listed.events().find { it instanceof LampEvent.Schedule }.jobs()*.id() == ['job-1']
 
-        when: 'the user asks the agent something in a session'
+        when: '`oillamp ask` sends a question in a session'
             startASession(lamp)
             var asked = host.oillamp.run('ask', lamp.toString(), 'Hello?')
 
         then: 'the run is numbered from the history, which names no run yet'
             asked.events().find { it instanceof LampEvent.RunFinished }.run().id() == 'run-1'
 
-        when: 'the user adds a job'
+        when: '`oillamp schedule add` adds a job'
             var added = host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2h', 'Look again')
 
         then: 'the job gets the number the file kept for it, and the file no longer counts runs'
@@ -1449,10 +1511,9 @@ class Waking_The_Agent_Spec extends Specification {
             time lies more than that many minutes in the past, oillamp misses the run: it does not
             wake the agent, and reports a `RunMissed` event, with when the run was due and how
             late it was. A repeating job then waits for its next time after now, here Friday at
-            17:00. Oillamp does not catch up on the run itself. An application, a program built on
-            oillamp, such as a desktop app, that starts the engine and receives its events, can
-            still have the prompt answered with `oillamp ask` if it decides the run is worth
-            making.
+            17:00. Oillamp does not catch up on the missed run. A program built on oillamp that
+            receives the `RunMissed` event can still send the job's prompt with `Lamp.ask`, if it
+            decides the run is worth making.
 
             The scenario starts the session on Friday, waits for `RunMissed`, and checks that the
             agent got no prompt, that `oillamp schedule` lists 17:00 on Friday as the job's next
