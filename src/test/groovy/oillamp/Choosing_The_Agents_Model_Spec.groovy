@@ -99,7 +99,7 @@ and writes into each answer the model that gave it. The scenarios read the conve
 switch.
 ''')
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class ChoosingTheAgentsModelSpec extends Specification {
+class Choosing_The_Agents_Model_Spec extends Specification {
 
     /** The model a scenario gives the session: one Eden AI offers, as Eden AI names it. */
     static final String GPT = 'azure/gpt-6.1-sol'
