@@ -1,34 +1,37 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Specification
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * Static checks of the files the sandbox image is built from ({@code src/main/resources/image}).
- *
- * <p>These files are shipped as resources and only ever executed inside a container, which means
- * a typo in one of them surfaces as a container that dies during startup with a message nobody
- * sees. Building the image to find that out takes minutes; these scenarios take milliseconds and
- * catch the whole class of error that is worth catching without a container: a script that does
- * not parse, a file the Containerfile copies but nobody wrote, a reference to something a design
- * decision removed.
- *
- * <p>They cannot check that the image works; the spike tests do that.
- */
+@Title('The sandbox image')
+@Narrative('''
+Static checks of the files the sandbox image is built from, in `src/main/resources/image`.
+
+These files are shipped as resources and run only inside a container, so a typo in one of them
+shows as a container that dies during startup, with a message nobody sees. Building the image to
+find that out takes minutes. These scenarios take milliseconds, and find what can be found without
+a container: a script that does not parse, a file the Containerfile copies that nobody wrote, a
+reference to something a design decision removed.
+
+They cannot check that the image works; the spikes do that.
+''')
 class The_Sandbox_Image_Spec extends Specification {
 
     static final Path IMAGE = Path.of('src/main/resources/image')
 
-    def 'Every shell script in the image parses'() {
+    def 'Every shell script in the image parses: #script.fileName'() {
         reportInfo """
-            `bash -n` is the cheapest possible check and catches the mistake that actually happens
-            when editing a 150-line entrypoint: an unclosed quote or a missing `fi` twenty lines
-            from where it was typed. Inside a container that appears as pid 1 exiting immediately,
-            which the host reports as "the sandbox did not become ready" - true, and useless.
+            `bash -n` is the cheapest check there is, and it finds the mistake that happens when
+            someone edits a 150-line entrypoint: a quote left open, or a missing `fi`, twenty lines
+            from where it was typed. Inside a container, that shows as process 1 exiting at once,
+            which the host reports as "the sandbox did not become ready", which is true, but does
+            not say what is wrong.
         """
-        expect:
+        expect: 'the script exists, and `bash -n` finds no syntax error in it'
             script.toFile().exists()
             var check = Spike.run('bash', '-n', script.toString())
             assert check.ok, "shell syntax error in $script:\n${check.describe()}"
@@ -65,10 +68,10 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The image carries no trace of the Java desktop helper that a shell script replaced'() {
         reportInfo """
-            An earlier design had a Java desktop helper (`oillamp-rfb`, `lamp-helper`). It was
-            replaced by the `lamp` shell script: the agent can drive the desktop with the ordinary
-            Wayland tools, and a script it can read is better than a program it cannot. This makes
-            sure no trace of the old helper was copied into the image files.
+            An earlier design had a Java desktop helper, `oillamp-rfb` or `lamp-helper`. The
+            `lamp` shell script replaced it: the agent can drive the desktop with the ordinary
+            Wayland tools, and a script it can read is better than a program it cannot. This
+            scenario makes sure that nothing of the old helper is left in the image's files.
         """
         expect: 'no file in the image mentions either, text or otherwise'
             allImageFiles.every { file ->
@@ -94,18 +97,18 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The compositor\'s configuration binds no key to running a command'() {
         reportInfo """
-            The sharpest edge in the whole image. sway runs as `lamp`, the user that owns the
-            recording and the VNC server; the agent can type into the desktop. A single
-            `bindsym … exec …` would therefore hand the agent a way to run commands as `lamp` and
-            quietly end the recording - defeating the one guarantee the human is relying on.
+            sway runs as `lamp`, the user that owns the recording and the VNC server, and the
+            agent can type into the desktop. A single `bindsym … exec …` would therefore give the
+            agent a way to run commands as `lamp`, and to end the recording unnoticed, which is
+            the one guarantee the human relies on.
 
-            The config says this in a comment. A comment is not enforcement.
+            The configuration says this in a comment; this scenario enforces it.
 
             `kill` is allowed, for the user's Ctrl+Super+Q. In sway it does not end a process: it
             asks the focused window to close, as its close button would. Every window belongs to
             a program the agent started, which the agent can close anyway.
         """
-        when:
+        when: 'the key bindings are read from sway\'s configuration'
             var config = Files.readString(IMAGE.resolve('rootfs/etc/oillamp/sway/config'))
             var bindings = config.readLines()
                     .findAll { it.trim().startsWith('bindsym') }
@@ -113,24 +116,24 @@ class The_Sandbox_Image_Spec extends Specification {
         then: 'there are bindings, or this scenario is checking nothing'
             !bindings.isEmpty()
 
-        and: 'and not one of them runs anything'
+        and: 'not one of them runs anything'
             bindings.every { line ->
                 !(line =~ /\b(exec|exit|reload)\b/)
             }
     }
 
-    def 'The dock runs as the agent, so its buttons run nothing the agent could not run itself'() {
+    def 'The dock runs as the agent, so that its buttons run nothing the agent could not run itself'() {
         reportInfo """
             Every button on the dock runs a command the agent wrote, whenever the user clicks it.
             Started as the agent, that is no more than the agent can already do. Started as
             `lamp`, the user that owns the recording, one click would let the agent's text end
             the recording. So the entrypoint must start it as the agent and never as `lamp`.
         """
-        when:
+        when: 'the entrypoint\'s lines that start the dock are read'
             var entrypoint = Files.readString(IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
             var dockLines = entrypoint.readLines().findAll { it.contains('lamp-dock') || it.contains(' dock ') }
 
-        then:
+        then: 'the entrypoint starts the dock as the agent, and never as `lamp`'
             entrypoint.contains('drop agent 077 dock ')
             dockLines.every { !it.contains('drop lamp') }
     }
@@ -141,7 +144,7 @@ class The_Sandbox_Image_Spec extends Specification {
             stops shipping one of its GTK packages, the image must still build, and the dock
             reports that it cannot run instead of being started again every few seconds.
         """
-        when:
+        when: 'the Containerfile, the entrypoint and the dock are read'
             var containerfile = Files.readString(IMAGE.resolve('Containerfile'))
             var entrypoint = Files.readString(IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
             var dock = Files.readString(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-dock'))
@@ -154,7 +157,7 @@ class The_Sandbox_Image_Spec extends Specification {
             entrypoint.contains('[ "$status" = 78 ] && exit 0')
     }
 
-    def 'The agent is allowed on the X11 display, so Swing applications can open windows'() {
+    def 'The agent is allowed on the X11 display, so that Swing applications can open windows'() {
         reportInfo """
             X11 applications such as Java Swing draw through Xwayland, which sway starts as the
             infra user `lamp`. Xwayland only accepts its own user, so the agent was refused with
@@ -164,7 +167,7 @@ class The_Sandbox_Image_Spec extends Specification {
             running, because a new Xwayland forgets the grant. The entrypoint must grant it. And
             the image must contain `xhost`, the program that grants it.
         """
-        when:
+        when: 'sway\'s configuration, the entrypoint and the Containerfile are read'
             var sway = Files.readString(IMAGE.resolve('rootfs/etc/oillamp/sway/config'))
             var entrypoint = Files.readString(IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
             var containerfile = Files.readString(IMAGE.resolve('Containerfile'))
@@ -182,15 +185,15 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The sandbox\'s sshd is configured so that an ssh connection cannot become a tunnel out'() {
         reportInfo """
-            Every outbound connection from the sandbox goes through the egress proxy. SSH into the sandbox is a hole
-            straight through that if forwarding is left on: `ssh -L` would reach anything the
-            container can, and the proxy would never see it. These five options are not hardening
-            extras, they are what makes the network policy mean anything.
+            Every outbound connection from the sandbox goes through the egress proxy. With
+            forwarding left on, ssh into the sandbox would be a way past it: `ssh -L` would reach
+            anything the container can reach, and the proxy would never see it. These five options
+            are what make the network policy hold.
         """
-        when:
+        when: '`sshd_config` is read'
             var sshd = Files.readString(IMAGE.resolve('rootfs/etc/oillamp/sshd_config'))
 
-        then:
+        then: 'it sets each forwarding option to `no`'
             forbidden.each { option ->
                 assert sshd.contains("$option no"), "sshd_config must set `$option no`"
             }
@@ -206,14 +209,14 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The agent\'s shell is told where the proxy is, in every form a tool might read'() {
         reportInfo """
-            There is no DNS in the sandbox. A tool that does not honour proxy variables
-            simply fails, so the ones that do must find them already set - and they disagree about
-            capitalisation, which is why both spellings are exported rather than one.
+            There is no DNS in the sandbox. A tool that does not honour the proxy variables fails,
+            so the tools that do must find them already set. They disagree about capitals, so
+            the profile exports both spellings.
         """
-        when:
+        when: 'the profile, `/etc/profile.d/oillamp.sh`, is read'
             var profile = Files.readString(IMAGE.resolve('rootfs/etc/profile.d/oillamp.sh'))
 
-        then:
+        then: 'it sets the proxy variables in capitals and in small letters'
             ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'NO_PROXY', 'no_proxy']
                     .every { profile.contains("export $it") || profile.contains("$it=") }
 
@@ -222,14 +225,15 @@ class The_Sandbox_Image_Spec extends Specification {
             profile.contains('-Dhttps.proxyHost=127.0.0.1')
     }
 
-    def 'Java in the agent shell finds native libraries in ~/libs and in the system directories'() {
+    def 'Java in the agent\'s shell finds native libraries in `~/libs` and in the system directories'() {
         reportInfo """
-            The agent guide promises that System.loadLibrary finds libraries in ~/libs with no
-            extra flags. It must not stop finding the ones installed with the system: the shell
-            once set -Djava.library.path=~/libs, which replaced Java's list instead of adding to
-            it. This loads the real profile into bash and asks a real JVM for its library path.
+            The agent's guide promises that `System.loadLibrary` finds libraries in `~/libs`, with
+            no extra flags. Java must still find the ones installed with the system: the shell
+            once set `-Djava.library.path=~/libs`, which replaced Java's list instead of adding to
+            it. This scenario loads the real profile into bash, and asks a real JVM for its
+            library path.
         """
-        given:
+        given: 'a home directory with a small Java program that prints its library path'
             var home = Files.createTempDirectory('oillamp-agent-home')
             var probe = home.resolve('LibraryPath.java')
             Files.writeString(probe, 'class LibraryPath { public static void main(String[] a) { ' +
@@ -250,18 +254,18 @@ class The_Sandbox_Image_Spec extends Specification {
             paths.contains('/usr/lib')
     }
 
-    def 'The agent harnesses are installed into the image, so they are there from the first session'() {
+    def 'The agent harnesses are installed into the image, so that they are there from the first session'() {
         reportInfo """
             The harnesses are installed when the image is built, so the agent has them the moment
-            it logs in, without waiting for downloads. (They could also be installed later through
-            the egress proxy.) That is why the build installs them and why the default is not
+            it logs in, without waiting for downloads. They could also be installed later, through
+            the egress proxy. That is why the build installs them, and why the default is not
             empty.
 
-            The friendly names a user writes in oillamp.toml are not package names, and the
-            mapping between them is the part that rots: a project renames, a scope changes, and
-            the sandbox quietly ships without a harness. So the mapping is pinned here.
+            The names a user writes in `oillamp.toml` are not package names, and the mapping
+            between the two goes out of date: a project renames itself, a scope changes, and the
+            sandbox ships without a harness, without an error. So the mapping is pinned here.
         """
-        when:
+        when: 'the installer script is read'
             var script = Files.readString(IMAGE.resolve('build/install-agent-tools.sh'))
 
         then: 'the two harnesses map to the packages that actually publish them'
@@ -274,14 +278,15 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'An ordinary image build goes on when a harness fails to install, but an explicit update fails'() {
         reportInfo """
-            The user was explicit about this, and they are right: a harness is a convenience, while
-            the desktop, the shell, the recording and ssh are the product. Losing all of them
-            because a registry was briefly unreachable would be a bad trade made automatically.
+            A harness is a convenience; the desktop, the shell, the recording and ssh are what the
+            sandbox is for. Losing all of them because a package registry was briefly unreachable
+            would be a bad trade, made without asking. The user asked for this explicitly.
 
-            Ordinary builds report failures and continue. An explicit update is different: it
-            must fail rather than claiming that incomplete tools or a stale catalog were updated.
+            So ordinary builds report the failure and go on. An explicit update is different: it
+            must fail, rather than claim that tools or a model catalog were updated when they
+            were not.
         """
-        when:
+        when: 'the installer script is read'
             var script = Files.readString(IMAGE.resolve('build/install-agent-tools.sh'))
 
         then: 'the script succeeds by default but has a strict mode for updates'
@@ -295,20 +300,19 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The image puts the pi extension where a bind-mounted home cannot hide it'() {
         reportInfo """
-            pi reads its extensions from its agent directory, which lives in the agent's home -
-            and that home is a bind mount from the lamp, so anything the image writes there at
-            build time is invisible the moment the container starts: a path that exists at build
-            time and means something different at run time.
+            pi reads its extensions from its agent directory, which is in the agent's home, and
+            that home is a bind mount from the lamp. So anything the image writes there at build
+            time is hidden the moment the container starts.
 
-            So the extension is built into /usr/local/share and copied into the home once per
-            session, and - like everything else about the tooling - it may not stop the sandbox.
+            So the extension is built into `/usr/local/share`, and copied into the home once per
+            session, and, like everything else about the tools, it may not stop the sandbox.
         """
-        when:
+        when: 'the installer script and the entrypoint are read'
             var installer = Files.readString(IMAGE.resolve('build/install-agent-tools.sh'))
             var entrypoint = Files.readString(
                     IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
 
-        then: 'the build installs it outside the home, using pi own relocation variable'
+        then: 'the build installs it outside the home, using pi\'s own relocation variable'
             installer.contains('PI_CODING_AGENT_DIR')
             installer.contains('/usr/local/share/oillamp/pi')
             installer.contains('git:github.com/edenai/pi-edenai')
@@ -327,27 +331,27 @@ class The_Sandbox_Image_Spec extends Specification {
     def 'Both harnesses reach Eden AI through oillamp\'s model relay, hold no key, and are offered only EU models'() {
         reportInfo """
             The harnesses, pi and opencode, never hold the model key. They send their requests to
-            oillamp's model relay at an address inside the sandbox, 127.0.0.1:3129, and oillamp
+            oillamp's model relay at an address inside the sandbox, `127.0.0.1:3129`, and oillamp
             adds the key on the host. The address is the same in every sandbox; where it leads is
             decided outside.
 
-            pi's Eden AI extension reads its endpoint from EDENAI_BASE_URL and its key from
-            EDENAI_API_KEY, which must not be empty, so the profile sets a placeholder. With
-            EDENAI_EU_ONLY it offers only the models served in the EU; oillamp decides on the host
-            whether that applies (on for Eden AI, off for a model server of the user's own) and
-            says so in OILLAMP_MODEL_EU_ONLY, and it is on unless oillamp said otherwise. The
-            profile sets all three after reading runtime.env.
+            pi's Eden AI extension reads its endpoint from `EDENAI_BASE_URL` and its key from
+            `EDENAI_API_KEY`, which must not be empty, so the profile sets a placeholder. With
+            `EDENAI_EU_ONLY` it offers only the models served in the EU. Oillamp decides on the
+            host whether that applies, on for Eden AI and off for a model server of the user's
+            own, and says so in `OILLAMP_MODEL_EU_ONLY`; it is on unless oillamp said otherwise.
+            The profile sets all three after reading `runtime.env`.
 
-            opencode has Eden AI built in, but pointed at the global endpoint and with a model
+            opencode has Eden AI built in, but pointed at the global endpoint, and with a model
             list mostly made of models the EU endpoint does not serve. The build writes a
-            configuration file that points it at the relay instead, and the profile names it in
-            OPENCODE_CONFIG. The model list in that file comes from the EU endpoint's own catalog,
+            configuration file that points it at the relay instead, and the profile names that file
+            in `OPENCODE_CONFIG`. The model list in it comes from the EU endpoint's own catalog,
             which needs no key, and only EU models are kept from it.
 
             Inside the container, a bridge run by the infrastructure user connects the relay's
             port to the socket on which oillamp listens.
         """
-        when:
+        when: 'the profile, the installer script and the opencode configuration writer are read'
             var profile = Files.readString(IMAGE.resolve('rootfs/etc/profile.d/oillamp.sh'))
             var installer = Files.readString(IMAGE.resolve('build/install-agent-tools.sh'))
             var writer = Files.readString(IMAGE.resolve('build/write-opencode-config.mjs'))
@@ -387,21 +391,20 @@ class The_Sandbox_Image_Spec extends Specification {
 
     def 'The image installs SDKMAN where it can be written to, which is not where it is built'() {
         reportInfo """
-            SDKMAN is how a JVM project gets the JDK, Groovy or Gradle it actually asks for, and
-            it is the only way to get one in here: there is no sudo, no apt and a read-only root
-            filesystem, so the usual answers are all unavailable.
+            SDKMAN is how a JVM project gets the JDK, Groovy or Gradle it asks for, and it is the
+            only way to get one here: there is no sudo, no apt, and the root filesystem is
+            read-only.
 
-            That read-only filesystem is also why SDKMAN cannot simply live in /usr/local and be
-            used from there. It writes while it works - candidates, caches, a lock file - so the
-            copy that gets used has to be somewhere writable. The agent's home is both writable
-            and persistent, which additionally means a JDK installed in one session is still
-            there in the next.
+            The read-only filesystem is also why SDKMAN cannot be used from `/usr/local`. It writes
+            while it works, candidates, caches and a lock file, so the copy that is used must be
+            somewhere writable. The agent's home is writable and outlives the session, so a JDK
+            installed in one session is still there in the next.
 
-            The copy is made as `agent`, not as root. /home/agent is a bind mount from the lamp,
+            The copy is made as `agent`, not as root. `/home/agent` is a bind mount from the lamp,
             and uid 1000 inside the container is the human outside it, while root inside is a
-            subuid they would find hard to delete afterwards.
+            subordinate id whose files they would find hard to delete afterwards.
         """
-        when:
+        when: 'the installer script, the entrypoint and the profile are read'
             var installer = Files.readString(IMAGE.resolve('build/install-sdkman.sh'))
             var entrypoint = Files.readString(
                     IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
