@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
-class KeepingTheModelKeyOutOfARealSandboxSpec extends Specification {
+class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
 
     static final String REAL_KEY = System.getenv('EDENAI_API_KEY') ?: ''
     /** A model the team's Eden AI account allows on the EU endpoint. */

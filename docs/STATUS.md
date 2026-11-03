@@ -203,7 +203,7 @@ From inside a real sandbox, through the real proxy:
 
 ### The model key stays on the host
 
-`KeepingTheModelKeyOutOfARealSandboxSpec` (a spike) starts `oillamp at` with a real
+`Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec` (a spike) starts `oillamp at` with a real
 `EDENAI_API_KEY` and a windowless terminal (checked on 2026-09-28):
 
 | Check | Result |
