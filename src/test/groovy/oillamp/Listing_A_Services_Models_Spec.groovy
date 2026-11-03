@@ -4,15 +4,16 @@ import com.sun.net.httpserver.HttpServer
 import dev.lamp.Lamp
 import spock.lang.Narrative
 import spock.lang.Specification
+import spock.lang.Subject
 import spock.lang.Title
 
 import java.nio.charset.StandardCharsets
 
 @Title('Listing the models a model service offers')
 @Narrative('''
-An application, a program built on oillamp's Java API, may ask before any lamp runs which models
-a model service will offer the agent, so that its settings page can list them rather than a list
-written into the application. It calls `Lamp.models(service)`, or `Lamp.models(service, key)`.
+A program built on oillamp's Java API may ask, before any lamp runs, which models a model service
+will offer the agent, so that its settings page can list them, rather than a list written into the
+program. It calls `Lamp.models(service)`, or `Lamp.models(service, key)`.
 
 `Lamp.models` asks from this machine, where the engine's model relay would ask for the sandbox,
 at the same address and with the key the relay would send. That the relay asks the same place is
@@ -23,6 +24,7 @@ shown in `Choosing_The_Model_For_A_Lamp_Spec`.
 A stand-in model server on loopback answers the way Ollama does, with an OpenAI-style list of
 models, and records which path it was asked for and with which key.
 ''')
+@Subject(Lamp)
 class Listing_A_Services_Models_Spec extends Specification {
 
     HttpServer server
@@ -48,16 +50,16 @@ class Listing_A_Services_Models_Spec extends Specification {
 
     def 'Oillamp asks a service with a path under that path, and gives back its models in its order'() {
         reportInfo """
-            Let's consider an application that lets the user pick a model from a server on their
+            Let's consider a program built on oillamp that lets the user pick a model from a server on their
             machine, such as Ollama at `http://127.0.0.1:11434/v1`. The address names where the
             server's OpenAI-style API is, so `Lamp.models` asks for the list at `/v1/models`. The
             ids come back in the order the server gave them, and are exactly what the agent names
             its model with.
         """
-        when: 'the application asks a service at /v1/ for its models'
+        when: '`Lamp.models` asks a service at `/v1/` for its models'
             var models = Lamp.models(address('/v1/'))
 
-        then: 'the server was asked at /v1/models, and its two models come back in its order'
+        then: 'the server was asked at `/v1/models`, and its two models come back in its order'
             models == ['qwen2.5:7b', 'llama3.2:3b']
             asked == ['/v1/models']
     }
@@ -68,10 +70,10 @@ class Listing_A_Services_Models_Spec extends Specification {
             The engine's relay passes a request for a service given without a path of its own on
             unchanged, so its list is at `/v3/models`, and that is where `Lamp.models` asks too.
         """
-        when: 'the application asks a service given without a path'
+        when: '`Lamp.models` asks a service given without a path'
             var models = Lamp.models(address(''))
 
-        then: 'the server was asked at /v3/models'
+        then: 'the server was asked at `/v3/models`'
             models == ['qwen2.5:7b', 'llama3.2:3b']
             asked == ['/v3/models']
     }
@@ -83,7 +85,7 @@ class Listing_A_Services_Models_Spec extends Specification {
             it with every model request: as a bearer token, with the spaces around it trimmed.
             `Lamp.models(service)` sends no key, for a server on this machine or a public list.
         """
-        when: 'the application asks once with a key and once without'
+        when: '`Lamp.models` asks once with a key and once without'
             Lamp.models(address('/v1'), '  sk-for-the-server  ')
             Lamp.models(address('/v1'))
 
@@ -98,7 +100,7 @@ class Listing_A_Services_Models_Spec extends Specification {
             service for its list would send the key the same way, so `Lamp.models` throws
             `IllegalArgumentException` before anything is sent.
         """
-        when: 'the application asks a service on another machine over plain http, with a key'
+        when: '`Lamp.models` asks a service on another machine over plain http, with a key'
             Lamp.models(URI.create('http://192.168.1.20:11434/v1'), 'sk-for-the-server')
 
         then: 'it is refused, saying the service must be https'
@@ -110,8 +112,8 @@ class Listing_A_Services_Models_Spec extends Specification {
         reportInfo """
             The usual mistakes when someone sets up a model server: the address lacks the API's
             path, so the server answers 404; the key is wrong, so it answers 401; or the server is
-            not running. `Lamp.models` throws `IOException` for each, with a sentence an
-            application can show next to its settings.
+            not running. `Lamp.models` throws `IOException` for each, with a sentence a
+            program can show next to its settings.
         """
         when: 'the server answers 404 to an address without a path'
             status = 404
@@ -156,8 +158,8 @@ class Listing_A_Services_Models_Spec extends Specification {
         reportInfo """
             Eden AI's list says where each model is served, and the harness in the sandbox keeps
             only the ones served in the EU. That filter is for Eden AI alone. Another service's
-            list is kept whole, also when it happens to name regions, here one model in the US and
-            one with none.
+            list is kept whole, also when it happens to name regions: here one model in the EU, one
+            in the US, and one with none.
         """
         when: 'a service that is not Eden AI lists a model served in the US, one in the EU, and one with no region'
             answer = '''{"data":[
