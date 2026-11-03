@@ -1,9 +1,12 @@
 package oillamp
 
 import dev.lamp.LampExitStatus
+import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,15 +16,25 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
 import java.time.Instant
 
-/**
- *  A "lamp" is one directory on disk that holds a sandbox: its settings, its state, and the
- *  agent's persistent home. These scenarios are about what `oillamp at <dir>` puts there, and -
- *  more importantly - about what it refuses to put there.
- */
+@Title('Setting up a lamp')
+@Narrative('''
+A *lamp* is a directory from which oillamp runs one sandbox. It holds:
+
+- `oillamp.toml`, the settings file, with the network policy;
+- `.oillamp/`, oillamp's own state: the lamp's identity `lamp.json`, its SSH keys, logs, sockets
+  and screen recordings;
+- `agent-lamp-<id>/`, the agent's home directory, which the sandbox mounts as `/home/agent` and
+  which keeps the agent's work from one session to the next.
+
+These scenarios are about what `oillamp at <dir>` creates in that directory, which directories it
+refuses to turn into a lamp, how `oillamp remove` deletes a lamp again, and how
+`oillamp recordings` lists, opens and deletes the screen recordings a lamp keeps.
+''')
+@Subject(OilLamp)
 class Setting_Up_A_Lamp_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     def setup() {
         host = new ScenarioHost(tmp)
@@ -30,184 +43,191 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         host.machine { it.reallyRuns('ssh-keygen') }
     }
 
-    def 'Oillamp\'s `at --dry-run` shows the user everything that would happen, and changes nothing'() {
+    def '`oillamp at --dry-run` lists the steps of setting up a lamp, and does not create the lamp'() {
         reportInfo """
-            oillamp installs system packages, edits /etc/subuid - the file that grants a user the
-            block of spare user-id numbers rootless containers need - writes SSH keys, and creates
-            directories in the user's home. That is a great deal of trust to ask of somebody
-            running a tool for the first time, so there is a mode that shows the complete plan
-            before any of it happens.
+            Let's consider someone who runs oillamp for the first time. Setting up a lamp may
+            install system packages with sudo, add a block of subordinate user ids to /etc/subuid
+            (the spare user ids that rootless containers run on), generate SSH keys and create
+            directories in their home. That is a lot to allow a tool they do not know yet. So
+            `oillamp at <dir> --dry-run` prints the whole plan and carries out none of it.
 
-            What makes this trustworthy is that --dry-run is not a separate code path: setup is
-            modelled as a list of described changes, and the dry run simply announces them
-            instead of carrying them out. There is no second implementation to drift.
+            The printed plan can be trusted because it is not written separately from the setup.
+            oillamp plans the setup as a list of steps, each with a description. A normal run
+            carries out the steps; a dry run prints their descriptions instead.
         """
-        given: 'a directory that does not exist yet'
+        given: 'a lamp path where no directory exists yet'
             var lamp = host.lampPath()
             !Files.exists(lamp)
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at <dir> --dry-run` runs'
             var outcome = host.oillamp.run('at', lamp.toString(), '--dry-run')
 
         then: 'it succeeds'
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'the directory is still not there, and neither is anything else'
+        and: 'the lamp directory has not been created'
             !Files.exists(lamp)
 
-        and: 'the plan covers the settings file, the identity, the keys and the agent home'
+        and: 'the plan includes writing `oillamp.toml`, the identity file `lamp.json`, the client and host SSH keys, and the agent home\'s `workspace`'
             outcome.steps().any { it.contains('oillamp.toml') }
             outcome.steps().any { it.contains('lamp.json') }
             outcome.steps().any { it.contains('client_ed25519') }
             outcome.steps().any { it.contains('host_ed25519') }
             outcome.steps().any { it.contains('agent-lamp-') && it.contains('workspace') }
 
-        and: 'including the two directories the agent must not be able to write to'
+        and: 'the plan also includes the steps that give `.oillamp/recordings` and `.oillamp/sockets/infra` to the container\'s infra user, uid 1001, so that the agent cannot write to them'
             outcome.steps().any { it.contains('recordings') && it.contains('container uid 1001') }
             outcome.steps().any { it.contains('sockets/infra') && it.contains('container uid 1001') }
 
-        and: 'the user is told plainly that nothing was done'
+        and: 'the output says that this was a dry run'
             outcome.console().contains('dry run')
     }
 
-    def 'Oillamp\'s `at --dry-run` prints the plan even when sudo could not be used to carry it out'() {
+    def '`oillamp at --dry-run` prints the plan even where sudo cannot be used; only the real `oillamp at` stops with `OIL-PKG-002`'() {
         reportInfo """
-            Found by running the real binary: on a machine where sudo would need a password and
-            there is no terminal to ask in, --dry-run was refusing with "cannot run sudo".
+            Let's consider a machine without podman. Setting up a lamp there includes installing
+            podman, which needs sudo, but sudo wants a password and there is no terminal to type
+            one into, for example because oillamp was started from a script. A real `oillamp at`
+            cannot go on, and reports `OIL-PKG-002`.
 
-            That is answering a different question. The user asked what oillamp *would* do, and a
-            dry run changes nothing, so whether sudo happens to work right now is irrelevant to
-            it. Being able to inspect the plan from a script, or before deciding whether to give
-            the tool your password at all, is a large part of why the dry run exists.
+            `oillamp at --dry-run` must not report it. A dry run carries out no step, so whether
+            sudo works makes no difference to it. And on exactly such a machine, a dry run is
+            what someone wants: to read the plan before deciding whether to give oillamp their
+            password at all.
         """
-        given: 'a machine that needs packages installed, where sudo cannot currently be used'
+        given: 'a machine without podman, where sudo needs a password and there is no terminal to ask for one'
             host.machine { it.withoutPodman().sudoNeedsPassword().interactive(false) }
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at <dir> --dry-run` runs'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
-        then: 'they get the plan, not a complaint about sudo'
+        then: 'it succeeds without `OIL-PKG-002`, and the plan includes installing the packages'
             outcome.status() == LampExitStatus.SUCCESS
             !outcome.reported('OIL-PKG-002')
             outcome.stepKinds().contains('InstallPackages')
 
-        and: 'the plan is complete, all the way to the per-session files'
+        and: 'the plan goes on to the end: the agent home, and the files written for each session, such as `runtime.env` and `known_hosts`'
             outcome.steps().any { it.contains('agent-lamp-') }
             outcome.steps().any { it.contains('runtime.env') }
             outcome.steps().any { it.contains('known_hosts') }
 
-        when: 'but they actually ask oillamp to do it'
+        when: '`oillamp at <dir>` runs without `--dry-run`'
             var real = host.oillamp.run('at', host.lampPath().toString())
 
-        then: 'then the missing sudo is the blocker it really is'
+        then: 'it reports `OIL-PKG-002`, because now it would really need sudo'
             real.reported('OIL-PKG-002')
     }
 
-    def 'Setting up a new lamp gives the agent a home and keeps everything else out of it'() {
+    def '`oillamp at` creates the agent\'s home in the lamp, and keeps the settings, keys, logs and recordings outside it'() {
         reportInfo """
-            This is the design's central idea, and the one thing that must never be got wrong:
-            the lamp is two layers. The agent gets `agent-lamp-<id>/`, mounted as its home.
-            Everything that *governs or observes* the agent - the network policy, the SSH keys,
-            the logs, the screen recordings - sits beside it, never inside it.
+            The most important rule of a lamp's layout is that it has two layers. The agent's
+            home, `agent-lamp-<id>/`, is mounted into the sandbox, and the agent can change
+            anything in it. Everything that controls or watches the agent sits next to that
+            directory, never inside it: the settings file `oillamp.toml` with the network policy,
+            and the SSH keys, the logs and the screen recordings in `.oillamp/`. If `oillamp.toml`
+            were inside the agent's home, the agent could edit its own network policy.
 
-            If the policy file ever ended up inside the agent's directory, the agent could edit
-            its own firewall rules. So this scenario checks the separation directly rather than
-            trusting that the code that creates the directories got it right.
+            The scenario sets up a new lamp and then checks the directories on disk, rather than
+            trusting the code that created them.
         """
-        given:
+        given: 'a lamp path where no directory exists yet'
             var lamp = host.lampPath()
 
-        when: 'the user sets up a lamp'
+        when: '`oillamp at <dir>` sets up a new lamp'
             var outcome = host.oillamp.run('at', lamp.toString())
 
-        then: 'it succeeds'
+        then: 'it succeeds without errors'
             outcome.status() == LampExitStatus.SUCCESS
             outcome.errors().isEmpty()
 
-        and: 'the agent has a home with somewhere for code and somewhere for native libraries'
+        and: 'the agent home has a `workspace` directory for repositories and a `libs` directory for native libraries'
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
                                             .findFirst().orElseThrow()
             Files.isDirectory(agentHome.resolve('workspace'))
             Files.isDirectory(agentHome.resolve('libs'))
 
-        and: 'the settings file exists, and is NOT inside the agent home'
+        and: '`oillamp.toml` is in the lamp directory, not in the agent home'
             Files.exists(lamp.resolve('oillamp.toml'))
             !Files.exists(agentHome.resolve('oillamp.toml'))
 
-        and: 'neither are the keys, the logs or the recordings'
+        and: 'the keys, the logs and the recordings are outside it too, in `.oillamp/`, and the agent home has no `.oillamp/` of its own'
             Files.isDirectory(lamp.resolve('.oillamp/keys'))
             Files.isDirectory(lamp.resolve('.oillamp/logs'))
             Files.isDirectory(lamp.resolve('.oillamp/recordings'))
             !Files.exists(agentHome.resolve('.oillamp'))
 
-        and: 'the state directory is readable only by its owner, so no other user on this machine can reach the sockets inside it'
+        and: 'only the owner may open `.oillamp/` (mode `rwx------`), so no other user on this machine can reach the sockets inside it'
             PosixFilePermissions.toString(Files.getPosixFilePermissions(lamp.resolve('.oillamp'))) == 'rwx------'
 
-        and: 'the lamp got its own SSH key pair rather than borrowing the user\'s'
+        and: 'the lamp has an SSH key pair of its own, rather than using the user\'s keys'
             Files.exists(lamp.resolve('.oillamp/keys/client_ed25519'))
             Files.exists(lamp.resolve('.oillamp/keys/host_ed25519.pub'))
 
-        and: 'the user is never asked to trust a host key, because it is pinned in advance'
+        and: 'the sandbox\'s host key is already in the lamp\'s `known_hosts`, so ssh never asks the user to trust it'
             Files.readString(lamp.resolve('.oillamp/known_hosts')).startsWith('lamp-')
     }
 
-    def 'The agent gets the same environment however its shell was started'() {
+    def 'oillamp gives the agent a `~/.bashrc` once, so that commands sent over ssh get the same environment as a login shell'() {
         reportInfo """
-            /etc/profile is read by *login* shells only. The terminal oillamp opens gets one, so
-            everything works there - but `ssh <lamp> 'some command'`, which is how an agent drives
-            a sandbox from a script, does not. That shell would start with no proxy variables, no
-            DISPLAY and no `sdk`, and the same command would then behave differently depending on
-            how it was invoked. An agent cannot diagnose that; it reports "the network is broken".
+            The agent's environment, such as the proxy variables, `DISPLAY` and SDKMAN's `sdk`
+            command, is set in /etc/profile.d/oillamp.sh. Bash reads that file, through
+            /etc/profile, only in a login shell. The terminal that oillamp opens on the desktop is
+            a login shell. But a command sent with `ssh <lamp> '<command>'`, which is how an agent
+            drives a sandbox from a script, runs in a shell that is not a login shell. Without help, that command
+            would have no proxy, no display and no `sdk`, and would behave differently from the
+            same command typed into the terminal. The agent could not tell why, and would conclude
+            that the network is broken.
 
-            Bash reads ~/.bashrc in exactly that case, so oillamp writes one. It is written once
-            and never again: from the moment it exists it belongs to the agent.
+            Bash does read `~/.bashrc` in a shell that ssh starts for a command, so oillamp writes
+            a `~/.bashrc` that reads /etc/profile.d/oillamp.sh. It writes the file only when there
+            is none yet. After that the file belongs to the agent, and oillamp never writes over it.
 
-            The guide is checked here for a related reason. The in-sandbox banner tells the agent
-            to read ~/AGENTS.md, and for a long time nothing put a file there.
+            The login banner tells the agent to read the guide `~/AGENTS.md`, so the scenario also
+            checks that the guide is there.
         """
-        given:
+        given: 'a lamp path where no directory exists yet'
             var lamp = host.lampPath()
 
-        when:
+        when: '`oillamp at <dir>` sets up the lamp'
             host.oillamp.run('at', lamp.toString())
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
                                             .findFirst().orElseThrow()
 
-        then: 'a non-login shell is sent to the same place a login shell gets its environment from'
+        then: 'the agent\'s `~/.bashrc` reads `/etc/profile.d/oillamp.sh`, the file a login shell gets its environment from'
             Files.readString(agentHome.resolve('.bashrc')).contains('/etc/profile.d/oillamp.sh')
 
-        and: 'and the guide is where the banner says it is'
+        and: 'the guide `~/AGENTS.md` is where the login banner says it is'
             Files.readString(agentHome.resolve('AGENTS.md')).contains('# This machine')
 
-        when: 'the agent makes the file its own'
+        when: 'the agent replaces `~/.bashrc` with its own, and `oillamp at` runs again'
             Files.writeString(agentHome.resolve('.bashrc'), 'export EDITOR=vim\n')
             host.oillamp.run('at', lamp.toString())
 
-        then: 'oillamp does not write over it'
+        then: 'oillamp leaves the agent\'s `~/.bashrc` as it is'
             Files.readString(agentHome.resolve('.bashrc')) == 'export EDITOR=vim\n'
 
-        and: 'while the guide, which describes this session, is rewritten'
+        and: '`~/AGENTS.md` is still the guide'
             Files.readString(agentHome.resolve('AGENTS.md')).contains('# This machine')
     }
 
-    def 'Oillamp\'s `remove` command deletes only what oillamp made, and only when given `--yes`'() {
+    def '`oillamp remove --yes` deletes what oillamp created in a lamp, and without `--yes` only lists it'() {
         reportInfo """
-            A lamp cannot be deleted with `rm -rf`. Part of one belongs to the sandbox's second
-            user - the infra sockets and the recordings, which is what stops the agent tampering
-            with the recording of its own screen - and those map onto subordinate ids the human
-            who owns the directory has no permission over. `rm -rf` stops halfway with "Permission
-            denied" on a path they have never heard of. So there is a command, and it goes through
-            podman's user namespace.
+            `rm -rf` cannot delete a lamp. Some of its files belong to the sandbox's infra user:
+            the recordings and the infra sockets. That ownership is what stops the agent from
+            changing the recording of its own screen. On the host, these files belong to a
+            subordinate user id over which the owner of the lamp has no permission, so `rm -rf`
+            stops halfway with "Permission denied". `oillamp remove <dir>` deletes them through
+            podman's user namespace, where the owner does have that permission.
 
-            It deletes what oillamp created and nothing else. The lamp directory is the user's:
-            they named it, and they may well have put notes or scripts of their own beside
-            oillamp.toml. So the root survives - unless removal leaves it empty, in which case
-            keeping it would just be litter.
+            It deletes only what oillamp created. The lamp directory itself is the user's: they
+            chose its name, and they may keep notes or scripts of their own next to `oillamp.toml`.
+            So the directory stays, unless removing oillamp's files leaves it empty.
 
-            There is no prompt to answer in a tool that may be driven by a script, so --yes is the
-            confirmation. Without it the command prints what would go and stops.
+            The command may be run from a script, where nobody could answer a prompt, so the flag
+            `--yes` is the confirmation. Without it, `oillamp remove` lists what it would delete,
+            and stops.
         """
-        given: 'a lamp with work in it, and a file of the user\'s own beside it'
+        given: 'a lamp with the agent\'s work in its workspace, and a file of the user\'s own in the lamp directory'
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
@@ -215,89 +235,96 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.writeString(agentHome.resolve('workspace').resolve('README.md'), 'the agent\'s work\n')
             Files.writeString(lamp.resolve('my-notes.txt'), 'not oillamp\'s\n')
 
-        when: 'the user asks without saying --yes'
+        when: '`oillamp remove <dir>` runs without `--yes`'
             var asked = host.oillamp.run('remove', lamp.toString())
 
-        then: 'it says what would go, names the agent\'s work, and stops'
+        then: 'it lists what it would delete, including the agent\'s `workspace`, says to add `--yes`, and stops'
             asked.status() == LampExitStatus.USAGE
             asked.console().contains('workspace')
             asked.console().contains('--yes')
 
-        and: 'nothing has been removed'
+        and: 'nothing has been deleted'
             Files.exists(lamp.resolve('oillamp.toml'))
             Files.exists(agentHome.resolve('workspace').resolve('README.md'))
 
-        when: 'the user says it'
+        when: '`oillamp remove <dir> --yes` runs'
             var removed = host.oillamp.run('remove', lamp.toString(), '--yes')
 
-        then: 'everything oillamp made is gone, the agent home included'
+        then: 'what oillamp created is gone: `oillamp.toml`, `.oillamp/` and the agent home'
             removed.status() == LampExitStatus.SUCCESS
             !Files.exists(lamp.resolve('oillamp.toml'))
             !Files.exists(lamp.resolve('.oillamp'))
             !Files.exists(agentHome)
 
-        and: 'and what was never oillamp\'s is not, nor is the directory holding it'
+        and: 'the user\'s own file is still there, and so is the lamp directory that holds it'
             Files.readString(lamp.resolve('my-notes.txt')) == 'not oillamp\'s\n'
 
-        and: 'the directory that is not a lamp any more says so if asked again'
+        and: 'a second `oillamp remove` reports that the directory is no longer an oillamp lamp'
             host.oillamp.run('remove', lamp.toString(), '--yes')
                     .errors().first().whatHappened().contains('not an oillamp lamp')
     }
 
-    def 'Oillamp\'s `remove` command still removes a lamp that someone already half deleted with `rm -rf`'() {
+    def '`oillamp remove` still removes a lamp that `rm -rf` has already half deleted'() {
         reportInfo """
-            This is the sequence that actually happens. A user reaches for `rm -rf` first, it
-            deletes lamp.json and then stops on the sockets it has no permission over, and what is
-            left is a directory that can no longer say which lamp it was - and still cannot be
-            deleted. Being told "this is not an oillamp lamp" at that point would be failing them
-            at the exact moment the command exists for.
+            Let's consider what usually happens first: a user tries `rm -rf` on a lamp. It
+            deletes the identity file `.oillamp/lamp.json`, then stops at the sockets it has no
+            permission over. What is left can no longer say which lamp it was, and still cannot
+            be deleted by hand. If `oillamp remove` now answered "this is not an oillamp lamp",
+            it would fail in exactly the situation it exists for.
 
-            So removal works from what is on disk rather than from an identity: any agent-lamp-*
-            directory, the state directory, the config. Only the two things named after the lamp's
-            id - its container and its runtime directory - are skipped, because without the id
-            there is nothing to name them with.
+            So `oillamp remove` works from what it finds on disk: any `agent-lamp-*` directory,
+            `.oillamp/` and `oillamp.toml`. It cannot find the lamp's runtime directory, which lies
+            outside the lamp and is named after the agent id that `lamp.json` held, so it leaves
+            that alone.
+
+            The sandbox may still be running, though, and its container is named after the same
+            id. But every container that `oillamp at` starts also carries the lamp's path in its
+            label `oillamp.lamp`. So `oillamp remove` asks podman for a container with that
+            label, and refuses while one is running.
         """
-        given: 'a lamp that a hand-rolled deletion got halfway through'
+        given: 'a lamp whose `.oillamp/lamp.json` was deleted by an attempted `rm -rf`'
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
                                             .findFirst().orElseThrow()
             Files.delete(lamp.resolve('.oillamp/lamp.json'))
 
-        when: 'its sandbox is still up, which the lamp can no longer say'
+        when: 'its sandbox is still running, and `oillamp remove <dir> --yes` runs'
             host.machine { it.commandSucceeding('podman ps', """
                 [{"Names":["oillamp-y62b5ihg"],"State":"running",
                   "Labels":{"oillamp.agent-id":"y62b5ihg","oillamp.lamp":"${lamp}"}}]
             """) }
             var refused = host.oillamp.run('remove', lamp.toString(), '--yes')
 
-        then: 'podman is asked instead, by the label that carries the lamp path'
+        then: 'podman finds the container by its `oillamp.lamp` label, and `oillamp remove` refuses, naming the container'
             refused.status() == LampExitStatus.LAMP_BUSY
             refused.errors().first().whatHappened().contains('oillamp-y62b5ihg')
 
-        and: 'so nothing was pulled out from under a container that is still running'
+        and: 'the agent home is still there, because the running container still uses it'
             Files.exists(agentHome)
 
-        when: 'the sandbox is gone'
+        when: 'the sandbox has stopped, and `oillamp remove <dir> --yes` runs again'
             host.machine { it.commandSucceeding('podman ps', '[]') }
             var outcome = host.oillamp.run('remove', lamp.toString(), '--yes')
 
-        then: 'removal works anyway, and takes the agent home it found by name'
+        then: 'it deletes `.oillamp/`, and the agent home, which it found by its `agent-lamp-` name'
             outcome.status() == LampExitStatus.SUCCESS
             !Files.exists(lamp.resolve('.oillamp'))
             !Files.exists(agentHome)
     }
 
-    def 'A lamp reached through a symbolic link is the same lamp to every command'() {
+    def '`oillamp remove`, given a lamp through a symbolic link, still finds the lamp\'s running sandbox'() {
         reportInfo """
-            Lamps are often reached through a link, for example ~/lamps pointing at a larger disk.
-            `oillamp at` follows the link, and labels the sandbox's container with the lamp's real
-            path. `oillamp remove` asks podman for a container with that label, because it is the
-            only thing left to ask once lamp.json is gone. It used to ask with the path as typed,
-            the link, which never matched, so a running sandbox's home could be deleted from
-            under it.
+            Lamps are often reached through a symbolic link, for example from ~/lamps to a
+            directory on a larger disk. `oillamp at` follows the link, and puts the lamp's real
+            path into the label `oillamp.lamp` of the sandbox's container.
+
+            Once `.oillamp/lamp.json` is gone, that label is the only way for `oillamp remove` to
+            find out whether the lamp's sandbox is still running. So it, too, must ask podman with
+            the real path, not with the link that the user typed. With the link it would find no
+            container, and would delete the home of a sandbox that is still running.
         """
-        given: 'a lamp on another disk, reached through a link'
+        given: 'a lamp on another disk, reached through a link, whose `lamp.json` was deleted'
             var real = Files.createDirectories(host.home.resolve('big-disk/feature-x'))
             var link = host.lampPath()
             Files.createDirectories(link.parent)
@@ -305,28 +332,29 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             host.oillamp.run('at', link.toString())
             Files.delete(real.resolve('.oillamp/lamp.json'))
 
-        and: 'its sandbox still running, labelled with the real path as `at` labels it'
+        and: 'its sandbox still running, with the real path in its `oillamp.lamp` label, as `oillamp at` sets it'
             host.machine { it.commandSucceeding('podman ps', """
                 [{"Names":["oillamp-y62b5ihg"],"State":"running",
                   "Labels":{"oillamp.agent-id":"y62b5ihg","oillamp.lamp":"${real.toRealPath()}"}}]
             """) }
 
-        when: 'the user removes it by the path they know'
+        when: '`oillamp remove --yes` is given the path of the link'
             var outcome = host.oillamp.run('remove', link.toString(), '--yes')
 
-        then: 'the running sandbox is found, and nothing is removed'
+        then: 'it finds the running sandbox and refuses, and the lamp is still there'
             outcome.status() == LampExitStatus.LAMP_BUSY
             outcome.errors().first().whatHappened().contains('oillamp-y62b5ihg')
             Files.exists(real.resolve('oillamp.toml'))
     }
 
-    def 'A link to a directory that does not exist yet makes the lamp where it points'() {
+    def '`oillamp at`, given a link to a directory that does not exist yet, creates the lamp where the link points'() {
         reportInfo """
-            A user who makes the link first, `ln -s /mnt/big/feature-x ~/lamps/feature-x`, and
-            then runs `oillamp at ~/lamps/feature-x` means the lamp to live on the big disk. The
-            link cannot be followed yet, because what it points to does not exist, and oillamp
-            used to try to create a directory where the link already was, and report that as a
-            bug in itself.
+            Let's consider a user who creates the link first, with
+            `ln -s /mnt/big/feature-x ~/lamps/feature-x`, and then runs
+            `oillamp at ~/lamps/feature-x`. They want the lamp on the big disk. But
+            /mnt/big/feature-x does not exist yet, so the link cannot be followed, and an earlier
+            oillamp failed trying to create a directory where the link itself is. `oillamp at`
+            creates the directory that the link points to instead, and leaves the link in place.
         """
         given: 'a link to a directory that does not exist yet'
             var real = host.home.resolve('big-disk/feature-x')
@@ -334,115 +362,117 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.createDirectories(link.parent)
             Files.createSymbolicLink(link, real)
 
-        when:
+        when: '`oillamp at` is given the path of the link'
             var outcome = host.oillamp.run('at', link.toString())
 
-        then: 'the lamp is made where the link points'
+        then: 'the lamp is created where the link points, and the link is still a link'
             outcome.status() == LampExitStatus.SUCCESS
             Files.exists(real.resolve('oillamp.toml'))
             Files.isSymbolicLink(link)
     }
 
-    def 'Oillamp\'s `remove` command removes several lamps at once, and only if it can remove every one of them'() {
+    def '`oillamp remove` removes several lamps at once, but only if it can remove all of them'() {
         reportInfo """
-            Lamps made for experiments pile up, and the natural way to clean them up is a shell
-            pattern: `oillamp remove ~/lamps/test* --yes`. The shell expands that into several
-            directories. oillamp used to act on the first and ignore the rest without a word, so
-            the user had to run it again for each.
+            Lamps made for experiments pile up, and the natural way to clear them away is a shell
+            pattern: `oillamp remove ~/lamps/test* --yes`. The shell turns the pattern into a list
+            of directories, and `oillamp remove` takes all of them.
 
-            Now `remove` takes them all. A pattern may match more than was meant, so every
-            directory is checked before anything is deleted: if any is not a lamp, or is still
-            running, nothing is removed and each problem is named. Without --yes it lists what
-            would go for each lamp, and the command it suggests names all of them.
+            A pattern can match more than was meant. So `oillamp remove` checks every directory
+            before it deletes anything: if one of them is not a lamp, or its sandbox is still
+            running, it removes none of them and names each problem. Without `--yes`, it lists
+            what it would delete from each lamp, and suggests one command that removes them all.
         """
-        given: 'two lamps, and a directory beside them that the pattern also matches'
+        given: 'two lamps, `test1` and `test2`, and a directory `test-notes` that is not a lamp but matches the same pattern'
             var first = host.lampPath('test1')
             var second = host.lampPath('test2')
             var notALamp = Files.createDirectories(host.lampPath('test-notes'))
             host.oillamp.run('at', first.toString())
             host.oillamp.run('at', second.toString())
 
-        when: 'the pattern catches the directory that is not a lamp'
+        when: '`oillamp remove --yes` is given all three'
             var refused = host.oillamp.run('remove', first.toString(), notALamp.toString(),
                                               second.toString(), '--yes')
 
-        then: 'nothing is removed, and the directory at fault is named'
+        then: 'it removes nothing, and names `test-notes` as the directory at fault'
             refused.status() == LampExitStatus.USAGE
             refused.errors().first().whatHappened().contains('test-notes')
             refused.console().contains('Nothing has been removed')
             Files.exists(first.resolve('oillamp.toml'))
             Files.exists(second.resolve('oillamp.toml'))
 
-        when: 'only the lamps are named, without --yes'
+        when: '`oillamp remove` is given only the two lamps, without `--yes`'
             var asked = host.oillamp.run('remove', first.toString(), second.toString())
 
-        then: 'it lists both, and offers one command that removes both'
+        then: 'it lists both, suggests one command that removes both, and removes nothing yet'
             asked.status() == LampExitStatus.USAGE
             asked.console().contains(first.toString())
             asked.console().contains(second.toString())
             asked.console().contains("oillamp remove ${first} ${second} --yes")
             Files.exists(first.resolve('oillamp.toml'))
 
-        when: 'the user confirms'
+        when: 'that suggested command runs'
             var removed = host.oillamp.run('remove', first.toString(), second.toString(), '--yes')
 
-        then: 'both are gone'
+        then: 'both lamp directories are gone, and the output says that all 2 lamps were removed'
             removed.status() == LampExitStatus.SUCCESS
             !Files.exists(first)
             !Files.exists(second)
             removed.console().contains('All 2 lamps were removed')
     }
 
-    def 'Oillamp refuses several lamps for a command that works on one, rather than quietly using the first'() {
+    def 'A command that works on one lamp refuses to be given several, rather than quietly using the first'() {
         reportInfo """
-            `oillamp stop ~/lamps/test*` looks as if it stops every matching lamp. Stopping the
-            first and ignoring the rest would leave the user believing the others were stopped.
-            So every command that takes one lamp says it was given several, and names them.
+            Let's consider `oillamp stop ~/lamps/test*`. It looks as if it stops every lamp that
+            the pattern matches, but `oillamp stop` works on one lamp. If it stopped the first
+            and ignored the others, the user would believe that all of them had stopped. So
+            `oillamp stop`, like every command that works on one lamp, refuses a list of several,
+            and says how many it was given.
         """
-        when:
+        when: '`oillamp stop` is given two lamps'
             var outcome = host.oillamp.run('stop', host.lampPath('test1').toString(),
                                               host.lampPath('test2').toString())
 
-        then:
+        then: 'it refuses with a usage error: it works on one lamp, but was given 2'
             outcome.status() == LampExitStatus.USAGE
             outcome.errors().first().whatHappened().contains('works on one lamp, but was given 2')
     }
 
-    def 'Oillamp\'s `remove` command refuses to remove a lamp whose container still exists'() {
+    def '`oillamp remove` refuses to remove a lamp whose container still exists, and suggests `oillamp stop`'() {
         reportInfo """
-            Let's consider a lamp whose container podman still knows about. Deleting the agent's
-            home while a container has it mounted would leave the session working in directories
-            that no longer exist, and the container would outlive everything that describes it,
-            leaving a sandbox with nothing left to stop it with.
+            Let's consider a lamp whose container podman still knows about. If `oillamp remove`
+            deleted the agent's home now, the session in the container would go on working in
+            directories that no longer exist. And the container would outlive the files that
+            describe it, so `oillamp stop` would have nothing left to find it with.
 
-            The answer names `oillamp stop`, which is also what clears up a container left behind
-            by a supervisor that died. Both cases need the same instruction, so they get the same
-            message.
+            So `oillamp remove` refuses, and suggests running `oillamp stop` first. A container
+            can also be left behind when the oillamp process that ran its session died, and
+            `oillamp stop` clears that away too, so the same advice fits both cases.
         """
-        given: 'a lamp whose container is still registered with podman'
+        given: 'a lamp whose container podman still knows about'
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
             host.machine { it.commandSucceeding('podman container exists', '') }
 
-        when:
+        when: '`oillamp remove <dir> --yes` runs'
             var outcome = host.oillamp.run('remove', lamp.toString(), '--yes')
 
-        then: 'it refuses, and says which command to run first'
+        then: 'it refuses because the container is still there, and suggests an `oillamp stop` command'
             outcome.status() == LampExitStatus.LAMP_BUSY
             outcome.errors().first().whatHappened().contains('still there')
             outcome.errors().first().fixes().any { it.command().orElse('').startsWith('oillamp stop') }
 
-        and: 'and the lamp is untouched'
+        and: '`oillamp.toml` is still there'
             Files.exists(lamp.resolve('oillamp.toml'))
     }
 
-    def 'Running oillamp again on the same lamp keeps the agent\'s world and the user\'s settings'() {
+    def 'Running `oillamp at` again on a lamp keeps the agent\'s work, the user\'s settings and the lamp\'s identity'() {
         reportInfo """
-            The point of a lamp is that the agent comes back to the work it left: its repositories,
-            its tool configuration, its shell history. And the user's edited policy must survive
-            too - a tool that silently reset `oillamp.toml` on every run would be useless.
+            A lamp exists so that the agent comes back to the work it left: its repositories, its
+            tool configuration, its shell history. The user's changes to `oillamp.toml` must last
+            as well; a tool that reset the file on every run would be useless.
 
-            So the second run must be almost entirely a no-op, and must say so.
+            So when `oillamp at` runs on a lamp that is already set up, it leaves the user's and
+            the agent's files alone, and keeps the lamp's agent id and SSH keys.
         """
         given: 'a lamp that has been set up once'
             var lamp = host.lampPath()
@@ -450,124 +480,126 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
                                             .findFirst().orElseThrow()
 
-        and: 'the user has changed a setting, and the agent has done some work'
+        and: 'the user has changed the display width in `oillamp.toml`, and the agent has written a file into its workspace'
             var settings = lamp.resolve('oillamp.toml')
             Files.writeString(settings, Files.readString(settings).replace('width  = 1920', 'width  = 2560'))
             Files.writeString(agentHome.resolve('workspace/notes.md'), 'work in progress')
             var identityBefore = Files.readString(lamp.resolve('.oillamp/lamp.json'))
             var keyBefore = Files.readString(lamp.resolve('.oillamp/keys/client_ed25519'))
 
-        when: 'the user runs oillamp on that lamp again'
+        when: '`oillamp at` runs on that lamp again'
             var outcome = host.oillamp.run('at', lamp.toString())
 
         then: 'it succeeds'
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'the edited setting is still there'
+        and: '`oillamp.toml` still holds the new width'
             Files.readString(settings).contains('width  = 2560')
 
-        and: 'and has taken effect'
+        and: 'the output shows the new width, so this session uses it'
             outcome.console().contains('2560x1440') || outcome.console().contains('2560')
 
-        and: 'the agent\'s work is untouched'
+        and: 'the agent\'s file is unchanged'
             Files.readString(agentHome.resolve('workspace/notes.md')) == 'work in progress'
 
-        and: 'the lamp keeps the same identity, so it is the same sandbox'
+        and: '`lamp.json` still holds the same agent id, so it is the same sandbox'
             var agentId = identityBefore.find(/"agentId": "(\w+)"/) { it[1] }
             Files.readString(lamp.resolve('.oillamp/lamp.json')).contains(agentId)
 
-        and: 'and the same keys, so no host-key warning appears'
+        and: 'the lamp\'s SSH client key is unchanged'
             Files.readString(lamp.resolve('.oillamp/keys/client_ed25519')) == keyBefore
     }
 
-    def 'Oillamp refuses to make a lamp in a directory that already holds other files, unless given `--init`'() {
+    def '`oillamp at` refuses a directory that already holds other files, unless given `--init`'() {
         reportInfo """
-            `oillamp at ~/my-project` is an easy thing to type by mistake. Since a lamp takes
-            ownership of its directory, doing that to a directory the user is already using would
-            scatter state through it and, worse, expose part of it to the agent.
+            `oillamp at ~/my-project` is easy to type by mistake. A lamp takes over its
+            directory, so if oillamp went ahead, it would put its own files among those of a
+            project the user is working on.
 
-            So oillamp refuses a directory that already has something in it and is not already a
-            lamp, with `OIL-LAMP-002` - but the refusal tells the user what is in the way and how
-            to go ahead deliberately, with `--init`, if that is what they meant.
+            So `oillamp at` refuses a directory that is not empty and is not already a lamp, with
+            `OIL-LAMP-002`. The message shows what is in the way, and how to go ahead on purpose:
+            with `--init`, oillamp sets up the lamp next to the files that are already there.
         """
         given: 'a directory with the user\'s own files in it'
             var directory = Files.createDirectories(tmp.resolve('home/dev/my-project'))
             Files.writeString(directory.resolve('README.md'), 'my actual project')
             Files.createDirectory(directory.resolve('src'))
 
-        when: 'the user points oillamp at it'
+        when: '`oillamp at` is given that directory'
             var outcome = host.oillamp.run('at', directory.toString())
 
-        then: 'oillamp refuses'
+        then: 'it refuses with `OIL-LAMP-002`'
             outcome.reported('OIL-LAMP-002')
             outcome.status() != LampExitStatus.SUCCESS
 
-        and: 'nothing was created'
+        and: 'it has created neither `.oillamp/` nor `oillamp.toml`'
             !Files.exists(directory.resolve('.oillamp'))
             !Files.exists(directory.resolve('oillamp.toml'))
 
-        and: 'the user is shown what is in the way'
+        and: 'the message shows `README.md` among what is in the way'
             var problem = outcome.errors().first()
             problem.evidence().any { it.toString().contains('README.md') }
 
-        and: 'and told how to say "yes, I meant it"'
+        and: 'it also suggests a command with `--init`'
             problem.fixes().any { it.command().orElse('').contains('--init') }
 
-        when: 'the user confirms with --init'
+        when: '`oillamp at --init` is given the same directory'
             var confirmed = host.oillamp.run('at', directory.toString(), '--init')
 
-        then: 'oillamp sets the lamp up alongside their files'
+        then: 'it sets up the lamp next to the user\'s files, and leaves them unchanged'
             confirmed.status() == LampExitStatus.SUCCESS
             Files.exists(directory.resolve('.oillamp/lamp.json'))
             Files.readString(directory.resolve('README.md')) == 'my actual project'
     }
 
-    def 'Oillamp refuses outright to make a lamp of the home directory itself or of a system directory'() {
+    def '`oillamp at` refuses outright to make a lamp of the home directory itself or of a system directory'() {
         reportInfo """
-            A lamp attaches part of its own directory to the sandbox as the agent's home. Making
-            the user's entire home directory into a lamp would therefore hand the agent every
-            single thing the sandbox exists to keep away from it. Making /etc into a lamp would be
-            worse still.
+            oillamp writes its state into a lamp's directory, gives part of it to the sandbox's
+            infra user, and mounts another part into the sandbox as the agent's home. A lamp
+            therefore needs a directory of its own. The user's home directory holds their keys,
+            settings and projects, and /etc holds the configuration of the whole machine; neither
+            is a place for a sandbox to live in.
 
-            There is deliberately no flag to override this. A flag to override it would be used
-            exactly once, by someone in a hurry, on the wrong directory.
+            `--init`, which lets a lamp share a directory with other files, does not override
+            this, and no other flag does either. Such a flag would be used once, by someone in a
+            hurry, on the wrong directory.
         """
-        when: 'the user points oillamp at their home directory itself'
+        when: '`oillamp at` is given the user\'s home directory itself'
             var outcome = host.oillamp.run('at', host.home.toString())
 
-        then: 'oillamp refuses and explains why, suggesting a subdirectory instead'
+        then: 'it refuses with `OIL-LAMP-003`, and suggests a directory under `~/lamps` instead'
             outcome.reported('OIL-LAMP-003')
             outcome.errors().first().whatHappened().contains('home directory')
             outcome.errors().first().whatHappened().contains('lamps')
 
-        when: 'or at a system directory'
+        when: '`oillamp at` is given a directory in /etc'
             var system = host.oillamp.run('at', '/etc/oillamp')
 
-        then: 'oillamp refuses that too'
+        then: 'it refuses that with `OIL-LAMP-003` too, naming /etc'
             system.reported('OIL-LAMP-003')
             system.errors().first().whatHappened().contains('/etc')
     }
 
-    def 'Oillamp will not set up a lamp anywhere inside a system directory: #path'() {
+    def '`oillamp at` refuses a lamp anywhere below a system directory: #path'() {
         reportInfo """
-            oillamp will not set up a lamp in a directory that belongs to the operating system: /bin, /boot,
-            /dev, /etc, /lib, /proc, /run, /sbin, /sys, /usr or /var, or any directory below one of them.
-            `oillamp at` reports OIL-LAMP-003 and names the system directory.
+            oillamp will not set up a lamp in a directory that belongs to the operating system: /bin,
+            /boot, /dev, /etc, /lib, /proc, /run, /sbin, /sys, /usr or /var, or any directory below
+            one of them. `oillamp at` reports `OIL-LAMP-003` and names the system directory.
 
-            The reason is what oillamp does to a lamp's directory. It creates `.oillamp/` and the agent
-            directory in it, sets their permissions, hands the recordings directory to the infra user, and
-            attaches the agent directory to the sandbox. Inside /usr or /var, that would put files the agent
-            controls among the system's programs and data.
+            The reason is what oillamp does to a lamp's directory. It creates `.oillamp/` and the
+            agent home in it, sets their permissions, gives the recordings directory to the
+            sandbox's infra user, and mounts the agent home into the sandbox. Inside /usr or /var,
+            that would put files the agent controls among the system's programs and data.
 
-            The check compares the start of the path with each directory in that list. A directory missing
-            from the list would let lamps in under it, and no other check would stop them. The scenario
-            asks `oillamp at` for a lamp a few levels inside /var, /usr and /boot, and expects
-            OIL-LAMP-003 naming the right directory each time.
+            `oillamp at` compares the start of the path with each directory in that list. A
+            directory missing from the list would let lamps in below it, and no other check would
+            stop them. So the scenario asks for a lamp a few levels below /var, /usr and /boot, and
+            expects `OIL-LAMP-003` to name the right system directory each time.
         """
-        when:
+        when: '`oillamp at` is given the path'
             var outcome = host.oillamp.run('at', path)
 
-        then: 'oillamp refuses, and names the system directory'
+        then: 'it refuses with `OIL-LAMP-003`, and names the system directory the path is in'
             outcome.reported('OIL-LAMP-003')
             outcome.errors().first().whatHappened().contains("inside the system directory ${directory}")
 
@@ -578,64 +610,73 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             '/boot/lamp'                 || '/boot'
     }
 
-    def 'The agent cannot rearrange the socket directories the desktop and the network depend on'() {
+    def '`oillamp at` mounts each socket directory into the container on its own, so the agent cannot swap one for a directory of its own'() {
         reportInfo """
-            The container reaches the host through Unix sockets in three directories: host/ holds
-            the network proxy, agent/ the agent's ssh listener, and infra/ the desktop the human
-            watches. infra/ belongs to the sandbox's infrastructure user, so the agent cannot
-            touch what is inside it.
+            The sandbox and the host talk through Unix sockets in three directories under
+            `.oillamp/sockets/`. `host/` holds the sockets that oillamp listens on outside the
+            sandbox, such as the network proxy's. `agent/` holds the socket of the
+            sandbox's ssh server. `infra/` holds the socket that carries the desktop picture the
+            human watches. `infra/` belongs to the sandbox's infra user, so the agent cannot change
+            what is inside it.
 
-            The agent runs as the lamp owner's own user id, though. Their shared parent directory
-            belongs to that user, so if it were attached to the container, the agent could move
-            infra/ aside and put its own desktop in its place, or a link pointing anywhere on the
-            host. So each of the three is attached on its own, which the agent cannot move, and
-            host/ is attached read-only, since the sandbox only ever connects to it.
+            The agent, however, runs as the lamp owner's own user id, and the owner also owns the
+            parent directory `.oillamp/sockets/`. If that parent were mounted into the container,
+            the agent could rename `infra/` and put a directory of its own in its place, with a
+            desktop socket of its own in it, or a link to anywhere on the host. So `oillamp at`
+            mounts each of the three directories on its own, and a mount point is something the
+            agent cannot rename. It mounts `host/` read-only, because the sandbox only ever
+            connects to the sockets in it.
+
+            The scenario reads the mounts from the `podman run` command that
+            `oillamp at --dry-run --verbose` prints.
         """
-        when: 'the user asks what oillamp would run'
+        when: '`oillamp at --dry-run --verbose` prints the `podman run` command it would use'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run', '--verbose')
             var podmanRun = outcome.stepDetails().find { it.startsWith('podman run') }
 
-        then:
+        then: 'the plan has a `podman run` step'
             podmanRun != null
 
-        and: 'each socket directory is attached on its own, and host/ read-only'
+        and: 'each socket directory is mounted on its own, and `host/` read-only'
             podmanRun.contains('.oillamp/sockets/host:/oillamp/sockets/host:ro')
             podmanRun.contains('.oillamp/sockets/agent:/oillamp/sockets/agent')
             podmanRun.contains('.oillamp/sockets/infra:/oillamp/sockets/infra')
 
-        and: 'their parent is not attached at all'
+        and: 'their parent `.oillamp/sockets` is not mounted at all'
             !podmanRun.contains('.oillamp/sockets:/oillamp/sockets')
     }
 
-    def 'Oillamp refuses to start a lamp whose socket directory was replaced by a link, and does not follow the link'() {
+    def '`oillamp at` refuses to start a lamp whose socket directory was replaced by a link, and does not follow the link'() {
         reportInfo """
-            Before each socket directory was attached on its own, the agent could replace one with
-            a symbolic link to any directory of the user's, such as their home or ~/.ssh. The next
-            session would then have handed that directory to the infrastructure user, and attached
-            it to the container.
+            Before oillamp mounted each socket directory on its own, the agent could replace one of
+            them with a symbolic link to any of the user's directories, such as their home or
+            ~/.ssh. At the lamp's next start, `oillamp at` would have followed the link: it would
+            have given that directory to the sandbox's infra user and mounted it into the
+            container.
 
-            A lamp in that state must not start. oillamp refuses with `OIL-LAMP-011`, names the
-            link and where it points, and says how to remove it, without touching either.
+            A lamp found in that state must not start. `oillamp at` refuses with `OIL-LAMP-011`,
+            names the link and where it points, and changes neither, so that the user can look at
+            what happened.
         """
         given: 'a lamp that has run before'
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
 
-        and: 'whose infra/ directory the agent moved aside and replaced with a link to the user\'s home'
+        and: 'whose `infra/` socket directory was moved aside and replaced with a link to the user\'s home'
             var infra = lamp.resolve('.oillamp/sockets/infra')
             Files.move(infra, lamp.resolve('.oillamp/sockets/moved-away'))
             Files.createSymbolicLink(infra, host.home)
 
-        when:
+        when: '`oillamp at` runs on the lamp again'
             var outcome = host.oillamp.run('at', lamp.toString())
 
-        then: 'oillamp refuses, saying what it found'
+        then: 'it refuses with `OIL-LAMP-011`, naming the link and the user\'s home it points to'
             outcome.status() != LampExitStatus.SUCCESS
             outcome.reported('OIL-LAMP-011')
             outcome.errors().first().whatHappened().contains(infra.toString())
             outcome.errors().first().whatHappened().contains(host.home.toString())
 
-        and: 'nothing was handed to the infrastructure user and no sandbox was started'
+        and: 'it gave nothing to the infra user, and started no container'
             !outcome.stepKinds().contains('ChownForContainer')
             !outcome.stepKinds().contains('RunContainer')
 
@@ -646,38 +687,40 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.deleteIfExists(infra)
     }
 
-    def 'Oillamp refuses a lamp on a filesystem that cannot hold Unix sockets, before it creates anything'() {
+    def '`oillamp at` refuses a lamp on a filesystem that cannot hold Unix sockets, before it creates anything'() {
         reportInfo """
-            Every channel between this machine and the sandbox - the shell, the desktop picture,
-            the network proxy - is carried by a Unix domain socket living inside the lamp
-            directory. A Unix domain socket is a special file that two processes on one machine use
-            to talk to each other, and not every filesystem can hold one: network filesystems such
-            as NFS cannot, and neither can the FAT filesystems used on most USB sticks.
+            Every channel between the host and the sandbox, such as the ssh shell, the desktop
+            picture and the network proxy, goes through a Unix domain socket inside the lamp
+            directory. A Unix domain socket is a special file through which two processes on the
+            same machine talk to each other. Not every filesystem can hold one: network
+            filesystems such as NFS cannot, and neither can the FAT filesystems on most USB sticks.
 
-            Discovering that halfway through starting a container would be a baffling failure, so
-            oillamp checks it up front and reports `OIL-LAMP-005`, where the message can name the
-            filesystem and suggest a fix.
+            If oillamp found this out halfway through starting the container, the error would make
+            no sense to the user. So `oillamp at` checks the filesystem first, and reports
+            `OIL-LAMP-005` with the type of the filesystem and a suggestion where to put the lamp
+            instead.
         """
-        given: 'a lamp directory on a network share'
+        given: 'a lamp path on an NFS share'
             host.machine { it.lampFilesystemType('nfs') }
 
-        when:
+        when: '`oillamp at` is given that path'
             var outcome = host.oillamp.run('at', host.lampPath().toString())
 
-        then:
+        then: 'it reports `OIL-LAMP-005`, naming `nfs`, and has not created the lamp directory'
             outcome.reported('OIL-LAMP-005')
             outcome.errors().first().whatHappened().contains('nfs')
             !Files.exists(host.lampPath())
     }
 
-    def 'Oillamp leaves a lamp written by a newer oillamp alone rather than damage it'() {
+    def '`oillamp at` refuses a lamp created by a newer oillamp, rather than risk damaging it'() {
         reportInfo """
-            A lamp holds the agent's accumulated work. If a future version changes the layout, an
-            older oillamp reading it could misinterpret or destroy that. So the identity file
-            carries a schema version, and for a version from the future oillamp stops with
-            `OIL-LAMP-004` and the only useful advice there is: upgrade.
+            A lamp holds the agent's accumulated work. A future version of oillamp may change the
+            lamp's layout, and an older oillamp that read such a lamp could misread or destroy that
+            work. So the identity file `.oillamp/lamp.json` records a schema version. When it is
+            higher than any this oillamp understands, `oillamp at` stops with `OIL-LAMP-004`, and
+            gives the only useful advice: upgrade oillamp.
         """
-        given: 'a lamp created by a later version of oillamp'
+        given: 'a lamp whose `lamp.json` declares schema version 99, written by oillamp 9.0.0'
             var lamp = Files.createDirectories(host.lampPath())
             Files.createDirectories(lamp.resolve('.oillamp'))
             Files.writeString(lamp.resolve('.oillamp/lamp.json'), '''
@@ -689,16 +732,17 @@ class Setting_Up_A_Lamp_Spec extends Specification {
                 }
             '''.stripIndent())
 
-        when:
+        when: '`oillamp at` runs on it'
             var outcome = host.oillamp.run('at', lamp.toString())
 
-        then:
+        then: 'it reports `OIL-LAMP-004`, and suggests upgrading oillamp'
             outcome.reported('OIL-LAMP-004')
             outcome.errors().first().fixes().any { it.description().contains('upgrade') }
     }
 
     /**
-     *  Plants a recording: the name says when it started, the modification time when it stopped.
+     *  Creates the recording file of a session, as the screen recorder would leave it: named
+     *  after the session's start time, and last modified `ran` later, when the recording stopped.
      */
     private static Path givenRecording(Path lamp, String session, Duration ran, int kilobytes) {
         Path file = lamp.resolve('.oillamp/recordings').resolve(session + '.mkv')
@@ -711,135 +755,140 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         file
     }
 
-    def 'Oillamp\'s `recordings` command lists how long each recording ran and its size, and invents no length for other files'() {
+    def '`oillamp recordings` lists each recording of a lamp with how long it ran and its size'() {
         reportInfo """
-            A recording is named after the session that made it, and wf-recorder writes to it until
-            it is interrupted. So the file already carries both ends of its own life: the name is
-            when it started, the modification time is when it stopped. The listing reads a duration
-            out of that gap rather than opening the file - oillamp does not require ffmpeg on the
-            host, and a listing that shelled out to ffprobe for every row would be a listing that
-            failed on a machine without it.
+            With recording switched on, every session writes a video of the desktop into
+            `.oillamp/recordings/`, named after the session's start time, such as
+            `20260115-100000.mkv`. wf-recorder, the program that records the screen, writes to the
+            file until the session stops it, so the file's modification time is when the
+            recording ended. `oillamp recordings <dir>` lists each file with how long it ran and
+            its size. It takes the start from the file's creation time where the filesystem keeps
+            one, and otherwise from the session time in the name. It never opens the video itself:
+            oillamp does not require ffmpeg on the host, and a listing that needed ffprobe would
+            fail on every host without it.
 
-            The directory belongs to the sandbox's infra user, not to the person running this. They
-            can read it, which is why the listing works at all; they cannot write it, which is why
-            deleting goes through podman.
+            A file in there whose name is not a session time, such as `notes.mkv`, is somebody's
+            own file. The listing shows it too, rather than hiding or deleting it.
 
-            Anything in there that is not a recording is somebody's own file. It is listed as
-            having no duration rather than hidden, deleted, or given a made-up one.
+            Given `--open` and a session that was never recorded, `oillamp recordings` reports
+            `OIL-LAMP-009` and names the sessions that were.
         """
-        given: 'a lamp with two recordings, and a file nobody can date'
+        given: 'a lamp with a 5-minute and a 90-second recording, and a file `notes.mkv` that is not named after a session'
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
             givenRecording(lamp, '20260115-100000', Duration.ofMinutes(5), 2048)
             givenRecording(lamp, '20260115-140000', Duration.ofSeconds(90), 512)
             Files.write(lamp.resolve('.oillamp/recordings/notes.mkv'), new byte[1024])
 
-        when:
+        when: '`oillamp recordings <dir>` runs'
             var listed = host.oillamp.run('recordings', lamp.toString())
 
-        then: 'each is named with how long it ran and what it cost'
+        then: 'it lists each recording with how long it ran and its size'
             listed.status() == LampExitStatus.SUCCESS
             listed.console().contains('20260115-100000.mkv')
             listed.console().contains('5m00s')
             listed.console().contains('2.0 MB')
             listed.console().contains('1m30s')
 
-        and: 'the file that is not a session is there, without an invented duration'
+        and: 'it lists `notes.mkv` too, and counts 3 files'
             listed.console().contains('notes.mkv')
             listed.console().contains('3 recording(s)')
 
-        when: 'a session that was never recorded is asked for'
+        when: '`oillamp recordings <dir> --open` is given a session that was never recorded'
             var missing = host.oillamp.run('recordings', lamp.toString(), '--open', '20200101-000000')
 
-        then: 'it says so, and names the ones that do exist'
+        then: 'it reports `OIL-LAMP-009`, and names a session that was recorded'
             missing.status() == LampExitStatus.USAGE
             missing.reported('OIL-LAMP-009')
             missing.errors().first().whyItMatters().contains('20260115-100000')
     }
 
-    def 'Oillamp\'s `recordings --open <session>` opens that session\'s recording in the desktop\'s video player'() {
+    def '`oillamp recordings --open <session>` opens that session\'s recording in the desktop\'s video player'() {
         reportInfo """
-            `oillamp recordings <dir> --open <session>` hands the recording of that session to the
-            desktop's own video player, the way opening the file by double-click would.
-            `--open=<session>` means the same. oillamp does not wait for the player to close.
+            `oillamp recordings <dir> --open <session>` hands the recording of that session to
+            `xdg-open`, which opens it in the desktop's default video player, as a double-click on
+            the file would. `--open=<session>` means the same. oillamp does not wait for the player
+            to close, because with some players `xdg-open` returns only once the video is closed.
         """
-        given: 'a desktop that can open files, and a lamp with one recording'
+        given: 'a desktop with `xdg-open`, and a lamp with one recording'
             host.machine { it.withPackages('xdg-utils') }
             var lamp = host.lampPath()
             host.oillamp.run('at', lamp.toString())
             var recording = givenRecording(lamp, '20260115-100000', Duration.ofMinutes(5), 2048)
 
-        when:
+        when: 'the session is given to `--open` once as a separate argument, and once as `--open=<session>`'
             var spaced = host.oillamp.run('recordings', lamp.toString(), '--open', '20260115-100000')
             var joined = host.oillamp.run('recordings', lamp.toString(), '--open=20260115-100000')
 
-        then: 'both open the same file'
+        then: 'both open the same recording file'
             spaced.status() == LampExitStatus.SUCCESS
             spaced.console().contains('opened ' + recording)
             joined.status() == LampExitStatus.SUCCESS
             joined.console().contains('opened ' + recording)
     }
 
-    def 'Oillamp\'s `recordings --prune` deletes now what the next session\'s retention would delete'() {
+    def '`oillamp recordings --prune` deletes right away what the next session would delete under the retention limits'() {
         reportInfo """
-            Retention, the rules `recording.max_age_days` and `recording.max_total_gb` in
-            `oillamp.toml`, already runs at the start of every session, because a lamp used day
-            after day would otherwise fill the host's disk without a warning. But a user who wants
-            the disk back today should not have to start a sandbox to get it, so --prune brings
-            the same decision forward.
+            Two settings in `oillamp.toml` limit the recordings a lamp keeps:
+            `recording.max_age_days` and `recording.max_total_gb`. oillamp applies these
+            retention limits at the start of every session, so that a lamp used day after day
+            does not fill the host's disk without warning. A user who wants the disk space back
+            today should not have to start a sandbox for it, so `oillamp recordings <dir> --prune`
+            applies the same limits right away.
 
-            The same decision, not a second one: both call the same function on the same
-            configuration. Two implementations of "keep 14 days" would eventually disagree about
-            what it means, and the one the user reads about in oillamp.toml would be the one that
-            was wrong.
+            The start of a session and `--prune` use the same code with the same settings. Two
+            separate implementations of "keep 14 days" would sooner or later disagree about what
+            it means.
 
-            The files belong to the container's infra user, so even this deletion goes through
-            podman's user namespace - the same reason `rm -rf` cannot remove a lamp.
+            The recordings belong to the sandbox's infra user, so `--prune` deletes them through
+            podman's user namespace, as `oillamp remove` does.
         """
-        given: 'a lamp that keeps a fortnight, and a recording from well before that'
+        given: 'on 1 February 2026, a lamp with the default age limit of 14 days, a recording from December and one from 31 January'
             var lamp = host.lampPath()
             host.machine { it.clockAt(Instant.parse('2026-02-01T12:00:00Z')) }
             host.oillamp.run('at', lamp.toString())
             var old = givenRecording(lamp, '20251201-090000', Duration.ofMinutes(20), 64)
             var recent = givenRecording(lamp, '20260131-090000', Duration.ofMinutes(20), 64)
 
-        when:
+        when: '`oillamp recordings <dir> --prune` runs'
             var pruned = host.oillamp.run('recordings', lamp.toString(), '--prune')
 
-        then: 'the one past its fortnight is gone and the one inside it is not'
+        then: 'it deletes the recording from December and keeps the one from 31 January'
             pruned.status() == LampExitStatus.SUCCESS
             !Files.exists(old)
             Files.exists(recent)
 
-        when: 'there is nothing left to prune'
+        when: '`--prune` runs again, with no recording older than 14 days left'
             var again = host.oillamp.run('recordings', lamp.toString(), '--prune')
 
-        then: 'it says so rather than reporting work it did not do'
+        then: 'it says that nothing is beyond the limits, and the recent recording is still there'
             again.status() == LampExitStatus.SUCCESS
             again.console().contains('nothing is beyond')
             Files.exists(recent)
     }
 
-    def 'When the recordings exceed recording.max_total_gb, oillamp keeps the newest and deletes the oldest'() {
+    def '`oillamp recordings --prune` keeps the newest recordings within `recording.max_total_gb` and deletes the older ones'() {
         reportInfo """
-            With recording on, every session writes a video of the desktop into `.oillamp/recordings/`.
-            Let's consider a lamp that is used every day: after a few weeks its recordings take many
-            gigabytes. Two settings limit them, `recording.max_age_days` and `recording.max_total_gb`. At
-            the start of every session, and on `oillamp recordings --prune`, oillamp deletes every
-            recording outside either limit.
+            With recording switched on, every session writes a video of the desktop into
+            `.oillamp/recordings/`. Let's consider a lamp that is used every day: after a few weeks
+            its recordings take up many gigabytes. Two settings limit them,
+            `recording.max_age_days` and `recording.max_total_gb`. At the start of every session,
+            and on `oillamp recordings --prune`, oillamp deletes every recording outside either
+            limit.
 
-            This scenario is about the size limit. The newest recordings are the ones a person is most
-            likely to watch, so those are kept. oillamp sorts the recordings from newest to oldest, by the
-            time they stopped, and adds up their sizes in that order. A recording that would bring the
-            total above the limit is deleted. With the sort the other way round, the same code would keep
-            the oldest recordings and delete the newest.
+            This scenario is about the size limit. The newest recordings are the ones a person is
+            most likely to watch, so those are kept. oillamp sorts the recordings from newest to
+            oldest, by the time they stopped, and adds up their sizes in that order. Each recording
+            that would bring the total above the limit is deleted. With the order the other way
+            round, the same code would keep the oldest recordings and delete the newest.
 
-            The lamp here has `max_total_gb = 1` and `max_age_days = 0`, which means no age limit, so only
-            the size decides. There are three recordings of 400 MB each, from 13, 14 and 15 January. The
-            two newest add up to 800 MB and are kept. With the oldest, the total would be 1200 MB, more than
-            1 GB (1024 MB), so the oldest is deleted.
+            The lamp here has `max_total_gb = 1` and `max_age_days = 0`, which means no age limit,
+            so only the size decides. There are three recordings of 400 MB each, from 13, 14 and 15
+            January. The two newest add up to 800 MB and are kept. With the oldest, the total would
+            be 1200 MB, more than 1 GB (1024 MB), so the oldest is deleted.
 
-            The recordings are sparse files: each reports a size of 400 MB but uses no disk space.
+            The recordings are sparse files: each reports a size of 400 MB but takes up no space on
+            the disk.
         """
         given: 'a lamp that keeps at most one gigabyte of recordings, of any age'
             var lamp = host.lampPath()
@@ -857,7 +906,7 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             var middle = givenRecordingOfSize(lamp, '20260114-100000', 400)
             var newest = givenRecordingOfSize(lamp, '20260115-100000', 400)
 
-        when:
+        when: '`oillamp recordings <dir> --prune` runs'
             var pruned = host.oillamp.run('recordings', lamp.toString(), '--prune')
 
         then: 'the two newest fit into the gigabyte together, and are kept'
@@ -865,13 +914,14 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.exists(newest)
             Files.exists(middle)
 
-        and: 'the oldest would make it 1.2 GB, so it is deleted'
+        and: 'with the oldest, the total would be 1200 MB, so the oldest is deleted'
             !Files.exists(oldest)
     }
 
     /**
-     *  Plants a recording of the given size without writing its bytes: a sparse file reports its
-     *  full size but takes no space on the disk. It stopped ten minutes after its session began.
+     *  Creates the recording file of a session with the given size, without writing its bytes: a
+     *  sparse file reports its full size but takes up no space on the disk. The recording stopped
+     *  ten minutes after the session began.
      */
     private static Path givenRecordingOfSize(Path lamp, String session, int megabytes) {
         Path file = givenRecording(lamp, session, Duration.ofMinutes(10), 0)
@@ -893,21 +943,22 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         return file
     }
 
-    def 'Oillamp refuses a lamp directory whose path contains a colon, because podman could not mount it'() {
+    def '`oillamp at` refuses a lamp path that contains a colon, because podman could not mount it'() {
         reportInfo """
-            Parts of the lamp are mounted into the sandbox with `podman run --volume
-            HOST:CONTAINER`, which separates its parts with colons. A colon in the lamp's path
-            would be read as one of those separators, and the sandbox would get the wrong
-            directories or fail to start with a message about something else. So oillamp refuses
-            such a path with `OIL-LAMP-001` before it creates anything.
+            oillamp mounts parts of the lamp into the sandbox with
+            `podman run --volume HOST:CONTAINER`, which separates the parts of its value with
+            colons. podman would read a colon in the lamp's path as one of those separators, and
+            the sandbox would get the wrong directories, or fail to start with a message about
+            something else entirely. So `oillamp at` refuses such a path with `OIL-LAMP-001`
+            before it creates anything.
         """
-        given:
+        given: 'a lamp path `~/lamps/feature:x`'
             var lamp = host.home.resolve('lamps').resolve('feature:x')
 
-        when:
+        when: '`oillamp at` is given that path'
             var outcome = host.oillamp.run('at', lamp.toString())
 
-        then: 'oillamp refuses before creating anything, and says what is wrong with the path'
+        then: 'it refuses with `OIL-LAMP-001`, says that the path contains a colon, and has not created the lamp directory'
             outcome.reported('OIL-LAMP-001')
             outcome.errors().first().whatHappened().contains('colon')
             !Files.exists(lamp)
