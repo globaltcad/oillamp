@@ -20,7 +20,7 @@
 ///
 /// A package-private class therefore needs no comment explaining its visibility. The public types
 /// each say why they are public. Before making another type public, read their reasons and update
-/// `TheShapeOfTheCodeSpec`.
+/// `The_Shape_Of_The_Code_Spec`.
 ///
 /// ## The tests use only the public types
 ///
@@ -32,7 +32,7 @@
 ///
 /// Most classes only decide: they take values and return values, with no file access,
 /// processes, clock or randomness. Only the classes on the allowlist in
-/// `TheShapeOfTheCodeSpec` actually do things. The phases gather facts, pass them to a pure
+/// `The_Shape_Of_The_Code_Spec` actually do things. The phases gather facts, pass them to a pure
 /// planner, and hand the resulting plan to [dev.oillamp.StepRunner]. A dry run builds the same
 /// plan and only prints it, so what `--dry-run` shows is what a real run would do.
 ///

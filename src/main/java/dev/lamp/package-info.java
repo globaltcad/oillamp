@@ -16,7 +16,7 @@
 /// Every public type here starts with `Lamp` and every other one with `Internal`, so that a name
 /// says whether it is a promise to applications. The engine uses these types too, but this
 /// package never imports `dev.oillamp`: an application depends on the engine's words, not on the
-/// engine. `TheShapeOfTheCodeSpec` enforces both.
+/// engine. `The_Shape_Of_The_Code_Spec` enforces both.
 ///
 /// `docs/DECISIONS.md`, "Other applications embed oillamp through `dev.lamp`", says why the engine
 /// runs in a process of its own.

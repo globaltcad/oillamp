@@ -1612,7 +1612,7 @@ package `oillamp`, so they can only use the public types, like any other caller.
 ### Deciding versus doing
 
 Most classes only **decide**: they take values and return values, with no file access, processes,
-clock or randomness. A few classes **do**. `TheShapeOfTheCodeSpec` fails the build if any class
+clock or randomness. A few classes **do**. `The_Shape_Of_The_Code_Spec` fails the build if any class
 outside this list uses `java.nio.file.Files`, `ProcessBuilder`, `Process`, `SecureRandom`, `Thread`
 or `System`:
 

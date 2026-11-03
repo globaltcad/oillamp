@@ -1059,7 +1059,7 @@ keep honest.
 
 ### 22.3 The rules that survived from the module split
 
-Enforced by `TheShapeOfTheCodeSpec`:
+Enforced by `The_Shape_Of_The_Code_Spec`:
 
 - **Exactly five public types.** A sixth fails the build. Adding one is a deliberate act with a
   test to change.

@@ -12,7 +12,7 @@ import spock.lang.Specification
  *  notice late. They are checked here rather than left to review: most are about what is
  *  *absent*, and absences are exactly what review misses.
  */
-class TheShapeOfTheCodeSpec extends Specification {
+class The_Shape_Of_The_Code_Spec extends Specification {
 
     @Shared JavaClasses code = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

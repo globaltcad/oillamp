@@ -87,7 +87,7 @@ clear them now and then with `podman images localhost/oillamp/sandbox` and `podm
 
 ## Architecture rules the build enforces
 
-`TheShapeOfTheCodeSpec` fails the build if:
+`The_Shape_Of_The_Code_Spec` fails the build if:
 
 - a third type in `dev.oillamp`, or an unlisted one in `dev.lamp`, becomes `public`;
 - `dev.lamp` imports anything from `dev.oillamp`;
@@ -137,7 +137,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `The_Launcher_Spec` | the single-file launcher script |
 | `The_Sandbox_Image_Spec` | static checks of the image files |
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |
-| `TheShapeOfTheCodeSpec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
+| `The_Shape_Of_The_Code_Spec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
 | `Keeping_The_Model_Key_On_The_Host_Spec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
 | `Reaching_The_Host_Spec` | host access: every request judged by a stand-in checker before it happens; tiers, roots, the person, the log |
 | `Working_On_The_Host_Spec` | `host_edit_file` and `host_bash` on the host, with `host_access.commands`, timeouts and cancellation |
