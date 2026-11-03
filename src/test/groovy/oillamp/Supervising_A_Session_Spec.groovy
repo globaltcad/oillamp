@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
  *  processes, and a test that stubbed the sockets out would be testing the stub.
  */
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class SupervisingASessionSpec extends Specification {
+class Supervising_A_Session_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host

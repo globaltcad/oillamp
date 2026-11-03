@@ -127,7 +127,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
 | `Configuring_A_Lamp_Spec` | the configuration file and its validation |
 | `Starting_The_Sandbox_Spec` | readiness and socket checks |
-| `SupervisingASessionSpec` | a whole session: windows, shutdown, failures |
+| `Supervising_A_Session_Spec` | a whole session: windows, shutdown, failures |
 | `The_Session_Commands_Spec` | `status`, `stop`, `shell`, `view`, `list` |
 | `Waking_The_Agent_Spec` | the schedule, `ask`, runs and their snapshots, and the agent's scheduling tools, with a stand-in pi |
 | `Deciding_What_The_Sandbox_May_Reach_Spec` | the egress proxy and policy, over the real socket |
