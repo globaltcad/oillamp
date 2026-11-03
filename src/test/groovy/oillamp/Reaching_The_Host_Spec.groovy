@@ -1,6 +1,7 @@
 package oillamp
 
 import dev.lamp.Lamp
+import dev.lamp.LampDirectory
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampFailedException
@@ -21,10 +22,9 @@ import java.util.concurrent.TimeUnit
 
 @Title('Reaching the host: every request judged before it happens')
 @Narrative('''
-An application (a program built on oillamp's Java API, such as a desktop app) lets its agent
-reach the user's own machine: read a document, write a file where
-the user will find it, copy out what it made, open a page. The agent never gets a way out of the
-sandbox of its own. It gets tools, and each call of one is a request that oillamp, on the host,
+A program built on oillamp's Java API, such as a desktop app, can let its agent reach the
+user's own machine: read a document, write a file where the user will find it, copy out what it
+made, open a page. The agent never gets a way out of the sandbox of its own. It gets tools, and each call of one is a request that oillamp, on the host,
 judges first and then carries out, or refuses.
 
 ## A request, on its way out
@@ -63,13 +63,13 @@ judges first and then carries out, or refuses.
 
 Steps 1 to 4 need no model and cost nothing, so a refusal there never reaches the checker. The
 checker is a separate model call with the user's requirements as its only authority. It is
-made on the model the agent answers with, and follows it when the application changes it, unless
+made on the model the agent answers with, and follows it when the program changes it, unless
 the lamp's file names a `checker_model` of its own. Which run a request belongs to is something
 the engine knows, not something the request says, so the checker always reads the instruction of
 the run the agent is really in.
 
-The feature is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`. An
-application may give its own requirements with `LampDirectory.security`, but only for a lamp
+The feature is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`. A
+program built on oillamp may give its own requirements with `LampDirectory.security`, but only for a lamp
 whose file already turned it on.
 
 ## How the scenarios see it
@@ -78,9 +78,10 @@ The engine runs in this JVM against the simulated machine, connected to the lamp
 A stand-in model service on loopback plays the checker: it records what it was shown, and
 answers with the verdict the scenario sets. The scenarios speak MCP to the session's
 host-access socket exactly as pi does through `socat` in the sandbox, and give the person's
-decisions with `Lamp.decidePermission`, as an application would. So what is checked is the real gate, from the
+decisions with `Lamp.decidePermission`, as such a program would. So what is checked is the real gate, from the
 request's first byte to the file on the host.
 ''')
+@Subject([Lamp, LampDirectory])
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class Reaching_The_Host_Spec extends Specification {
 
@@ -89,7 +90,7 @@ class Reaching_The_Host_Spec extends Specification {
     static final String REQUIREMENTS = 'You may read ~/Documents. Never read ~/.ssh.'
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
     /** The model service that plays the checker. */
     StandInChecker checker
     final List<LampEvent> events = new CopyOnWriteArrayList<>()
@@ -134,7 +135,7 @@ class Reaching_The_Host_Spec extends Specification {
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3\nRevenue is up.\n')
             givenHostAccess(roots: [host.home.resolve('Documents')])
 
-        when: 'the application starts the lamp, with a model service it can reach'
+        when: 'the program starts the lamp, with a model service it can reach'
             start()
 
         then: 'the session says the way out is open, with the reading and writing tools, and no command tool'
@@ -233,10 +234,10 @@ class Reaching_The_Host_Spec extends Specification {
             the checker under `last_reasoning`, with a note that it is data and not instructions.
 
             Here the agent runs 14 commands with pi's `bash`, thinks aloud, and only then reads a
-            file on the host, once the application has heard of all of that as
+            file on the host, once the program that holds the lamp has heard of all of that as
             `LampEvent.RunProgress`. The session takes in what pi reports before it tells the
-            application, and the checker is asked only once the session has taken in everything
-            reported before the request, so what the application has heard of, the checker is
+            program, and the checker is asked only once the session has taken in everything
+            reported before the request, so what the program has heard of, the checker is
             shown.
         """
         given: 'a lamp that lets the agent read its Documents, and an agent that works for a while before it reads on the host'
@@ -380,7 +381,7 @@ class Reaching_The_Host_Spec extends Specification {
         reportInfo """
             A model service may send its answer in pieces, HTTP's chunked encoding, each piece
             with its length in bytes. A reason with an accent or a dash in it has more bytes than
-            characters, and a piece may end in the middle of a character. oillamp reads the
+            characters, and a piece may end in the middle of a character. Oillamp reads the
             pieces as bytes and decodes the whole once, so the reason arrives as the checker wrote
             it. Here the stand-in checker refuses in French, and splits its answer in the middle
             of the "é".
@@ -699,7 +700,7 @@ class Reaching_The_Host_Spec extends Specification {
             document that is passive: the user sees it. For a launcher (`.desktop`), a script, or
             anything marked executable, the default application is what runs it, so `host_show`
             together with `host_write_file` would run a program while running commands is off.
-            oillamp refuses those before the checker is asked, and a file that is not there.
+            Oillamp refuses those before the checker is asked, and a file that is not there.
         """
         given: 'a machine whose desktop has xdg-open, a lamp that lets the agent reach its Documents, and files there'
             host.machine { it.withPackages('xdg-utils') }
@@ -730,7 +731,7 @@ class Reaching_The_Host_Spec extends Specification {
         reportInfo """
             `host_copy_out` copies a file from the agent's home in the sandbox to the host. Its
             `from` is named as the agent sees it: `~/workspace/report.pdf`, or
-            `/home/agent/workspace/report.pdf`. oillamp reads it from the lamp's copy of that home.
+            `/home/agent/workspace/report.pdf`. Oillamp reads it from the lamp's copy of that home.
             A `from` that is a path on the host, that is not absolute, or that leaves the home with
             `..` or `.`, is refused before the checker is asked: otherwise the tool would copy any
             host file anywhere, a read and a write the checker never judged as such.
@@ -762,7 +763,7 @@ class Reaching_The_Host_Spec extends Specification {
             The roots, `host_access.roots`, are the folders on the host the agent may reach. With
             `ask_the_user = true`, a request the checker allows that reaches past the roots goes
             to the user instead of being refused. The session sends the question as a
-            `HostAccessAsked` event, and the application, a program built on oillamp's Java API,
+            `HostAccessAsked` event, and the program built on oillamp that holds the lamp
             gives the user's decision with `Lamp.decidePermission`. Each question is its own: a
             yes once is not a yes for the next one.
         """
@@ -793,23 +794,22 @@ class Reaching_The_Host_Spec extends Specification {
             McpClient.text(refused).contains('said no')
     }
 
-    def 'An application can give the checker\'s requirements, but only for a lamp whose file turns host access on'() {
+    def '`LampDirectory.security` gives the checker\'s requirements, but only for a lamp whose file turns host access on'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, with its own settings screen
-            hands over the user's rules for the checker with `LampDirectory.security`, exactly as
+            A program built on oillamp with its own settings screen hands over the user's rules for the checker with `LampDirectory.security`, exactly as
             it hands over the model key. The text goes to the engine in its environment, not on
             its command line, and it wins over the file. The model that judges is the one the
-            application gave the agent.
+            program gave the agent.
 
-            What the application cannot do is turn the feature on: a lamp whose file says no stays
-            closed — no socket, no extension, no tools — and the session warns the application
+            What the program cannot do is turn the feature on: a lamp whose file says no stays
+            closed — no socket, no extension, no tools — and the session warns the program
             with `OIL-HOSTACCESS-014` that its rules are not used.
         """
         given: 'a lamp with the feature turned on, but its own placeholder rules'
             Files.writeString(host.home.resolve('Documents/today.md'), 'today')
             givenHostAccess(roots: [host.home.resolve('Documents')], requirements: "the file's rules")
 
-        when: 'the application starts the lamp with its own requirements, and the agent reads a document'
+        when: 'the program starts the lamp with its own requirements, and the agent reads a document'
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
                        .modelService(checker.address()).modelKey('sk-0123456789').model(MODEL)
                        .security('Only ~/Documents, and nothing private.')
@@ -817,12 +817,12 @@ class Reaching_The_Host_Spec extends Specification {
             lamp.awaitRunning(Duration.ofSeconds(30))
             var reply = ask('host_read_file', [path: '~/Documents/today.md'])
 
-        then: 'the application\'s rules are the ones the checker saw, on the agent\'s model'
+        then: 'the program\'s rules are the ones the checker saw, on the agent\'s model'
             !reply.isError
             StandInChecker.judged(checker.checked.first()).requirements.text == 'Only ~/Documents, and nothing private.'
             StandInChecker.modelOf(checker.checked.first()) == MODEL
 
-        when: 'an application asks for host access on a lamp whose file has it off'
+        when: 'a program asks for host access on a lamp whose file has it off'
             var closed = host.lampPath('closed')
             host.givenConfig(closed, 'schema_version = 1\n')
             List<LampEvent> heard = new CopyOnWriteArrayList<>()
@@ -832,7 +832,7 @@ class Reaching_The_Host_Spec extends Specification {
                             .launchedBy(host.launcher).start()
             second.awaitRunning(Duration.ofSeconds(30))
 
-        then: 'the lamp stays closed, and the application hears that its rules are unused'
+        then: 'the lamp stays closed, and the program hears that its rules are unused'
             !Files.exists(Lamp.agentHome(closed).orElseThrow().resolve('.pi/agent/extensions/oillamp-host-access.js'))
             !Files.readString(Lamp.agentHome(closed).orElseThrow().resolve('AGENTS.md')).contains("## Reaching the user's computer")
             !heard.any { it instanceof LampEvent.HostAccessEnabled }
@@ -844,10 +844,10 @@ class Reaching_The_Host_Spec extends Specification {
             second?.close()
     }
 
-    def 'An application writes the host access switch and requirements into the lamp\'s file while no session runs'() {
+    def '`LampDirectory.hostAccess` writes the host access switch and requirements into the lamp\'s file while no session runs'() {
         reportInfo """
-            An application, a program built on oillamp's Java API, with a settings page for this,
-            such as the desktop app Genies, writes the user's choices into the lamp's own
+            A program built on oillamp with a settings page for this, such as the desktop app
+            Genies, writes the user's choices into the lamp's own
             `oillamp.toml` with `LampDirectory.hostAccess`, so the file stays what decides. Only
             `enabled` and `requirements` under `[host_access]` change; the rest of the file, the
             user's comments too, stays as it was. The requirements are free text: Genies puts the
@@ -873,7 +873,7 @@ class Reaching_The_Host_Spec extends Specification {
             var rules = '{\n  "may_read": ["~/Documents"],\n  "never": "anything with \'\'\' in it"\n}'
             start()
 
-        when: 'the application writes while a session runs'
+        when: 'the program writes while a session runs'
             settings.hostAccess(true, rules)
 
         then: 'the lamp refuses, and the file is as it was'
@@ -881,7 +881,7 @@ class Reaching_The_Host_Spec extends Specification {
             busy.status() == dev.lamp.LampExitStatus.LAMP_BUSY
             !settings.hostAccess().enabled()
 
-        when: 'the session ends, and the application writes again'
+        when: 'the session ends, and the program writes again'
             lamp.close()
             lamp = null
             var written = settings.hostAccess(true, rules)
@@ -897,11 +897,11 @@ class Reaching_The_Host_Spec extends Specification {
             start()
             var reply = ask('host_read_file', [path: '~/Documents/today.md'])
 
-        then: 'the checker judged it against what the application wrote'
+        then: 'the checker judged it against what the program wrote'
             !reply.isError
             StandInChecker.judged(checker.checked.first()).requirements.text == rules
 
-        when: 'the session ends, and the application turns host access on with no requirements'
+        when: 'the session ends, and the program turns host access on with no requirements'
             lamp.close()
             lamp = null
             settings.hostAccess(true, '')
@@ -916,7 +916,7 @@ class Reaching_The_Host_Spec extends Specification {
             `LampDirectory.hostAccess(enabled, requirements)`, which runs `oillamp host-access`,
             changes two lines of the lamp's `oillamp.toml`: `enabled` and `requirements` under
             `[host_access]`. The requirements are free text over several lines, so the old text
-            may hold a line that looks like a table header, such as `[schedule]`. oillamp replaces
+            may hold a line that looks like a table header, such as `[schedule]`. Oillamp replaces
             the whole old value, that line with it, and nothing else: the other tables, the
             user's comments and the line order stay as they were.
         """
@@ -942,7 +942,7 @@ class Reaching_The_Host_Spec extends Specification {
                 enabled = true
                 '''.stripIndent())
 
-        when: 'an application turns host access on with new requirements'
+        when: 'a program turns host access on with new requirements'
             Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(true, '{"may_read": ["~/Documents"]}')
 
         then: 'only the two values changed, the old line "[schedule]" went with the old text'
@@ -976,7 +976,7 @@ class Reaching_The_Host_Spec extends Specification {
             aLampThatHasRun(host.lampPath())
             host.givenConfig(host.lampPath(), 'schema_version = 1\n')
 
-        when: 'an application writes the switch, off, with requirements'
+        when: 'a program writes the switch, off, with requirements'
             Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(false, 'x')
 
         then: 'the table is at the end'
@@ -1008,7 +1008,7 @@ class Reaching_The_Host_Spec extends Specification {
             host.givenConfig(host.lampPath(), 'schema_version = 1\n')
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher)
 
-        when: 'an application writes the requirements, twice'
+        when: 'a program writes the requirements, twice'
             lamp.hostAccess(false, requirements)
             var first = lamp.hostAccess().requirements()
             lamp.hostAccess(false, requirements)
@@ -1032,9 +1032,9 @@ class Reaching_The_Host_Spec extends Specification {
             The checker is a separate model call that judges each request against the user's
             requirements before oillamp carries it out. The user picked one model for the lamp,
             and that is the model they trust with it. So the checker judges a request with the
-            model the agent answers with: the one the application started the lamp with, and, once
-            the application changes it, the new one, from the next request on. A lamp whose file
-            names a checker_model of its own keeps that one, whatever the agent answers with.
+            model the agent answers with: the one the program built on oillamp started the lamp
+            with, and, once the program changes it, the new one, from the next request on. A lamp whose file
+            names a `checker_model` of its own keeps that one, whatever the agent answers with.
         """
         given: 'a lamp that lets the agent read its Documents, started with the agent\'s model'
             Files.writeString(host.home.resolve('Documents/today.md'), 'today')
@@ -1047,7 +1047,7 @@ class Reaching_The_Host_Spec extends Specification {
         then: 'the checker was asked on the agent\'s model'
             StandInChecker.modelOf(checker.checked.last()) == MODEL
 
-        when: 'the application gives the agent another model, and the agent reads again'
+        when: 'the program gives the agent another model, and the agent reads again'
             lamp.useModel('mistral/mistral-large-3')
             ask('host_read_file', [path: '~/Documents/today.md'])
 
@@ -1083,12 +1083,12 @@ class Reaching_The_Host_Spec extends Specification {
         given: 'a lamp with host access on and no checker_model'
             givenHostAccess(roots: [host.home.resolve('Documents')])
 
-        when: 'an application starts it without a model for the agent'
+        when: 'a program starts it without a model for the agent'
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
                        .modelService(checker.address()).modelKey('sk-0123456789')
                        .launchedBy(host.launcher).start()
 
-        then: 'the session does not start, and the application hears OIL-HOSTACCESS-015'
+        then: 'the session does not start, and the program hears `OIL-HOSTACCESS-015`'
             !lamp.awaitRunning(Duration.ofSeconds(30))
             events.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-HOSTACCESS-015' }
             checker.checked.isEmpty()
@@ -1145,7 +1145,7 @@ class Reaching_The_Host_Spec extends Specification {
         lamp = null
     }
 
-    /** The person's decision, as an application gives it. */
+    /** The person's decision, as a program built on oillamp gives it. */
     private void answer(String request, boolean allowed) {
         lamp.decidePermission(request, allowed)
     }
