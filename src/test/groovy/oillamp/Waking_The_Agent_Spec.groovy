@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit
  *  to do. Everything else is real: the session, the sockets, the schedule file and the history.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class WakingTheAgentSpec extends Specification {
+class Waking_The_Agent_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
