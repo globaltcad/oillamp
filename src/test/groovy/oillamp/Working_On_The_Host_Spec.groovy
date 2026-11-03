@@ -53,18 +53,19 @@ command really happens on this machine, in a temporary directory. A stand-in mod
 loopback plays the checker, and the scenarios speak MCP to the session's host-access socket as
 pi does through `socat` in the sandbox.
 ''')
+@Subject(Lamp)
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class Working_On_The_Host_Spec extends Specification {
 
     static final String MODEL = 'azure/gpt-6.1-sol'
-    /** The key the application gives the lamp, which oillamp keeps in `OILLAMP_MODEL_KEY`. */
+    /** The key a program built on oillamp gives the lamp, which oillamp keeps in `OILLAMP_MODEL_KEY`. */
     static final String KEY = 'sk-0123456789'
     static final String REQUIREMENTS = 'You may work in ~/project: read, change and build it. Nothing else.'
     static final String ALLOW_ADDITIVE = '{"decision":"allow","risk":"additive","reason":"An edit in the project."}'
     static final String ALLOW_EXECUTING = '{"decision":"allow","risk":"executing","reason":"A build in the project."}'
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
     StandInChecker checker
     final List<LampEvent> events = new CopyOnWriteArrayList<>()
     Lamp lamp
@@ -122,7 +123,7 @@ class Working_On_The_Host_Spec extends Specification {
             Let's consider a lamp whose `oillamp.toml` sets `host_access.commands = "checker"`: the
             user lets the agent run commands on their computer, judged by the checker alone. The
             agent calls `host_bash` with the `command`, as it would type it into bash, and `cwd`,
-            the directory it runs in. oillamp runs it there with `bash -c`, as the user, and hands
+            the directory it runs in. Oillamp runs it there with `bash -c`, as the user, and hands
             back the exit status, then what the command printed to stdout and to stderr.
 
             A command that exits with a status other than 0 has still run. That is an answer, not
@@ -186,8 +187,8 @@ class Working_On_The_Host_Spec extends Specification {
         reportInfo """
             With `host_access.commands = "ask"` in the lamp's `oillamp.toml`, a command the checker
             allows still waits for the person. The session sends a `HostAccessAsked` event whose
-            text holds the whole command and where it runs, and an application gives the person's
-            decision with `Lamp.decidePermission`. A yes runs the command. A no, or no answer
+            text holds the whole command and where it runs, and the program built on oillamp that
+            holds the lamp gives the person's decision with `Lamp.decidePermission`. A yes runs the command. A no, or no answer
             within 60 seconds, refuses it, and nothing runs. Each command is asked about on its
             own: a yes for one is not a yes for the next.
         """
@@ -274,7 +275,7 @@ class Working_On_The_Host_Spec extends Specification {
             checker.verdict = ALLOW_EXECUTING
             start()
 
-        when: 'pi lists the tools, and a client calls host_bash anyway'
+        when: 'pi lists the tools, and a client calls `host_bash` anyway'
             Map listed
             Map called
             McpClient.initialized(hostAccessSocket()).withCloseable { client ->
@@ -282,7 +283,7 @@ class Working_On_The_Host_Spec extends Specification {
                 called = client.call('host_bash', [command: 'touch ran-anyway', cwd: '~/project'])
             }
 
-        then: 'host_bash is not listed, the call is refused by the setting, and the checker was not asked'
+        then: '`host_bash` is not listed, the call is refused by the setting, and the checker was not asked'
             !(listed.result.tools as List<Map>)*.name.contains('host_bash')
             called.isError
             McpClient.text(called).contains('host_access.commands is "off"')
@@ -395,10 +396,10 @@ class Working_On_The_Host_Spec extends Specification {
     def 'A command on the host does not get the model key oillamp holds'() {
         reportInfo """
             A command runs with oillamp's own environment, as one typed into the user's terminal
-            would, so that `PATH` and the user's other settings are there. oillamp's own secrets
-            are not: the variable holding the model key, here `OILLAMP_MODEL_KEY`, in which an
-            application's key reaches the engine, is removed with `env -u` before bash starts. So
-            are the variables an application names for its requirements and instructions. The
+            would, so that `PATH` and the user's other settings are there. Oillamp's own secrets
+            are not: the variable holding the model key, here `OILLAMP_MODEL_KEY`, in which the key
+            from a program built on oillamp reaches the engine, is removed with `env -u` before bash starts. So
+            are the variables such a program names for its requirements and instructions. The
             checker is the only part of oillamp that uses the key, and the agent is not the
             checker.
 
