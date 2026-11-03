@@ -11,7 +11,7 @@ import java.nio.file.Path
  *  `oillamp doctor` is the command a user reaches for when something is wrong, or before they
  *  trust the tool with anything. Its whole value is the quality of what it tells them.
  */
-class CheckingTheMachineSpec extends Specification {
+class Checking_The_Machine_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host

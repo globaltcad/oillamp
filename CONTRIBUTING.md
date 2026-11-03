@@ -123,7 +123,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 
 | Spec | About |
 |---|---|
-| `CheckingTheMachineSpec` | `doctor` and host prerequisites |
+| `Checking_The_Machine_Spec` | `doctor` and host prerequisites |
 | `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
 | `Configuring_A_Lamp_Spec` | the configuration file and its validation |
 | `StartingTheSandboxSpec` | readiness and socket checks |
