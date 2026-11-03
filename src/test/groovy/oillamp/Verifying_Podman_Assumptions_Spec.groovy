@@ -1,22 +1,25 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Tag
 import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * Checks the podman behaviour the container design depends on: rootless podman works on Ubuntu,
- * the uid mapping, a read-only container with writable mounts, and Unix sockets across the
- * container boundary.
- *
- * <p>These run against real podman on a real machine. They are tagged {@code spike} and excluded
- * from {@code test}; run them with {@code ./gradlew spikes}.
- */
+@Title('Verifying podman assumptions')
+@Narrative('''
+Checks the podman behaviour the container design depends on: that rootless podman works on Ubuntu,
+the mapping of user ids, a read-only container with writable mounts, and Unix sockets across the
+container boundary.
+
+This spike runs against real podman on a real machine. It is tagged `spike`, so `./gradlew test`
+leaves it out; run it with `./gradlew spikes`.
+''')
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.podmanAvailable() })
@@ -40,12 +43,13 @@ class Verifying_Podman_Assumptions_Spec extends Specification {
     def 'Rootless podman runs here despite the Ubuntu restriction on unprivileged user namespaces'() {
         reportInfo """
             Ubuntu 23.10 and newer refuse unprivileged user namespaces to programs without a
-            matching AppArmor profile, and rootless podman needs them. oillamp assumes Ubuntu
+            matching AppArmor profile, and rootless podman needs them. Oillamp assumes that Ubuntu
             ships a profile that permits podman. If that were wrong, oillamp would not work at all
-            on its primary target platform, and OIL-PODMAN-004 would be the most important message
-            in the product rather than a rare one.
+            on Ubuntu, the platform it is made for first, and `OIL-PODMAN-004` would be the most
+            common message oillamp prints, rather than a rare one.
 
-            This scenario is the cheapest possible check: if a container runs, the assumption holds.
+            This scenario is the cheapest check there is: if a container runs, the assumption
+            holds.
         """
         when: 'a container is asked to do the simplest possible thing'
             var result = Spike.inBaseImage('echo alive')
@@ -60,40 +64,38 @@ class Verifying_Podman_Assumptions_Spec extends Specification {
 
     def 'The container sees the human as its own user, and the infrastructure as a different one'() {
         reportInfo """
-            The whole security design depends on this assumption, so it is explained from the
-            beginning.
+            The security design depends on this assumption, so it is explained from the start.
 
-            On Linux every file is owned by a *number*, and every running process has one. Names
-            like "myUsrName" or "root" are a convenience layered on top; the kernel only ever compares
-            numbers. A container can be given its own, private set of those numbers, together with
-            a translation table saying which private number corresponds to which real one. That
-            table is what decides, in the end, which files the programs inside a container may
-            touch.
+            On Linux every file is owned by a number, and every running process has one. Names
+            such as "dev" or "root" are a convenience on top; the kernel only compares numbers. A
+            container can be given its own, private set of those numbers, with a table that says
+            which private number stands for which real one. That table decides, in the end, which
+            files the programs inside a container may touch.
 
-            oillamp arranges that table so it holds two properties at once. Both are needed, and
+            Oillamp arranges the table so that it has two properties at once. Both are needed, and
             neither is obvious enough to take on trust:
 
-            1. Files that really belong to the person running oillamp must appear, inside the
-               container, to belong to the container's own user number 1000 - the account the AI
-               agent works as. That is what lets the agent write freely in its own home directory
-               while those files remain ordinary, editable files belonging to the human outside.
-               Without it the only alternatives are making everything world-writable, or leaving
-               the human unable to open what the agent produced.
+            1. Files that belong to the person running oillamp must appear, inside the container,
+               to belong to the container's user number 1000, the account the agent works as. That
+               lets the agent write freely in its own home directory, while those files remain
+               ordinary files of the human outside, which they can edit. Without it, the only
+               choices would be to make everything writable by all, or to leave the human unable
+               to open what the agent made.
 
-            2. It must also be possible to hand a directory to container user number 1001 - the
-               account that runs the compositor, the screen recorder and the network bridges -
-               such that the agent cannot write to it. That is what makes a screen recording
-               trustworthy: the agent can see that it is being recorded and cannot do anything
-               about it.
+            2. It must also be possible to hand a directory to container user number 1001, the
+               account that runs the compositor, the screen recorder and the network bridges, so
+               that the agent cannot write to it. That is what makes a screen recording
+               trustworthy: the agent can see that it is recorded, and cannot change the
+               recording.
 
-            If the second property did not hold, the boundary that lets a human trust the sandbox
-            would simply not exist, and the honest response would have been to remove the second
-            user from the design rather than pretend. That is why this is checked against real
-            podman, before any of the code that depends on it was written.
+            Without the second property, there would be no boundary that lets a human trust the
+            sandbox, and the second user would have had to go from the design. That is why this
+            was checked against real podman before any of the code that depends on it was
+            written.
 
-            Note the scenario reads the host uid rather than assuming 1000: the machine this was
-            first run on had the user at 1001, which would have made a hardcoded assertion pass or
-            fail for the wrong reason.
+            The scenario reads the host's user id rather than assuming 1000: on the machine this
+            first ran on, the user was 1001, which would have made a fixed assertion pass or fail
+            for the wrong reason.
         """
         given: 'a state directory, part of it handed to the infra user the way oillamp will'
             var state = Files.createDirectories(scratch.resolve('state'))
@@ -127,9 +129,9 @@ class Verifying_Podman_Assumptions_Spec extends Specification {
 
     def 'A read-only container can still write to its bind-mounted home'() {
         reportInfo """
-            The container is run with `--read-only`, so that everything outside the agent's
-            home is discarded and cannot be quietly modified. That is only useful if bind mounts
-            onto pre-created mount points stay writable; otherwise the agent cannot work at all.
+            The container runs with `--read-only`, so that everything outside the agent's home is
+            discarded, and cannot be changed unnoticed. That is only useful if bind mounts onto
+            mount points made beforehand stay writable; otherwise the agent cannot work at all.
         """
         given: 'a workspace directory on the host'
             var work = Files.createDirectories(scratch.resolve('work'))
@@ -158,11 +160,11 @@ class Verifying_Podman_Assumptions_Spec extends Specification {
 
     def 'A Unix socket the container creates is connectable from the host'() {
         reportInfo """
-            This is the direction SSH uses: sshd listens inside the container on a socket in
-            a bind-mounted directory, and the host's ssh client connects to it. It is what keeps
-            `--network=none` possible while still giving the user a shell.
+            This is the direction ssh uses: sshd listens inside the container on a socket in a
+            bind-mounted directory, and the host's ssh client connects to it. It is what keeps
+            `--network=none` possible, while still giving the user a shell.
 
-            The container borrows the host's socat; see Spike.borrowedSocat for why.
+            The container borrows the host's socat; `Spike.borrowedSocat` says why.
         """
         given: 'a directory both sides can see'
             var sockets = Files.createDirectories(scratch.resolve('sockets'))
@@ -189,11 +191,10 @@ class Verifying_Podman_Assumptions_Spec extends Specification {
 
     def 'A Unix socket the host creates is connectable from the container'() {
         reportInfo """
-            A socket the host creates must be connectable from inside the container: the network
-            design depends on this direction. The agent has no route and no DNS, and reaches the
-            egress proxy only through a socket the host supervisor is listening on. If this did
-            not work, `--network=none` would have to go, and with it the guarantee that nothing
-            leaves the sandbox unseen.
+            The network design depends on this direction. The agent has no route and no DNS, and
+            reaches the egress proxy only through a socket the supervisor on the host listens on.
+            If a container could not connect to it, `--network=none` would have to go, and with it
+            the guarantee that nothing leaves the sandbox unseen.
         """
         given: 'the host listening on a socket in a shared directory'
             var sockets = Files.createDirectories(scratch.resolve('sockets'))
