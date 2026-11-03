@@ -21,7 +21,7 @@ import java.nio.file.Path
  *  {@code .oillamp/session/gitconfig}, which the image's {@code /etc/gitconfig} includes. That is
  *  git's lowest level: the agent's {@code ~/.gitconfig} and a repository's own setting still win.
  */
-class GivingTheAgentAGitIdentitySpec extends Specification {
+class Giving_The_Agent_A_Git_Identity_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
