@@ -131,9 +131,11 @@ class The_Session_Commands_Spec extends Specification {
         then:
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'the session reports the extra shell'
-            waitUntil { reported.any { it instanceof LampEvent.Info &&
-                                       it.text().contains('extra shell') } }
+        and: 'the session reports "1 extra shell attached", then "the extra shell closed"'
+            waitUntil { reported.any { it instanceof LampEvent.Info && it.text() == 'the extra shell closed' } }
+            var news = reported.findAll { it instanceof LampEvent.Info }*.text()
+            news.contains('1 extra shell attached')
+            news.indexOf('1 extra shell attached') < news.indexOf('the extra shell closed')
 
         and: 'the session is still running after the extra shell has closed, and has printed no end-of-session summary'
             session.alive

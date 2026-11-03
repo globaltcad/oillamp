@@ -35,8 +35,7 @@ final class LampLocationUtil {
 
         if (path.equals(user.home()))
             return Result.err(ProblemCatalogUtil.lampForbiddenPath(path,
-                    "is your home directory itself — a lamp would mount part of it into the sandbox; "
-                  + "use a subdirectory such as " + user.home().resolve("lamps").resolve("my-feature")));
+                    "is your home directory itself; use a subdirectory such as " + user.home().resolve("lamps").resolve("my-feature")));
 
         String text = path.toString();
         if (text.contains(":"))

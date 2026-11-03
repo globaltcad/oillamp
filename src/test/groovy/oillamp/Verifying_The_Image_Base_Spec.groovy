@@ -40,7 +40,7 @@ class Verifying_The_Image_Base_Spec extends Specification {
 
     /** Packages that were once in doubt, with what would be lost without them. */
     static final Map<String, String> DOUBTED = [
-            'wlrctl'      : 'lamp click / move / scroll (pointer control)',
+            'wlrctl'      : 'wlrctl toplevel, the agent\'s way to wait for, focus and close windows',
             'firefox-esr' : 'a browser for the agent to use',
     ]
 
@@ -82,10 +82,11 @@ class Verifying_The_Image_Base_Spec extends Specification {
 
     def 'The packages that were once in doubt are in Debian trixie, or the planned fallback applies'() {
         reportInfo """
-            `wlrctl` and `firefox-esr` were once uncertain in trixie. Without `wlrctl`, `wtype`
-            still covers the keyboard, and `grim` and `slurp` still cover screenshots; only
-            pointer control would be lost. This scenario records which is the case, and on purpose
-            does not fail when a package is absent, because the sandbox still works without it.
+            `wlrctl` and `firefox-esr` were once uncertain in trixie. Without `wlrctl`, `lamp`
+            still works: it clicks through `lamp-pointer` and types with `wtype`. Only
+            `wlrctl toplevel`, with which the agent waits for, focuses and closes windows, would be
+            lost. This scenario records which is the case, and on purpose does not fail when a
+            package is absent, because the sandbox still works without it.
         """
         expect: 'the query succeeds, and the report says for each package whether trixie has it'
             var result = Spike.run('podman', 'run', '--rm', Spike.BASE_IMAGE, 'sh', '-lc',

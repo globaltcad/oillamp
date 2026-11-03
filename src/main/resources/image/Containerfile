@@ -46,15 +46,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ── the desktop, SSH, and the tools `lamp` wraps ─────────────────────────────────────────────
 # wlrctl is installed separately so that, if it is ever missing from Debian, the build still
-# succeeds and only `lamp click`/`move`/`scroll` stop working. (It is in trixie today.) The dock's
-# GTK packages likewise: without them the desktop only lacks its dock.
+# succeeds and the agent only loses `wlrctl toplevel`, its way to wait for, focus and close
+# windows. (It is in trixie today.) `lamp` does not use it. The dock's GTK packages likewise:
+# without them the desktop only lacks its dock.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       sway xwayland x11-xserver-utils x11-utils wayvnc wf-recorder grim slurp wtype python3 \
       foot dbus dbus-x11 at-spi2-core xdg-utils \
       mesa-utils libgl1-mesa-dri libegl1 libgles2 \
       fonts-dejavu fonts-liberation2 fonts-noto-color-emoji adwaita-icon-theme \
       openssh-server socat catatonit \
- && (apt-get install -y --no-install-recommends wlrctl || echo "wlrctl unavailable: lamp click/move/scroll will not work") \
+ && (apt-get install -y --no-install-recommends wlrctl || echo "wlrctl unavailable: the agent cannot control windows with wlrctl toplevel") \
  && (apt-get install -y --no-install-recommends python3-gi gir1.2-gtk-3.0 gir1.2-gtklayershell-0.1 \
       || echo "GTK for Python unavailable: the desktop will have no dock") \
  && rm -rf /var/lib/apt/lists/*

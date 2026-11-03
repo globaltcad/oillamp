@@ -274,9 +274,10 @@ final class ProblemCatalogUtil {
     public static LampProblem lampForbiddenPath(Path requested, String why) {
         return error(LAMP_FORBIDDEN_PATH, "Refusing to use a system or home directory as a lamp",
                 requested + " " + why,
-                "a lamp owns the directory it lives in — it writes state into it and mounts part of "
-              + "it into the container as the agent's home; pointing that at a system path or at "
-              + "your home directory itself would put your own files inside the sandbox")
+                "a lamp owns the directory it lives in: oillamp writes its state into it, gives part "
+              + "of it to the sandbox's infra user, and mounts another part into the sandbox as the "
+              + "agent's home; a system directory, or your home directory itself, holds far more "
+              + "than one lamp and is no place for that")
             .withEvidence(new Evidence.Value("requested path", requested.toString()))
             .withFix(Fix.of("choose a dedicated directory, for example ~/lamps/my-feature"));
     }

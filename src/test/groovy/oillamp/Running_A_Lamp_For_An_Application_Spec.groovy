@@ -322,8 +322,8 @@ for line in sys.stdin:
             answer.contains(containerOf(directory))
 
         and: 'the lamp is listed with the other sandboxes on this machine'
-            oillamp('list').events().find { it instanceof LampEvent.Answer }.text()
-                           .contains(containerOf(directory))
+            var listed = oillamp('list').events().find { it instanceof LampEvent.Sandboxes }.sandboxes()
+            listed*.container().contains(containerOf(directory))
     }
 
     def '`Lamp.close` ends the session, even with a command still running, and leaves nothing behind'() {

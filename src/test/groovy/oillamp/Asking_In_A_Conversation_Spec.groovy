@@ -1,5 +1,6 @@
 package oillamp
 
+import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampConversation.Kind
 import dev.lamp.LampPrompt
@@ -188,7 +189,8 @@ class Asking_In_A_Conversation_Spec extends Specification {
             conversation, are both refused with `OIL-CONVERSATION-001`. `--after` a question, where
             only an answer fits, and `--instead-of` an answer, where only a question fits, are
             refused with a problem that says which option to give instead. An entry without `--in`
-            is refused too.
+            is a mistake on the command line, refused with `OIL-USAGE-001`: `--after` and
+            `--instead-of` name an entry of the conversation that `--in` names.
 
             Oillamp refuses before it saves a snapshot to the lamp's history or wakes the agent, so
             the scenario sees no new prompt and no new snapshot.
@@ -215,12 +217,15 @@ class Asking_In_A_Conversation_Spec extends Specification {
             var insteadOfAnAnswer = host.oillamp.run('ask', lamp.toString(), '--in', conversation, '--instead-of', blue.id(), 'x')
             var entryWithoutConversation = host.oillamp.run('ask', lamp.toString(), '--after', blue.id(), 'x')
 
-        then: 'each is refused, and the two that do not fit name the option to give instead'
+        then: 'each is refused: the two that do not fit name the option to give instead, and the entry without `--in` is a usage error'
             noConversation.reported('OIL-CONVERSATION-001')
             noEntry.reported('OIL-CONVERSATION-001')
             afterAQuestion.problems().first().whatHappened().contains('give --instead-of ' + colour.id())
             insteadOfAnAnswer.problems().first().whatHappened().contains('give --after ' + blue.id())
-            !entryWithoutConversation.succeeded()
+            entryWithoutConversation.status() == LampExitStatus.USAGE
+            entryWithoutConversation.reported('OIL-USAGE-001')
+            entryWithoutConversation.problems().first().whatHappened()
+                    .contains('--after and --instead-of name an entry of the conversation that --in names')
 
         and: 'the agent received no new prompt, and the history has no new snapshot'
             prompts.size() == asked

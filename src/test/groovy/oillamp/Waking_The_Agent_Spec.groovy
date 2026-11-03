@@ -265,8 +265,9 @@ class Waking_The_Agent_Spec extends Specification {
             minutes; h or hours; d or days; w or weeks. A week is 7 days. "+2h" means the same as
             "in 2h".
 
-            On Tuesday at 16:15, the scenario adds one job with each unit, and checks that the
-            job's next time is 16:15 plus the span: 90 minutes, 2 hours, 3 days or 7 days.
+            On Tuesday at 16:15, the scenario adds one job with each unit, and one with "+2h",
+            and checks that the job's next time is 16:15 plus the span: 90 minutes, 2 hours,
+            3 days or 7 days.
         """
         given: 'Tuesday, 16:15 in Berlin'
             var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
@@ -284,6 +285,7 @@ class Waking_The_Agent_Spec extends Specification {
             'in 2h'       || Duration.ofHours(2)
             'in 3 days'   || Duration.ofDays(3)
             'in 1w'       || Duration.ofDays(7)
+            '+2h'         || Duration.ofHours(2)
     }
 
     def '`oillamp schedule add --cron` reads a cron expression as the Linux scheduler cron does: #meaning'() {
@@ -574,7 +576,7 @@ class Waking_The_Agent_Spec extends Specification {
 
     def 'With `autosave.before_run` and `autosave.after_run` off, a run makes no snapshot, and the next job\'s prompt says nothing of it'() {
         reportInfo """
-            Oillamp saves the lamp just before and just after every run, unless
+            Oillamp saves the lamp just before and just after every run of a job, unless
             `autosave.before_run` and `autosave.after_run` are set to `false`. With both off, the
             history holds no runs, so the next job's prompt cannot say what the last run changed or
             said. It still carries the agent's notes, a file in the agent's home, and says that the
@@ -836,6 +838,9 @@ class Waking_The_Agent_Spec extends Specification {
             An agent can loop, or wait for something that never comes, and every minute it does
             costs model tokens. So oillamp stops a run after `schedule.max_run_minutes`. It saves
             the run like any other, marked as timed out, so that it can be looked at or undone.
+
+            The agent here writes `half-done.txt` and then never finishes. Restoring the run's
+            snapshot brings that file back, which shows that the snapshot holds the half-done work.
         """
         given: 'runs of at most one minute, on a clock that runs ten minutes a second'
             var lamp = aLampThatHasRun('''
@@ -871,6 +876,16 @@ class Waking_The_Agent_Spec extends Specification {
             var snapshot = history.events().find { it instanceof LampEvent.History }.snapshots().first()
             snapshot.kind() == LampSaveKind.RUN
             snapshot.message().contains('timed out')
+
+        when: 'the session is stopped, `half-done.txt` is deleted, and the run\'s snapshot is restored with `oillamp history <dir> restore`'
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+            Files.delete(home(lamp).resolve('workspace/half-done.txt'))
+            var restored = host.oillamp.run('history', lamp.toString(), 'restore', snapshot.id())
+
+        then: '`half-done.txt` is back, as the agent left it: the run\'s snapshot held the half-done work'
+            restored.succeeded()
+            Files.readString(home(lamp).resolve('workspace/half-done.txt')) == 'started\n'
     }
 
     def '`oillamp stop` in the middle of a run stops the run, and saves it'() {

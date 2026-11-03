@@ -491,8 +491,14 @@ public final class Lamp implements AutoCloseable {
     /// Wakes the agent with `prompt`, and waits until it has answered.
     ///
     /// The session holds one agent, which works on one thing at a time. When it is busy, with a
-    /// job or with another question, this waits its turn. The lamp is saved just before and just
-    /// after, so what the agent changed is one snapshot of its own, named in the result.
+    /// job or with another question, this waits its turn.
+    ///
+    /// A question is not saved by itself. The questions of a chat are saved together, in one
+    /// [CHAT][LampSaveKind#CHAT] snapshot, once the chat has been quiet for
+    /// `autosave.chat_quiet_minutes`, as a job's run begins, or as the session ends, so the
+    /// result names no snapshot. Only with `chat_quiet_minutes = 0` is the lamp saved before and
+    /// after each question, as for a job's run, and the result names the snapshot taken after it,
+    /// unless `autosave.after_run` is off.
     ///
     /// Blocks until the agent is done, which can take minutes. What the engine reports goes to
     /// this lamp's listeners.

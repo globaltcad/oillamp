@@ -2,6 +2,7 @@ package oillamp
 
 import dev.lamp.Lamp
 import dev.lamp.LampExitStatus
+import dev.lamp.LampEvent
 import dev.lamp.LampWallpaper
 import dev.oillamp.OilLamp
 import spock.lang.Narrative
@@ -255,7 +256,10 @@ class Configuring_A_Lamp_Spec extends Specification {
             1920x1080 desktop, GPU `auto`, a clipboard that goes from the user to the agent only,
             16g of memory, and the shipped network policy. That policy allows every connection
             except those its two rules refuse: Eden AI outside its EU endpoint, and the private
-            and internal network ranges.
+            and internal network ranges. It then compares everything `show-effective` prints with
+            what it prints for a lamp whose `oillamp.toml` sets nothing, so that every other value
+            it prints is checked too. Settings it does not print, such as the timeouts, the
+            schedule and the saves, are not checked here.
         """
         given: 'a new lamp, whose `oillamp.toml` is untouched'
             var lamp = host.lampPath()
@@ -275,7 +279,17 @@ class Configuring_A_Lamp_Spec extends Specification {
             outcome.console().contains('default allow')
             outcome.console().contains('2 rule')
 
-        and: 'only the user may read and write `oillamp.toml` (mode `rw-------`), because it is the sandbox\'s policy'
+        and: 'every setting `show-effective` prints is the same as for a lamp whose `oillamp.toml` sets nothing at all'
+            var bare = host.lampPath('bare')
+            host.givenConfig(bare, 'schema_version = 1\n')
+            host.oillamp.run('at', bare.toString())
+            var effective = { Path dir ->
+                host.oillamp.run('config', dir.toString(), 'show-effective')
+                        .events().find { it instanceof LampEvent.Answer }.text()
+            }
+            effective(lamp) == effective(bare)
+
+        and: 'only the user may read and write `oillamp.toml` (mode `rw-------`), because it can hold what other users of the machine have no business reading, such as a git name and email under `[git]`, or the requirements for reaching the host'
             java.nio.file.attribute.PosixFilePermissions.toString(
                     Files.getPosixFilePermissions(lamp.resolve('oillamp.toml'))) == 'rw-------'
     }

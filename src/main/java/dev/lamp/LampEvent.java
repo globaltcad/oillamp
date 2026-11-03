@@ -200,10 +200,12 @@ public sealed interface LampEvent {
     /// @param ahead runs waiting before this one, not counting the one in progress
     record RunQueued(LampRun run, int ahead)            implements LampEvent {}
     record RunStarted(LampRun run)                      implements LampEvent {}
-    /// A run ended, and the lamp was saved.
+    /// A run ended.
     ///
     /// @param answer       the agent's last message; for a failed run, the error
-    /// @param snapshot     the snapshot taken as the run ended; empty only when that save failed
+    /// @param snapshot     the snapshot taken as the run ended; empty when the run is not saved by
+    ///                     itself (a question, unless `autosave.chat_quiet_minutes` is 0), when
+    ///                     `autosave.after_run` is off, or when the save failed
     /// @param took         from [RunStarted] to this event
     /// @param conversation the conversation the run happened in; empty when pi failed before it
     ///                     opened one

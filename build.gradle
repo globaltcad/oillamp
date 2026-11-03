@@ -84,7 +84,7 @@ dependencies {
     // The report renderer builds its pages with GStringTemplateEngine, which lives here.
     testImplementation 'org.apache.groovy:groovy-templates:5.0.6'
 
-    // Used by TheShapeOfTheCodeSpec to check the public types and which classes may do I/O.
+    // Used by The_Shape_Of_The_Code_Spec to check the public types and which classes may do I/O.
     testImplementation group: 'com.tngtech.archunit', name: 'archunit', version: '1.4.1'
 }
 
@@ -109,7 +109,7 @@ test {
         excludeTags 'spike'
     }
     // The model key an application gives a lamp reaches the engine in this variable. With it set
-    // in the scenarios' own JVM too, a command run on the host in WorkingOnTheHostSpec would
+    // in the scenarios' own JVM too, a command run on the host in Working_On_The_Host_Spec would
     // print the key if oillamp did not take it out of the command's environment.
     environment 'OILLAMP_MODEL_KEY', 'sk-0123456789'
     testLogging {

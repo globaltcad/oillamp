@@ -12,7 +12,9 @@ import sprouts.Tuple;
 /// mention.
 ///
 /// The commented `oillamp.toml` written into a new lamp ([GeneratedFileTextUtil#defaultConfig])
-/// must describe exactly these values. A scenario in `Configuring_A_Lamp_Spec` checks that.
+/// must describe exactly these values. A scenario in `Configuring_A_Lamp_Spec` checks that for
+/// every value `oillamp config <dir> show-effective` prints; the others, such as the timeouts, the
+/// schedule and the saves, no test compares.
 final class ConfigDefaultsUtil {
 
     private ConfigDefaultsUtil() {}

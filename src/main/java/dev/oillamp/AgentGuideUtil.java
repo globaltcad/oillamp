@@ -117,6 +117,13 @@ final class AgentGuideUtil {
             | `slurp` | pick a region interactively |
             | `wtype -s 150` | type text, press key combinations (keep the `-s 150` pause: without it X11 applications lose the first key) |
             | `/usr/local/lib/oillamp/lamp-pointer` | move, click, drag and scroll at screen positions |
+            | `wlrctl toplevel` | list windows, wait for one, focus, maximize, fullscreen, minimize or close it, by `app_id:` or `title:` |
+
+            `wlrctl toplevel waitfor title:Calculator` blocks until such a window exists, so after
+            launching an application you can wait for its window instead of taking screenshots.
+            Put a timeout around it: it waits forever. `wlrctl toplevel list` shows only windows
+            that have an `app_id`; an X11 window without a `WM_CLASS` has none, but `title:`
+            still finds it.
 
             Do not use `wlrctl pointer` to click: it moves the pointer by an offset, not to a
             position, and its clicks do not reach any window.
@@ -331,8 +338,8 @@ final class AgentGuideUtil {
               to it: it is not a log. The lamp's history already is one, and `run_history`
               reads it.
 
-            oillamp saves your home just before and just after every run, so the user can see
-            what each run changed, and undo it.
+            oillamp saves your home just before and just after every run of a job, so the user
+            can see what each of those runs changed, and undo it.
 
             """.formatted(schedule.maxAgentJobs(), schedule.minAgentIntervalMinutes(), schedule.maxAgentDays(),
                           schedule.maxAgentRunsPerDay(), schedule.maxRunMinutes(), schedule.notesMaxKb());

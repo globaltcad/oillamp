@@ -394,6 +394,69 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
             inSandbox('pkill -x xev || true')
     }
 
+    def 'The agent waits for, lists, focuses and closes windows by name with `wlrctl toplevel`'() {
+        reportInfo """
+            The agent cannot use `swaymsg`: sway's control socket belongs to the infra user
+            `lamp`. `wlrctl toplevel` controls windows through the Wayland socket the agent
+            already has, and finds them by their `app_id` or their title. `wlrctl toplevel
+            waitfor` blocks until a matching window exists, so an agent that starts an
+            application can wait for its window instead of taking screenshots until it appears.
+
+            Let's consider two terminals with the `app_id`s "spike-first" and "spike-second",
+            opened one after the other, and the X11 program `xev`, whose window is titled "Event
+            Tester". An X11 window's `app_id` is its `WM_CLASS`, and `xev` sets none, so
+            `wlrctl toplevel list` leaves its window out. Matching by title still finds it.
+
+            `wlrctl pointer` is not used: it moves the pointer by an offset, and its clicks reach
+            no window, so `lamp click` goes through `lamp-pointer` instead.
+        """
+        when: 'the two terminals and `xev` are started, and each is awaited with `wlrctl toplevel waitfor`'
+            var started = inSandbox('''
+                nohup foot --app-id spike-first -T 'First window' sleep 120 >/dev/null 2>&1 &
+                timeout 10 wlrctl toplevel waitfor app_id:spike-first && echo "spike-first appeared"
+                nohup foot --app-id spike-second -T 'Second window' sleep 120 >/dev/null 2>&1 &
+                timeout 10 wlrctl toplevel waitfor app_id:spike-second && echo "spike-second appeared"
+                nohup xev >/dev/null 2>&1 &
+                timeout 10 wlrctl toplevel waitfor 'title:Event Tester' && echo "xev appeared"
+            '''.stripIndent())
+
+        then: '`waitfor` returned for each of the three windows'
+            started.mentions('spike-first appeared')
+            started.mentions('spike-second appeared')
+            started.mentions('xev appeared')
+
+        when: '`wlrctl toplevel list` is run'
+            var listed = inSandbox('wlrctl toplevel list').out.readLines()
+
+        then: 'it names each terminal as "`app_id`: title", and leaves out `xev`, which has no `app_id`'
+            listed.contains('spike-first: First window')
+            listed.contains('spike-second: Second window')
+            listed.every { !it.contains('Event Tester') }
+
+        when: '`xev`, then "spike-first", is focused with `wlrctl toplevel focus`, and "spike-first" is closed with `wlrctl toplevel close`'
+            var handled = inSandbox('''
+                wlrctl toplevel focus 'title:Event Tester'
+                sleep 1
+                wlrctl toplevel find 'title:Event Tester' state:focused && echo "xev focused"
+                wlrctl toplevel focus app_id:spike-first
+                sleep 1
+                wlrctl toplevel find app_id:spike-first state:focused && echo "spike-first focused"
+                wlrctl toplevel close app_id:spike-first
+                sleep 1
+                wlrctl toplevel find app_id:spike-first || echo "spike-first closed"
+            '''.stripIndent())
+
+        then: 'each was focused in turn, as `wlrctl toplevel find … state:focused` shows'
+            handled.mentions('xev focused')
+            handled.mentions('spike-first focused')
+
+        and: '"spike-first" has no window any more'
+            handled.mentions('spike-first closed')
+
+        cleanup:
+            inSandbox('pkill -x xev; pkill -f "app-id spike-"; true')
+    }
+
     /** The four numbers after a label, such as "moved 240 110 400 300": x, y, width, height. */
     private static List<Integer> geometry(String output, String label) {
         var line = output.readLines().find { it.startsWith(label + ' ') }
@@ -543,8 +606,7 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
             !logs.mentions('Failed to listen on socket')
             !logs.mentions('exited during startup')
 
-        and: """the desktop actually answers - the assertion that matters, because every
-                weaker one passed while this was broken"""
+        and: '`vncviewer` reaches the desktop over the VNC socket and speaks RFB 3.8: the checks above all passed while the desktop was unreachable'
             var viewer = Spike.run(Duration.ofSeconds(15), 'timeout', '8', 'vncviewer',
                     vncSocket.toString())
             viewer.mentions('Connected to socket')

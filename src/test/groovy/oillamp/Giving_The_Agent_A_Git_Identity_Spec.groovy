@@ -169,6 +169,9 @@ class Giving_The_Agent_A_Git_Identity_Spec extends Specification {
             outcome.status() == LampExitStatus.SUCCESS
             !Files.readString(sessionGitConfig()).contains('[user]')
             outcome.console().contains('your git configuration has no user.name and user.email')
+
+        and: 'it says how to fix that: with `git config --global`, or with `[git]` in `oillamp.toml`'
+            outcome.console().contains('set them with `git config --global`, or set [git] in oillamp.toml')
     }
 
     def 'Oillamp refuses to start a session for a custom git identity without an email'() {

@@ -64,15 +64,17 @@ class Following_A_Session_Spec extends Specification {
 
     def '`oillamp follow`, started late, reports the runs in progress first, then each event as it happens'() {
         reportInfo """
-            Let's consider an agent at work on one question, with another waiting its turn, when
-            `oillamp follow <lamp>` starts. The session does not repeat its past to the follower,
+            Let's consider an agent that has answered one question, and is at work on a second,
+            with a third waiting its turn, when `oillamp follow <lamp>` starts. The session does
+            not repeat its past to the follower, such as the first question's run,
             only its present: the `SessionOpened` event, which says how to reach the sandbox, the
             run in progress from its start, the run waiting, and last the agent's status, which
             marks the end of the catching up. After that, `follow` reports every event as it
             happens: both runs finishing, and at last the session's summary as it ends, which ends
             `follow` too.
         """
-        given: 'the agent is at work on the question "wait for me", and "and then this" waits'
+        given: 'the agent has answered "done before", is at work on the question "wait for me", and "and then this" waits'
+            var past = held.ask('done before').run()
             var first = held.send(LampPrompt.fresh('wait for me'))
             var second = held.send(LampPrompt.fresh('and then this'))
             eventually { held.agentStatus().waiting().any { it.id() == second.id() } }
@@ -91,6 +93,11 @@ class Following_A_Session_Spec extends Specification {
             status.current().get().id() == first.id()
             status.waiting()*.id() == [second.id()]
             followed.indexOf(status) > followed.findIndexOf { it instanceof LampEvent.RunQueued }
+
+        and: 'no `RunQueued`, `RunStarted` or `RunFinished` for the run of "done before", which ended before `follow` started'
+            followed.findAll { it instanceof LampEvent.RunQueued || it instanceof LampEvent.RunStarted
+                               || it instanceof LampEvent.RunFinished }
+                    .every { it.run().id() != past.id() }
 
         when: 'the scenario lets the agent answer'
             release.countDown()

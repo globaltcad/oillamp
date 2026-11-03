@@ -183,7 +183,8 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             is none yet. After that the file belongs to the agent, and oillamp never writes over it.
 
             The login banner tells the agent to read the guide `~/AGENTS.md`, so the scenario also
-            checks that the guide is there.
+            checks that the guide is there. Unlike `~/.bashrc`, the guide describes the session's
+            configuration, so oillamp writes it again for every session, over whatever is there.
         """
         given: 'a lamp path where no directory exists yet'
             var lamp = host.lampPath()
@@ -199,14 +200,15 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         and: 'the guide `~/AGENTS.md` is where the login banner says it is'
             Files.readString(agentHome.resolve('AGENTS.md')).contains('# This machine')
 
-        when: 'the agent replaces `~/.bashrc` with its own, and `oillamp at` runs again'
+        when: 'the agent replaces `~/.bashrc` and `~/AGENTS.md` with its own, and `oillamp at` runs again'
             Files.writeString(agentHome.resolve('.bashrc'), 'export EDITOR=vim\n')
+            Files.writeString(agentHome.resolve('AGENTS.md'), 'my own notes\n')
             host.oillamp.run('at', lamp.toString())
 
         then: 'oillamp leaves the agent\'s `~/.bashrc` as it is'
             Files.readString(agentHome.resolve('.bashrc')) == 'export EDITOR=vim\n'
 
-        and: '`~/AGENTS.md` is still the guide'
+        and: '`~/AGENTS.md` is the guide again'
             Files.readString(agentHome.resolve('AGENTS.md')).contains('# This machine')
     }
 
@@ -486,6 +488,7 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.writeString(agentHome.resolve('workspace/notes.md'), 'work in progress')
             var identityBefore = Files.readString(lamp.resolve('.oillamp/lamp.json'))
             var keyBefore = Files.readString(lamp.resolve('.oillamp/keys/client_ed25519'))
+            var hostKeyBefore = Files.readString(lamp.resolve('.oillamp/keys/host_ed25519'))
 
         when: '`oillamp at` runs on that lamp again'
             var outcome = host.oillamp.run('at', lamp.toString())
@@ -496,8 +499,8 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         and: '`oillamp.toml` still holds the new width'
             Files.readString(settings).contains('width  = 2560')
 
-        and: 'the output shows the new width, so this session uses it'
-            outcome.console().contains('2560x1440') || outcome.console().contains('2560')
+        and: 'the output shows the new desktop size, 2560x1080, so this session uses it'
+            outcome.console().contains('2560x1080')
 
         and: 'the agent\'s file is unchanged'
             Files.readString(agentHome.resolve('workspace/notes.md')) == 'work in progress'
@@ -508,6 +511,9 @@ class Setting_Up_A_Lamp_Spec extends Specification {
 
         and: 'the lamp\'s SSH client key is unchanged'
             Files.readString(lamp.resolve('.oillamp/keys/client_ed25519')) == keyBefore
+
+        and: 'so is its SSH host key'
+            Files.readString(lamp.resolve('.oillamp/keys/host_ed25519')) == hostKeyBefore
     }
 
     def '`oillamp at` refuses a directory that already holds other files, unless given `--init`'() {
@@ -768,7 +774,9 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             fail on every host without it.
 
             A file in there whose name is not a session time, such as `notes.mkv`, is somebody's
-            own file. The listing shows it too, rather than hiding or deleting it.
+            own file. The listing shows it too, rather than hiding or deleting it, but with `-`
+            for its duration: oillamp did not record it, so its file times say nothing about how
+            long a recording ran.
 
             Given `--open` and a session that was never recorded, `oillamp recordings` reports
             `OIL-LAMP-009` and names the sessions that were.
@@ -790,8 +798,9 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             listed.console().contains('2.0 MB')
             listed.console().contains('1m30s')
 
-        and: 'it lists `notes.mkv` too, and counts 3 files'
-            listed.console().contains('notes.mkv')
+        and: 'it lists `notes.mkv` too, with `-` for its duration, and counts 3 files'
+            var notes = listed.console().readLines().find { it.contains('notes.mkv') }
+            notes.trim().split(/\s+/)[1] == '-'
             listed.console().contains('3 recording(s)')
 
         when: '`oillamp recordings <dir> --open` is given a session that was never recorded'

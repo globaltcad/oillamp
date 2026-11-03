@@ -411,18 +411,22 @@ final class FilesystemUtil {
         return found;
     }
 
-    /// When the recording began: the file's creation time where the filesystem keeps one. Where it
-    /// does not, Java returns the modification time instead, which would make every recording zero
-    /// seconds long, so the session start in the file name is used. That is a few seconds early,
-    /// because the sandbox starts before the recorder.
-    private static Instant startOf(Path file, BasicFileAttributes attributes) {
-        Instant created = attributes.creationTime().toInstant();
-        if (created.isBefore(attributes.lastModifiedTime().toInstant())) return created;
+    /// When the recording began, for a file named after the session it recorded: the file's
+    /// creation time where the filesystem keeps one. Where it does not, Java returns the
+    /// modification time instead, which would make every recording zero seconds long, so the
+    /// session start in the file name is used. That is a few seconds early, because the sandbox
+    /// starts before the recorder.
+    ///
+    /// Empty for any other file, such as `notes.mkv`: oillamp did not record it, so its times say
+    /// nothing about how long a recording ran.
+    private static Optional<Instant> startOf(Path file, BasicFileAttributes attributes) {
         Path name = file.getFileName();
-        return name == null ? created
-                : SessionId.parse(name.toString().replaceFirst("\\.mkv$", ""))
-                           .map(SessionId::startedAt)
-                           .orElse(created);
+        if (name == null) return Optional.empty();
+        Optional<SessionId> session = SessionId.parse(name.toString().replaceFirst("\\.mkv$", ""));
+        Instant created = attributes.creationTime().toInstant();
+        if (session.isPresent() && created.isBefore(attributes.lastModifiedTime().toInstant()))
+            return Optional.of(created);
+        return session.map(SessionId::startedAt);
     }
 
     /// Lists a directory for [LampDirectoryUtil].

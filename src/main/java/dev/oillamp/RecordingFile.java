@@ -9,10 +9,11 @@ import java.util.Optional;
 ///
 /// @param startedAt  when recording began: the file's creation time where the filesystem records
 ///                   one, otherwise the session start encoded in the file name (a few seconds
-///                   earlier, because the sandbox starts before the recorder does)
+///                   earlier, because the sandbox starts before the recorder does); empty for a
+///                   file not named after a session, which oillamp did not record
 /// @param recordedAt when recording stopped: the file's last modification time, because
 ///                   wf-recorder writes to the file until it is stopped
-record RecordingFile(Path path, Instant startedAt, Instant recordedAt, long sizeBytes) {
+record RecordingFile(Path path, Optional<Instant> startedAt, Instant recordedAt, long sizeBytes) {
 
     public RecordingFile {
         if (sizeBytes < 0) throw new IllegalArgumentException("Negative file size: " + sizeBytes);
@@ -27,9 +28,10 @@ record RecordingFile(Path path, Instant startedAt, Instant recordedAt, long size
 
     /// How long the recording ran.
     ///
-    /// Empty when the start is after the end, which happens with a copied or restored file.
+    /// Empty when the start is unknown, or after the end, which happens with a copied or restored
+    /// file.
     public Optional<Duration> duration() {
-        Duration ran = Duration.between(startedAt, recordedAt);
-        return ran.isNegative() ? Optional.empty() : Optional.of(ran);
+        return startedAt.map(start -> Duration.between(start, recordedAt))
+                        .filter(ran -> !ran.isNegative());
     }
 }

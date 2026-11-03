@@ -1,6 +1,7 @@
 package oillamp
 
 import dev.lamp.LampExitStatus
+import dev.lamp.LampProblem
 import dev.oillamp.OilLamp
 import spock.lang.Narrative
 import spock.lang.Specification
@@ -286,6 +287,11 @@ class Using_The_Command_Line_Spec extends Specification {
 
         and: 'the problem advises running again with `--verbose`'
             outcome.errors().first().fixes().any { it.description().contains('--verbose') }
+
+        and: 'it keeps the start of the stack trace as evidence, an excerpt titled "stack trace" with oillamp\'s frames in it'
+            var trace = outcome.errors().first().evidence()
+                    .find { it instanceof LampProblem.Evidence.Excerpt && it.title() == 'stack trace' }
+            trace.text().contains('at dev.oillamp.')
     }
 
     def '`oillamp view` on a directory that is not a lamp says so, and creates nothing'() {
@@ -634,22 +640,27 @@ class Using_The_Command_Line_Spec extends Specification {
             command << ['at', 'view', 'shell', 'stop', 'status', 'follow', 'recordings', 'doctor']
     }
 
-    def 'The output of a command that sets up or changes a lamp names oillamp\'s version and the lamp'() {
+    def 'The first line of a command that sets up or changes a lamp names oillamp\'s version and the lamp'() {
         reportInfo """
-            Commands that set up or change a lamp print a line that names oillamp, its version
-            and the lamp, such as `oillamp 0.2.0 — ~/lamps/first`. A terminal with several
-            sessions in it, or a pasted log, then shows which lamp each part is about.
-            `oillamp remove` says how many lamps it was given instead.
+            Commands that set up or change a lamp begin their output with a line that names
+            oillamp, its version and the lamp, such as `oillamp 0.2.0 — ~/lamps/first`. A terminal
+            with several sessions in it, or a pasted log, then shows which lamp each part is
+            about. `oillamp remove` names how many lamps it was given instead.
         """
         given: 'a lamp path'
             var lamp = host.lampPath().toString()
 
-        expect: 'the output of `doctor`, `at --dry-run`, `history save` and `history restore` has the line that names the lamp, and that of `remove` the number of lamps'
-            host.oillamp.run('doctor', lamp).console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('at', lamp, '--dry-run').console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('history', lamp, 'save').console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('history', lamp, 'restore', 'a1b2c3d4').console().contains("oillamp 0.2.0 — ${lamp}")
-            host.oillamp.run('remove', lamp, host.lampPath('other').toString()).console().contains('oillamp 0.2.0 — 2 lamps')
+        expect: 'the first line of `doctor`, `at --dry-run`, `history save` and `history restore` names the lamp, and that of `remove` the number of lamps'
+            firstLine(host.oillamp.run('doctor', lamp)).endsWith("oillamp 0.2.0 — ${lamp}")
+            firstLine(host.oillamp.run('at', lamp, '--dry-run')).endsWith("oillamp 0.2.0 — ${lamp}")
+            firstLine(host.oillamp.run('history', lamp, 'save')).endsWith("oillamp 0.2.0 — ${lamp}")
+            firstLine(host.oillamp.run('history', lamp, 'restore', 'a1b2c3d4')).endsWith("oillamp 0.2.0 — ${lamp}")
+            firstLine(host.oillamp.run('remove', lamp, host.lampPath('other').toString())).endsWith('oillamp 0.2.0 — 2 lamps')
+    }
+
+    /** The first line of a command's output that is not blank. */
+    private static String firstLine(outcome) {
+        outcome.console().readLines().find { !it.isBlank() }.strip()
     }
 
     def '`oillamp config <dir>` checks the configuration when given no action, and refuses an action it does not know'() {
