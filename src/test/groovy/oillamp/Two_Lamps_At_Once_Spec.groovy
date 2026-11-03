@@ -19,7 +19,7 @@ import static oillamp.RealLamps.*
  */
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
-class TwoLampsAtOnceSpec extends Specification {
+class Two_Lamps_At_Once_Spec extends Specification {
 
     Path north = newLampPath('north')
     Path south = newLampPath('south')

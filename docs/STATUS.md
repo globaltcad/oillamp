@@ -270,7 +270,7 @@ started as a separate process from the test's own classpath, as an application w
 | the process holding the engine's standard input killed with `kill -9` | the engine shuts down within seconds, exits 0 and says the application let go; no container, `session.json` or lock left |
 | the container killed with `podman kill` | the application is told within seconds, the engine exits 5, the container is removed, and `Lamp` refuses further commands |
 
-`TwoLampsAtOnceSpec` (a spike) holds two lamps at once:
+`Two_Lamps_At_Once_Spec` (a spike) holds two lamps at once:
 
 | Check | Result |
 |---|---|

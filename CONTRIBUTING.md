@@ -182,7 +182,7 @@ same code path oillamp uses.
 | `VerifyingTerminalProfilesSpec` | installed terminals accept oillamp's arguments; terminal emulators return before their window closes |
 | `VerifyingTheSandboxDesktopSpec` | the real image: readiness, SSH login as `agent`, screen size and rendering, vncviewer on a Unix socket, clicking and typing with `lamp`, a playable recording, a clean second session |
 | `Running_A_Lamp_For_An_Application_Spec` | a lamp's whole life through `dev.lamp.Lamp`, with the engine as a separate process |
-| `TwoLampsAtOnceSpec` | one application holding two lamps that must not see each other |
+| `Two_Lamps_At_Once_Spec` | one application holding two lamps that must not see each other |
 | `WhenAnApplicationOrItsSandboxDiesSpec` | the application crashing, or the container dying |
 | `KeepingTheModelKeyOutOfARealSandboxSpec` | the model key absent from a real sandbox; real model requests when `EDENAI_API_KEY` is set |
 | `Using_A_Model_On_This_Machine_Spec` | a lamp using Ollama on this machine |
