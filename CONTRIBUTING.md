@@ -133,7 +133,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Deciding_What_The_Sandbox_May_Reach_Spec` | the egress proxy and policy, over the real socket |
 | `Using_The_Command_Line_Spec` | usage errors, version, crash handling |
 | `The_Lamp_Command_Spec` | the `lamp` script, with stub tools on `PATH` |
-| `ThePointerSpec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
+| `The_Pointer_Spec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
 | `The_Launcher_Spec` | the single-file launcher script |
 | `TheSandboxImageSpec` | static checks of the image files |
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |

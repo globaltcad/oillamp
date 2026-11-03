@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * clicks and types into an X11 program in a real sandbox.
  */
 @Requires({ Files.isExecutable(Path.of('/usr/bin/python3')) })
-class ThePointerSpec extends Specification {
+class The_Pointer_Spec extends Specification {
 
     static final Path LAMP = Path.of('src/main/resources/image/rootfs/usr/local/bin/lamp').toAbsolutePath()
     static final Path HELPER = Path.of('src/main/resources/image/rootfs/usr/local/lib/oillamp/lamp-pointer').toAbsolutePath()
