@@ -44,7 +44,7 @@ session's socket directly, as `socat` would, and a stand-in model service on loo
 checker.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class ServingTheHostToolsOverMcpSpec extends Specification {
+class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
 
     static final String MODEL = 'azure/gpt-6.1-sol'
 

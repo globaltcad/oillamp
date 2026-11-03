@@ -141,7 +141,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Keeping_The_Model_Key_On_The_Host_Spec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
 | `Reaching_The_Host_Spec` | host access: every request judged by a stand-in checker before it happens; tiers, roots, the person, the log |
 | `Working_On_The_Host_Spec` | `host_edit_file` and `host_bash` on the host, with `host_access.commands`, timeouts and cancellation |
-| `ServingTheHostToolsOverMcpSpec` | the host tools as an MCP server: initialize, tools/list, JSON-RPC errors, connections |
+| `Serving_The_Host_Tools_Over_Mcp_Spec` | the host tools as an MCP server: initialize, tools/list, JSON-RPC errors, connections |
 | `Showing_The_User_The_Desktop_Spec` | `lamp show` telling the host there is something to look at |
 | `Keeping_Windows_On_The_Desktop_Spec` | floating windows kept in reach when the desktop changes size |
 | `Giving_The_Agent_A_Git_Identity_Spec` | the name and email on the agent's commits |
