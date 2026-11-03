@@ -3,9 +3,12 @@ package oillamp
 import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
+import spock.lang.Subject
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,10 +16,13 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 import static oillamp.RealLamps.*
 
-/**
- * One application holding several lamps, such as a game with two campaigns open, or two agents
- * that must not see each other's notes. On this machine, with real podman.
- */
+@Title('Two lamps at once')
+@Narrative('''
+One program built on oillamp holding several lamps, such as a game with two campaigns open, or two
+agents that must not see each other's notes. This is a spike: it runs on this machine, with real
+podman.
+''')
+@Subject(Lamp)
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
 class Two_Lamps_At_Once_Spec extends Specification {
@@ -40,7 +46,7 @@ class Two_Lamps_At_Once_Spec extends Specification {
             socket, and neither agent may see the other's files, because an agent's home is the
             only part of the host its sandbox contains. Closing one leaves the other running.
         """
-        when: 'both lamps are started at the same time'
+        when: '`Lamp.start` starts both lamps at the same time'
             first = Lamp.at(north).start()
             second = Lamp.at(south).start()
 
@@ -66,7 +72,7 @@ class Two_Lamps_At_Once_Spec extends Specification {
                     .out.strip() == ''
             !inSandbox(first, 'grep', '-rqs', 'south secret', '/home', '/tmp', '/oillamp').ok
 
-        when: 'the first lamp is closed'
+        when: 'the first lamp is closed with `Lamp.close`'
             first.close()
 
         then: 'it ended cleanly, and its container is gone'
@@ -81,16 +87,16 @@ class Two_Lamps_At_Once_Spec extends Specification {
     def 'Oillamp refuses to open a lamp that is already running, and leaves the running session alone'() {
         reportInfo """
             One lamp is one sandbox. A second start on a directory that is already running, for
-            example from a second window of the same game, would fight the first over its
-            container and its sockets. oillamp refuses it with a problem, `OIL-LOCK-001`, that
-            says the lamp is busy, and the session already running is not disturbed.
+            example from a second window of the same game, would compete with the first for its
+            container and its sockets. Oillamp refuses it with `OIL-LOCK-001`, which says the lamp
+            is busy, and does not disturb the session that already runs.
         """
         given: 'a running lamp'
             first = Lamp.at(north).start()
             first.awaitRunning(FIRST_START)
             var refusals = new CopyOnWriteArrayList<LampEvent>()
 
-        when: 'the same directory is opened a second time'
+        when: '`Lamp.start` opens the same directory a second time'
             second = Lamp.at(north).onEvent { refusals << it }.start()
 
         then: 'the second never runs, and says the lamp is busy'
