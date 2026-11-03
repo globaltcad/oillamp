@@ -15,7 +15,7 @@ import java.nio.file.attribute.PosixFilePermissions
  *  <p>These scenarios build a small launcher from the real script, with a stand-in for the Java
  *  runtime that only says it was started, and run it the way a user does.
  */
-class TheLauncherSpec extends Specification {
+class The_Launcher_Spec extends Specification {
 
     @TempDir Path tmp
 

@@ -134,7 +134,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Using_The_Command_Line_Spec` | usage errors, version, crash handling |
 | `The_Lamp_Command_Spec` | the `lamp` script, with stub tools on `PATH` |
 | `ThePointerSpec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
-| `TheLauncherSpec` | the single-file launcher script |
+| `The_Launcher_Spec` | the single-file launcher script |
 | `TheSandboxImageSpec` | static checks of the image files |
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |
 | `TheShapeOfTheCodeSpec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
