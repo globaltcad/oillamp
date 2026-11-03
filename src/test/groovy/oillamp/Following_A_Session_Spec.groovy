@@ -4,10 +4,13 @@ import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
+import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Timeout
+import spock.lang.Title
 
 import java.nio.file.Path
 import java.time.Duration
@@ -15,19 +18,26 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- *  Following a session that someone else started: {@code oillamp follow}.
- *
- *  <p>The events of a session go to whoever started it. An application that closed and opens
- *  again, or a person at a terminal, wants to see the same: what the agent is doing now, and
- *  everything after. They ask the session over its control socket, and it answers with its
- *  events, as they happen, until it ends.
- */
+@Title('Following a session')
+@Narrative('''
+The events of a session go to the program that started it: the terminal where `oillamp at` runs,
+or the application that started it through oillamp's Java API. Someone else may want to see them
+too, such as an application that closed and opened again, or a person at another terminal.
+
+`oillamp follow <lamp>` asks the session's *supervisor*, the `oillamp` process that runs the
+session, for its events over the session's control socket. The supervisor first sends what is
+going on now, then each event as it happens, until the session ends.
+
+In these scenarios an application holds the session, started with `Lamp.at(dir).start()`. The
+agent is a stand-in that answers each prompt with "Done: " and the prompt, and that waits for the
+scenario's signal before it answers a prompt beginning with "wait".
+''')
+@Subject(OilLamp)
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class Following_A_Session_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     Path lamp
     Lamp held
@@ -52,86 +62,87 @@ class Following_A_Session_Spec extends Specification {
         held?.close()
     }
 
-    def 'Oillamp\'s `follow` command, started late, reports the runs in progress first, then each event as it happens'() {
+    def '`oillamp follow`, started late, reports the runs in progress first, then each event as it happens'() {
         reportInfo """
-            `oillamp follow <lamp>` asks a running session, over its control socket, for its
-            events. Let's consider the agent working on one question, with another waiting its
-            turn, when someone starts following. The session does not repeat its past to them,
-            only its present: how to reach the sandbox, the run in progress from its start, and
-            the run waiting, and last what the agent is doing, which marks the end of the catching
-            up. Then they hear everything else as it happens, both runs finishing, and at last the
-            session ending, which ends following too.
+            Let's consider an agent at work on one question, with another waiting its turn, when
+            `oillamp follow <lamp>` starts. The session does not repeat its past to the follower,
+            only its present: the `SessionOpened` event, which says how to reach the sandbox, the
+            run in progress from its start, the run waiting, and last the agent's status, which
+            marks the end of the catching up. After that, `follow` reports every event as it
+            happens: both runs finishing, and at last the session's summary as it ends, which ends
+            `follow` too.
         """
-        given: 'the agent is at work on one question, and another waits'
+        given: 'the agent is at work on the question "wait for me", and "and then this" waits'
             var first = held.send(LampPrompt.fresh('wait for me'))
             var second = held.send(LampPrompt.fresh('and then this'))
             eventually { held.agentStatus().waiting().any { it.id() == second.id() } }
 
-        when: 'someone starts following'
+        when: '`oillamp follow <lamp>` starts, on a thread of its own'
             var following = follow()
 
-        then: 'they learn how to reach the sandbox, and what the agent is doing'
+        then: 'it reports the `SessionOpened` event, the run in progress and the run waiting'
             eventually { followed.any { it instanceof LampEvent.SessionOpened } }
             eventually { followed.any { it instanceof LampEvent.RunStarted && it.run().id() == first.id() } }
             eventually { followed.any { it instanceof LampEvent.RunQueued && it.run().id() == second.id() } }
 
-        and: 'last, what the agent is doing, which ends the catching up'
+        and: 'last, the agent\'s status, with the run in progress and the one waiting, which ends the catching up'
             eventually { followed.any { it instanceof LampEvent.AgentStatus } }
             var status = followed.find { it instanceof LampEvent.AgentStatus }
             status.current().get().id() == first.id()
             status.waiting()*.id() == [second.id()]
             followed.indexOf(status) > followed.findIndexOf { it instanceof LampEvent.RunQueued }
 
-        when: 'the agent is done'
+        when: 'the scenario lets the agent answer'
             release.countDown()
 
-        then: 'they hear both answers'
+        then: 'it reports both runs finishing, with the second run\'s answer'
             eventually { finished(first.id()) && finished(second.id()) }
             followed.find { it instanceof LampEvent.RunFinished && it.run().id() == second.id() }
                     .answer() == 'Done: and then this'
 
-        when: 'the session ends'
+        when: 'the application closes its `Lamp`, which ends the session'
             held.close()
             following.join(30_000)
 
-        then: 'following ends with it, and says so'
+        then: '`follow` ends with success, after reporting the session\'s summary'
             following.outcome.status() == LampExitStatus.SUCCESS
             followed.any { it instanceof LampEvent.Summary }
     }
 
     def 'When an application stops following a session, the session keeps running'() {
         reportInfo """
-            An application, a program built on oillamp such as a desktop app, follows a session by
-            running `oillamp follow <lamp> --embedded` as a child process, and stops by closing
+            An application built on oillamp's Java API follows a session by running
+            `oillamp follow <lamp> --embedded` as a child process. It stops following by closing
             that process's standard input, the same signal that ends a session it started with
-            `oillamp at --embedded`. Here that signal only ends the following: the session, which
-            someone else holds, keeps running.
+            `oillamp at --embedded`. Let's consider a session that another application holds:
+            closing the standard input of `follow` ends only the following, and the session keeps
+            running.
         """
-        when: 'an application follows, and closes its end a second later'
+        when: '`oillamp follow <lamp> --embedded` runs, and its standard input closes a second later'
             host.machine { it.standardInput(closingAfter(Duration.ofSeconds(1))) }
             var outcome = host.oillamp.run('follow', lamp.toString(), '--embedded')
 
-        then: 'following ended cleanly'
+        then: '`follow` ended with success, after reporting the `SessionOpened` event'
             outcome.status() == LampExitStatus.SUCCESS
             outcome.events().any { it instanceof LampEvent.SessionOpened }
 
-        and: 'the session is still running'
+        and: 'the session still runs: it has no exit status, and reports the agent\'s status'
             held.exitStatus().isEmpty()
             held.agentStatus() != null
     }
 
-    def 'Oillamp\'s `follow` command reports that no session runs, rather than waiting for one'() {
+    def '`oillamp follow` reports that no session runs, rather than waiting for one'() {
         reportInfo """
-            `oillamp follow` for a lamp with no session running reports `OIL-SESSION-001`, as
-            `oillamp status` does, rather than waiting for a session that is not coming.
+            `oillamp follow <lamp>`, for a lamp whose session has ended, reports `OIL-SESSION-001`,
+            as `oillamp status` does, rather than waiting for a session that may never come.
         """
-        given:
+        given: 'the application closes its `Lamp`, which ends the session'
             held.close()
 
-        when:
+        when: '`oillamp follow <lamp>` is run'
             var outcome = host.oillamp.run('follow', lamp.toString())
 
-        then:
+        then: 'it fails, and reports `OIL-SESSION-001`'
             !outcome.succeeded()
             outcome.reported('OIL-SESSION-001')
     }
