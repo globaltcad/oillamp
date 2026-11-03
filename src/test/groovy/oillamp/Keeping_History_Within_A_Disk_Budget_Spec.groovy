@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture
  * The scenarios set limits of a small fraction of a GB and save files of 64 KB of random bytes,
  * which do not compress, so that files really are deleted from disk without writing gigabytes.
  */
-class KeepingHistoryWithinADiskBudgetSpec extends Specification {
+class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
     @TempDir Path tmp
     ScenarioHost host
 
