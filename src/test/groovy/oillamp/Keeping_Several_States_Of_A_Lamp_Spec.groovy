@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit
  *  git itself can read, which some scenarios check with git where it is installed.
  */
 @Timeout(value = 180, unit = TimeUnit.SECONDS)
-class KeepingSeveralStatesOfALampSpec extends Specification {
+class Keeping_Several_States_Of_A_Lamp_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
