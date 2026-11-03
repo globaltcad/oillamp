@@ -1,24 +1,27 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 
-/**
- * Builds the real image, starts the real container, connects over SSH the way the terminal window
- * does, and drives the desktop with the real {@code lamp} script. It checks the assumptions about
- * sshd, Wayland, sway, vncviewer and wf-recorder that the rest of oillamp depends on.
- *
- * <p>Slow by nature: the first run builds an image. {@code WITH_TOOLCHAIN=false} keeps that to the
- * desktop and SSH stack, which is all these assumptions concern; adding a JDK and a browser would
- * multiply the build time without testing one extra thing.
- */
+@Title('Verifying the sandbox desktop')
+@Narrative('''
+Builds the real image, starts the real container, connects over ssh the way the shell window does,
+and drives the desktop with the real `lamp` script. It checks the assumptions about sshd, Wayland,
+sway, vncviewer and wf-recorder that the rest of oillamp depends on.
+
+This spike is slow: the first run builds an image. `WITH_TOOLCHAIN=false` limits that to the
+desktop and ssh stack, which is all these assumptions concern; a JDK and a browser would multiply
+the build time without testing anything more. Its scenarios run in order, on one container.
+''')
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
@@ -106,20 +109,21 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
 
     private static String escape(String script) { "'" + script.replace("'", "'\\''") + "'" }
 
-    def 'The sandbox starts and reports itself ready'() {
+    def 'The sandbox starts, and reports itself ready'() {
         reportInfo """
-            The entrypoint running in full: it
-            starts sway, wayvnc, the recorder and the socket bridges as the right users, waits for
-            each to prove itself, and only then writes ready.json.
+            The entrypoint, run in full: it starts sway, wayvnc, the recorder and the socket
+            bridges as the right users, waits for each to show that it works, and only then
+            writes `ready.json`.
 
-            Two bugs found the first time this ran, both invisible to any simulation:
+            The first run found two bugs that no simulation could show:
 
-            1. `setpriv` changes the user but not the environment, so every dropped process
-               inherited root's HOME=/root (mode 0700, owned by root). wayvnc reported "Failed to
-               load config. Permission denied" and fontconfig reported "No writable cache
-               directories"; neither mentioned HOME.
-            2. `\${gpu_fallback:+…}` tests for a non-empty string, and "false" is one, so a run
-               that never attempted the GPU announced that it had fallen back from it.
+            1. `setpriv` changes the user but not the environment, so every process it started
+               inherited root's `HOME=/root`, mode 0700 and owned by root. wayvnc reported "Failed
+               to load config. Permission denied", and fontconfig "No writable cache
+               directories"; neither named `HOME`.
+            2. `\${gpu_fallback:+…}` tests for a string that is not empty, and "false" is not
+               empty, so a run that never tried the GPU announced that it had fallen back from
+               it.
         """
         when: 'the container is started with the same security flags oillamp uses'
             var started = Spike.run('podman', 'run', '-d', '--name', CONTAINER,
@@ -157,13 +161,12 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
 
     def 'A shell over the Unix socket lands as the agent user'() {
         reportInfo """
-            The user's shell is SSH over a Unix socket, so that the container can have no network.
-            It was not certain that a non-root `sshd -i` still works with trixie's OpenSSH, which split out
-            a separate `sshd-session` binary. The fallback was to replace it with dropbear.
-
-            It works. No fallback needed.
+            The user's shell is ssh over a Unix socket, so that the container can have no network.
+            It was not certain that a `sshd -i` that is not root still works with trixie's
+            OpenSSH, which split out a separate `sshd-session` program. The fallback was to
+            replace it with dropbear. It works, so no fallback is needed.
         """
-        when:
+        when: '`whoami` and `id -u` are run over the socket'
             var result = inSandbox('whoami; id -u')
 
         then: 'the login succeeded with the per-lamp key alone'
@@ -174,32 +177,32 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
             result.out.readLines()*.trim().contains('1000')
     }
 
-    def 'Clients accept an absolute path in WAYLAND_DISPLAY'() {
+    def 'Wayland clients accept an absolute path in `WAYLAND_DISPLAY`'() {
         reportInfo """
-            The compositor runs as `lamp` with its socket at /run/lamp/wayland-1, and the agent has
-            its own XDG_RUNTIME_DIR, so the two cannot agree on a relative socket name. The design
-            resolves this with an absolute path in WAYLAND_DISPLAY, and it was not certain that libwayland
-            would accept one. The fallback was a symlink and a relative name.
-
-            grim connecting is the proof: it is a Wayland client and it captured the screen.
+            The compositor runs as `lamp`, with its socket at `/run/lamp/wayland-1`, and the agent
+            has its own `XDG_RUNTIME_DIR`, so the two cannot agree on a relative socket name. The
+            design uses an absolute path in `WAYLAND_DISPLAY`, and it was not certain that
+            libwayland would accept one. The fallback was a symbolic link and a relative name.
+            grim is a Wayland client, so a screen grim captures shows that it does.
         """
-        when:
+        when: 'grim captures the screen as the agent'
             var result = inSandbox('echo "$WAYLAND_DISPLAY"; grim /tmp/probe.png && echo captured')
 
-        then:
+        then: '`WAYLAND_DISPLAY` is the absolute path, and grim captured the screen'
             result.mentions('/run/lamp/wayland-1')
             result.mentions('captured')
     }
 
     def 'Sway honours the requested mode, and the desktop really renders windows'() {
         reportInfo """
-            The assumption behind the whole product: sway headless with a custom mode, Xwayland
-            available, and applications that actually appear. An empty desktop of the right size
-            would prove only half of it, so this launches a terminal and captures it.
+            The assumption everything else depends on: sway headless with a custom mode, Xwayland
+            available, and applications that really appear. An empty desktop of the right size
+            would show only half of it, so this launches a terminal and captures it.
 
-            The first screenshot ever taken in the sandbox also found a defect: every GUI app
-            warned "'C' is not a UTF-8 locale", because sshd does not forward a locale and the
-            image's ENV does not reach a login shell. The login profile now sets one.
+            The first screenshot ever taken in the sandbox also found a defect: every GUI
+            application warned "'C' is not a UTF-8 locale", because sshd does not pass on a
+            locale, and the image's `ENV` does not reach a login shell. The login profile now sets
+            one.
         """
         when: 'the empty desktop is captured, then an application is launched and captured again'
             var result = inSandbox('''
@@ -211,7 +214,7 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
                 lamp screenshot --out /home/agent/screenshots/window.png
             '''.stripIndent())
 
-        then:
+        then: 'the application started'
             result.ok
 
         and: 'the capture is a real image of the requested size'
@@ -420,16 +423,15 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
 
     def 'The viewer connects straight to the wayvnc Unix socket'() {
         reportInfo """
-            It was not certain that TigerVNC's vncviewer accepts a Unix socket path as its server
-            argument. The fallback was an extra socat bridge onto a random loopback TCP port with
-            a VNC password: more moving parts, and a listening TCP socket that did not need to
-            exist.
+            It was not certain that TigerVNC's `vncviewer` accepts a Unix socket path as its server
+            argument. The fallback was one more socat bridge, onto a random loopback TCP port with
+            a VNC password: more parts, and a listening TCP socket that did not need to exist.
 
-            It is not needed: vncviewer connects to the socket directly and negotiates RFB 3.8.
-            The viewer is run with a timeout because it is a GUI application that would otherwise
-            never exit; what is asserted is that it got as far as speaking the protocol.
+            It is not needed: `vncviewer` connects to the socket directly, and speaks RFB 3.8. The
+            viewer is run with a timeout, because it is a GUI application that would otherwise
+            never exit; what is checked is that it got as far as speaking the protocol.
         """
-        when:
+        when: '`vncviewer` is run against the socket, for eight seconds'
             var viewer = Spike.run(Duration.ofSeconds(15), 'timeout', '8', 'vncviewer',
                     lamp.resolve('sockets/infra/vnc.sock').toString())
 
@@ -460,14 +462,14 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
             !Spike.run('podman', 'logs', CONTAINER).mentions('invalid buffer dimensions')
     }
 
-    def 'The recording is finalised and playable after the sandbox stops'() {
+    def 'The recording is finished and playable after the sandbox stops'() {
         reportInfo """
-            oillamp promises the human a recording of everything the agent did. A file that exists but
-            cannot be played is the worst possible outcome, because it is discovered when someone needs to
-            watch it. The fallback, had this failed, was to split recordings into segments every few minutes if a killed
-            recorder left an unplayable file.
+            Oillamp promises the human a recording of everything the agent did. A file that exists
+            but cannot be played would be found out only when someone needs to watch it. Had this
+            failed, the fallback was to split recordings into segments every few minutes, in case
+            a killed recorder left a file that cannot be played.
 
-            It is not needed here: the .mkv is a complete, playable h264 stream with a duration.
+            It is not needed: the `.mkv` is a complete, playable h264 stream with a duration.
         """
         when: 'the sandbox is asked to stop the way the supervisor will ask'
             Spike.run(Duration.ofMinutes(2), 'podman', 'stop', '-t', '30', CONTAINER)
@@ -491,24 +493,24 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
 
     def 'A second session on the same lamp comes up with a working desktop'() {
         reportInfo """
-            The regression this spec exists to prevent, and the one bug here that a user found
-            before the suite did. The first session on a lamp always worked. The second came up
-            with a working shell and a dead desktop: the viewer was refused, while oillamp had
-            already printed a green tick and gone away.
+            This is the regression this spec exists to prevent, and the one bug here that a user
+            found before the tests did. The first session on a lamp always worked. The second came
+            up with a working shell and a desktop that did not answer: the viewer was refused,
+            while oillamp had already printed a green tick and returned.
 
-            /oillamp/sockets is a bind mount, so it outlives the container, and `vnc.sock` from
-            the previous session was still sitting there. wayvnc has no equivalent of socat's
-            `unlink-early` - it binds its path or it exits - so it exited, and the ssh listener,
-            which does have that option, came up fine. That asymmetry is the whole bug.
+            `/oillamp/sockets` is a bind mount, so it outlives the container, and `vnc.sock` from
+            the previous session was still there. wayvnc has nothing like socat's `unlink-early`:
+            it binds its path or exits. So it exited, while the ssh listener, which does have that
+            option, came up fine.
 
-            What made it reach the user rather than a log nobody reads is that every check on
-            both sides of the mount tested whether the path existed, which the leftover file
-            satisfied perfectly. The entrypoint wrote ready.json for a dead VNC server, and the
-            host believed it.
+            The failure reached the user, rather than only a log, because every check on both
+            sides of the mount asked only whether the path existed, which the leftover file
+            answered with yes. The entrypoint wrote `ready.json` for a VNC server that was not
+            running, and the host believed it.
 
             Here the lamp's container has just been stopped with `podman stop`, so its sockets
-            directory is in exactly the state that broke - full of the previous session's files -
-            and no setup is needed to arrange it.
+            directory is in the state that broke, full of the previous session's files, and no
+            setup is needed to arrange it.
         """
         given: 'the previous session left its socket and its readiness file behind'
             var vncSocket = lamp.resolve('sockets/infra/vnc.sock')
@@ -606,12 +608,12 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
             inSandbox('pkill -x xev; pkill -x foot; true')
     }
 
-    def 'The `lamp show` command reaches the session on the host'() {
+    def '`lamp show` reaches the session on the host'() {
         reportInfo """
-            `lamp show` sends one line of JSON to /oillamp/sockets/host/desktop.sock. That
+            `lamp show` sends one line of JSON to `/oillamp/sockets/host/desktop.sock`. That
             directory is the host's, mounted read-only into the sandbox, and a socket in it is
             served by the session on the host. Connecting to it needs no write access, which is
-            what this checks for real: the session's side is in Showing_The_User_The_Desktop_Spec.
+            what this checks for real; the session's side is in Showing_The_User_The_Desktop_Spec.
         """
         given: 'the host listening on the desktop socket, as the session does'
             var server = java.nio.channels.ServerSocketChannel.open(java.net.StandardProtocolFamily.UNIX)
@@ -624,11 +626,11 @@ class Verifying_The_Sandbox_Desktop_Spec extends Specification {
                 }
             }
 
-        when:
+        when: '`lamp show "the chart you asked for"` is run in the sandbox'
             var shown = inSandbox('lamp show "the chart you asked for"')
             host.join(10_000)
 
-        then:
+        then: 'it succeeded, said that the user was asked, and the host received the request'
             shown.ok
             shown.mentions('The user was asked.')
             new groovy.json.JsonSlurper().parseText(asked) == [op: 'show', what: 'the chart you asked for']
