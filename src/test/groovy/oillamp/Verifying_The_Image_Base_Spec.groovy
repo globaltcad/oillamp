@@ -1,18 +1,19 @@
 package oillamp
 
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
 import spock.lang.Tag
+import spock.lang.Title
 
-/**
- * Checks that the packages the sandbox image installs exist in Debian trixie.
- *
- * <p>A missing package would only be discovered when an image build fails halfway through on a
- * user's machine. This spec asks trixie directly.
- *
- * <p>Needs a network inside the container, so it skips where rootless podman has no networking
- * backend. Run with {@code ./gradlew spikes}.
- */
+@Title('Verifying the image base')
+@Narrative('''
+Checks that the packages the sandbox image installs exist in Debian trixie.
+
+A missing package would otherwise be found only when an image build fails halfway, on a user's
+machine. This spike asks trixie directly. It needs a network inside the container, so it is
+skipped where rootless podman has no networking backend. Run it with `./gradlew spikes`.
+''')
 @Tag('spike')
 @Requires({ Spike.containerNetworkWorks() })
 class Verifying_The_Image_Base_Spec extends Specification {
@@ -47,21 +48,20 @@ class Verifying_The_Image_Base_Spec extends Specification {
         Spike.ensureBaseImage()
     }
 
-    def 'Every package the sandbox image needs exists in trixie'() {
+    def 'Every package the sandbox image needs exists in Debian trixie'() {
         reportInfo """
-            The image is built once and then cached by content hash, so a missing package is not a
-            slow failure - it is a failure the user hits on their very first run, after a long
-            download, with an apt error that names one package and explains nothing about what
-            oillamp wanted it for.
+            The image is built once and then cached by the hash of its contents, so a missing
+            package fails on the user's very first run, after a long download, with an apt error
+            that names one package and says nothing about what oillamp wanted it for.
 
-            Each package is therefore checked *with the reason it is needed*, so that if one has
-            been renamed or dropped from trixie, whoever reads this failure knows immediately
-            whether the answer is "find the new name" or "redesign that feature".
+            So each package is listed with the reason it is needed. If one has been renamed or
+            dropped from trixie, whoever reads the failure knows at once whether the answer is to
+            find the new name, or to change the feature that needed it.
         """
         given: 'the package list the image installs'
             var missing = [:]
 
-        when: 'trixie is asked about each one'
+        when: 'trixie\'s `apt-cache policy` is asked about each one'
             var result = Spike.run('podman', 'run', '--rm', Spike.BASE_IMAGE, 'sh', '-lc',
                     'apt-get update -qq >/dev/null 2>&1; ' +
                     REQUIRED.keySet().collect { "echo \"$it=\$(apt-cache policy $it 2>/dev/null | sed -n 's/^  Candidate: //p')\"" }.join('; '))
@@ -73,21 +73,21 @@ class Verifying_The_Image_Base_Spec extends Specification {
         then: 'the query itself succeeded, or the answer below means nothing'
             result.ok
 
-        and: 'and nothing the image needs is absent'
+        and: 'nothing the image needs is absent'
             missing.isEmpty() ||
                     { throw new AssertionError("trixie is missing packages the image needs:\n" +
                             missing.collect { k, v -> "  $k: without it, oillamp loses: $v" }.join('\n') +
                             "\n\nFull output:\n${result.describe()}") }()
     }
 
-    def 'The packages the desktop needs are all in Debian trixie, or the planned fallback applies'() {
+    def 'The packages that were once in doubt are in Debian trixie, or the planned fallback applies'() {
         reportInfo """
-            `wlrctl` was once uncertain in trixie. Without it, `wtype` still covers the keyboard
-            and `grim` and `slurp` still cover screenshots; only pointer control is lost. This
-            scenario records which is the case and deliberately does *not* fail when a package is
-            absent, because the sandbox still works without it.
+            `wlrctl` and `firefox-esr` were once uncertain in trixie. Without `wlrctl`, `wtype`
+            still covers the keyboard, and `grim` and `slurp` still cover screenshots; only
+            pointer control would be lost. This scenario records which is the case, and on purpose
+            does not fail when a package is absent, because the sandbox still works without it.
         """
-        expect: 'a recorded answer either way, so the Containerfile can be written with confidence'
+        expect: 'the query succeeds, and the report says for each package whether trixie has it'
             var result = Spike.run('podman', 'run', '--rm', Spike.BASE_IMAGE, 'sh', '-lc',
                     'apt-get update -qq >/dev/null 2>&1; ' +
                     DOUBTED.keySet().collect { "echo \"$it=\$(apt-cache policy $it 2>/dev/null | sed -n 's/^  Candidate: //p')\"" }.join('; '))
