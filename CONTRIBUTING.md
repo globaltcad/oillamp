@@ -147,7 +147,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `GivingTheAgentAGitIdentitySpec` | the name and email on the agent's commits |
 | `Travelling_Back_In_Time_Spec` | `save`, `history` and `restore` |
 | `KeepingHistoryWithinADiskBudgetSpec` | the initial-size allowance, automatic pruning, shallow branches, previews, active-run bases and retained run numbers |
-| `AskingInAConversationSpec` | `ask --in`, `--after`, `--instead-of` |
+| `Asking_In_A_Conversation_Spec` | `ask --in`, `--after`, `--instead-of` |
 | `ReadingTheAgentsConversationsSpec` | `conversations` and `Lamp.conversations` |
 | `FollowingARunSpec` | `ask --no-wait`, `cancel`, and following a run through `Lamp` |
 | `Following_A_Session_Spec` | `follow` |

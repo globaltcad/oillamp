@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
  *  {@code dev.lamp}.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class AskingInAConversationSpec extends Specification {
+class Asking_In_A_Conversation_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
