@@ -5,11 +5,14 @@ import dev.lamp.LampEvent
 import dev.oillamp.Machine
 import dev.oillamp.OilLamp
 import groovy.json.JsonSlurper
+import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
+import spock.lang.Subject
 import spock.lang.Tag
+import spock.lang.Title
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -17,21 +20,24 @@ import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
-/**
- * The model key, in a real session on this machine: real image, real container, real harnesses,
- * and, when the key in this environment is a real Eden AI key, real model requests.
- *
- * <p>oillamp is started exactly as a user starts it, {@code oillamp at <dir>}, as a separate process
- * with {@code EDENAI_API_KEY} in its environment. Its terminal is configured to be the shell command
- * itself, with no window, so the spike opens nothing on this desktop. Commands then reach the
- * sandbox over ssh, as the agent's shell does.
- *
- * <p>When no key is set here, a made-up one stands in: every check that the key stays out still
- * runs, and the checks that need Eden AI to answer are skipped.
- *
- * <p>The key itself never appears in this spike's output. Checks that involve it compare in a
- * helper and report only whether, and where, it was found.
- */
+@Title('Keeping the model key out of a real sandbox')
+@Narrative('''
+The model key, in a real session on this machine: real image, real container, real harnesses,
+and, when the key in this environment is a real Eden AI key, real model requests.
+
+Oillamp is started exactly as a user starts it, `oillamp at <dir>`, as a separate process with
+`EDENAI_API_KEY` in its environment. Its terminal is set to be the shell command itself, with no
+window, so the spike opens nothing on this desktop. Commands then reach the sandbox over ssh, as
+the agent's shell does.
+
+When no key is set here, a made-up one stands in: every check that the key stays out still runs,
+and the checks that need Eden AI to answer are skipped.
+
+The key itself never appears in this spike's output. Checks that involve it compare in a helper,
+and report only whether, and where, it was found. This is a spike, and its scenarios run in order
+on one session.
+''')
+@Subject(OilLamp)
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
@@ -60,15 +66,15 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
 
     def 'A session starts with the key in oillamp\'s environment, and the key goes no further'() {
         reportInfo """
-            The user starts oillamp with EDENAI_API_KEY set, as the quick start says. oillamp reads
-            it and keeps it in memory. It must not write it into the lamp: not into the settings
-            file the container reads, not into the agent's home, not into its own terminal output.
-            The lamp directory is on the user's disk, and the terminal output is what people paste
-            into bug reports.
+            The user starts oillamp with `EDENAI_API_KEY` set, as the quick start says. Oillamp
+            reads the key and keeps it in memory. It must not write the key into the lamp: not into
+            the settings file the container reads, not into the agent's home, not into its own
+            terminal output. The lamp directory is on the user's disk, and the terminal output is
+            what people paste into bug reports.
 
             The first start after a change to the image builds the image, which takes minutes.
         """
-        given: 'a lamp whose shell "window" is the shell command itself, so no window opens'
+        given: 'a lamp whose shell "window" is the shell command itself, so that no window opens'
             Files.createDirectories(directory)
             Files.writeString(directory.resolve('oillamp.toml'), '''
                 schema_version = 1
@@ -78,7 +84,7 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
                 command = ["{cmd}"]
             '''.stripIndent())
 
-        when: 'oillamp is started as a user starts it, with the key in its environment'
+        when: '`oillamp at` is started as a user starts it, with the key in its environment'
             var java = Path.of(System.getProperty('java.home'), 'bin', 'java').toString()
             var builder = new ProcessBuilder(java, '-cp', System.getProperty('java.class.path'),
                                              'dev.oillamp.OilLamp', 'at', directory.toString())
@@ -94,7 +100,7 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
         and: 'no file in the lamp holds the key, whatever it is called'
             filesHolding(directory).isEmpty()
 
-        and: 'and oillamp did not print it'
+        and: 'oillamp did not print it'
             !holdsKey(Files.readString(engineOutput))
     }
 
@@ -102,10 +108,10 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
         reportInfo """
             The agent can read every file its user may read, the environment of every process it
             runs, and their command lines. Here all of that is copied out of the sandbox and
-            searched, on the host, for the key: the agent's home, the session's settings, the
-            sockets and recordings, /tmp, /run, /etc, and /proc for every process the agent can
-            see. The key is only searched for out here, because sending it in to search for would
-            put it in the sandbox.
+            searched for the key on the host: the agent's home, the session's settings, the sockets
+            and recordings, `/tmp`, `/run`, `/etc`, and `/proc` for every process the agent can
+            see. The key is searched for only out here, because sending it in to search for would
+            put it in the sandbox. This scenario uses the session the spike started first.
         """
         when: 'everything the agent can read is copied out'
             var copied = inSandboxBytes('''
@@ -120,16 +126,17 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
             copied.length > 100_000
             new String(copied, StandardCharsets.ISO_8859_1).contains('EDENAI_API_KEY=held-by-oillamp-on-the-host')
 
-        and: 'and the key is not in any of it'
+        and: 'the key is not in any of it'
             !holdsKey(copied)
     }
 
-    def 'The harnesses in the sandbox point at the relay, and hold only the placeholder'() {
+    def 'The harnesses in the sandbox point at the model relay, and hold only the placeholder key'() {
         reportInfo """
-            What the agent sees when it looks: the model address is the relay inside the sandbox,
-            and the key is a placeholder that says where the real one is.
+            What the agent sees when it looks: the model address is the model relay inside the
+            sandbox, and the key is a placeholder that says where the real one is. This scenario
+            uses the session the spike started first.
         """
-        expect:
+        expect: '`EDENAI_BASE_URL` and opencode\'s configuration name the relay, and `EDENAI_API_KEY` holds the placeholder'
             inSandbox('echo "$EDENAI_BASE_URL"').strip() == 'http://127.0.0.1:3129/v3'
             inSandbox('echo "$EDENAI_API_KEY"').strip() == 'held-by-oillamp-on-the-host'
             new JsonSlurper().parseText(inSandbox('cat "$OPENCODE_CONFIG"'))
@@ -155,37 +162,37 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
     }
 
     @Requires({ REAL_KEY })
-    def 'Through the relay, the model answers, with the key the sandbox never had'() {
+    def 'Through the model relay, the model answers, with the key the sandbox never had'() {
         reportInfo """
-            A tiny chat request from the sandbox, sent with `curl` to the model relay at
-            `EDENAI_BASE_URL`, with the placeholder key the sandbox holds. oillamp adds the real
-            key on the host, sends it to Eden AI's EU endpoint over HTTPS, and the model answers.
-            The request is tiny (five tokens at most) and needs a real key in this environment;
-            without one, it is skipped.
+            A small chat request from the sandbox, sent with `curl` to the model relay at
+            `EDENAI_BASE_URL`, with the placeholder key the sandbox holds. Oillamp adds the real
+            key on the host, sends the request to Eden AI's EU endpoint over HTTPS, and the model
+            answers. The request asks for five tokens at most, and needs a real key in this
+            environment; without one, the scenario is skipped.
         """
-        when:
+        when: '`curl` in the sandbox sends a chat request to the relay, with the placeholder key'
             var answer = inSandbox('''curl -s --max-time 120 \\
                          -H "Authorization: Bearer $EDENAI_API_KEY" -H 'Content-Type: application/json' \\
                          -d '{"model":"''' + MODEL + '''","max_tokens":5,"messages":[{"role":"user","content":"Reply with the word ok"}]}' \\
                          "$EDENAI_BASE_URL/chat/completions"''')
 
-        then:
+        then: 'the model answered'
             new JsonSlurper().parseText(answer).choices[0].message.content instanceof String
     }
 
     @Requires({ REAL_KEY })
     def 'The harness pi, holding only the placeholder key, gets an answer from the model'() {
         reportInfo """
-            The real test of the whole arrangement: the harness itself, as the agent would run it.
-            This needs a real key in this environment; without one, it is skipped. pi's Eden AI
+            The whole arrangement, tested with the harness itself, as the agent would run it. This
+            needs a real key in this environment; without one, it is skipped. pi's Eden AI
             extension reads the relay's address and the placeholder, asks for the model catalog
             and then for an answer, and both requests leave the sandbox without a key and reach
             Eden AI with one.
         """
-        when:
+        when: 'pi in the sandbox is asked to reply with one word'
             var answer = inSandbox("pi --provider edenai --model '${MODEL}' --no-session -p 'Reply with the single word ok.' </dev/null")
 
-        then:
+        then: 'it answers "ok"'
             answer.toLowerCase().contains('ok')
     }
 
@@ -198,23 +205,24 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
             the real key on the host. This needs a real key in this environment; without one, it
             is skipped.
         """
-        when:
+        when: 'opencode in the sandbox is asked to reply with one word'
             var answer = inSandbox("opencode run -m 'edenai/${MODEL}' 'Reply with the single word ok.' </dev/null")
 
-        then:
+        then: 'it answers "ok"'
             answer.toLowerCase().contains('ok')
     }
 
     def 'Every model request is in the network log, and the key never is'() {
         reportInfo """
-            The user sees in the network log that the agent used the model, and how much. The
-            log is on the user's disk and gets shared, so the key must not be in it.
+            The user sees in the network log that the agent used the model, and how much. The log
+            is on the user's disk, and gets shared, so the key must not be in it. With a made-up
+            key, no model request reached Eden AI, so only the second half is checked.
         """
-        when:
+        when: 'the session\'s logs are read'
             var logs = Files.list(directory.resolve('.oillamp/logs')).toList()
             var text = logs.collect { Files.readString(it) }.join('\n')
 
-        then:
+        then: 'with a real key they hold model requests, and they never hold the key'
             REAL_KEY ? text.contains('"channel":"model"') : true
             !holdsKey(text)
     }
@@ -224,11 +232,11 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
             After the session, the lamp is just files on the user's disk. Not one of them may hold
             the key, including anything written while shutting down.
         """
-        when:
+        when: '`oillamp stop` ends the session'
             var stopped = oillamp('stop', directory.toString())
             engine.waitFor(2, TimeUnit.MINUTES)
 
-        then:
+        then: 'it succeeds, the engine has exited, and neither the lamp nor the engine\'s output holds the key'
             stopped.status() == LampExitStatus.SUCCESS
             !engine.alive
             filesHolding(directory).isEmpty()
