@@ -1,46 +1,60 @@
 package oillamp
 
 import dev.lamp.LampExitStatus
+import dev.oillamp.OilLamp
+import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
+import spock.lang.Title
 
 import java.nio.file.Path
 
-/**
- *  `oillamp doctor` is the command a user reaches for when something is wrong, or before they
- *  trust the tool with anything. Its whole value is the quality of what it tells them.
- */
+@Title('Checking the machine')
+@Narrative('''
+`oillamp doctor` checks whether this machine can run oillamp, and changes nothing. Someone runs it
+when something is wrong, or before they trust oillamp with anything, so what matters is what it
+tells them: what it found, what is missing, and the command that fixes it.
+
+`oillamp at` runs the same checks, and fixes what it may. With installing allowed, a missing
+package becomes a step in its plan; with `--no-install`, or `host.auto_install = false`, it is a
+reported problem.
+
+The machine is simulated: a stock Ubuntu 24.04 desktop with everything oillamp needs, unless a
+scenario takes something away.
+''')
+@Subject(OilLamp)
 class Checking_The_Machine_Spec extends Specification {
 
     @TempDir Path tmp
-    @Subject ScenarioHost host
+    ScenarioHost host
 
     def setup() { host = new ScenarioHost(tmp) }
 
     def 'On a machine that is ready, `oillamp doctor` lists what it checked'() {
         reportInfo """
-            The happy path still has to *say* something. A user running `doctor` on a machine that
-            is fine should see what was actually checked - the distribution, the session type, the
-            podman version and how it runs - not a bare "OK" they have no reason to believe.
+            Let's consider a machine that has everything oillamp needs: a stock Ubuntu desktop.
+            `oillamp doctor` should still say what it checked there: the distribution, the session
+            type, the podman version and how podman runs. A bare "OK" would give the user no reason
+            to believe it.
         """
         given: 'a stock Ubuntu desktop with everything oillamp needs'
             var oillamp = host.oillamp
 
-        when: 'the user asks oillamp to check the machine'
+        when: '`oillamp doctor` is run'
             var outcome = oillamp.run('doctor')
 
         then: 'it succeeds'
             outcome.status() == LampExitStatus.SUCCESS
 
-        and: 'nothing is reported as wrong'
+        and: 'it reports no problem'
             outcome.errors().isEmpty()
 
-        and: 'the user can see which distribution and session it found'
+        and: 'it names the distribution and the session it found'
             outcome.console().contains('Ubuntu 24.04')
             outcome.console().contains('Wayland (GNOME)')
 
-        and: 'and that podman is there, rootless, with the runtime it will use'
+        and: 'it names podman\'s version, that podman runs rootless, and its runtime, crun'
             outcome.console().contains('podman 5.4.2')
             outcome.console().contains('rootless')
             outcome.console().contains('crun')
@@ -48,43 +62,40 @@ class Checking_The_Machine_Spec extends Specification {
 
     def 'On a machine without podman, `oillamp doctor` names what to install and how'() {
         reportInfo """
-            oillamp is allowed to install the host packages it needs - podman and a few others -
-            but `doctor` is the one command that never changes anything at all. So on a machine
-            that is missing packages, the only useful thing doctor can do is name them and hand
-            over a command that can be pasted.
+            Let's consider a machine on which podman and socat were never installed. `oillamp at`
+            may install the host packages it needs, but `oillamp doctor` never changes anything. So
+            on such a machine doctor reports `OIL-PKG-001`, names the missing packages, and gives a
+            command that can be pasted.
 
-            The *second* remedy is the one this scenario guards. Doctor suppresses installing
-            internally, and when that was a plain boolean it was indistinguishable from the user
-            passing --no-install - so doctor told people to "drop --no-install", naming a flag they
-            had never passed and implying oillamp could not install packages at all. That is the
-            opposite of the truth, and it misled a real reader. Doctor must instead point at
-            `oillamp at`, which is the command that does install things.
+            Its second remedy points at `oillamp at`, the command that installs them. An earlier
+            doctor told people to "drop --no-install" instead: a flag they had never passed, which
+            suggested that oillamp could not install packages at all.
 
-            The exit code matters as much as the text: 3 means "prerequisites missing", distinct
-            from a generic failure, so a script wrapping oillamp can tell the two apart.
+            The exit status is 3, `PREREQUISITES_MISSING`, rather than a general failure, so that a
+            script that runs oillamp can tell the two apart.
         """
         given: 'a machine where podman and socat were never installed'
             host.machine { it.withoutPodman().withoutPackages('socat') }
 
-        when: 'the user checks the machine'
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
         then: 'oillamp reports the prerequisites as missing, with its own problem code'
             outcome.reported('OIL-PKG-001')
 
-        and: 'it exits with the code that specifically means "prerequisites missing"'
+        and: 'it exits with `PREREQUISITES_MISSING`'
             outcome.status() == LampExitStatus.PREREQUISITES_MISSING
 
-        and: 'both missing packages are named'
+        and: 'the problem names both missing packages'
             var problem = outcome.errors().find { it.code().value() == 'OIL-PKG-001' }
             problem.whatHappened().contains('podman')
             problem.whatHappened().contains('socat')
 
-        and: 'the user is given a command they can paste'
+        and: 'one remedy is an `apt-get install` command that can be pasted'
             problem.fixes().any { it.command().orElse('').startsWith('sudo apt-get install -y') }
             problem.fixes().any { it.command().orElse('').contains('podman') }
 
-        and: 'and pointed at the command that installs them, not at a flag they never passed'
+        and: 'another points at `oillamp at`, and none at `--no-install`'
             problem.fixes().any { it.description().contains('oillamp at') }
             problem.fixes().every { !it.description().contains('--no-install') }
     }
@@ -92,67 +103,61 @@ class Checking_The_Machine_Spec extends Specification {
     def 'Oillamp reports every missing prerequisite at once, not one per attempt'() {
         reportInfo """
             Let's consider a machine with three problems at once: podman is missing, the user has
-            no block of subordinate ids (the spare user ids rootless podman needs), and there is
-            no terminal program to open the agent's shell in. Oillamp should report three
-            problems, so the user fixes them in one go. Discovering them one attempt at a time -
-            fix, start again, discover the next - turns a five minute setup into an afternoon.
+            no block of subordinate ids (the spare user ids rootless podman needs), and there is no
+            terminal program to open the agent's shell in. Were oillamp to report one problem per
+            attempt, the user would fix it, start again and find the next, three times over. So
+            oillamp runs every check that does not depend on another, and reports all their
+            problems together: `OIL-PKG-001`, `OIL-HOST-010` and `OIL-TERM-001`.
 
-            So oillamp runs every independent check, and reports all their problems together:
-            `OIL-PKG-001`, `OIL-HOST-010` and `OIL-TERM-001`.
-
-            The scenario starts `oillamp at` with `--no-install`, because that is when oillamp has
-            to *report* rather than fix: with installing allowed, the first two of these become
-            steps in a plan instead.
+            The scenario runs `oillamp at --no-install`, because only then does oillamp report the
+            first two problems. With installing allowed, they become steps in its plan instead.
         """
-        given: 'a machine missing packages AND missing a subordinate id range AND with no terminal'
+        given: 'a machine without podman, without a block of subordinate ids, and without a terminal program'
             host.machine {
                 it.withoutPodman()
                   .withoutSubordinateIds()
                   .withoutTerminals()
             }
 
-        when: 'the user asks oillamp to set up without letting it change the machine'
+        when: '`oillamp at --no-install` is run'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--no-install')
 
-        then: 'all three are reported together, in one run'
+        then: 'it reports all three problems, in one run'
             outcome.reported('OIL-PKG-001')
             outcome.reported('OIL-HOST-010')
             outcome.reported('OIL-TERM-001')
 
-        and: 'and the exit code says the machine is not ready, rather than something generic'
+        and: 'it exits with `PREREQUISITES_MISSING`'
             outcome.status() == LampExitStatus.PREREQUISITES_MISSING
     }
 
     def 'With installing allowed, oillamp plans to install missing prerequisites instead of reporting them'() {
         reportInfo """
-            This is the central promise of the whole tool: on a machine straight out of the box,
-            the user types one command, `oillamp at`, and oillamp fixes whatever it can fix by
-            itself. Here podman is missing and the user has no block of subordinate ids (the spare
-            user ids rootless podman needs).
-
-            That promise comes with an obligation: a program that installs system packages must
-            say so first. So everything oillamp would change on the machine can be printed in
-            advance, and `--dry-run` is how: it prints the complete plan - every package, every
-            command - and carries none of it out. The scenario reads that plan: a step that
-            installs podman, a step that adds the id block, and a step that has podman re-read its
-            id map, and no `OIL-PKG-001` problem.
+            Let's consider a machine without podman, whose user has no block of subordinate ids
+            (the spare user ids rootless podman needs). Oillamp is meant to work on a machine
+            straight out of the box: the user types `oillamp at`, and oillamp fixes what it can fix
+            itself. A program that installs system packages must say so first, so
+            `oillamp at --dry-run` prints everything oillamp would change on the machine, every
+            package and every command, and carries none of it out. The scenario reads that plan: a
+            step that installs podman, a step that adds the block of ids, a step that has podman
+            read its id map again, and no `OIL-PKG-001`.
         """
         given: 'a machine with no podman and no subordinate id range, but a terminal and sudo'
             host.machine { it.withoutPodman().withoutSubordinateIds() }
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
-        then: 'installing the packages and adding an id range are planned, not reported as errors'
+        then: 'the plan installs the packages and adds a block of ids, and oillamp reports no `OIL-PKG-001`'
             outcome.stepKinds().contains('InstallPackages')
             outcome.stepKinds().contains('AddSubIds')
             !outcome.reported('OIL-PKG-001')
 
-        and: 'the plan says which packages, and which id range it picked'
+        and: 'the plan names podman, and the block of ids it picked'
             outcome.steps().any { it.contains('podman') }
             outcome.steps().any { it.contains('100000-165535') }
 
-        and: 'podman is told to re-read the id map afterwards, or it would keep the old one'
+        and: 'the plan has podman read its id map again afterwards, or podman would keep the old one'
             outcome.stepKinds().contains('PodmanMigrate')
     }
 
@@ -170,7 +175,7 @@ class Checking_The_Machine_Spec extends Specification {
             they could read and change it. podman reports no error for an overlap, so oillamp has to avoid
             it when it picks the block.
 
-            oillamp starts at id 100000 and goes through the existing blocks in order. When a block is in
+            Oillamp starts at id 100000 and goes through the existing blocks in order. When a block is in
             the way, it moves the start past the end of that block, rounded up to the next multiple of
             65536. It stops at the first start where 65536 ids fit before the next block.
 
@@ -189,7 +194,7 @@ class Checking_The_Machine_Spec extends Specification {
                 }
             }
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
         then: 'the plan adds the first block that is free'
@@ -205,118 +210,113 @@ class Checking_The_Machine_Spec extends Specification {
 
     def 'Oillamp plans to install crun alongside podman, because Ubuntu\'s podman would otherwise use runc'() {
         reportInfo """
-            Found the first time oillamp ran on real hardware, which no simulation would have
-            caught: Ubuntu 24.04 ships podman 4.9.3 with **runc**, not crun. Using the GPU in the
-            sandbox needs crun, because only crun supports `--group-add keep-groups`, which
-            carries the host's `render` group into the container.
+            Ubuntu 24.04 ships podman 4.9.3 with runc, not crun. This was found the first time
+            oillamp ran on real hardware; the simulated machine could not have shown it. The
+            sandbox needs crun to use the graphics card, because only crun supports
+            `--group-add keep-groups`, which carries the host's `render` group into the container.
 
-            The failure mode is what makes this worth a scenario rather than a comment. Nothing
-            fails. The sandbox's desktop is drawn by the processor instead of the graphics card,
-            without an error, on the *default* setting (`display.gpu = auto`) of the *primary
-            target platform*. A user would have no error message to search for.
-
-            So crun is a required package, not an optional extra, and this scenario exists to
-            stop someone removing it later as "podman already works without it" - which is true,
-            and is exactly the trap.
+            Without crun, nothing fails: the sandbox's desktop is drawn by the processor instead of
+            the graphics card, without an error, with the default setting `display.gpu = auto`, on
+            Ubuntu, the platform oillamp is made for first. The user would have no error message to
+            search for. So crun is a required package, and this scenario keeps it one, although
+            podman works without it.
         """
         given: 'a stock Ubuntu where podman is present but crun is not'
             host.machine { it.withoutPackages('crun') }
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
-        then: 'crun is installed rather than left to chance'
+        then: 'the plan installs crun'
             outcome.stepKinds().contains('InstallPackages')
             outcome.steps().any { it.contains('crun') }
 
-        and: 'and the user is told why a runtime they did not ask for is being installed'
+        and: 'the plan says why: Ubuntu\'s podman uses runc, and the `render` group needs crun'
             outcome.stepDetails().any { it.contains('runc') && it.contains('render group') }
     }
 
     def 'Oillamp plans to install slirp4netns, because rootless podman cannot build an image without it'() {
         reportInfo """
-            This was found by running real podman, and is an example of why the spike tests (tests
-            that run real podman to confirm an assumption) exist. The error is not subtle -
-            `podman run` fails outright with
+            This was found by running real podman, in a spike: a test that runs real third-party
+            tools to check an assumption. Without slirp4netns, rootless podman fails with
 
                 could not find slirp4netns, the network namespace can't be configured
 
-            - but nothing in oillamp would have predicted it, because the simulation only knows
-            what we already believed, and we believed podman brought its own networking.
+            The simulated machine did not predict it, because it knows only what we believed, and
+            we believed that podman brought its own networking.
 
-            The subtlety is *where* it fails. The sandbox is started with no network interfaces at
-            all, and so genuinely needs no networking support from podman; every scenario about
-            running the container would have passed. Building the image is the step that needs a
-            network, because that is where apt-get runs. So it would have worked on the
-            developer's machine, where the image was already built, and failed for every new user.
+            The sandbox itself starts with no network interfaces, `--network=none`, and needs no
+            networking from podman, so every scenario about running the container passed. Building
+            the image does need a network, because apt-get runs there. So oillamp worked on a
+            machine where the image was already built, and failed for every new user.
         """
         given: 'a machine with podman but no rootless networking backend'
             host.machine { it.withoutPackages('slirp4netns') }
 
-        when: 'the user asks what oillamp would do'
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
-        then: 'it is installed along with everything else, before an image build needs it'
+        then: 'the plan installs slirp4netns, before an image build needs it'
             outcome.stepKinds().contains('InstallPackages')
             outcome.steps().any { it.contains('slirp4netns') }
 
-        and: 'and the reason distinguishes building the image from running the sandbox'
+        and: 'the plan says why: the sandbox runs with `--network=none`, but building the image needs a network'
             outcome.stepDetails().any { it.contains('--network=none') }
     }
 
     def 'When AppArmor blocks rootless podman, `oillamp doctor` names AppArmor and its remedies'() {
         reportInfo """
             Ubuntu 23.10 and newer refuse unprivileged user namespaces to programs without a
-            matching AppArmor profile. Rootless podman needs them, so oillamp simply does not
-            work - and the raw error ("cannot clone: Operation not permitted") tells a user
-            nothing about why or what to do.
+            matching AppArmor profile. Rootless podman needs them, so oillamp does not work, and the
+            raw error, "cannot clone: Operation not permitted", tells the user neither why nor what
+            to do.
 
-            This is the single most likely reason oillamp fails to start on a current Ubuntu, so
-            it gets its own problem code and its own ordered remedies. Note the third remedy is
-            deliberately last and explains the trade-off: turning the sysctl off weakens a
-            system-wide protection, not just oillamp's sandbox, so oillamp will never do it by
-            itself.
+            This is the most likely reason that oillamp fails to start on a current Ubuntu, so it
+            has its own problem code, `OIL-PODMAN-004`, and its own remedies, the safest first. The
+            last one turns the sysctl off, and says what that costs: it weakens a protection of the
+            whole system, not only of oillamp's sandbox, so oillamp never does it itself.
         """
         given: 'a modern Ubuntu whose AppArmor policy blocks unprivileged user namespaces'
             host.machine { it.userNamespacesBlockedByAppArmor() }
 
-        when: 'the user checks the machine'
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
-        then: 'oillamp names the actual cause rather than the symptom'
+        then: 'it reports `OIL-PODMAN-004`, whose title names AppArmor'
             outcome.reported('OIL-PODMAN-004')
             var problem = outcome.errors().find { it.code().value() == 'OIL-PODMAN-004' }
             problem.title().contains('AppArmor')
 
-        and: 'it shows the user the command it ran and what the kernel setting says'
+        and: 'it shows the command it ran, and what the kernel setting says'
             outcome.console().contains('$ podman unshare true')
             outcome.console().contains('apparmor_restrict_unprivileged_userns: 1')
 
-        and: 'the safe remedies come first'
+        and: 'the first remedy is the safe one: Ubuntu-packaged podman'
             var fixes = problem.fixes().collect { it.description() }
             fixes.first().contains('Ubuntu-packaged podman')
 
-        and: 'and disabling the protection is offered last, with the consequence spelled out'
+        and: 'the last remedy turns the protection off, and says that this weakens it'
             fixes.last().contains('weakens')
             problem.fixes().last().command().get().contains('apparmor_restrict_unprivileged_userns=0')
     }
 
-    def 'Oillamp\'s `doctor` command reports a podman that does not answer under another code than one that is too old'() {
+    def '`oillamp doctor` reports a podman that does not answer under another code than one that is too old'() {
         reportInfo """
-            oillamp asks podman for its version before anything else. A podman that fails to
-            answer, often a stale copy earlier on PATH or a broken configuration file, used to be
-            reported under the same code as one that is too old, and a user looking the code up
-            would go off to upgrade a podman that is new enough. It has its own code now, and the
-            fixes for it: see what podman says, and check which podman is on PATH.
+            Oillamp asks podman for its version before anything else. A podman that fails to
+            answer, often a stale copy earlier on `PATH` or a broken configuration file, was once
+            reported under the same code as one that is too old, `OIL-PODMAN-001`, and a user who
+            looked the code up would upgrade a podman that is new enough. Now it has its own code,
+            `OIL-PODMAN-005`, and its own remedies: see what podman says, and check which podman is
+            on `PATH`.
         """
         given: 'podman is installed, but asking it for its version fails'
             host.machine { it.commandFailing('podman version', 125,
                     'Error: cannot parse configuration file containers.conf') }
 
-        when:
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
-        then:
+        then: 'it reports `OIL-PODMAN-005`, not `OIL-PODMAN-001`, and a remedy names `PATH`'
             outcome.reported('OIL-PODMAN-005')
             !outcome.reported('OIL-PODMAN-001')
             var problem = outcome.errors().find { it.code().value() == 'OIL-PODMAN-005' }
@@ -324,86 +324,84 @@ class Checking_The_Machine_Spec extends Specification {
             problem.fixes().any { it.description().contains('PATH') }
     }
 
-    def 'Oillamp\'s `doctor` command runs without a graphical session, which `oillamp at` refuses to'() {
+    def '`oillamp doctor` runs without a graphical session, where `oillamp at` refuses to'() {
         reportInfo """
             `oillamp at` opens two windows, so it refuses to run without a graphical session.
-            `doctor` must not: "I am on a plain SSH login and oillamp will not start" is exactly
-            the situation a user runs doctor to diagnose. Refusing to diagnose it would be absurd.
+            `oillamp doctor` must still run there: "I am on a plain SSH login and oillamp will not
+            start" is a situation someone runs doctor to diagnose.
 
-            Oillamp refuses `oillamp at` there with `OIL-HOST-003`, and the problem names the way
-            round it. Someone who asked for `--no-viewer` still gets a shell window, which is easy
-            to miss; `--no-windows` opens nothing at all.
+            `oillamp at` reports `OIL-HOST-003` there, and the problem names a way round it:
+            `--no-windows`, which opens no window at all. `--no-viewer` is easy to mistake for it,
+            but still opens a shell window.
         """
         given: 'a machine reached over SSH, with no desktop session'
             host.machine { it.noGraphicalSession() }
 
-        when: 'the user checks the machine'
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
-        then: 'doctor still runs and reports the machine as usable'
+        then: 'it succeeds'
             outcome.status() == LampExitStatus.SUCCESS
 
-        when: 'but they try to actually start a session'
+        when: '`oillamp at --dry-run` is run'
             var session = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
 
-        then: 'that is refused, because there is nowhere to put the terminal and the viewer'
+        then: 'it reports `OIL-HOST-003`: there is nowhere to put the shell window and the viewer'
             session.reported('OIL-HOST-003')
 
-        and: 'the user is told how to run a session without windows instead'
+        and: 'a remedy runs the session with `--no-windows`'
             session.errors().first().fixes().any { it.command().orElse('').contains('--no-windows') }
     }
 
     def 'Oillamp tells a user who is not in the graphics card\'s group the command that adds them'() {
         reportInfo """
-            A graphics card makes the sandbox's desktop faster, and nothing else. It is therefore
-            never allowed to stop a session: when oillamp cannot use the card, it draws the desktop
-            with the processor instead and says why.
+            A graphics card makes the sandbox's desktop faster, and nothing else. So it never stops
+            a session: when oillamp cannot use the card, it draws the desktop with the processor
+            instead, and says why.
 
-            Saying why turned out not to be enough. "You are not in the 'render' group" is a fact,
-            not an answer, and the first person to read that line asked what exactly they were
-            supposed to do about it, and on which machine.
+            "You are not in the 'render' group" says why, but not what to do, and the first person
+            to read that line asked what exactly to do, and on which machine. So the line carries
+            the command, with the real group and user name from the probe, and says what is easy to
+            miss: a new group reaches only processes started after a new login, so the session
+            running now does not get it.
 
-            So the line carries the command, with the real group and the real user name filled in
-            from the probe, and says the part that is easy to miss: a new group only reaches
-            processes started after a fresh login, so the session running now will not see it.
-
-            oillamp does not run this itself, even though it does run `sudo usermod` elsewhere, to
-            give the user the block of spare user-id numbers that rootless containers need. The
-            difference is that the id numbers are a prerequisite and this is not: everything works
-            without the graphics card, just more slowly. And since the change cannot take effect
-            until the user logs in again, doing it
-            silently would leave them on software rendering anyway, now with an altered account.
+            Oillamp does not run that command itself, although it does run `sudo usermod` to give
+            the user a block of subordinate ids. Those ids are a prerequisite, and the group is
+            not: everything works without the graphics card, only more slowly. And the change
+            takes effect only after the user logs in again, so running it unasked would leave them
+            with the desktop drawn by the processor all the same, and a changed account.
         """
         given: 'a machine with a render node the user has no access to'
             var lamp = host.lampPath()
             host.machine { it.renderNode('/dev/dri/renderD128', 'render', 'i915') }
 
-        when:
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', lamp.toString(), '--dry-run')
 
         then: 'the reason is stated'
             outcome.console().contains("not in the 'render' group")
 
-        and: 'and so is the command, for this machine and this user'
+        and: 'so is the command, for this machine and this user'
             outcome.console().contains('sudo usermod -aG render dev')
 
-        and: 'including the part that catches people out'
+        and: 'and the step that is easy to miss: log out and back in'
             outcome.console().contains('log out and back in')
     }
 
     def 'On an operating system that is not Linux, `oillamp doctor` says at once that oillamp cannot run'() {
         reportInfo """
-            The sandbox is a rootless podman container built on Linux user namespaces. There is
-            no partial version of this on another platform, so oillamp says so plainly instead of
-            failing later with something about missing binaries.
+            The sandbox is a rootless podman container, built on Linux user namespaces. There is no
+            partial version of it on another operating system, so `oillamp doctor` reports
+            `OIL-HOST-001` at once, rather than failing later with a message about missing
+            programs.
         """
-        given: 'oillamp running somewhere that is not Linux'
+        given: 'oillamp running on Mac OS X'
             host.machine { it.notLinux('Mac OS X') }
 
-        when: 'the user checks the machine'
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
-        then:
+        then: 'it reports `OIL-HOST-001`, and does not succeed'
             outcome.reported('OIL-HOST-001')
             outcome.status() != LampExitStatus.SUCCESS
 
@@ -413,18 +411,18 @@ class Checking_The_Machine_Spec extends Specification {
 
     def 'On a Linux without apt, `oillamp doctor` lists the packages to install by hand'() {
         reportInfo """
-            oillamp can only install packages with `apt`, the package manager of Debian and
-            Ubuntu. Nothing else in oillamp depends on the distribution. So on Fedora or Arch the
-            answer is not "unsupported" but "here is the list; install it yourself and oillamp
-            will work". The problem carries the package list for that reason.
+            Oillamp can only install packages with apt, the package manager of Debian and Ubuntu,
+            and nothing else in oillamp depends on the distribution. So on Fedora or Arch,
+            `oillamp doctor` reports `OIL-HOST-002` with the list of packages oillamp needs, for
+            the user to install themselves.
         """
         given: 'a Fedora machine'
             host.machine { it.fedora('42') }
 
-        when: 'the user checks the machine'
+        when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
 
-        then:
+        then: 'it reports `OIL-HOST-002`'
             outcome.reported('OIL-HOST-002')
 
         and: 'the packages oillamp needs are listed, so the user can install them themselves'
@@ -435,9 +433,9 @@ class Checking_The_Machine_Spec extends Specification {
 
     def 'Oillamp installs nothing for a lamp configured with `host.auto_install = false`'() {
         reportInfo """
-            `host.auto_install = false` is the configuration's way of saying what `--no-install`
-            says on the command line: tell me what is missing, but do not run sudo. It used to be
-            accepted and then ignored, so oillamp asked for a sudo password anyway.
+            `host.auto_install = false` in `oillamp.toml` says what `--no-install` says on the
+            command line: report what is missing, but do not run sudo. An earlier oillamp accepted
+            the setting and ignored it, and asked for a sudo password anyway.
         """
         given: 'a machine without podman, and a lamp that says not to install'
             host.machine { it.withoutPodman() }
@@ -449,14 +447,14 @@ class Checking_The_Machine_Spec extends Specification {
                 auto_install = false
             '''.stripIndent())
 
-        when:
+        when: '`oillamp at --dry-run` is run'
             var outcome = host.oillamp.run('at', lamp.toString(), '--dry-run')
 
         then: 'nothing is installed; the missing packages are reported instead'
             !outcome.stepKinds().contains('InstallPackages')
             outcome.reported('OIL-PKG-001')
 
-        and: 'and the advice points at the setting, not at a flag the user never passed'
+        and: 'the advice points at the setting, not at a flag the user never passed'
             outcome.console().contains('auto_install = true')
             !outcome.console().contains('without --no-install')
     }
