@@ -42,7 +42,7 @@ import java.util.zip.InflaterInputStream
  *  would hide exactly the mistakes that lose them.
  */
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
-class TravellingBackInTimeSpec extends Specification {
+class Travelling_Back_In_Time_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host

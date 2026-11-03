@@ -145,7 +145,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `ShowingTheUserTheDesktopSpec` | `lamp show` telling the host there is something to look at |
 | `KeepingWindowsOnTheDesktopSpec` | floating windows kept in reach when the desktop changes size |
 | `GivingTheAgentAGitIdentitySpec` | the name and email on the agent's commits |
-| `TravellingBackInTimeSpec` | `save`, `history` and `restore` |
+| `Travelling_Back_In_Time_Spec` | `save`, `history` and `restore` |
 | `KeepingHistoryWithinADiskBudgetSpec` | the initial-size allowance, automatic pruning, shallow branches, previews, active-run bases and retained run numbers |
 | `AskingInAConversationSpec` | `ask --in`, `--after`, `--instead-of` |
 | `ReadingTheAgentsConversationsSpec` | `conversations` and `Lamp.conversations` |
