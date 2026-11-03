@@ -13,7 +13,7 @@ import java.nio.file.Path
  *  happens then - and about the exit codes, which are a contract for anything wrapping oillamp
  *  in a script.
  */
-class UsingTheCommandLineSpec extends Specification {
+class Using_The_Command_Line_Spec extends Specification {
 
     @TempDir Path tmp
     @Subject ScenarioHost host
