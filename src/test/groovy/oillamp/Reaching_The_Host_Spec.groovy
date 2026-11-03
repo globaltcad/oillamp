@@ -82,7 +82,7 @@ decisions with `Lamp.decidePermission`, as an application would. So what is chec
 request's first byte to the file on the host.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
-class ReachingTheHostSpec extends Specification {
+class Reaching_The_Host_Spec extends Specification {
 
     /** The model the agent answers with, and so the one that judges, unless the file names another. */
     static final String MODEL = 'azure/gpt-6.1-sol'
