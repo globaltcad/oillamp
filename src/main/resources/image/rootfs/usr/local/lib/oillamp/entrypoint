@@ -367,7 +367,7 @@ stop_all() {
     trap - TERM INT
     if [ -n "$REC_PID" ]; then
         # SIGINT, not SIGTERM: wf-recorder finalises the container on INT, and a .mkv killed with
-        # TERM may not be playable. VerifyingTheSandboxDesktopSpec checks the file plays.
+        # TERM may not be playable. Verifying_The_Sandbox_Desktop_Spec checks the file plays.
         kill -INT "$REC_PID" 2>/dev/null || true
         timeout 10 tail --pid="$REC_PID" -f /dev/null || log "recorder did not finish in time"
     fi

@@ -22,7 +22,7 @@ import java.time.Duration
 @Tag('spike')
 @Stepwise
 @Requires({ Spike.containerNetworkWorks() })
-class VerifyingTheSandboxDesktopSpec extends Specification {
+class Verifying_The_Sandbox_Desktop_Spec extends Specification {
 
     static final String IMAGE = 'localhost/oillamp-spike:core'
     static final String CONTAINER = 'oillamp-spike-desktop'
