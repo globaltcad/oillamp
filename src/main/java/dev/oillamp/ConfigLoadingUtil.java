@@ -5,6 +5,7 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 import java.util.Optional;
 
+import dev.lamp.LampHostCommandApproval;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
 
@@ -551,7 +552,7 @@ final class ConfigLoadingUtil {
         boolean enabled = s.bool("enabled", fallback.enabled());
         String requirements = s.string("requirements", fallback.requirements());
         Tuple<String> roots = s.strings("roots", fallback.roots());
-        LampConfig.HostAccess.Commands commands = readCommands(s, fallback.commands());
+        LampHostCommandApproval commands = readCommands(s, fallback.commands());
         int maxReadBytes = bounded(s, "max_read_bytes", fallback.maxReadBytes(), 1, 16 * 1024 * 1024,
                 "a number of bytes from 1 to 16777216");
         boolean allowAdditive = s.bool("allow_additive", fallback.allowAdditive());
@@ -586,12 +587,12 @@ final class ConfigLoadingUtil {
 
     /// `host_access.commands`, one of three words. Anything else is reported, and the lamp keeps
     /// the fallback, which for a new lamp is `off`: a typo must not open the executing tier.
-    private static LampConfig.HostAccess.Commands readCommands(ConfigSection s, LampConfig.HostAccess.Commands fallback) {
+    private static LampHostCommandApproval readCommands(ConfigSection s, LampHostCommandApproval fallback) {
         String text = s.string("commands", fallback.name().toLowerCase(java.util.Locale.ROOT));
         return switch (text) {
-            case "off" -> LampConfig.HostAccess.Commands.OFF;
-            case "ask" -> LampConfig.HostAccess.Commands.ASK;
-            case "checker" -> LampConfig.HostAccess.Commands.CHECKER;
+            case "off" -> LampHostCommandApproval.OFF;
+            case "ask" -> LampHostCommandApproval.ASK;
+            case "checker" -> LampHostCommandApproval.CHECKER;
             default -> {
                 s.invalid("commands", "\"" + text + "\"", "\"off\", \"ask\" (the checker, then you, for every command) or \"checker\" (the checker alone)");
                 yield fallback;

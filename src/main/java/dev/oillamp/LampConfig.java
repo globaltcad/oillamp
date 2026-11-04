@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
 
+import dev.lamp.LampHostCommandApproval;
 import dev.lamp.LampWallpaper;
 
 import sprouts.Association;
@@ -391,7 +392,7 @@ record LampConfig(
     /// @param askTheUser      whether a request outside `roots` goes to a person once the checker
     ///                        allows it, rather than being refused
     public record HostAccess(boolean enabled, String requirements, String checkerModel,
-                             Tuple<String> roots, int maxReadBytes, Commands commands,
+                             Tuple<String> roots, int maxReadBytes, LampHostCommandApproval commands,
                              boolean allowAdditive, boolean askTheUser) {
         public HostAccess {
             if (maxReadBytes < 1) throw new IllegalArgumentException("host_access.max_read_bytes");
@@ -402,18 +403,6 @@ record LampConfig(
         public HostAccess switchedOn() {
             return new HostAccess(true, requirements, checkerModel, roots, maxReadBytes, commands,
                                   allowAdditive, askTheUser);
-        }
-
-        /// `host_access.commands`: whether `host_bash` exists in this lamp, and who allows each
-        /// command. Running a command is the executing tier, the one that can do anything the
-        /// user can, so it is off unless the user names one of the other two.
-        public enum Commands {
-            /// No `host_bash`: the tool is not offered, and a call is refused.
-            OFF,
-            /// The checker judges each command, and then the person is asked before it runs.
-            ASK,
-            /// The checker alone judges each command.
-            CHECKER
         }
     }
 }

@@ -28,7 +28,7 @@ class The_Shape_Of_The_Code_Spec extends Specification {
     static final Set<String> EMBEDDING_API = [
             'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampDirectory', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'LampJobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
-            'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
+            'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostCommandApproval', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
             'LampConversation', 'LampLauncher', 'LampBranch', 'LampSaveOnBranches', 'LampSandbox', 'LampWallpaper',
             'LampWebPort'
     ] as Set

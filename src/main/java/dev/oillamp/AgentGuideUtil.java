@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
+import dev.lamp.LampHostCommandApproval;
+
 import sprouts.Tuple;
 
 /// Writes `~/AGENTS.md`, the guide that tells the agent what kind of machine it is on.
@@ -434,7 +436,7 @@ final class AgentGuideUtil {
 
                 A command run with `%shost_bash` runs as the user, on their computer, in the
                 directory you name; the model that judges it is shown the whole command. %s
-                """.formatted(PI_TOOL_PREFIX, access.commands() == LampConfig.HostAccess.Commands.ASK
+                """.formatted(PI_TOOL_PREFIX, access.commands() == LampHostCommandApproval.ASK
                         ? "The user is asked before each one runs, so tell them what you are about to do and why."
                         : "Say what a command is for, in your own words, before you call it."));
         out.append("""

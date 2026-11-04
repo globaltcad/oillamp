@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
 
+import dev.lamp.LampHostCommandApproval;
 import dev.lamp.LampHostRisk;
 import dev.lamp.LampHostVerdict;
 
@@ -176,7 +177,7 @@ sealed interface HostTool {
     /// lamp whose `host_access.commands` is `ask`; a path past the roots does separately, in
     /// [HostAccess].
     static boolean needsThePerson(HostTool tool, LampConfig.HostAccess access) {
-        return tool instanceof Bash && access.commands() == LampConfig.HostAccess.Commands.ASK;
+        return tool instanceof Bash && access.commands() == LampHostCommandApproval.ASK;
     }
 
     // ─── reading a request ────────────────────────────────────────────────────────────────
