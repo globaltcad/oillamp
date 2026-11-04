@@ -4,7 +4,9 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.event.InputEvent;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -188,14 +190,37 @@ final class ViewPartsUtil {
         final Val<Boolean> changeable,
         final Consumer<Boolean> choose
     ) {
-        return
+        return oneOf(theme, List.of(Choice.of(false, first), Choice.of(true, second)), chosen, changeable, choose);
+    }
+
+    /// One part of a switch: the value choosing it chooses, its words, and what it says to a
+    /// pointer that rests on it, if anything.
+    record Choice<T>(T value, Val<String> words, Optional<Val<String>> tooltip) {
+        static <T> Choice<T> of(T value, Val<String> words) { return new Choice<>(value, words, Optional.empty()); }
+        static <T> Choice<T> of(T value, Val<String> words, Val<String> tooltip) { return new Choice<>(value, words, Optional.of(tooltip)); }
+    }
+
+    /// A switch of parts in a row, one for each of `choices`, as the one between a genie's pages
+    /// in the header: the part of the value `chosen` holds is lit, and choosing a part gives
+    /// its value to `choose`. All are greyed while it cannot be changed.
+    static <T> UIForBox<JBox> oneOf(
+        final Val<Theme> theme,
+        final List<Choice<T>> choices,
+        final Val<T> chosen,
+        final Val<Boolean> changeable,
+        final Consumer<T> choose
+    ) {
+        UIForBox<JBox> well =
             box("ins 2, gap 2")
             .withStyle(Themed.of(changeable, theme), (can, it) -> {
                 Palette p = can.palette();
                 return it.backgroundColor(p.SMOKE()).border(1, can.item() ? p.BORDER() : p.SMOKE()).borderRadius(11);
-            })
-            .add(part(theme, first, chosen.viewAs(Boolean.class, it -> !it), changeable, () -> choose.accept(false)))
-            .add(part(theme, second, chosen, changeable, () -> choose.accept(true)));
+            });
+        for (Choice<T> choice : choices) {
+            UIForButton<JButton> part = part(theme, choice.words(), chosen.viewAs(Boolean.class, it -> it.equals(choice.value())), changeable, () -> choose.accept(choice.value()));
+            well = well.add(choice.tooltip().map(part::withTooltip).orElse(part));
+        }
+        return well;
     }
 
     /// How a part of a switch looks: whether it is chosen, and whether it can be changed.
