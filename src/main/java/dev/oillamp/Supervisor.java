@@ -3,6 +3,7 @@ package dev.oillamp;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -24,6 +25,9 @@ import dev.lamp.LampEvent;
 import dev.lamp.LampSaveKind;
 import dev.lamp.LampProblem;
 import dev.lamp.LampSessionStatus;
+import dev.lamp.LampWebPort;
+import dev.oillamp.Relay.Listening.OnLoopbackPort;
+import dev.oillamp.Relay.Listening.OnUnixSocket;
 
 import sprouts.Tuple;
 
@@ -309,7 +313,12 @@ final class Supervisor {
 
     private void announceState() {
         context.sink().accept(new LampEvent.SessionStateChanged(new LampSessionStatus(
-                state.name(), describeState(), uptime(), state.extraShells())));
+                state.name(), describeState(), uptime(), state.extraShells(), webPorts())));
+    }
+
+    /// The published web servers, or none before the session has opened them.
+    private Tuple<LampWebPort> webPorts() {
+        return served.map(Served::webPorts).orElse(Tuple.of(LampWebPort.class));
     }
 
     private String describeState() {
@@ -475,9 +484,12 @@ final class Supervisor {
     ///                       desktop; failing to open it is only a warning
     /// @param hostAccessDesk the socket of supervised access to the host; only with
     ///                       `host_access.enabled`
-    private record Served(Relay primary, Relay extras, Control.Server control, Egress egress,
+    /// @param published      the web servers in the sandbox the browser can open, one relay each;
+    ///                       a port the session could not listen for is missing, with a warning
+    private record Served(Relay<OnUnixSocket> primary, Relay<OnUnixSocket> extras,
+                          Control.Server control, Egress egress,
                           Optional<Control.Server> scheduleDesk, Optional<Control.Server> desktopDesk,
-                          Optional<HostMcp.Server> hostAccessDesk) {
+                          Optional<HostMcp.Server> hostAccessDesk, Tuple<Published> published) {
 
         /// Step 0 of the shutdown: the agent's own sockets, so it cannot start anything new.
         void closeTheAgentsDesks() {
@@ -486,10 +498,12 @@ final class Supervisor {
             hostAccessDesk.ifPresent(HostMcp.Server::close);
         }
 
-        /// Step 1 of the shutdown: no new shells, and the open ones dropped.
-        void closeTheShells() {
+        /// Step 1 of the shutdown: no new shells or web connections, and the open ones dropped,
+        /// while the sandbox still runs.
+        void closeTheWaysIn() {
             primary.close();
             extras.close();
+            for (Published web : published) web.relay().close();
         }
 
         /// Step 4 of the shutdown, once the container is gone: the host-only sockets.
@@ -497,6 +511,37 @@ final class Supervisor {
             egress.close();
             control.close();
         }
+
+        Tuple<LampWebPort> webPorts() { return published.mapTo(LampWebPort.class, Published::port); }
+    }
+
+    /// One published web server: the relay from a loopback port on this machine into the
+    /// sandbox's `web-<name>.sock`, and what the user is told about it.
+    private record Published(Relay<OnLoopbackPort> relay, LampWebPort port) {}
+
+    /// The link to a published web server: the lamp's id under `localhost`, which browsers send to
+    /// the loopback address. A host name of its own gives each lamp's pages their own cookies,
+    /// rather than sharing them with everything else on `localhost`.
+    private URI webLink(int hostPort) {
+        return URI.create("http://" + prepared.layout().agentId().value() + ".localhost:" + hostPort + "/");
+    }
+
+    /// Opens the relay for one published web port. Failing to is a warning: the session runs
+    /// without that link.
+    private Result<Published> publish(LampConfig.Web.Port port) {
+        Result<Relay<OnLoopbackPort>> opened = Relay.openOnLoopback(new Relay.Route<>(
+                new OnLoopbackPort(0), prepared.layout().webSocket(port), new Relay.Admission.AnyNumber(),
+                "the web server '" + port.name() + "' (port " + port.port() + " in the sandbox)"),
+                new WebListener(port));
+        return switch (opened) {
+            case Result.Err<Relay<OnLoopbackPort>>(Tuple<LampProblem> problems) ->
+                    Result.err(ProblemCatalogUtil.webPortNotPublished(port, problems.first()));
+            case Result.Ok<Relay<OnLoopbackPort>> ok -> {
+                int hostPort = ok.value().listening().port();
+                yield Result.ok(new Published(ok.value(),
+                        new LampWebPort(port.name(), port.port(), hostPort, webLink(hostPort))));
+            }
+        };
     }
 
     /// What [#openTheSession()] opened, and what it has to warn about.
@@ -516,19 +561,21 @@ final class Supervisor {
             LampLayout layout = prepared.layout();
             // The primary relay belongs to the terminal window oillamp opened, so a second
             // connection is refused and `oillamp shell` suggested.
-            Result<Relay> primaryRelay = Relay.open(new Relay.Route(
-                    new Relay.Listening.OnUnixSocket(layout.primarySshSocket()), layout.agentSshSocket(),
+            Result<Relay<OnUnixSocket>> primaryRelay = Relay.open(new Relay.Route<>(
+                    new OnUnixSocket(layout.primarySshSocket()), layout.agentSshSocket(),
                     new Relay.Admission.OnlyOne(ProblemCatalogUtil.extraPrimaryRejected(layout.primarySshSocket())),
                     SHELL_LABEL), new PrimaryListener());
-            if (primaryRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return abandon(problems, opened);
-            Relay primary = ((Result.Ok<Relay>) primaryRelay).value();
+            if (primaryRelay instanceof Result.Err<Relay<OnUnixSocket>>(Tuple<LampProblem> problems))
+                return abandon(problems, opened);
+            Relay<OnUnixSocket> primary = ((Result.Ok<Relay<OnUnixSocket>>) primaryRelay).value();
             opened = opened.add(primary::close);
 
-            Result<Relay> extraRelay = Relay.open(new Relay.Route(
-                    new Relay.Listening.OnUnixSocket(layout.extraSshSocket()), layout.agentSshSocket(),
+            Result<Relay<OnUnixSocket>> extraRelay = Relay.open(new Relay.Route<>(
+                    new OnUnixSocket(layout.extraSshSocket()), layout.agentSshSocket(),
                     new Relay.Admission.AnyNumber(), SHELL_LABEL), new ExtraListener());
-            if (extraRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return abandon(problems, opened);
-            Relay extras = ((Result.Ok<Relay>) extraRelay).value();
+            if (extraRelay instanceof Result.Err<Relay<OnUnixSocket>>(Tuple<LampProblem> problems))
+                return abandon(problems, opened);
+            Relay<OnUnixSocket> extras = ((Result.Ok<Relay<OnUnixSocket>>) extraRelay).value();
             opened = opened.add(extras::close);
 
             Result<Control.Server> server = Control.Server.open(layout.controlSocket(), this::answer);
@@ -593,6 +640,18 @@ final class Supervisor {
                 desktopDesk = Optional.of(desktop);
             }
 
+            // The web servers the browser may open. Each that cannot be published is a warning.
+            Tuple<Published> published = Tuple.of(Published.class);
+            for (LampConfig.Web.Port port : prepared.config().web().published()) {
+                Result<Published> web = publish(port);
+                if (web instanceof Result.Err<Published>(Tuple<LampProblem> problems)) warnings = warnings.addAll(problems);
+                else {
+                    Published one = ((Result.Ok<Published>) web).value();
+                    opened = opened.add(one.relay()::close);
+                    published = published.add(one);
+                }
+            }
+
             try {
                 FilesystemUtil.writeFile(layout.sessionMeta(), sessionJson(), PosixMode.PRIVATE_FILE);
             } catch (IOException e) {
@@ -600,7 +659,7 @@ final class Supervisor {
                 warnings = warnings.add(ProblemCatalogUtil.internal("session.json", ProblemCatalogUtil.reason(e)));
             }
             return Result.ok(new Opened(new Served(primary, extras, control, egress,
-                    scheduleDesk, desktopDesk, hostAccessDesk), warnings));
+                    scheduleDesk, desktopDesk, hostAccessDesk, published), warnings));
         } catch (RuntimeException bug) {
             closeNewestFirst(opened);
             throw bug;
@@ -661,8 +720,8 @@ final class Supervisor {
                 new IllegalStateException("the session is ending")));
         runs.stop();
 
-        // 1. Stop accepting shells, and drop the ones that are open.
-        served.ifPresent(Served::closeTheShells);
+        // 1. Stop accepting shells and web connections, and drop the ones that are open.
+        served.ifPresent(Served::closeTheWaysIn);
 
         // 2. Ask the container to stop, so the entrypoint can finish the recording on SIGTERM.
         //    Both podman commands are shielded from Ctrl-C, which would otherwise reach them
@@ -894,6 +953,7 @@ final class Supervisor {
         LampConfig config = prepared.config();
         context.sink().accept(new LampEvent.SessionOpened(prepared.session().value(), SandboxSshUtil.commandArgv(layout),
                 layout.vncSocket(), config.display().width(), config.display().height()));
+        for (LampWebPort port : webPorts()) context.sink().accept(new LampEvent.WebPublished(port));
         // The sandbox is up, so the agent can be woken from now on. Only now, so that an
         // application hears of a job's run only after it has heard that the session is open.
         runs.begin();
@@ -1022,6 +1082,35 @@ final class Supervisor {
         @Override public void trouble(LampProblem problem) { context.sink().accept(new LampEvent.Warning(problem)); }
     }
 
+    /// A published web server. Browsers open many connections, so none is reported on its own.
+    /// When the sandbox does not answer, that is reported once, and again only after a connection
+    /// got through in between, so a page that keeps retrying does not fill the terminal.
+    private final class WebListener implements Relay.Listener {
+        private final LampConfig.Web.Port port;
+        private final AtomicBoolean told = new AtomicBoolean();
+        WebListener(LampConfig.Web.Port port) { this.port = port; }
+        @Override public void connected()    { told.set(false); }
+        @Override public void disconnected() { }
+        @Override public void trouble(LampProblem problem) {
+            if (told.compareAndSet(false, true)) context.sink().accept(new LampEvent.Warning(problem));
+        }
+        /// Nothing in the sandbox took the connection: a server to start, not a sandbox to remove.
+        @Override public void sandboxRefused(String label, Path sandbox, String reason) {
+            trouble(ProblemCatalogUtil.webServerNotAnswering(port, reason));
+        }
+    }
+
+    /// What `oillamp status` says about the published web servers: one per line, or why none.
+    private String describeWeb() {
+        Tuple<LampWebPort> ports = webPorts();
+        if (ports.isEmpty())
+            return prepared.config().web().publish() == LampConfig.Web.Publishing.OFF
+                    ? "off" : "nothing published";
+        Tuple<String> lines = ports.mapTo(String.class, port ->
+                port.name() + ": " + port.link() + " → port " + port.sandboxPort() + " in the sandbox");
+        return String.join("\n" + " ".repeat(12), lines);
+    }
+
     /// Reports what the egress proxy has to say. With `network.console_denied` on (the
     /// default), every denied connection is printed with the rule that denied it, so the user knows
     /// which rule to change.
@@ -1104,6 +1193,7 @@ final class Supervisor {
                     .with("agent", runs.describe())
                     .with("agent_status", runs.status().toJson())
                     .with("schedule", prepared.config().schedule().enabled() ? "on" : "off")
+                    .with("web", describeWeb())
                     .with("viewer", prepared.layout().vncSocket().toString());
             case "stop" -> {
                 post(new SessionEvent.StopRequested("oillamp stop"));

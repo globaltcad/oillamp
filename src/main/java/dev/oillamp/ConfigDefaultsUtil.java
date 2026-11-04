@@ -43,6 +43,9 @@ final class ConfigDefaultsUtil {
             new LampConfig.HostAccess(false, "", "",
                     Tuple.of(String.class), 65536, LampConfig.HostAccess.Commands.OFF, true, false),
              new LampConfig.Autosave(false, false, true, true, 10),
-             new LampConfig.History(2));
+             new LampConfig.History(2),
+             // opencode's web interface, `opencode serve --port 4096`, which the user starts.
+             new LampConfig.Web(LampConfig.Web.Publishing.LISTED,
+                     Tuple.of(LampConfig.Web.Port.class, new LampConfig.Web.Port("opencode", 4096))));
     }
 }

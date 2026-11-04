@@ -51,7 +51,7 @@ These words have one meaning each, in the code and in the documents.
 | **supervisor** | The `oillamp at` process while a session runs. It stays in the foreground of the terminal you started it in. |
 | **primary shell** | The SSH connection from the terminal window oillamp opens. When it connects, the session is up. |
 | **extra shell** | A shell opened with `oillamp shell <dir>`. |
-| **relay** | A place on the host, a Unix socket or a port on 127.0.0.1, that forwards each connection into a Unix socket inside the sandbox. It admits either one connection or any number. Used for SSH. |
+| **relay** | A place on the host, a Unix socket or a port on 127.0.0.1, that forwards each connection into a Unix socket inside the sandbox. It admits either one connection or any number. Used for SSH and for published web servers. |
 | **control socket** | A Unix socket the supervisor listens on, so that `oillamp stop`, `status`, `view`, `shell` and `follow` can talk to a running session. |
 | **egress proxy** | The HTTP proxy inside oillamp that is the sandbox's only way out. "Egress" means outbound. |
 | **forward** | A fixed tunnel from a port inside the sandbox to one address you configured. Not subject to the proxy's rules. |
@@ -89,7 +89,7 @@ table lists every part that runs, what it is written in, where it runs and as wh
 | `swaybg` | third-party | container, infra user | Draws the wallpaper. |
 | `wayvnc` | third-party | container, infra user | Serves the desktop over VNC on a Unix socket. |
 | `wf-recorder` | third-party | container, infra user | Records the desktop, if recording is on. |
-| `socat` bridges | third-party | container, infra user | `127.0.0.1:3128` → proxy socket, and one per forward. |
+| `socat` bridges | third-party | container, infra user | `127.0.0.1:3128` → proxy socket, one per forward, and one per published web port. |
 | `socat` + `sshd -i` | third-party | container, agent user | The SSH listener; one `sshd` per connection. |
 | `dbus-daemon` | third-party | container, agent user | The session bus GUI applications expect. |
 | `/etc/profile.d/oillamp.sh` | bash | container, agent user | The environment of every shell: proxy, display, library paths, SDKMAN, prompt, banner. |
@@ -145,7 +145,8 @@ flowchart LR
 ```
 
 Every arrow that crosses between host and container is a Unix domain socket in a bind-mounted
-directory. There is no TCP port on the host and no network interface in the container.
+directory. There is no network interface in the container. The only TCP ports on the host are
+those of published web servers (see "Published web servers"), on 127.0.0.1 only.
 
 ---
 
@@ -213,7 +214,7 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   │   ├── host/                you;        proxy.sock, model.sock, fwd-*.sock, schedule.sock, desktop.sock,
 │   │   │                        host-access.sock (only while host access is on);
 │   │   │                        read-only in the container
-│   │   ├── infra/               infra user; vnc.sock, ready.json
+│   │   ├── infra/               infra user; vnc.sock, ready.json, web-*.sock
 │   │   └── agent/               you;        ssh.sock
 │   ├── recordings/              infra user; <session>.mkv; attached at /oillamp/recordings
 │   ├── logs/                    network-<session>.jsonl, host-access-<session>.jsonl
@@ -791,8 +792,8 @@ podman run --detach --name oillamp-<id>
 1. Reads `/oillamp/session/runtime.env` and checks the required settings. A missing file stops the
    container with exit code 70, and a missing required setting with bash's own exit code 1; either
    way the reason is the last line of the container's log.
-2. Deletes `vnc.sock`, `ready.json` and `ssh.sock` from the previous session. The socket directories
-   outlive the container, and wayvnc cannot bind a path that already exists.
+2. Deletes `vnc.sock`, `ready.json`, `ssh.sock` and every `web-*.sock` from the previous session.
+   The socket directories outlive the container, and wayvnc cannot bind a path that already exists.
 3. Creates `/run/lamp` (infra user, 0711), `/run/lamp/private` (0700), `/run/agent` (agent, 0700)
    and cache directories. Writes sway's screen size to `/run/lamp/output.conf` and the window
    layout to `/run/lamp/windows.conf`, and the wallpaper to `/run/lamp/wallpaper.conf`. Creates `/tmp/.X11-unix` as root with mode 1777.
@@ -811,7 +812,9 @@ podman run --detach --name oillamp-<id>
 8. If recording is on, starts **wf-recorder** as the infra user, writing
    `/oillamp/recordings/<session>.mkv`.
 9. Starts the **network bridges** as the infra user: socat on `127.0.0.1:3128` to the proxy
-   socket, on `127.0.0.1:3129` to the model relay's socket, and one per forward.
+   socket, on `127.0.0.1:3129` to the model relay's socket, and one per forward. And the other way
+   round, one per published web port: socat on `sockets/infra/web-<name>.sock` (0666) to
+   `127.0.0.1:<port>`. The web bridges are not critical (see step 12).
 10. Starts, as the agent user, a **D-Bus session bus**, the **SSH listener** (socat on
     `/oillamp/sockets/agent/ssh.sock`, running `sshd -i` per connection) and the **dock**. The
     dock runs as the agent because its buttons run commands the agent wrote. A loop starts it
@@ -820,8 +823,10 @@ podman run --detach --name oillamp-<id>
 11. Waits until the VNC and SSH sockets **accept a connection** (not just exist), then writes
     `ready.json` as the infra user:
     `{"renderer":"pixman","gpu_fallback":false,"width":1920,"height":1080,"session":"<id>"}`.
-12. Supervises. If sway, wayvnc, a bridge or the recorder exits, it stops everything and exits
-    with code 70. D-Bus, the SSH listener and the dock are not watched this way.
+12. Supervises. If sway, wayvnc, the proxy or model bridge, a forward's bridge or the recorder
+    exits, it stops everything and exits with code 70. D-Bus, the SSH listener, the dock,
+    keep-windows-on-screen and the web bridges are not watched this way; a web bridge that stops
+    leaves a line in the container's log, and the session goes on without that link.
 13. On SIGTERM or SIGINT (from `podman stop`), sends SIGINT to wf-recorder so the `.mkv` is
     finished, waits up to 10 s, stops the rest, and exits 0.
 
@@ -950,7 +955,7 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
 0. Close the schedule socket, the desktop socket and the host-access socket, tell pi to stop the
    run in progress, and wait for that run to be saved (at most six minutes); runs still waiting end
    as interrupted. The sandbox still runs here, so pi can wind down.
-1. Close both SSH relays and all their connections.
+1. Close both SSH relays, the relays of published web servers, and all their connections.
 2. `podman stop --time <timeouts.stop_seconds> oillamp-<id>`, shielded from Ctrl-C (it runs under
    `setsid --wait`). This lets the entrypoint finish the recording.
 3. `podman rm -f oillamp-<id>`, also shielded. If stop failed but remove worked, that is reported as
@@ -1197,7 +1202,7 @@ window program that exits with a non-zero code within 3 s is reported: a warning
 ## The network
 
 The container has only a loopback interface: no route and no DNS. Every connection in or out is a
-Unix socket. These are the four data paths:
+Unix socket. These are the five data paths:
 
 ```mermaid
 flowchart LR
@@ -1206,17 +1211,20 @@ flowchart LR
         VW["vncviewer"]
         EG["egress proxy<br/>policy check"]
         FW["forward handler<br/>(no policy)"]
+        BR["browser"] -->|"(id).localhost:port"| WR["127.0.0.1:port<br/>(supervisor relay)"]
     end
     subgraph Container
         SS["sockets/agent/ssh.sock<br/>socat → sshd -i"]
         VS["sockets/infra/vnc.sock<br/>wayvnc → sway"]
         P1["curl, npm, git…"] -->|HTTPS_PROXY| B1["socat 127.0.0.1:3128"]
         P2["harness"] -->|127.0.0.1:port| B2["socat 127.0.0.1:port"]
+        WS["sockets/infra/web-name.sock<br/>socat → 127.0.0.1:port"] --> SRV["agent's web server"]
     end
     R1 --> SS
     VW --> VS
     B1 -->|sockets/host/proxy.sock| EG --> I(("internet"))
     B2 -->|sockets/host/fwd-name.sock| FW --> TG(("configured target"))
+    WR --> WS
 ```
 
 ### The proxy (`Egress.java`)
@@ -1347,6 +1355,58 @@ The supervisor listens on `sockets/host/fwd-llm.sock`; socat in the container li
 `127.0.0.1:8000`. Each connection is opened from the host, so your VPN and routing apply. Forwards
 skip the policy on purpose: you chose the target. They are listed in the agent guide and logged. A
 forward cannot use port 3128 or 3129, and names and ports must be unique.
+
+### Published web servers
+
+A published web server is a forward the other way round: the host's browser opens a web server
+that runs inside the sandbox, such as opencode's web interface, `opencode serve --port 4096`,
+which you start in the sandbox's shell. oillamp never starts a server itself.
+
+```toml
+[web]
+publish = "listed"            # "listed" or "off"
+ports   = { opencode = 4096 } # name = port inside the sandbox
+```
+
+A lamp without `[web]` publishes `opencode = 4096`. `publish = "off"` publishes nothing,
+whatever `ports` lists, and so does `ports = {}`. `web.ports` is replaced as a whole by a later
+file, like an array, so a lamp's own list replaces the global file's rather than adding to it
+(`ConfigTree.WHOLE_TABLES`). A default port that a forward uses is left out with the warning
+`OIL-CONFIG-005`, so a lamp made before `[web]` existed with a forward on 4096 still starts; a port
+the lamp lists itself that clashes is an error. Names are lowercase letters, digits and dashes,
+at most 32 characters. A port must be 1024–65535, not 3128 or 3129, and not the port of a forward,
+because publishing a forward would hand its target, which you chose for the sandbox only, to your
+browser. `ConfigLoadingUtil.readWeb` refuses each of these with `OIL-CONFIG-004`.
+
+The data path, for each published port:
+
+1. `runtime.env` lists the ports in `OILLAMP_WEB`, such as `opencode:4096`; empty with `off`.
+2. The entrypoint starts socat as the infra user on `sockets/infra/web-<name>.sock`, mode 0666, which
+   connects each connection to `127.0.0.1:<port>`. The host user reaches it as it reaches `vnc.sock`
+   in the same directory: to the infra user, the host user is an outsider, and `.oillamp/` (0700)
+   keeps every other user of the machine out. The entrypoint removes old `web-*.sock` files first.
+   Until a server listens on the port, socat accepts each connection and closes it at once.
+3. The supervisor opens one `Relay` per port, listening on `127.0.0.1` on a port the kernel picks
+   (it binds port 0), and copies each connection into `web-<name>.sock`. Each session gets new
+   ports, and every supervisor has its own, so no process is shared between lamps. A port that
+   cannot be bound is the warning `OIL-NET-012`, and the session runs without it. The bridge in
+   the sandbox is not critical either: if it stops, the container logs it and the session goes on.
+4. When the session is up, it reports `LampEvent.WebPublished` for each port, and the terminal
+   prints `opencode: http://<lamp id>.localhost:<port>/ → port 4096 in the sandbox`. The ports are
+   also in `LampSessionStatus.webPorts` and in `oillamp status`.
+
+Browsers send every `*.localhost` name to the loopback address. A host name per lamp gives each
+lamp's pages their own cookies, rather than sharing them with everything else on `localhost`. The
+relay does not check the `Host` header. Browsers open many connections, so none is reported on its
+own. When nothing in the sandbox takes a connection, the warning `OIL-NET-013` says to start the
+server, such as `opencode serve --port 4096`, once until a connection gets through again. (socat
+in the sandbox accepts a connection even when nothing listens on the port and then closes it, so
+the warning appears mostly when the bridge itself is gone.)
+
+**The risk.** A page from a published port runs in your browser, not in the sandbox. From there it
+can send requests to your other local web servers, and to other lamps' published ports: your
+browser becomes a bridge between lamps that cannot otherwise reach each other. That is why the
+setting has levels, why `off` exists, and why only the ports you list are published.
 
 ### The network log
 
@@ -1553,7 +1613,7 @@ line** by the entrypoint or the supervisor.
 | sway | `/etc/oillamp/sway/config`, which includes `/run/lamp/output.conf`, `/run/lamp/windows.conf` and `/run/lamp/wallpaper.conf` | the config is in the image; the three includes are written by the entrypoint from `runtime.env` |
 | wayvnc | command-line flags, `--config=/dev/null` | every start, the entrypoint (`OILLAMP_VNC_MAX_FPS`) |
 | wf-recorder | command-line flags | every start, the entrypoint (`OILLAMP_RECORDING_*`) |
-| socat bridges | command-line arguments | every start, the entrypoint (`OILLAMP_PROXY_PORT`, `OILLAMP_FORWARDS`) |
+| socat bridges | command-line arguments | every start, the entrypoint (`OILLAMP_PROXY_PORT`, `OILLAMP_FORWARDS`, `OILLAMP_WEB`) |
 | sshd | `/etc/oillamp/sshd_config`; `HostKey` and `AuthorizedKeysFile` point into `/oillamp/session/` | config in the image; keys copied by `LampPlanUtil` every start |
 | every shell | `/etc/profile.d/oillamp.sh`, reached from `/etc/profile` and from `~/.bashrc` | the script is in the image; it reads `runtime.env`; `.bashrc` is written once by `LampPlanUtil` |
 | git | `/etc/gitconfig`, which includes `/oillamp/session/gitconfig` | the include is in the image; the file is written every start by `AgentGitConfigUtil`, from `git.*`; git on the host never reads it |
@@ -1578,7 +1638,7 @@ the file is stable.
 Contents: `OILLAMP_SESSION`, `OILLAMP_AGENT_ID`, `OILLAMP_LAMP_NAME`,
 `OILLAMP_DISPLAY_WIDTH/HEIGHT/SCALE`, `OILLAMP_WINDOWS`, `OILLAMP_WALLPAPER`, `OILLAMP_BACKGROUND`, `OILLAMP_RENDERER`, `OILLAMP_VNC_MAX_FPS`,
 `OILLAMP_RECORDING_ENABLED/CODEC/CRF/MAX_FPS`, `OILLAMP_PROXY_PORT`, `OILLAMP_MODEL_PORT`, `OILLAMP_MODEL_EU_ONLY`, `OILLAMP_FORWARDS`
-(`name:port name:port`), the LLM variables when configured, and `EDENAI_MAX_TOKENS` when it is set
+(`name:port name:port`), `OILLAMP_WEB` (the published web ports, `name:port name:port`, empty with `web.publish = "off"`), the LLM variables when configured, and `EDENAI_MAX_TOKENS` when it is set
 on the host (`RuntimeEnvFileUtil.INHERITED_FROM_HOST`). The model key is never in it: it stays on the host,
 and the relay adds it to each model request. `EDENAI_BASE_URL`, `EDENAI_API_KEY` and
 `EDENAI_EU_ONLY` are set by the sandbox's profile, never copied from the host.
@@ -1823,7 +1883,8 @@ Configuration is TOML. Three layers are merged, later ones winning:
 3. `<lamp>/oillamp.toml` (must contain `schema_version = 1`).
 
 Tables merge key by key. **Arrays replace**: if a lamp lists `network.rules`, it gets exactly those
-rules and none from the global file. Unknown keys are errors, with a suggestion for the nearest
+rules and none from the global file. So does the table `web.ports`, which is a list of ports by
+name rather than a group of settings. Unknown keys are errors, with a suggestion for the nearest
 known key. `ConfigLoadingUtil` reads the merged tree with `ConfigSection`, which records every problem
 with its file, key path (such as `network.rules[0].cidrs`), value and expectation, and keeps going,
 so all problems are reported together.
@@ -1859,6 +1920,8 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `network.console_denied` | true | print denials in your terminal | yes |
 | `[[network.rules]]` | two deny rules | see "The policy" above | yes |
 | `[[network.forwards]]` | none | see "Forwards" above | yes |
+| `web.publish` | `"listed"` | `listed`: the ports in `web.ports`; `off`: none. See "Published web servers" above | yes |
+| `web.ports` | `{ opencode = 4096 }` | name = port inside the sandbox, published to the host's browser; a later file replaces it as a whole, like an array | yes |
 | `model.service` | `"https://api.eu.edenai.run"` | where oillamp sends the sandbox's model requests, with the key; `https://`, or `http://` only on this machine's loopback; a path, such as `/v1`, replaces the sandbox's `/v3`; harnesses keep only EU models when it is Eden AI | yes |
 | `model.key_env` | `"EDENAI_API_KEY"` | the host environment variable holding the model key, read when a session starts | yes |
 | `git.identity` | `"genie"` | the name and email on the agent's commits: `"genie"` is `genie agent <genie@<lamp id>>`, `"host"` copies your global `user.name` and `user.email` each start, `"custom"` uses `git.name` and `git.email`, `"none"` gives none, so git in the sandbox cannot commit; the agent's `~/.gitconfig` and a repository's own setting still override it | yes |
@@ -1973,6 +2036,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-CONFIG-002` | Unknown key. |
 | `OIL-CONFIG-003` | Wrong type. |
 | `OIL-CONFIG-004` | Invalid value. |
+| `OIL-CONFIG-005` | Warning: a built-in default was left out because it clashes with the lamp's own settings, such as the default web port 4096 and a forward on 4096. |
 | `OIL-GPU-001` | Information: GPU not used, and why. |
 | `OIL-GPU-003` | `display.gpu = "on"` but the GPU cannot be used. |
 | `OIL-SSH-001` | `ssh-keygen` failed. |
@@ -1985,6 +2049,8 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-NET-002` | Cannot listen on a socket. |
 | `OIL-NET-010` | Warning: a forward's target is unreachable. |
 | `OIL-NET-011` | Warning: the network log cannot be written; the session carries on without it. |
+| `OIL-NET-012` | Warning: a web server in the sandbox could not be published; the session carries on without its link. |
+| `OIL-NET-013` | Warning: nothing in the sandbox took a connection to a published web server; start the server. |
 | `OIL-SESSION-001` | No session is running for this lamp. |
 | `OIL-SESSION-002` | The session's control socket does not answer. |
 | `OIL-SESSION-003` | The running session refused the request (for example, it is shutting down). |

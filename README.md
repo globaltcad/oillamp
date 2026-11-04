@@ -485,7 +485,17 @@ default = "allow"            # what happens when no rule matches
 label  = "company artifact mirror"
 action = "allow"
 hosts  = ["nexus.corp.example.com"]
+
+[web]
+publish = "listed"            # "off" publishes nothing to your browser
+ports   = { opencode = 4096 } # web servers in the sandbox you can open in your browser
 ```
+
+When the session starts, it prints a link for each published port, such as
+`http://k3v7x2ab.localhost:41237/`. Run `opencode serve --port 4096` in the sandbox's shell, and
+the `opencode` link opens opencode's web interface. A page you open there runs in your browser, so
+it can send requests to your other local web servers and to other lamps' published ports; set
+`publish = "off"` if you do not want that.
 
 The shipped rules block your local network and this machine's loopback, and send Eden AI traffic
 only to its EU endpoint. When the agent hits a blocked address, it gets a clear refusal naming the

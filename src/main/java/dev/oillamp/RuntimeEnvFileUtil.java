@@ -76,7 +76,8 @@ final class RuntimeEnvFileUtil {
             .put("OILLAMP_PROXY_PORT",      Integer.toString(Forward.PROXY_PORT))
             .put("OILLAMP_MODEL_PORT",      Integer.toString(Forward.MODEL_PORT))
             .put("OILLAMP_MODEL_EU_ONLY",   config.model().euOnly() ? "1" : "0")
-            .put("OILLAMP_FORWARDS",        forwardList(config));
+            .put("OILLAMP_FORWARDS",        forwardList(config))
+            .put("OILLAMP_WEB",             webList(config));
 
         for (Pair<String, String> inherited : fromHost)
             env = env.put(inherited.first(), inherited.second());
@@ -96,6 +97,15 @@ final class RuntimeEnvFileUtil {
         Tuple<String> entries = Tuple.of(String.class);
         for (Forward forward : config.forwards())
             entries = entries.add(forward.name() + ":" + forward.port());
+        return String.join(" ", entries);
+    }
+
+    /// `"name:port name:port"`, which the entrypoint splits to serve one `web-<name>.sock` per
+    /// published port. Empty when `web.publish` is `off`.
+    private static String webList(LampConfig config) {
+        Tuple<String> entries = Tuple.of(String.class);
+        for (LampConfig.Web.Port port : config.web().published())
+            entries = entries.add(port.name() + ":" + port.port());
         return String.join(" ", entries);
     }
 

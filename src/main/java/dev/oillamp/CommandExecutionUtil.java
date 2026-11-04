@@ -804,7 +804,7 @@ final class CommandExecutionUtil {
         Control.Reply answer = ((Result.Ok<Control.Reply>) reply).value();
         StringBuilder out = new StringBuilder();
         for (String key : Tuple.of(String.class, "state", "detail", "lamp", "session", "container",
-                                            "desktop", "renderer", "uptime", "shells", "agent", "schedule", "viewer"))
+                                            "desktop", "renderer", "uptime", "shells", "agent", "schedule", "web", "viewer"))
             answer.values().get(key).ifPresent(value ->
                     out.append(pad(key, 12)).append(value).append('\n'));
         context.sink().accept(new LampEvent.Answer(out.toString().stripTrailing()));
@@ -1786,9 +1786,20 @@ final class CommandExecutionUtil {
              + "network      default " + config.network().defaultDecision().configName()
                 + ", " + config.network().rules().size() + " rule(s), "
                 + config.forwards().size() + " forward(s)\n"
+             + "web          " + describeWeb(config.web()) + "\n"
              + "image        " + config.image().base() + ", " + config.image().jdkPackage()
                 + ", node " + config.image().nodeVersion()
              + "\nhost access  " + describeHostAccess(config.hostAccess());
+    }
+
+    /// Which web servers in the sandbox the browser may open: `off`, or `listed` and the ports.
+    private static String describeWeb(LampConfig.Web web) {
+        Tuple<String> ports = Tuple.of(String.class);
+        for (LampConfig.Web.Port port : web.ports()) ports = ports.add(port.name() + " " + port.port());
+        return switch (web.publish()) {
+            case OFF -> "off";
+            case LISTED -> "listed: " + (ports.isEmpty() ? "no ports" : String.join(", ", ports));
+        };
     }
 
     /// What the sandbox may reach on the host, and what it is judged by. The requirements are the

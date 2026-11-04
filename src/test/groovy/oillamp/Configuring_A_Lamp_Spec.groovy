@@ -999,4 +999,273 @@ class Configuring_A_Lamp_Spec extends Specification {
 
             verdict = accepted ? 'accepts' : 'refuses'
     }
+
+    def 'oillamp publishes opencode\'s port 4096 for a lamp whose `oillamp.toml` has no `[web]` section'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` has no `[web]` section at all, as every lamp
+            made before the section existed. The person working with it wants to open opencode's
+            web interface in their own browser. They start it in the sandbox's shell with
+            `opencode serve --port 4096`, and expect a link on their machine that leads to it.
+
+            So such a lamp behaves as `publish = "listed"` with `ports = { opencode = 4096 }`.
+            `oillamp config <dir> show-effective` says so, and `runtime.env` tells the sandbox, in
+            `OILLAMP_WEB`, to serve that one port. oillamp never starts opencode itself: a published
+            port is only a way in, which answers once something in the sandbox listens there.
+        """
+        given: 'a lamp whose `oillamp.toml` says nothing about `[web]`'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+
+        when: '`oillamp config <dir> show-effective` runs, and `oillamp at <dir>` starts the session'
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+            host.oillamp.run('at', lamp.toString())
+            var runtimeEnv = Files.readString(lamp.resolve('.oillamp/session/runtime.env'))
+
+        then: '`show-effective` says that the listed port `opencode`, 4096, is published'
+            shown.console().contains('web          listed: opencode 4096')
+
+        and: '`runtime.env` tells the sandbox to serve that port, as `OILLAMP_WEB=\'opencode:4096\'`'
+            runtimeEnv.contains("OILLAMP_WEB='opencode:4096'")
+    }
+
+    def 'oillamp publishes nothing when `[web]` says #how'() {
+        reportInfo """
+            Let's consider a person who does not want any page from the sandbox in their browser.
+            A page opened from a published port runs in the browser, and from there it can send
+            requests to the person's other local web servers and to other lamps' published ports.
+            A company that locks its lamps down has the same concern.
+
+            `publish = "off"` publishes nothing, whatever `ports` lists. `publish = "listed"` with
+            `ports = {}` lists nothing, and so publishes nothing either. In both cases the sandbox
+            gets an empty `OILLAMP_WEB` in `runtime.env` and serves no web socket.
+        """
+        given: 'a lamp whose `[web]` section says #how'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n\n[web]\n' + web)
+
+        when: '`oillamp config <dir> show-effective` runs, and `oillamp at <dir>` starts the session'
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+            host.oillamp.run('at', lamp.toString())
+            var runtimeEnv = Files.readString(lamp.resolve('.oillamp/session/runtime.env'))
+
+        then: '`show-effective` says so, and `runtime.env` holds an empty `OILLAMP_WEB`'
+            shown.console().contains(effective)
+            runtimeEnv.contains("OILLAMP_WEB=''")
+
+        where:
+            how                                         | web                                                   || effective
+            '`publish = "off"`, with a port listed'     | 'publish = "off"\nports = { opencode = 4096 }\n'      || 'web          off'
+            '`publish = "listed"` and `ports = {}`'     | 'publish = "listed"\nports = {}\n'                    || 'web          listed: no ports'
+    }
+
+    def 'oillamp refuses `web.publish = "#value"`, and names the levels it knows'() {
+        reportInfo """
+            `web.publish` decides which web servers inside the sandbox the person's browser may
+            open. This oillamp knows two levels: `off` and `listed`. Later versions may add more,
+            such as publishing whatever the agent starts, or asking the person first. A lamp that
+            names such a level, or a typo, must not be read as one of the two that exist, because
+            either guess could publish more or less than the person meant. So oillamp refuses it
+            with `OIL-CONFIG-004`, names `web.publish`, and lists `"off"` and `"listed"`.
+        """
+        given: 'a lamp whose `oillamp.toml` sets `web.publish = "#value"`'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n\n[web]\npublish = "' + value + '"\n')
+
+        when: '`oillamp config <dir> check` runs'
+            var outcome = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'it reports `OIL-CONFIG-004` for `web.publish`, and names `"off"` and `"listed"`'
+            outcome.status() == LampExitStatus.USAGE
+            outcome.reported('OIL-CONFIG-004')
+            outcome.console().contains('web.publish')
+            outcome.console().contains('"off" or "listed"')
+
+        where:
+            value << ['any', 'ask', 'on']
+    }
+
+    def 'oillamp refuses to publish port #port, because #why'() {
+        reportInfo """
+            Each entry of `web.ports` names a port inside the sandbox that the person's browser may
+            open. Some ports must never be published. 3128 is the sandbox's egress proxy and 3129
+            is where the agent's tools reach the model service through oillamp; publishing either
+            would let a page in the browser use them. A port of `[[network.forwards]]` leads to a
+            target the person chose for the sandbox only, such as a company's model service, and
+            publishing it would hand that target to the browser. Ports below 1024 are not used in
+            the sandbox at all.
+
+            So oillamp refuses such an entry with `OIL-CONFIG-004`, names the key, such as
+            `web.ports.site`, and says what the port is used for, so that the person knows which
+            entry to change.
+        """
+        given: 'a lamp with a forward "llm" on port 8000, and a web port "site" on port #port'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, """
+                schema_version = 1
+
+                [[network.forwards]]
+                name   = "llm"
+                port   = 8000
+                target = "llm.corp.example.com:8000"
+
+                [web]
+                ports = { site = ${port} }
+            """.stripIndent())
+
+        when: '`oillamp config <dir> check` runs'
+            var outcome = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'it reports `OIL-CONFIG-004` for `web.ports.site`, and says why'
+            outcome.status() == LampExitStatus.USAGE
+            outcome.reported('OIL-CONFIG-004')
+            outcome.console().contains('web.ports.site')
+            outcome.console().contains(explanation)
+
+        where:
+            port | why                                         || explanation
+            3128 | 'it is the sandbox\'s egress proxy'          || 'egress proxy'
+            3129 | 'it is where the model service is reached'  || 'model service through oillamp'
+            8000 | 'it is the forward "llm"'                   || 'the forward "llm"'
+            80   | 'it is below 1024'                          || 'between 1024 and 65535'
+    }
+
+    def 'A lamp whose `oillamp.toml` was written before `[web]` existed still loads, and publishes opencode\'s port'() {
+        reportInfo """
+            Let's consider a lamp made by an older oillamp. Its `oillamp.toml` is the commented
+            file that oillamp wrote then, which is today's file without the `[web]` section. oillamp
+            refuses unknown keys, but here keys were only added, so the old file must still load
+            exactly as before, and the lamp must start. It publishes what a lamp without `[web]`
+            publishes: opencode's port 4096.
+        """
+        given: 'a lamp whose `oillamp.toml` is today\'s commented file without its `[web]` section'
+            var lamp = host.lampPath()
+            host.oillamp.run('at', lamp.toString())
+            var file = lamp.resolve('oillamp.toml')
+            var lines = Files.readAllLines(file)
+            var start = lines.findIndexOf { it.startsWith('[web]') }
+            var end = lines.findIndexOf(start + 1) { it.startsWith('[') }
+            // The comment above [web] belongs to it as well; it starts after the blank line before.
+            var commentStart = lines.subList(0, start).findLastIndexOf { it.isBlank() } + 1
+            Files.write(file, lines.subList(0, commentStart) + lines.subList(end, lines.size()))
+
+        when: '`oillamp config <dir> check` and `oillamp config <dir> show-effective` run'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'the file has no `[web]` section, and is valid'
+            !Files.readString(file).contains('[web]')
+            checked.status() == LampExitStatus.SUCCESS
+
+        and: 'the lamp publishes opencode\'s port 4096'
+            shown.console().contains('web          listed: opencode 4096')
+    }
+
+    def '`~/AGENTS.md` names the ports the human can open in their browser, and how opencode\'s web interface gets there'() {
+        reportInfo """
+            Let's consider an agent asked to build a small web site, or a person who wants to use
+            opencode's web interface. The agent can only help if it knows which of its ports the
+            person can open in their browser through oillamp. So the guide `~/AGENTS.md`, which
+            every session writes, lists the published ports. For a port named `opencode` it says
+            that `opencode serve --port 4096` starts the web interface, and that the person starts
+            it, not oillamp. With `web.publish = "off"` it says that nothing is published, and that
+            the person would have to enable `[web]`.
+        """
+        given: 'a lamp whose `oillamp.toml` has no `[web]` section'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+
+        when: '`oillamp at <dir>` starts the session'
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+
+        then: 'the guide lists port 4096 as `opencode`, and says how to start opencode\'s web interface'
+            guide.contains('## Web servers the human can open')
+            guide.contains('- `4096` → opencode')
+            guide.contains('`opencode serve --port 4096`')
+            guide.contains('oillamp never\nstarts it')
+
+        when: 'the lamp sets `web.publish = "off"`, and `oillamp at <dir>` starts the session again'
+            host.givenConfig(lamp, 'schema_version = 1\n\n[web]\npublish = "off"\n')
+            host.oillamp.run('at', lamp.toString())
+            guide = Files.readString(agentHome.resolve('AGENTS.md'))
+
+        then: 'the guide says that nothing is published, and that the human would have to enable `[web]`'
+            guide.contains('Nothing in this sandbox is published')
+            guide.contains('enable `[web]`')
+            !guide.contains('`opencode serve')
+    }
+
+    def 'A lamp with a forward on port 4096 and no `[web]` section still starts, and oillamp leaves the default opencode port out'() {
+        reportInfo """
+            Let's consider a lamp made before `[web]` existed, with a forward "llm" on port 4096 in
+            its `[[network.forwards]]`. A lamp without `[web]` publishes opencode's port 4096 by
+            default. Publishing a forward's port would hand the forward's target, which the person
+            chose for the sandbox only, to their browser, so the two cannot go together. But this
+            lamp's file never asked for the web port; refusing it would stop a lamp that started
+            yesterday from starting today.
+
+            So oillamp leaves the default port out, says so with the warning `OIL-CONFIG-005`, and
+            the lamp starts. `OILLAMP_WEB` in `runtime.env` is empty: nothing is published on 4096.
+            A lamp whose own `web.ports` lists a forward's port is still refused.
+        """
+        given: 'a lamp with a forward "llm" on port 4096 and no `[web]` section'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, '''
+                schema_version = 1
+
+                [[network.forwards]]
+                name   = "llm"
+                port   = 4096
+                target = "llm.corp.example.com:8000"
+            '''.stripIndent())
+
+        when: '`oillamp config <dir> check` runs, and `oillamp at <dir>` starts the session'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+            var started = host.oillamp.run('at', lamp.toString())
+            var runtimeEnv = Files.readString(lamp.resolve('.oillamp/session/runtime.env'))
+
+        then: 'the configuration is valid, with the warning `OIL-CONFIG-005` naming the forward "llm"'
+            checked.status() == LampExitStatus.SUCCESS
+            checked.reported('OIL-CONFIG-005')
+            checked.console().contains("'llm'")
+
+        and: 'the session starts, says the same, and publishes nothing on port 4096'
+            started.reported('OIL-CONFIG-005')
+            runtimeEnv.contains("OILLAMP_WEB=''")
+            runtimeEnv.contains("OILLAMP_FORWARDS='llm:4096'")
+    }
+
+    def 'A lamp\'s `web.ports` replaces the list in `~/.config/oillamp/config.toml`, so a lamp can publish fewer ports'() {
+        reportInfo """
+            Let's consider a person whose `~/.config/oillamp/config.toml` publishes two ports for
+            every lamp, `opencode = 4096` and `site = 8080`, and one lamp in which only opencode
+            should be reachable from the browser. Tables in the configuration files are usually
+            merged key by key, which would leave `site` published whatever the lamp says.
+
+            `web.ports` is a list of ports by name, not a group of settings, so a lamp's own
+            `web.ports` replaces the global one as a whole, as an array would. The lamp publishes
+            exactly the ports it lists. A lamp that lists none of its own keeps the global list.
+        """
+        given: 'a user-wide file that publishes `opencode = 4096` and `site = 8080`'
+            host.givenGlobalConfig('''
+                [web]
+                ports = { opencode = 4096, site = 8080 }
+            '''.stripIndent())
+
+        and: 'a lamp that lists only `opencode = 4096`, and a lamp that lists no ports'
+            var narrow = host.lampPath('narrow')
+            host.givenConfig(narrow, 'schema_version = 1\n\n[web]\nports = { opencode = 4096 }\n')
+            var plain = host.lampPath('plain')
+            host.givenConfig(plain, 'schema_version = 1\n')
+
+        when: '`oillamp config <dir> show-effective` runs for both'
+            var narrowShown = host.oillamp.run('config', narrow.toString(), 'show-effective')
+            var plainShown = host.oillamp.run('config', plain.toString(), 'show-effective')
+
+        then: 'the lamp with its own list publishes only opencode, and the other publishes both from the user-wide file'
+            narrowShown.console().contains('web          listed: opencode 4096\n')
+            plainShown.console().contains('web          listed: opencode 4096, site 8080')
+    }
 }

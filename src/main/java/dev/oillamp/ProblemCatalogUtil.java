@@ -75,6 +75,7 @@ final class ProblemCatalogUtil {
     public static final Code CONFIG_UNKNOWN_KEY    = new Code("OIL-CONFIG-002");
     public static final Code CONFIG_WRONG_TYPE     = new Code("OIL-CONFIG-003");
     public static final Code CONFIG_INVALID_VALUE  = new Code("OIL-CONFIG-004");
+    public static final Code CONFIG_DEFAULT_LEFT_OUT = new Code("OIL-CONFIG-005");
     public static final Code GPU_SOFTWARE          = new Code("OIL-GPU-001");
     public static final Code SSH_KEYGEN_FAILED     = new Code("OIL-SSH-001");
     public static final Code TERM_NONE_FOUND       = new Code("OIL-TERM-001");
@@ -86,6 +87,8 @@ final class ProblemCatalogUtil {
     public static final Code NET_CANNOT_LISTEN     = new Code("OIL-NET-002");
     public static final Code NET_FORWARD_UNREACHABLE = new Code("OIL-NET-010");
     public static final Code NET_LOG_NOT_WRITTEN   = new Code("OIL-NET-011");
+    public static final Code NET_WEB_NOT_PUBLISHED = new Code("OIL-NET-012");
+    public static final Code NET_WEB_NOT_ANSWERING = new Code("OIL-NET-013");
     public static final Code SESSION_NOT_RUNNING   = new Code("OIL-SESSION-001");
     public static final Code SESSION_UNREACHABLE   = new Code("OIL-SESSION-002");
     public static final Code SESSION_REFUSED       = new Code("OIL-SESSION-003");
@@ -106,6 +109,30 @@ final class ProblemCatalogUtil {
     /// A forward's target could not be reached. A warning, not an error: the service being down is
     /// no reason to stop the session, but inside the sandbox it only looks like a closed connection,
     /// so the user is told here.
+    /// One port of `[web]` could not be published, because the session could not listen for it
+    /// on this machine. The session goes on without it.
+    public static LampProblem webPortNotPublished(LampConfig.Web.Port port, LampProblem cause) {
+        return warning(NET_WEB_NOT_PUBLISHED, "A web server in the sandbox could not be published",
+                "the session could not listen on this machine for '" + port.name() + "' (port "
+              + port.port() + " in the sandbox): " + cause.whatHappened(),
+                "there is no link to open it in your browser this session; everything else works")
+            .withEvidence(new Evidence.Value("cause", cause.code() + " " + cause.title()))
+            .withFix(Fix.of("start the session again; it picks a new port each time"));
+    }
+
+    /// A connection to a published web server found nothing in the sandbox to take it.
+    public static LampProblem webServerNotAnswering(LampConfig.Web.Port port, String reason) {
+        return warning(NET_WEB_NOT_ANSWERING, "Nothing in the sandbox answered for '" + port.name() + "'",
+                "a connection to the link for '" + port.name() + "' (port " + port.port()
+              + " in the sandbox) found nothing to take it: " + reason,
+                "the page stays empty in your browser until a server in the sandbox listens on port "
+              + port.port() + "; this is reported once until a connection gets through again")
+            .withEvidence(new Evidence.Value("port in the sandbox", Integer.toString(port.port())))
+            .withFix(Fix.of(port.name().equals("opencode")
+                    ? "start it in the sandbox's shell: `opencode serve --port " + port.port() + "`"
+                    : "start the server in the sandbox, listening on 127.0.0.1:" + port.port()));
+    }
+
     public static LampProblem forwardUnreachable(Forward forward, String why) {
         return warning(NET_FORWARD_UNREACHABLE, "A forward target cannot be reached",
                 "the forward '" + forward.name() + "' could not connect to " + forward.target(),
@@ -708,6 +735,19 @@ final class ProblemCatalogUtil {
                 "oillamp binds configuration to typed values so the rest of the program cannot "
               + "misinterpret it later")
             .withEvidence(new Evidence.Config(file, keyPath, value, expected));
+    }
+
+    /// A built-in default port of `web.ports` is not published, because a forward of the lamp
+    /// uses that port. The lamp did not ask for it, so this is a warning, and the lamp starts.
+    public static LampProblem webDefaultLeftOut(LampConfig.Web.Port port, Forward forward) {
+        return warning(CONFIG_DEFAULT_LEFT_OUT, "A built-in web port is not published",
+                "'" + port.name() + "' on port " + port.port() + " is published by default, but the forward '"
+              + forward.name() + "' uses port " + port.port() + ", so it is left out",
+                "publishing a forward's port would hand its target to your browser; this lamp's file does "
+              + "not list web ports, so oillamp leaves the default out rather than refuse to start")
+            .withEvidence(new Evidence.Value("forward", forward.name() + " on port " + forward.port()))
+            .withFix(Fix.of("to publish it on another port, add `[web]` with `ports = { " + port.name()
+                    + " = <port> }`, and start it there; or set `publish = \"off\"` to say you want none"));
     }
 
     public static LampProblem configInvalidValue(Path file, String keyPath, String value, String expected) {

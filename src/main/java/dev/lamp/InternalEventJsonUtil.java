@@ -5,6 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
+import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,8 +31,9 @@ import sprouts.Tuple;
 /// - a record becomes an object with one field per component, plus `"type"` (its simple name)
 ///   when it is one of the cases of a sealed interface, such as `{"type":"Ok","area":…,"text":…}`;
 /// - a `Tuple` becomes an array, an `Optional` its value or nothing, an enum its name;
-/// - a `Path` becomes its text, a `Duration` and an `Instant` their ISO-8601 text such as
-///   `"PT1.5S"`.
+/// - a list missing from an object, as from an older engine, reads as empty;
+/// - a `Path` and a `URI` become their text, a `Duration` and an `Instant` their ISO-8601 text
+///   such as `"PT1.5S"`.
 ///
 /// Reading accepts only the types a [LampEvent] is made of, and anything it does not understand
 /// (for example an event kind from a newer oillamp) is read as nothing rather than as an error.
@@ -66,6 +68,7 @@ final class InternalEventJsonUtil {
             case Boolean flag         -> NODES.booleanNode(flag);
             case Enum<?> constant     -> NODES.textNode(constant.name());
             case Path path            -> NODES.textNode(path.toString());
+            case URI uri              -> NODES.textNode(uri.toString());
             case Duration duration    -> NODES.textNode(duration.toString());
             case Instant instant      -> NODES.textNode(instant.toString());
             case Tuple<?> tuple       -> {
@@ -117,7 +120,10 @@ final class InternalEventJsonUtil {
             if (raw == Optional.class)
                 return node.isMissingNode() || node.isNull()
                         ? Optional.empty() : Optional.of(decode(node, element));
-            if (raw == Tuple.class) return decodeTuple(node, element);
+            // A list an older engine did not write yet reads as empty, so that a program can still
+            // read that engine's events.
+            if (raw == Tuple.class) return node.isMissingNode() ? decodeTuple(NODES.arrayNode(), element)
+                                                                : decodeTuple(node, element);
             throw new IllegalArgumentException("no JSON form for " + generic);
         }
         Class<?> target = (Class<?>) type;
@@ -129,6 +135,7 @@ final class InternalEventJsonUtil {
         if (target == double.class)   return node.asDouble();
         if (target == boolean.class)  return node.asBoolean();
         if (target == Path.class)     return Path.of(node.asText());
+        if (target == URI.class)      return URI.create(node.asText());
         if (target == Duration.class) return Duration.parse(node.asText());
         if (target == Instant.class)  return Instant.parse(node.asText());
         if (target.isEnum())          return enumConstant(target, node.asText());

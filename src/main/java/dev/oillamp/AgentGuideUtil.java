@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
+import sprouts.Tuple;
+
 /// Writes `~/AGENTS.md`, the guide that tells the agent what kind of machine it is on.
 ///
 /// An agent that does not know it is in a sandbox wastes time: it tries `sudo apt install`,
@@ -286,6 +288,8 @@ final class AgentGuideUtil {
             out.append('\n');
         }
 
+        out.append(webSection(config.web()));
+
         if (config.schedule().enabled()) out.append(scheduleSection(config.schedule()));
         if (config.hostAccess().enabled()) out.append(hostAccessSection(config.hostAccess()));
 
@@ -301,7 +305,37 @@ final class AgentGuideUtil {
         return out.toString();
     }
 
-    /// How the agent works on a schedule, for a lamp that has one: the tools, the rules the host
+    /// Which web servers in the sandbox the human can open in their browser, and how opencode's
+    /// web interface gets there. oillamp never starts a server itself.
+    private static String webSection(LampConfig.Web web) {
+        Tuple<LampConfig.Web.Port> ports = web.published();
+        StringBuilder out = new StringBuilder("## Web servers the human can open\n\n");
+        if (ports.isEmpty()) {
+            out.append(web.publish() == LampConfig.Web.Publishing.OFF
+                    ? "Nothing in this sandbox is published to the human's browser: this lamp has\n"
+                    + "`[web]` publishing switched off. A web server you start here is for you alone;\n"
+                    + "to open it in their browser, the human would have to enable `[web]` in the\n"
+                    + "lamp's settings and start the session again.\n\n"
+                    : "No port of this sandbox is published to the human's browser: the lamp's\n"
+                    + "`[web]` settings list none. To open a server you start here, the human would\n"
+                    + "have to list its port there and start the session again.\n\n");
+            return out.toString();
+        }
+        out.append("The human can open these ports in their own browser, through oillamp, which\n")
+           .append("shows them a link for each when the session starts:\n\n");
+        for (LampConfig.Web.Port port : ports)
+            out.append("- `").append(port.port()).append("` → ").append(port.name()).append('\n');
+        out.append("\nA server must listen on `127.0.0.1` (or all addresses) on that port; until one\n")
+           .append("does, the link opens nothing. Other ports are not reachable from their browser.\n");
+        for (LampConfig.Web.Port opencode : ports.retainIf(port -> port.name().equals("opencode")))
+            out.append("\nopencode's web interface is reached by running `opencode serve --port ")
+               .append(opencode.port())
+               .append("`\nin the shell. The human starts it themselves when they want it; oillamp never\n")
+               .append("starts it.\n");
+        return out.append('\n').toString();
+    }
+
+        /// How the agent works on a schedule, for a lamp that has one: the tools, the rules the host
     /// holds it to, and its notes, which are its only memory from one run to the next.
     private static String scheduleSection(LampConfig.Schedule schedule) {
         return """

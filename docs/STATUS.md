@@ -462,6 +462,12 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Not yet tested
 
+- Published web servers (`[web]`) in a real session. Scenarios cover the configuration, the
+  entrypoint's lines, and the host side with a simulated container: the link is reported, listed
+  by `oillamp status` and the session's state, and a TCP connection to it reaches a stand-in for
+  the sandbox's `web-opencode.sock` in both directions. Not yet tried: the real image's socat
+  bridge, `opencode serve` behind it, and a real browser opening the `*.localhost` link.
+
 - The startup and shutdown saves (off by default, `[autosave]`) in a real session with podman. Scenarios cover both with a
   simulated container, ending the session with `oillamp stop`. After Ctrl-C the same shutdown
   sequence runs, with the save in it; that was checked by reading the code, not by a test.

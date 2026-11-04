@@ -172,7 +172,24 @@ final class ConfigSection {
         return out;
     }
 
-    /// Reads a value from a fixed set of spellings, e.g. `gpu = "auto" | "on" | "off"`.
+    /// A key/value table of whole numbers, as `web.ports` is.
+    public Association<String, Integer> integerTable(String key) {
+        Association<String, Integer> out = Association.betweenSorted(String.class, Integer.class);
+        JsonNode value = node.get(key);
+        if (value == null || value.isNull()) return out;
+        if (!value.isObject()) return wrongType(key, value, "a table of whole numbers", out);
+        for (Map.Entry<String, JsonNode> field : ((ObjectNode) value).properties()) {
+            if (!field.getValue().isIntegralNumber()) {
+                String path = child(key) + "." + field.getKey();
+                report(ProblemCatalogUtil.configWrongType(fileOf(path), path, describe(field.getValue()), "a whole number"));
+                continue;
+            }
+            out = out.put(field.getKey(), field.getValue().asInt());
+        }
+        return out;
+    }
+
+        /// Reads a value from a fixed set of spellings, e.g. `gpu = "auto" | "on" | "off"`.
     public <E> E oneOf(String key, E fallback, Function<String, Optional<E>> parse, String expected) {
         JsonNode value = node.get(key);
         if (value == null || value.isNull()) return fallback;

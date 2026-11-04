@@ -10,6 +10,7 @@ import spock.lang.TempDir
 import spock.lang.Timeout
 import spock.lang.Title
 
+import java.net.InetSocketAddress
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -368,6 +369,122 @@ class Supervising_A_Session_Spec extends Specification {
 
         cleanup:
             host.oillamp.run('stop', host.lampPath().toString())
+            session?.join(20_000)
+    }
+
+    def 'oillamp publishes opencode\'s port as a link on this machine, and a connection to it reaches the web server in the sandbox'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` has no `[web]` section, so that it publishes
+            opencode's port 4096. Inside the sandbox, a bridge serves that port on the Unix socket
+            `web-opencode.sock` in the lamp's socket directory. On this machine, the session listens
+            on a TCP port of the loopback address 127.0.0.1, picked anew each session so that two
+            lamps never ask for the same one, and copies each connection to that socket.
+
+            When the session is up, oillamp reports the link as `LampEvent.WebPublished`, which the
+            terminal prints and an application receives: `http://<lamp id>.localhost:<port>/`.
+            Browsers send every `*.localhost` name to the loopback address, and a host name of its
+            own gives each lamp's pages their own cookies. The same port is in the session's state,
+            `LampSessionStatus.webPorts`, for an application that joins later.
+
+            In this scenario the container is simulated, so a small server in the scenario stands
+            in for the sandbox's bridge on `web-opencode.sock`. It answers "pong" to "ping". The
+            scenario connects to the published port as a browser would, and the bytes must go
+            through in both directions.
+        """
+        given: 'a session for a lamp without `[web]`, whose shell window stays open'
+            host.machine { it.windowsStayOpenFor(Duration.ofSeconds(60)) }
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+            var reported = new java.util.concurrent.CopyOnWriteArrayList<LampEvent>()
+            var oillamp = host.oillamp.observedBy { reported.add(it) }
+            var session = Thread.start { oillamp.run('at', lamp.toString()) }
+            waitUntil { reported.any { it instanceof LampEvent.Summary && it.title() == 'your session is up' } }
+
+        and: 'a stand-in for the sandbox\'s bridge on `web-opencode.sock`, which answers "pong" to "ping"'
+            var runtimeOfTheLamp = java.nio.file.Files.list(host.runtime.resolve('oillamp')).toList().first()
+            var agentId = runtimeOfTheLamp.fileName.toString()
+            var bridge = java.nio.channels.ServerSocketChannel.open(java.net.StandardProtocolFamily.UNIX)
+            bridge.bind(java.net.UnixDomainSocketAddress.of(runtimeOfTheLamp.resolve('sockets/infra/web-opencode.sock')))
+            var heard = new java.util.concurrent.CompletableFuture<String>()
+            Thread.start {
+                try (var channel = bridge.accept()) {
+                    heard.complete(new String(java.nio.channels.Channels.newInputStream(channel).readAllBytes(), 'UTF-8'))
+                    channel.write(java.nio.ByteBuffer.wrap('pong'.getBytes('UTF-8')))
+                }
+            }
+
+        when: 'oillamp reports the published port'
+            var published = reported.find { it instanceof LampEvent.WebPublished }.port()
+
+        then: 'it is `opencode`, port 4096 in the sandbox, with a link to `<lamp id>.localhost` on the port oillamp listens on'
+            published.name() == 'opencode'
+            published.sandboxPort() == 4096
+            published.link() == URI.create("http://${agentId}.localhost:${published.hostPort()}/")
+
+        and: 'the session\'s state lists the same port, for an application that joins later'
+            waitUntil { reported.any { it instanceof LampEvent.SessionStateChanged && it.status().webPorts().contains(published) } }
+
+        when: 'a client connects to 127.0.0.1 on that port, as a browser would, sends "ping" and finishes sending'
+            var client = java.nio.channels.SocketChannel.open(new InetSocketAddress('127.0.0.1', published.hostPort()))
+            client.write(java.nio.ByteBuffer.wrap('ping'.getBytes('UTF-8')))
+            client.shutdownOutput()
+            var answer = new String(java.nio.channels.Channels.newInputStream(client).readAllBytes(), 'UTF-8')
+            client.close()
+
+        then: 'the stand-in heard "ping", and the client got "pong" back'
+            heard.get(10, TimeUnit.SECONDS) == 'ping'
+            answer == 'pong'
+
+        cleanup:
+            bridge?.close()
+            host.oillamp.run('stop', lamp.toString())
+            session?.join(20_000)
+    }
+
+    def 'When nothing in the sandbox takes a connection to a published web server, oillamp says once how to start it'() {
+        reportInfo """
+            Let's consider a lamp that publishes opencode's port 4096, and a person who opens its
+            link before opencode's web interface runs in the sandbox, or after the bridge for it
+            has stopped. A browser then opens one connection after another and gets nothing. The
+            person must learn what to do: start the server in the sandbox, with
+            `opencode serve --port 4096`. Removing the sandbox, the advice for a sandbox that does
+            not answer at all, would be wrong here.
+
+            So oillamp reports the warning `OIL-NET-013`, which names `opencode serve --port 4096`.
+            Browsers retry, so it is reported once, and again only after a connection got through.
+            In this scenario nothing serves the sandbox's `web-opencode.sock`, and two connections
+            to the published port fail.
+        """
+        given: 'a session for a lamp without `[web]`, with nothing behind the sandbox\'s `web-opencode.sock`'
+            host.machine { it.windowsStayOpenFor(Duration.ofSeconds(60)) }
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+            var reported = new java.util.concurrent.CopyOnWriteArrayList<LampEvent>()
+            var oillamp = host.oillamp.observedBy { reported.add(it) }
+            var session = Thread.start { oillamp.run('at', lamp.toString()) }
+            waitUntil { reported.any { it instanceof LampEvent.Summary && it.title() == 'your session is up' } }
+            var published = reported.find { it instanceof LampEvent.WebPublished }.port()
+
+        when: 'a browser connects to the published port twice'
+            2.times {
+                var client = java.nio.channels.SocketChannel.open(new InetSocketAddress('127.0.0.1', published.hostPort()))
+                java.nio.channels.Channels.newInputStream(client).readAllBytes()
+                client.close()
+            }
+            waitUntil { reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-013' } }
+            Thread.sleep(500)
+
+        then: 'oillamp warned with `OIL-NET-013` once, and the warning says to run `opencode serve --port 4096`'
+            var warnings = reported.findAll { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-013' }
+            warnings.size() == 1
+            warnings.first().problem().toString().contains('opencode serve --port 4096')
+
+        and: 'it gives no advice to remove the sandbox, and the session goes on'
+            !warnings.first().problem().toString().contains('podman rm')
+            session.alive
+
+        cleanup:
+            host.oillamp.run('stop', lamp.toString())
             session?.join(20_000)
     }
 

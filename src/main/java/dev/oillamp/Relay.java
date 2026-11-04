@@ -30,7 +30,11 @@ import dev.lamp.LampProblem;
 /// the primary socket, it cannot pose as the shell window whose connecting starts the session. The
 /// primary relay admits exactly one connection per session: the terminal window. The extra relay
 /// admits any number, for `oillamp shell`.
-final class Relay implements AutoCloseable {
+///
+/// A relay's type says where it listens: a `Relay<Listening.OnUnixSocket>` or a
+/// `Relay<Listening.OnLoopbackPort>`, opened with [#open] or [#openOnLoopback]. So code that opened
+/// a loopback relay reads its port from [#listening()] without asking which kind it is.
+final class Relay<L extends Relay.Listening> implements AutoCloseable {
 
     /// The kernel's limit on a Unix socket path, in bytes. Sockets are addressed through the short
     /// runtime directory for this reason, but a long user name or a custom runtime directory can
@@ -52,7 +56,7 @@ final class Relay implements AutoCloseable {
     /// @param sandbox      the Unix socket each connection is copied into
     /// @param admission    whether the relay admits one connection or any number
     /// @param label        what the far side is called in a problem message, such as "the shell (SSH)"
-    record Route(Listening listening, Path sandbox, Admission admission, String label) {
+    record Route<L extends Listening>(L listening, Path sandbox, Admission admission, String label) {
         public Route {
             if (label.isBlank()) throw new IllegalArgumentException("a relay needs a label for its problems");
         }
@@ -88,45 +92,58 @@ final class Relay implements AutoCloseable {
         void connected();
         void disconnected();
         void trouble(LampProblem problem);
+
+        /// The sandbox's socket refused a connection, or is gone. By default that is reported as
+        /// the sandbox not answering on `label`; a listener that knows better says something else.
+        default void sandboxRefused(String label, Path sandbox, String reason) {
+            trouble(ProblemCatalogUtil.sandboxEndpointDead(label, sandbox, "the sandbox",
+                    "connecting to " + label + ": " + reason));
+        }
     }
 
-    private final Route route;
-    private final Listening listening;
+    private final Route<L> route;
+    private final L listening;
     private final Listener listener;
     private final ServerSocketChannel server;
     private final List<SocketChannel> live = new CopyOnWriteArrayList<>();
     private volatile boolean closing;
 
-    private Relay(Route route, Listening listening, Listener listener, ServerSocketChannel server) {
+    private Relay(Route<L> route, L listening, Listener listener, ServerSocketChannel server) {
         this.route = route;
         this.listening = listening;
         this.listener = listener;
         this.server = server;
     }
 
-    /// Starts listening where `route` says, and forwards everything it receives into the sandbox.
-    static Result<Relay> open(Route route, Listener listener) {
-        return listen(route).map(bound -> {
-            Relay relay = new Relay(route, bound.listening(), listener, bound.server());
-            Thread.ofVirtual().name("oillamp-relay-" + describe(bound.listening())).start(relay::acceptLoop);
-            return relay;
-        });
+    /// Starts listening on the Unix socket `route` names, and forwards everything it receives
+    /// into the sandbox.
+    static Result<Relay<Listening.OnUnixSocket>> open(Route<Listening.OnUnixSocket> route, Listener listener) {
+        return bind(route.listening().socket())
+                .map(server -> start(route, route.listening(), server, listener));
+    }
+
+    /// Starts listening on the loopback port `route` names, and forwards everything it receives
+    /// into the sandbox. For port 0, the relay's [#listening()] holds the port the kernel picked.
+    static Result<Relay<Listening.OnLoopbackPort>> openOnLoopback(Route<Listening.OnLoopbackPort> route,
+                                                                   Listener listener) {
+        return bindLoopback(route.listening().port(), route.label())
+                .map(bound -> start(route, bound.listening(), bound.server(), listener));
+    }
+
+    private static <L extends Listening> Relay<L> start(Route<L> route, L listening,
+                                                        ServerSocketChannel server, Listener listener) {
+        Relay<L> relay = new Relay<>(route, listening, listener, server);
+        Thread.ofVirtual().name("oillamp-relay-" + describe(listening)).start(relay::acceptLoop);
+        return relay;
     }
 
     /// Where this relay actually listens. For a loopback port asked for as 0, this holds the port
     /// the kernel picked.
-    Listening listening() { return listening; }
+    L listening() { return listening; }
 
-    /// A server that is listening, and where. Only a loopback port asked for as 0 ends up somewhere
-    /// other than where the route said.
-    private record Bound(ServerSocketChannel server, Listening listening) {}
-
-    private static Result<Bound> listen(Route route) {
-        return switch (route.listening()) {
-            case Listening.OnUnixSocket unix -> bind(unix.socket()).map(server -> new Bound(server, unix));
-            case Listening.OnLoopbackPort(int port) -> bindLoopback(port, route.label());
-        };
-    }
+    /// A loopback server that is listening, and on which port. Asked for port 0, it is one the
+    /// kernel picked.
+    private record LoopbackBound(ServerSocketChannel server, Listening.OnLoopbackPort listening) {}
 
     private static String describe(Listening listening) {
         return switch (listening) {
@@ -168,13 +185,13 @@ final class Relay implements AutoCloseable {
     ///
     /// The address is spelled out as 127.0.0.1 rather than asked of the system, which could answer
     /// with the IPv6 loopback on some machines and would then not match what we tell the user.
-    private static Result<Bound> bindLoopback(int port, String label) {
+    private static Result<LoopbackBound> bindLoopback(int port, String label) {
         try {
             ServerSocketChannel server = ServerSocketChannel.open(StandardProtocolFamily.INET);
             try {
                 server.bind(new InetSocketAddress(LOOPBACK, port), ACCEPT_QUEUE);
                 int bound = ((InetSocketAddress) server.getLocalAddress()).getPort();
-                return Result.ok(new Bound(server, new Listening.OnLoopbackPort(bound)));
+                return Result.ok(new LoopbackBound(server, new Listening.OnLoopbackPort(bound)));
             } catch (IOException | RuntimeException e) {
                 server.close();
                 throw e;
@@ -241,8 +258,7 @@ final class Relay implements AutoCloseable {
         } catch (IOException e) {
             // The sandbox's socket is gone or refusing. Whoever connected only sees a connection
             // that opens and closes, so this is reported in the supervisor's terminal.
-            listener.trouble(ProblemCatalogUtil.sandboxEndpointDead(route.label(), route.sandbox(),
-                    "the sandbox", "connecting to " + route.label() + ": " + ProblemCatalogUtil.reason(e)));
+            listener.sandboxRefused(route.label(), route.sandbox(), ProblemCatalogUtil.reason(e));
             closeQuietly(client);
             return;
         }

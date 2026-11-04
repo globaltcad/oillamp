@@ -11,6 +11,7 @@ import dev.lamp.LampWallpaper;
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import sprouts.Pair;
 import sprouts.Tuple;
 
 /// Turns configuration files into a validated [LampConfig].
@@ -85,7 +86,7 @@ final class ConfigLoadingUtil {
         LampConfig defaults = ConfigDefaultsUtil.lampConfig();
         root.allowOnly("schema_version", "display", "viewer", "terminal", "recording",
                        "limits", "network", "llm", "model", "git", "agent_tools", "image", "host", "timeouts",
-                        "schedule", "host_access", "autosave", "history");
+                        "schedule", "host_access", "autosave", "history", "web");
 
         LampConfig.Display display   = readDisplay(root.table("display"), defaults.display());
         LampConfig.Viewer viewer     = readViewer(root.table("viewer"), defaults.viewer());
@@ -116,9 +117,11 @@ final class ConfigLoadingUtil {
             historyGb = defaults.history().maxGrowthGb();
         }
 
+        LampConfig.Web web = readWeb(root.table("web"), defaults.web(), forwards);
+
         return new LampConfig(display, viewer, terminal, recording, limits,
                               network, forwards, llm, model, git, tools, image, host, timeouts, schedule,
-                               hostAccess, autosave, new LampConfig.History(historyGb));
+                               hostAccess, autosave, new LampConfig.History(historyGb), web);
     }
 
     private static LampConfig.Display readDisplay(ConfigSection s, LampConfig.Display fallback) {
@@ -314,6 +317,80 @@ final class ConfigLoadingUtil {
                      + " is already used by \"" + other.name() + "\"";
         }
         return "";
+    }
+
+    /// `[web]`. A lamp without the table publishes what the built-in defaults say. `ports`, when
+    /// given, replaces the default list as a whole, so `ports = {}` lists nothing.
+    ///
+    /// Only `off` and `listed` exist so far. Anything else, `any` and `ask` included, is refused
+    /// with the two that do, so that a lamp written for a later oillamp is not quietly read as
+    /// something else.
+    private static LampConfig.Web readWeb(ConfigSection s, LampConfig.Web fallback, Tuple<Forward> forwards) {
+        s.allowOnly("publish", "ports");
+        LampConfig.Web.Publishing publish = s.oneOf("publish", fallback.publish(),
+                ConfigLoadingUtil::parsePublishing, "\"off\" or \"listed\"");
+        if (!s.has("ports")) return new LampConfig.Web(publish, defaultPortsBeside(s, fallback.ports(), forwards));
+
+        Tuple<LampConfig.Web.Port> ports = Tuple.of(LampConfig.Web.Port.class);
+        for (Pair<String, Integer> entry : s.integerTable("ports")) {
+            String name = entry.first();
+            int port = entry.second();
+            String key = "ports." + name;
+            if (!name.matches("[a-z0-9-]+") || name.length() > LampConfig.Web.Port.LONGEST_NAME) {
+                s.invalid(key, "\"" + name + "\"", "a name of up to " + LampConfig.Web.Port.LONGEST_NAME
+                        + " lowercase letters, digits and dashes");
+                continue;
+            }
+            Optional<String> wrong = webPortProblem(port, forwards, ports);
+            if (wrong.isPresent()) {
+                s.invalid(key, Integer.toString(port), wrong.get());
+                continue;
+            }
+            ports = ports.add(new LampConfig.Web.Port(name, port));
+        }
+        return new LampConfig.Web(publish, ports);
+    }
+
+    /// The built-in ports, without any that a forward uses. Those are left out with a warning
+    /// rather than refused: a lamp made before `[web]` existed may have a forward on 4096, and must
+    /// keep starting. A port the lamp's file lists itself is checked as an error instead.
+    private static Tuple<LampConfig.Web.Port> defaultPortsBeside(ConfigSection s, Tuple<LampConfig.Web.Port> defaults,
+                                                                 Tuple<Forward> forwards) {
+        Tuple<LampConfig.Web.Port> kept = Tuple.of(LampConfig.Web.Port.class);
+        for (LampConfig.Web.Port port : defaults) {
+            Optional<Forward> clash = Optional.empty();
+            for (Forward forward : forwards) if (forward.port() == port.port()) clash = Optional.of(forward);
+            if (clash.isPresent()) s.report(ProblemCatalogUtil.webDefaultLeftOut(port, clash.get()));
+            else kept = kept.add(port);
+        }
+        return kept;
+    }
+
+    /// Why `port` cannot be published, or empty if it can.
+    private static Optional<String> webPortProblem(int port, Tuple<Forward> forwards,
+                                                   Tuple<LampConfig.Web.Port> before) {
+        if (port < 1024 || port > 65535)
+            return Optional.of("expected a port between 1024 and 65535");
+        if (port == Forward.PROXY_PORT)
+            return Optional.of("port " + Forward.PROXY_PORT + " is the sandbox's egress proxy — it cannot be published");
+        if (port == Forward.MODEL_PORT)
+            return Optional.of("port " + Forward.MODEL_PORT + " is where the sandbox reaches the model service "
+                    + "through oillamp — it cannot be published");
+        for (Forward forward : forwards)
+            if (forward.port() == port)
+                return Optional.of("port " + port + " is the forward \"" + forward.name() + "\"; publishing it would "
+                        + "give your browser the forward's target, which you chose for the sandbox only");
+        for (LampConfig.Web.Port other : before)
+            if (other.port() == port)
+                return Optional.of("web ports must be unique — port " + port + " is already listed as \""
+                        + other.name() + "\"");
+        return Optional.empty();
+    }
+
+    private static Optional<LampConfig.Web.Publishing> parsePublishing(String text) {
+        for (LampConfig.Web.Publishing level : LampConfig.Web.Publishing.values())
+            if (level.configName().equals(text)) return Optional.of(level);
+        return Optional.empty();
     }
 
     private static Optional<LampConfig.Llm> readLlm(ConfigSection s, Tuple<Forward> forwards) {

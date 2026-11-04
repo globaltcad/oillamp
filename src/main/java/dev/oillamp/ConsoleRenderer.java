@@ -214,6 +214,9 @@ final class ConsoleRenderer {
             case LampEvent.SessionOpened opened ->
                     { if (verbose) printLine(area("session") + dim("· commands run in the sandbox with: "
                                                               + String.join(" ", opened.command()))); }
+            case LampEvent.WebPublished web -> printLine(area("web") + colour(GREEN, "✓ ")
+                    + web.port().name() + ": " + web.port().link() + " → port " + web.port().sandboxPort()
+                    + " in the sandbox");
             case LampEvent.LookAtDesktop look -> printLine(area("desktop") + colour(GREEN, "◉ ")
                     + "the agent asks you to look at its desktop" + (look.what().isEmpty() ? "" : ": " + look.what()));
             case LampEvent.WindowOpened opened -> {

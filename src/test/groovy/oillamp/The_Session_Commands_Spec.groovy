@@ -86,6 +86,29 @@ class The_Session_Commands_Spec extends Specification {
             answer.contains(lamp.toString())
     }
 
+    def '`oillamp status` lists the web servers of the sandbox that a running session publishes'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` has no `[web]` section, so that its session
+            publishes opencode's port 4096 to the person's browser. The session picks the port on
+            this machine anew each time, so the link cannot be written down anywhere in advance.
+            `oillamp status <lamp>` asks the running session, and its answer has a line `web` that
+            gives the link and the port in the sandbox it leads to, as in
+            `opencode: http://<lamp id>.localhost:<port>/ → port 4096 in the sandbox`.
+        """
+        given: 'a session runs for a lamp without `[web]`'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+            startASession(lamp)
+
+        when: '`oillamp status <lamp>` is run'
+            var outcome = host.oillamp.run('status', lamp.toString())
+            var answer = outcome.events().find { it instanceof LampEvent.Answer }.text()
+
+        then: 'the answer has a line `web` with the link that the session reported, and the port 4096 in the sandbox'
+            var link = reported.find { it instanceof LampEvent.WebPublished }.port().link().toString()
+            answer.readLines().any { it.startsWith('web') && it.contains("opencode: ${link} → port 4096 in the sandbox") }
+    }
+
     def '`oillamp stop` asks the supervisor to end the session, rather than removing its container'() {
         reportInfo """
             Let's consider a session that runs, and `oillamp stop <lamp>` run from another terminal.

@@ -277,8 +277,9 @@ emptied at every reboot.
 
 ### How oillamp uses them
 
-**Every** connection between your machine and the sandbox is a Unix socket. There is no TCP port
-on your machine and no network interface in the container. Because lamp paths can be long, oillamp
+**Every** connection between your machine and the sandbox is a Unix socket. There is no network
+interface in the container. The only TCP ports on your machine are those of web servers the lamp
+publishes to your browser, on 127.0.0.1 only, and each of those leads to a Unix socket too. Because lamp paths can be long, oillamp
 reaches the sockets through a short directory under `$XDG_RUNTIME_DIR`. oillamp connects to each
 socket before it says the sandbox is ready, rather than checking that the file exists. socat runs
 on both sides: in the container it turns local TCP ports into Unix sockets, and on your machine it

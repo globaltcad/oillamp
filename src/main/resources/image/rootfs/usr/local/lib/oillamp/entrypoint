@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The sandbox's first process (pid 1). See docs/ARCHITECTURE.md, "The entrypoint, step by step".
 #
-# Starts the compositor, the VNC server, the recorder and the two socket bridges, each as the
+# Starts the compositor, the VNC server, the recorder and the socket bridges, each as the
 # right user with the right umask, then supervises them. When any *critical* process dies the
 # sandbox stops: a desktop without a compositor, or a session whose recording has silently ended,
 # is worse than no session, because the human watching would not know.
@@ -33,6 +33,7 @@ set -a; . /oillamp/session/runtime.env; set +a
 : "${OILLAMP_RECORDING_CRF:=30}"
 : "${OILLAMP_RECORDING_MAX_FPS:=10}"
 : "${OILLAMP_FORWARDS:=}"
+: "${OILLAMP_WEB:=}"
 
 # ── drop privileges ──────────────────────────────────────────────────────────────────────────
 # Starts a command in the background as another user with output prefixed, and sets LAST_PID to
@@ -110,9 +111,13 @@ wait_until_listening() {
 # ready.json has to go first and for a different reason: the host starts watching for it the
 # moment the container starts, so one left here is the previous session answering a question the
 # host is asking now. Everything removed here is recreated below.
+#
+# The web-*.sock files are those of the ports an earlier session published. The lamp may list
+# other ports now, and a file left for a port no longer listed would only look as if it were.
 rm -f /oillamp/sockets/infra/vnc.sock \
       /oillamp/sockets/infra/ready.json \
-      /oillamp/sockets/agent/ssh.sock
+      /oillamp/sockets/agent/ssh.sock \
+      /oillamp/sockets/infra/web-*.sock
 
 # ── the runtime directories each user owns ───────────────────────────────────────────────────
 install -d -o lamp  -g lamp  -m 0711 /run/lamp
@@ -325,6 +330,25 @@ for forward in $OILLAMP_FORWARDS; do
     drop lamp 077 "fwd-$name" socat "TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr,fork" \
          "UNIX-CONNECT:/oillamp/sockets/host/fwd-${name}.sock"
     BRIDGE_PIDS+=("$LAST_PID")
+done
+# The published web servers, the other way round: the host connects to web-<name>.sock, and the
+# connection goes on to the agent's server on 127.0.0.1:<port>. Nothing needs to listen there yet;
+# until something does, each connection is accepted and closed again.
+#
+# The host user reaches this socket as the infra user's outsider, as it reaches vnc.sock beside
+# it: infra/ is 0755 and the socket is writable by everyone (wayvnc's umask is 000, this is
+# mode=666), while .oillamp/ on the host, mode 0700, keeps every other user of the machine out.
+# The agent can connect to it too, which gives it nothing: the port is its own.
+#
+# Not critical: a web bridge that stops takes only its link with it, so it is a helper, and the
+# session goes on. The line it leaves in the sandbox's log says that it stopped, and how.
+for published in $OILLAMP_WEB; do
+    name=${published%%:*}; port=${published##*:}
+    drop lamp 077 "web-$name" bash -c 'socat "$1" "$2"
+         echo "the web bridge stopped (exit status $?); the session goes on without this link"' _ \
+         "UNIX-LISTEN:/oillamp/sockets/infra/web-${name}.sock,fork,unlink-early,mode=666" \
+         "TCP:127.0.0.1:${port}"
+    HELPER_PIDS+=("$LAST_PID")
 done
 
 # ── the agent's own processes ────────────────────────────────────────────────────────────────

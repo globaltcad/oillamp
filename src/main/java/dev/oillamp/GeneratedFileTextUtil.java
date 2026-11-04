@@ -25,8 +25,8 @@ final class GeneratedFileTextUtil {
     public static String defaultConfig(LampWallpaper wallpaper, String background) {
         return """
             # oillamp lamp configuration. Edited by you, never visible to the agent.
-            # Changes take effect at the next `oillamp at`. Arrays replace (not merge with) values
-            # from ~/.config/oillamp/config.toml.
+            # Changes take effect at the next `oillamp at`. Arrays, and web.ports, replace (not merge
+            # with) values from ~/.config/oillamp/config.toml.
             schema_version = 1
 
             [display]
@@ -116,6 +116,18 @@ final class GeneratedFileTextUtil {
             # name   = "llm"
             # port   = 8000
             # target = "llm.corp.example.com:8000"
+
+            # Web servers inside the sandbox that you can open in your browser. Each listed port gets a
+            # link such as http://<lamp id>.localhost:41237/ when the session starts; the port on
+            # this machine is picked anew each time. A page you open there runs in your browser, so
+            # it can send requests to your other local web servers and to other lamps' published
+            # ports.
+            [web]
+            publish = "listed"            # "listed": the ports below; a link answers once a server
+                                          # in the sandbox listens on its port
+                                          # "off": nothing, whatever the ports say
+            ports   = { opencode = 4096 } # name = port inside the sandbox; `opencode serve --port 4096`
+                                          # in the sandbox's shell starts opencode's web interface
 
             [llm]
             forward       = ""        # e.g. "llm" — enables preconfiguration of the agent tools

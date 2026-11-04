@@ -12,6 +12,7 @@ import dev.lamp.LampJob
 import dev.lamp.LampProblem
 import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
+import dev.lamp.LampWebPort
 import dev.lamp.LampRun
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
@@ -23,6 +24,7 @@ import spock.lang.Subject
 import spock.lang.Title
 import sprouts.Tuple
 
+import java.net.URI
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -85,6 +87,9 @@ class The_Event_Wire_Format_Spec extends Specification {
                         Tuple.of(dev.lamp.LampConversation.ToolCall, new dev.lamp.LampConversation.ToolCall('c1', 'bash', 'ls')),
                         Optional.of('bash'), true, Optional.of('azure/gpt-6.1-sol'))))
 
+    static final LampWebPort WEB_PORT = new LampWebPort('opencode', 4096, 41237,
+            URI.create('http://k3v7x2ab.localhost:41237/'))
+
     static final LampRun RUN = new LampRun('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
     /** One of every kind of event, with every optional part both present and absent somewhere. */
@@ -100,7 +105,11 @@ class The_Event_Wire_Format_Spec extends Specification {
             new LampEvent.Output('sway', '[sway] 00:00:01 ✓ ünïcödé'),
             new LampEvent.Answer('multi\nline\nanswer'),
             new LampEvent.Sandboxes(Tuple.of(LampSandbox, new LampSandbox('oillamp-k3v7x2ab', 'running', Path.of('/home/me/lamps/north')))),
-            new LampEvent.SessionStateChanged(new LampSessionStatus('running', 'up', Duration.ofMinutes(2), 1)),
+            new LampEvent.SessionStateChanged(new LampSessionStatus('running', 'up', Duration.ofMinutes(2), 1,
+                    Tuple.of(LampWebPort, WEB_PORT))),
+            new LampEvent.SessionStateChanged(new LampSessionStatus('starting', 'coming up', Duration.ZERO, 0,
+                    Tuple.of(LampWebPort))),
+            new LampEvent.WebPublished(WEB_PORT),
             new LampEvent.SessionOpened('20260928-120000', Tuple.of(String, 'ssh', '-T', 'lamp-k3v7x2ab'),
                                         Path.of('/run/user/1000/oillamp/k3v7x2ab/sockets/infra/vnc.sock'), 1920, 1080),
             new LampEvent.LookAtDesktop('the chart you asked for'),
@@ -231,6 +240,20 @@ class The_Event_Wire_Format_Spec extends Specification {
         where:
             line << ['', 'not json', '{}', '{"type":"FromTheFuture","x":1}', '{"type":"Ok","area":"x"}',
                      '{"type":"Failure","problem":{"code":{"value":"nonsense"}}}']
+    }
+
+    def 'A session\'s state from an engine that did not yet publish web servers reads with none'() {
+        reportInfo """
+            Let's consider a program built on oillamp that joins a session an older oillamp
+            started, and reads its events with `LampEvent.fromJson`. That engine's
+            `SessionStateChanged` events have no `webPorts`, because it published no web servers.
+            They read as a state with an empty list of web ports, rather than not at all: the
+            program learns that the session runs, and that nothing is published.
+        """
+        expect: 'a `SessionStateChanged` without `webPorts` reads back with an empty list'
+            LampEvent.fromJson('{"type":"SessionStateChanged","status":{"state":"running","detail":"up","uptime":"PT2M","extraShells":1}}') ==
+                    Optional.of(new LampEvent.SessionStateChanged(
+                            new LampSessionStatus('running', 'up', Duration.ofMinutes(2), 1, Tuple.of(LampWebPort))))
     }
 
     def 'An answer from an engine that did not yet say which model wrote it reads with no model'() {

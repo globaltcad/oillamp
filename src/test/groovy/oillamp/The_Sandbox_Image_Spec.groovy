@@ -138,6 +138,53 @@ class The_Sandbox_Image_Spec extends Specification {
             dockLines.every { !it.contains('drop lamp') }
     }
 
+    def 'The entrypoint serves each published web port on a socket the host can reach, as the infra user, and clears old ones first'() {
+        reportInfo """
+            Let's consider a lamp that publishes opencode's port 4096 to the person's browser.
+            `runtime.env` names the port in `OILLAMP_WEB`, as `opencode:4096`. For each entry the
+            entrypoint starts socat as the infra user `lamp`, never as the agent: it listens on
+            `/oillamp/sockets/infra/web-<name>.sock` and connects each connection to
+            `127.0.0.1:<port>`, where the agent's server listens. The agent cannot replace or
+            remove a socket in that directory, so it cannot put something of its own in the
+            bridge's place.
+
+            The host reaches the socket as it reaches the desktop's `vnc.sock` beside it: the
+            directory belongs to the infra user and anyone may enter it, and the socket must be
+            writable by everyone, `mode=666`, because to the infra user the host user is an
+            outsider. The lamp's `.oillamp` directory on the host, mode 0700, keeps every other
+            user of the machine out.
+
+            The socket directory outlives the container, so the entrypoint first removes every
+            `web-*.sock` an earlier session left. A file left for a port the lamp no longer lists
+            would otherwise look as if that port were still served.
+
+            A web bridge is a helper, not a critical process. If it stops, only its link stops
+            working, so the session goes on, and the line the bridge leaves in the sandbox's log
+            says that it stopped. The proxy and model bridges stay critical: without them the
+            agent has no network and no model, and the session ends.
+        """
+        when: 'the entrypoint is read, and in it the loop that starts the web bridges'
+            var entrypoint = Files.readString(IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
+            var loop = entrypoint.substring(entrypoint.indexOf('for published in $OILLAMP_WEB'))
+            var bridge = loop.substring(0, loop.indexOf('\ndone'))
+
+        then: 'it starts one bridge per entry of `OILLAMP_WEB`, as `lamp`, from `web-<name>.sock` to `127.0.0.1:<port>`, at mode 666'
+            entrypoint.contains('for published in $OILLAMP_WEB; do')
+            bridge.contains('drop lamp 077 "web-$name" ')
+            bridge.contains('"UNIX-LISTEN:/oillamp/sockets/infra/web-${name}.sock,fork,unlink-early,mode=666"')
+            bridge.contains('"TCP:127.0.0.1:${port}"')
+
+        and: 'each web bridge is a helper, whose stopping is logged and does not end the session, while the proxy bridge stays critical'
+            bridge.contains('HELPER_PIDS+=("$LAST_PID")')
+            !bridge.contains('BRIDGE_PIDS')
+            bridge.contains('the web bridge stopped')
+            entrypoint.contains('CRITICAL=("$SWAY_PID" "$VNC_PID" "${BRIDGE_PIDS[@]}")')
+            entrypoint.substring(entrypoint.indexOf('drop lamp 077 proxy socat')).readLines().take(3).any { it.contains('BRIDGE_PIDS+=') }
+
+        and: 'it removes the `web-*.sock` files of earlier sessions before it starts anything'
+            entrypoint.indexOf('/oillamp/sockets/infra/web-*.sock') < entrypoint.indexOf('for published in $OILLAMP_WEB')
+    }
+
     def 'If the dock cannot be installed, the image still builds, and only the dock is missing'() {
         reportInfo """
             The dock is a convenience on top of the desktop, ssh and the recording. If Debian ever

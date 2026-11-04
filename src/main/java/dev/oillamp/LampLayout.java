@@ -172,6 +172,10 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path hostAccessSocket()  { return shortSockets().resolve("host").resolve("host-access.sock"); }
     /// Where the agent asks the user to look at its desktop, through the session.
     public Path desktopSocket()     { return shortSockets().resolve("host").resolve("desktop.sock"); }
+    /// Where the sandbox serves one published web port, for the session's relay to connect to.
+    public Path webSocket(LampConfig.Web.Port port) {
+        return shortSockets().resolve("infra").resolve(port.socketFileName());
+    }
     public Path forwardSocket(String name) {
         return shortSockets().resolve("host").resolve("fwd-" + name + ".sock");
     }

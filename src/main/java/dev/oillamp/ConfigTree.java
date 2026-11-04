@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import sprouts.Association;
+import sprouts.Tuple;
 
 /// The configuration files merged into one tree, remembering which file each value came from.
 ///
@@ -15,9 +16,16 @@ import sprouts.Association;
 /// a combination with the global file's rules, which nobody could reason about. The template
 /// written into each new lamp says this at the top.
 ///
+/// A few tables are values rather than groups of settings, and are **replaced as a whole** like
+/// arrays: [#WHOLE_TABLES]. A lamp that lists `web.ports` publishes exactly those ports, and can
+/// list fewer than the global file, rather than only add to them.
+///
 /// The file of origin is kept for every key path, so a problem can name the file the bad value
 /// came from.
 record ConfigTree(JsonNode root, Association<String, Path> origins) {
+
+    /// Tables that a later file replaces as a whole, by key path.
+    static final Tuple<String> WHOLE_TABLES = Tuple.of(String.class, "web.ports");
 
     public static ConfigTree of(JsonNode root, Path origin) {
         return new ConfigTree(root, recordOrigins(Association.between(String.class, Path.class), "", root, origin));
@@ -25,7 +33,7 @@ record ConfigTree(JsonNode root, Association<String, Path> origins) {
 
     /// Merges `later` on top of this tree.
     public ConfigTree mergedWith(JsonNode later, Path origin) {
-        JsonNode merged = merge(root, later);
+        JsonNode merged = merge(root, later, "");
         return new ConfigTree(merged, recordOrigins(origins, "", later, origin));
     }
 
@@ -44,13 +52,15 @@ record ConfigTree(JsonNode root, Association<String, Path> origins) {
         }
     }
 
-    private static JsonNode merge(JsonNode base, JsonNode later) {
-        if (!(base instanceof ObjectNode baseObject) || !(later instanceof ObjectNode laterObject))
-            return later;                                  // scalars and arrays replace wholesale
+    private static JsonNode merge(JsonNode base, JsonNode later, String keyPath) {
+        if (!(base instanceof ObjectNode baseObject) || !(later instanceof ObjectNode laterObject)
+                || WHOLE_TABLES.contains(keyPath))
+            return later;                                  // scalars, arrays and whole tables replace
         ObjectNode result = baseObject.deepCopy();
         for (Map.Entry<String, JsonNode> field : laterObject.properties()) {
             JsonNode existing = result.get(field.getKey());
-            result.set(field.getKey(), existing == null ? field.getValue() : merge(existing, field.getValue()));
+            String child = keyPath.isEmpty() ? field.getKey() : keyPath + "." + field.getKey();
+            result.set(field.getKey(), existing == null ? field.getValue() : merge(existing, field.getValue(), child));
         }
         return result;
     }

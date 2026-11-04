@@ -29,7 +29,8 @@ class The_Shape_Of_The_Code_Spec extends Specification {
             'LampEvent', 'LampProblem', 'LampExitStatus', 'Lamp', 'LampDirectory', 'LampFailedException', 'LampSave',
             'LampSaveKind', 'LampJob', 'LampJobAuthor', 'LampStartupPhase', 'LampStep', 'LampSessionStatus',
             'LampRun', 'LampRunOutcome', 'LampAgentProgress', 'LampHostRisk', 'LampHostVerdict', 'LampPrompt',
-            'LampConversation', 'LampLauncher', 'LampBranch', 'LampSaveOnBranches', 'LampSandbox', 'LampWallpaper'
+            'LampConversation', 'LampLauncher', 'LampBranch', 'LampSaveOnBranches', 'LampSandbox', 'LampWallpaper',
+            'LampWebPort'
     ] as Set
 
     static final Set<String> PUBLIC_API = ENGINE_API + EMBEDDING_API

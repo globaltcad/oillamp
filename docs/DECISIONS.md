@@ -65,6 +65,40 @@ company LLM service, without going through the proxy policy.
 blocks internal addresses would need an exception anyway. Forwards are named in the config, listed
 in the agent guide and logged. *(D-13)*
 
+### Web servers in the sandbox are published to the browser at a level you choose
+
+`[web]` decides which web servers inside the sandbox your browser may open. `publish` is a level,
+not a switch: `off` publishes nothing, `listed` publishes the ports in `web.ports`. Later levels,
+`any` (whatever the agent starts listening on) and `ask` (ask you first), are refused until they
+exist, so a lamp written for them is never read as something else. A lamp without `[web]`
+publishes `opencode = 4096`, opencode's web interface.
+
+- **Levels, because the risk depends on who uses the lamp.** A page from the sandbox runs in your
+  browser, where it can send requests to your other local web servers and to other lamps'
+  published ports. For someone using a lamp as a personal assistant that is acceptable; a company
+  that locks its lamps down wants `off`.
+- **The default is `listed` with opencode.** Opening opencode's web interface is the main use, and
+  it needs nothing else to work. You start it yourself, with `opencode serve --port 4096` in the
+  sandbox's shell; oillamp never starts it, so a published port answers only when you want it to.
+- **A new loopback port per supervisor, picked by the kernel.** Each session binds port 0 on
+  127.0.0.1 and tells you the port it got. No process is shared between lamps, there is no port to
+  configure or to collide on, and nothing listens on another address.
+- **The link is `http://<lamp id>.localhost:<port>/`, and the Host header is not checked.**
+  Browsers send `*.localhost` to the loopback address, and a host name per lamp gives each lamp's
+  pages their own cookies. Checking the header would keep out requests that name another host,
+  but the port is on loopback only and the link is the one oillamp prints, so it was not worth
+  refusing other names such as `127.0.0.1`.
+- **A forward's port cannot be published**, because that would hand the forward's target to your
+  browser. A lamp that lists such a port is refused; the default opencode port is left out with a
+  warning instead, so a lamp made before `[web]` existed, with a forward on 4096, still starts.
+- **A lamp's `web.ports` replaces the global file's** as a whole, as an array would, so a lamp can
+  publish fewer ports than the global file lists, not only more.
+- **The bridges in the sandbox are not critical.** A web bridge that stops takes only its link
+  with it; the proxy and model bridges still end the session when they stop.
+
+*Given up:* the browser can be a bridge between lamps, and a page can reach local services. `off`
+is the answer for anyone who does not accept that. *(no number)*
+
 ### Two users inside the container: the agent is you, the infrastructure is nobody
 
 Container uid 1000 (`agent`) is mapped to your host user with `--userns=keep-id:uid=1000,gid=1000`.
@@ -136,7 +170,7 @@ boundary, and it allows several viewers and recording. *(D-02)*
 
 ### wayvnc on a Unix socket; TigerVNC as the viewer
 
-*Why:* no TCP port exists anywhere. Access is controlled by file permissions. TigerVNC's
+*Why:* no TCP port is needed for the desktop. Access is controlled by file permissions. TigerVNC's
 `vncviewer` connects to a socket path directly (verified). A built-in Swing viewer is a possible
 later replacement. *(D-04, D-05)*
 

@@ -75,6 +75,10 @@ public sealed interface LampEvent {
     record SessionOpened(String session, Tuple<String> command, Path desktop, int desktopWidth, int desktopHeight)
             implements LampEvent {}
 
+    /// A web server inside the sandbox can be opened in the browser, at `port.link()`. Reported
+    /// once per published port, when the session is up. [SessionStateChanged] lists them too.
+    record WebPublished(LampWebPort port)               implements LampEvent {}
+
     /// The agent asks the user to look at its desktop, because it shows them something there.
     /// An application that shows the desktop can open it now.
     ///
