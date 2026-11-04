@@ -56,9 +56,6 @@ import sprouts.Tuple;
 /// and the log is a record of what happened, not a copy of what was said.
 final class HostAccess implements AutoCloseable {
 
-    /// How long a person has to answer when the feature asks them. No answer is a refusal.
-    static final Duration USER_PATIENCE = Duration.ofSeconds(60);
-
     /// How many tool calls of the current run the checker sees. Enough to show what the run is
     /// doing; short enough that the request itself stays the largest thing in the prompt.
     static final int ACTIVITY_KEPT = 12;
@@ -79,13 +76,6 @@ final class HostAccess implements AutoCloseable {
         record Failed(String why) implements Answer {}
     }
 
-    /// A request the checker allowed that the person must allow too, as the person is shown it.
-    ///
-    /// @param run  the run the request came from, or empty when the agent asked outside one
-    /// @param tool the tool, such as `host_bash`
-    /// @param what what is about to happen, in words
-    record RequestForPermission(String run, String tool, String what) {}
-
     private final Machine machine;
     private final LampLayout layout;
     private final LampConfig config;
@@ -98,7 +88,7 @@ final class HostAccess implements AutoCloseable {
     /// Asks the session to show the person a request for permission, and returns whether the
     /// person allowed it. The session decides whether there is a person to ask at all; this only
     /// puts the request on its queue.
-    private final Function<RequestForPermission, CompletableFuture<Boolean>> decisions;
+    private final Function<Question.HostRequest, CompletableFuture<Boolean>> decisions;
     /// The run the agent is working on now, as the session's runner knows it. The request does
     /// not name its run: anything the sandbox sends is the agent's word, and the agent must not
     /// choose whose instruction the checker reads.
@@ -114,7 +104,7 @@ final class HostAccess implements AutoCloseable {
     ///                 such as the model key; a command run on the host does not get them
     HostAccess(Machine machine, LampLayout layout, LampConfig config, SessionId session, Path home,
                HostAccessChecker checker, Consumer<LampEvent> sink,
-               Function<RequestForPermission, CompletableFuture<Boolean>> decisions,
+               Function<Question.HostRequest, CompletableFuture<Boolean>> decisions,
                Supplier<Optional<LampRun>> currentRun, Function<String, RunLog> activityNow,
                Tuple<String> withheld) {
         this.machine = machine;
@@ -288,7 +278,7 @@ final class HostAccess implements AutoCloseable {
         // 5. The person's permission first, for a command when the lamp says so, and for a path
         // past the roots.
         if (HostTool.needsThePerson(tool, config.hostAccess()) || outside) {
-            Optional<String> no = askTheUser(new RequestForPermission(run, attempt.tool(), HostTool.describe(tool)
+            Optional<String> no = askTheUser(new Question.HostRequest(run, attempt.tool(), HostTool.describe(tool)
                     + (outside ? " (outside the lamp's roots)" : "")), withdrawn);
             if (no.isPresent()) return refuse(attempt, resolved, no.get());
         }
@@ -404,27 +394,27 @@ final class HostAccess implements AutoCloseable {
     /// A person is the slowest and most careful checker there is, so this is reserved for the
     /// requests worth an interruption: a command, in a lamp whose `host_access.commands` is
     /// `ask`, and (with `ask_the_user`) a path past the roots. The session refuses at once when it has nobody to ask, and the request
-    /// times out on its own, so this never waits longer than [#USER_PATIENCE].
+    /// times out on its own, so this never waits longer than [Question#PATIENCE].
     /// A request the sandbox withdraws while the person is asked is withdrawn from the person
     /// too: the question is closed, and the next one can be asked.
     ///
     /// @return why the request may not go on, or empty when the person said yes
-    private Optional<String> askTheUser(RequestForPermission request, CompletableFuture<Void> withdrawn) {
+    private Optional<String> askTheUser(Question.HostRequest request, CompletableFuture<Void> withdrawn) {
         CompletableFuture<Boolean> decision = decisions.apply(request);
         var unused = withdrawn.thenRun(() -> decision.completeExceptionally(new IllegalStateException(CANCELLED)));
         try {
-            boolean yes = Boolean.TRUE.equals(decision.get(USER_PATIENCE.toMillis() + 1000, TimeUnit.MILLISECONDS));
+            boolean yes = Boolean.TRUE.equals(decision.get(Question.PATIENCE.toMillis() + 1000, TimeUnit.MILLISECONDS));
             if (withdrawn.isDone()) return Optional.of(CANCELLED);
             return yes ? Optional.empty() : Optional.of(HostAccessProblems.userSaidNo(request.tool()).whatHappened());
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt();
             return Optional.of(HostAccessProblems.failed(request.tool(), "it was stopped").whatHappened());
         } catch (TimeoutException slow) {
-            return Optional.of(HostAccessProblems.userDidNotAnswer(USER_PATIENCE).whatHappened());
+            return Optional.of(HostAccessProblems.userDidNotAnswer(Question.PATIENCE).whatHappened());
         } catch (ExecutionException ended) {
             if (withdrawn.isDone()) return Optional.of(CANCELLED);
             return Optional.of(ended.getCause() instanceof TimeoutException
-                    ? HostAccessProblems.userDidNotAnswer(USER_PATIENCE).whatHappened()
+                    ? HostAccessProblems.userDidNotAnswer(Question.PATIENCE).whatHappened()
                     : HostAccessProblems.userNotAsked(request.tool(), Optional.ofNullable(ended.getCause())
                             .map(Throwable::getMessage).orElse("the request was withdrawn")).whatHappened());
         }

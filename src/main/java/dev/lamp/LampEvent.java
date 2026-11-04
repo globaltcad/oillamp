@@ -275,7 +275,7 @@ public sealed interface LampEvent {
     record HostAccessRefused(String run, String tool, String why) implements LampEvent {}
 
     /// The user is being asked about a request the checker allowed, and needs to look. The answer
-    /// goes back on the session's control socket as `host-access-answer`, naming `what`.
+    /// goes back on the session's control socket as `answer`, naming `what`; [Lamp#decidePermission] sends it.
     ///
     /// @param what what is about to happen, in words, and where
     record HostAccessAsked(String run, String tool, String what) implements LampEvent {}

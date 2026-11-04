@@ -440,7 +440,7 @@ final class AgentGuideUtil {
     /// how long pi waits for one call is filled in here: the checker, then a person, then the
     /// longest command, and a minute to spare.
     static String hostAccessTools() {
-        long seconds = HostAccessChecker.PATIENCE.plus(HostAccess.USER_PATIENCE).plus(HostTool.LONGEST_COMMAND)
+        long seconds = HostAccessChecker.PATIENCE.plus(Question.PATIENCE).plus(HostTool.LONGEST_COMMAND)
                 .plusMinutes(1).toSeconds();
         return resource("oillamp-host-access.js").replace("/* timeout */0", String.valueOf(seconds));
     }

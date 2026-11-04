@@ -39,7 +39,7 @@ sealed interface SessionState {
     /// @param asked           the host-access question the person has not answered yet; empty
     ///                        when there is none, which is almost always
     record Running(Instant since, ReadyInfo ready, boolean shellWindowOpen, int extraShells,
-                   Optional<String> asked, Tuple<HostAccess.RunLog> runs) implements SessionState {}
+                   Optional<Question> asked, Tuple<HostAccess.RunLog> runs) implements SessionState {}
 
     /// The shutdown sequence is running; further events are ignored.
     record ShuttingDown(Instant since, ShutdownReason reason, Tuple<HostAccess.RunLog> runs)

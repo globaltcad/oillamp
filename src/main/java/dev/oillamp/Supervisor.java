@@ -115,10 +115,10 @@ final class Supervisor {
     private boolean desktopAnswering = true;
     private boolean shellAnswering = true;
     private boolean briefed;
-    /// The host-access questions waiting for the person, by the text they were shown. Each is
-    /// answered by `host-access-answer`, declined by the state machine when nobody can be asked,
-    /// times out after [HostAccess#USER_PATIENCE], or is refused when the session ends; however
-    /// it ends, it leaves this map and the state machine hears that it is closed.
+    /// The questions waiting for the person, by the text they were shown. Each is answered by
+    /// the control request `answer`, declined by the state machine when nobody can be asked,
+    /// times out after [Question#PATIENCE], or is refused when the session ends; however it
+    /// ends, it leaves this map and the state machine hears that it is closed.
     private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Boolean>> questions =
             new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -343,24 +343,32 @@ final class Supervisor {
 
     // ─── what the machine asks for ─────────────────────────────────────────────────────────
 
-    /// Puts a host-access question on the event queue, where [SessionMachine] decides whether
-    /// this session has a person to ask, and returns what the person answers.
+    /// Puts a question on the event queue, where [SessionMachine] decides whether this session
+    /// has a person to ask, and returns what the person answers.
     ///
     /// The future completes with the answer, or fails with the reason there was none: nobody to
     /// ask, no answer in time, or the session ending. A question with the same text as one that
     /// already waits is not asked twice; it is declined.
-    private java.util.concurrent.CompletableFuture<Boolean> awaitAnswered(HostAccess.RequestForPermission request) {
+    private java.util.concurrent.CompletableFuture<Boolean> awaitAnswered(Question question) {
         var answer = new java.util.concurrent.CompletableFuture<Boolean>();
-        if (questions.putIfAbsent(request.what(), answer) != null)
+        if (questions.putIfAbsent(question.text(), answer) != null)
             return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException(
                     "the person is already being asked about the same request"));
-        var unused = answer.orTimeout(HostAccess.USER_PATIENCE.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
+        var unused = answer.orTimeout(Question.PATIENCE.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
               .whenComplete((yes, failed) -> {
-                  questions.remove(request.what(), answer);
-                  post(new SessionEvent.UserAnswered(request.what(), Boolean.TRUE.equals(yes)));
+                  questions.remove(question.text(), answer);
+                  post(new SessionEvent.UserAnswered(question, Boolean.TRUE.equals(yes)));
               });
-        post(new SessionEvent.HostAccessAsked(request.run(), request.tool(), request.what()));
+        post(new SessionEvent.QuestionAsked(question));
         return answer;
+    }
+
+    /// How the person is shown a question: the public event the terminal prints, `oillamp follow`
+    /// relays and an application renders.
+    private static LampEvent shown(Question question) {
+        return switch (question) {
+            case Question.HostRequest request -> new LampEvent.HostAccessAsked(request.run(), request.tool(), request.what());
+        };
     }
 
     private void perform(SessionAction action) {
@@ -372,9 +380,8 @@ final class Supervisor {
             case SessionAction.BeginShutdown shutdown -> beginShutdown(shutdown.reason());
             // The state machine decided the person should be asked; here it is turned into the
             // event the terminal shows (and `oillamp follow` relays, and an application renders).
-            case SessionAction.AskTheUser asked ->
-                    context.sink().accept(new LampEvent.HostAccessAsked(asked.run(), asked.tool(), asked.question()));
-            case SessionAction.DeclineQuestion declined -> Optional.ofNullable(questions.get(declined.question()))
+            case SessionAction.AskTheUser asked -> context.sink().accept(shown(asked.question()));
+            case SessionAction.DeclineQuestion declined -> Optional.ofNullable(questions.get(declined.question().text()))
                     .ifPresent(answer -> answer.completeExceptionally(new IllegalStateException(declined.why())));
             // Handled by the loop, which records the exit code. Listed so that a new kind of action
             // does not compile until it is handled here.
@@ -1266,9 +1273,9 @@ final class Supervisor {
                         out.write(event.get().toJson());
                 }
             });
-            // The answer to a host-access question the agent asked. The question is the text
-            // the person was shown; the state machine closes it and the gate hears the answer.
-            case "host-access-answer" -> {
+            // The answer to a question the person was asked, named by the text they were shown.
+            // The state machine closes it, and whoever asked hears the answer.
+            case "answer" -> {
                 String question = request.arguments().get("question").orElse("");
                 if (question.isEmpty()) yield Control.Reply.failed("say which question, as the event names it");
                 var waiting = questions.get(question);

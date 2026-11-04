@@ -1485,10 +1485,10 @@ final class CommandExecutionUtil {
         }
     }
 
-    /// `oillamp answer <dir> yes|no <question>`: the person's answer to a host-access question
-    /// the running session asked, named by its text.
+    /// `oillamp answer <dir> yes|no <question>`: the person's answer to a question the running
+    /// session asked, named by its text. So far every question is about a host request.
     private static LampExitStatus answer(Machine machine, Context context, Path lampPath, boolean yes, String question) {
-        return askTheSession(machine, context, lampPath, "answer", Control.Request.of("host-access-answer")
+        return askTheSession(machine, context, lampPath, "answer", Control.Request.of("answer")
                         .with("question", question).with("yes", String.valueOf(yes)),
                 reply -> context.sink().accept(new LampEvent.Ok("host access", "answered " + (yes ? "yes" : "no"))));
     }

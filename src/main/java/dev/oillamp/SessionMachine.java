@@ -117,17 +117,17 @@ record SessionMachine(Settings settings) {
             case SessionEvent.ShellDisconnected ignored when state instanceof SessionState.Running running ->
                     shells(running, -1);
 
-            // The agent wants something on the host that needs a person. Only a running session
-            // has one to ask, and it asks one question at a time: a question that cannot be asked
-            // now is declined at once, so the request is refused with a reason instead of waiting
-            // out its patience for a person who was never shown it.
-            case SessionEvent.HostAccessAsked asked when state instanceof SessionState.Running running
+            // Something needs a person. Only a running session has one to ask, and it asks one
+            // question at a time: a question that cannot be asked now is declined at once, so
+            // whoever asked hears a reason instead of waiting out the patience for a person who was
+            // never shown it.
+            case SessionEvent.QuestionAsked asked when state instanceof SessionState.Running running
                     && running.asked().isEmpty() ->
                     Transition.to(new SessionState.Running(running.since(), running.ready(),
                                     running.shellWindowOpen(), running.extraShells(),
                                     Optional.of(asked.question()), running.runs()),
-                            new SessionAction.AskTheUser(asked.run(), asked.tool(), asked.question()));
-            case SessionEvent.HostAccessAsked asked ->
+                            new SessionAction.AskTheUser(asked.question()));
+            case SessionEvent.QuestionAsked asked ->
                     Transition.to(state, new SessionAction.DeclineQuestion(asked.question(),
                             state instanceof SessionState.Running
                                     ? "the person is already being asked about another request"
@@ -140,9 +140,9 @@ record SessionMachine(Settings settings) {
                     Transition.to(new SessionState.Running(running.since(), running.ready(),
                                     running.shellWindowOpen(), running.extraShells(),
                                     Optional.empty(), running.runs()),
-                            new SessionAction.Announce(new LampEvent.Info("host access",
+                            new SessionAction.Announce(new LampEvent.Info(answered.question().area(),
                                     "the person said " + (answered.yes() ? "yes" : "no")
-                                  + " to: " + answered.question())));
+                                  + " to: " + answered.question().text())));
 
             // What the agent did, kept for the host-access gate. There is no decision to make:
             // the run's log is part of the state, and the next state carries it on.

@@ -52,7 +52,7 @@ These words have one meaning each, in the code and in the documents.
 | **primary shell** | The SSH connection from the terminal window oillamp opens. When it connects, the session is up. |
 | **extra shell** | A shell opened with `oillamp shell <dir>`. |
 | **relay** | A place on the host, a Unix socket or a port on 127.0.0.1, that forwards each connection into a Unix socket inside the sandbox. It admits either one connection or any number. Used for SSH and for published web servers. |
-| **control socket** | A Unix socket the supervisor listens on, so that `oillamp stop`, `status`, `view`, `shell` and `follow` can talk to a running session. |
+| **control socket** | A Unix socket the supervisor listens on, so that `oillamp stop`, `status`, `view`, `shell`, `follow` and `answer` can talk to a running session. |
 | **egress proxy** | The HTTP proxy inside oillamp that is the sandbox's only way out. "Egress" means outbound. |
 | **forward** | A fixed tunnel from a port inside the sandbox to one address you configured. Not subject to the proxy's rules. |
 | **runtime directory** | `$XDG_RUNTIME_DIR/oillamp/<agent id>/`, usually `/run/user/<uid>/oillamp/<agent id>/`. Short socket paths, in memory. |
@@ -1808,10 +1808,8 @@ returns an `Answer`: `Done`, `Refused` or `Failed`. `HostMcp` writes each as a t
 5. `HostAccessChecker.check` asks the model, in a conversation of its own, and `HostTool.verdict`
    reads the answer; anything unreadable, untimed, or unreachable is a refusal.
 6. A command in a lamp whose `host_access.commands` is `ask`, or (with `ask_the_user`) an allowed
-   request outside the roots, goes to the person: `SessionEvent.HostAccessAsked` on the event
-   queue. The state machine asks one question at a time, and only while the session runs; any
-   other is declined at once. The supervisor keeps one future per question, answered by
-   `host-access-answer` on the control socket, and timed out after `HostAccess.USER_PATIENCE`.
+   request outside the roots, goes to the person as a `Question.HostRequest` (see "Asking the
+   person" below).
 7. `HostAccessTools.perform` does the work, after the paths are resolved once more.
    `host_copy_in` writes into the agent's home with `FilesystemUtil.replaceInAgentHome`, one
    directory at a time through handles that refuse links, as oillamp writes its own files
@@ -1846,6 +1844,27 @@ otherwise the model the agent answers with, read from the session's runner for e
 (`HostAccessChecker.forSession`, `AgentRunner.model`), so it follows `oillamp model`. A session
 with the feature on and neither is refused as it starts (`LampPhase.hostAccessInForce`,
 `OIL-HOSTACCESS-015`).
+
+### Asking the person
+
+Some decisions belong to the person at the session. Each is a `Question`, a sealed type with one
+case so far, `Question.HostRequest` (a host request the checker allowed). A question's `text()` is
+what the person sees and answers by, and also its key while it waits.
+
+1. Whoever needs the answer calls `Supervisor.awaitAnswered(question)`, which keeps one future per
+   question text and posts `SessionEvent.QuestionAsked`.
+2. `SessionMachine` asks one question at a time, and only while the session runs: it records the
+   question in `SessionState.Running.asked` and returns `SessionAction.AskTheUser`. Any other
+   question is declined at once with `SessionAction.DeclineQuestion` and the reason ("the person is
+   already being asked…", "the session is not running…"), so whoever asked hears why rather than
+   waiting.
+3. The supervisor turns `AskTheUser` into the public event for that kind of question, with an
+   exhaustive switch; a host request is `LampEvent.HostAccessAsked`, as before.
+4. The answer comes back on the control socket as the request `answer`, naming the question's text,
+   from `oillamp answer <dir> yes|no -- <text>` or `Lamp.decidePermission`. No answer within
+   `Question.PATIENCE` (60 s) is a no, and so is the session ending.
+5. However it ends, the future posts `SessionEvent.UserAnswered`; the state machine clears `asked`
+   and announces the answer in the question's area (`host access` for a host request).
 
 ## Packaging
 

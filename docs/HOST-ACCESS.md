@@ -301,7 +301,7 @@ interrupting for:
 - an allowed request outside `roots`, when `ask_the_user` is on.
 
 The session reports `LampEvent.HostAccessAsked`, the terminal prints it, and an application shows
-it. The answer comes back on the session's control socket, as `{"op":"host-access-answer",
+it. The answer comes back on the session's control socket, as `{"op":"answer",
 "question":"<what the event said>","yes":"true"}`; an application sends it with
 `Lamp.decidePermission(request, allowed)`, and a person with `oillamp answer <dir> yes|no "<question>"`. The session asks one question at a time, and
 only while it is running; a question that cannot be asked now is declined at once, with the
