@@ -89,6 +89,7 @@ final class ProblemCatalogUtil {
     public static final Code NET_LOG_NOT_WRITTEN   = new Code("OIL-NET-011");
     public static final Code NET_WEB_NOT_PUBLISHED = new Code("OIL-NET-012");
     public static final Code NET_WEB_NOT_ANSWERING = new Code("OIL-NET-013");
+    public static final Code NET_WEB_TOO_MANY      = new Code("OIL-NET-014");
     public static final Code SESSION_NOT_RUNNING   = new Code("OIL-SESSION-001");
     public static final Code SESSION_UNREACHABLE   = new Code("OIL-SESSION-002");
     public static final Code SESSION_REFUSED       = new Code("OIL-SESSION-003");
@@ -118,6 +119,17 @@ final class ProblemCatalogUtil {
                 "there is no link to open it in your browser this session; everything else works")
             .withEvidence(new Evidence.Value("cause", cause.code() + " " + cause.title()))
             .withFix(Fix.of("start the session again; it picks a new port each time"));
+    }
+
+    /// The session published as many ports during the session as it will, and publishes no more.
+    public static LampProblem tooManyWebPorts(int most) {
+        return warning(NET_WEB_TOO_MANY, "No more web servers are published this session",
+                "the agent opened more ports than the " + most + " a session publishes while it runs; "
+              + "further ports are neither published nor asked about until the session ends",
+                "each published port costs a port on this machine, a relay and a bridge in the sandbox, "
+              + "and an agent that opens hundreds of ports, such as a test suite, must not get hundreds of each")
+            .withFix(Fix.of("list a port you need in `web.ports` in the lamp's oillamp.toml; listed ports "
+                    + "are published from the start of the next session, outside this limit"));
     }
 
     /// A connection to a published web server found nothing in the sandbox to take it.

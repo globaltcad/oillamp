@@ -310,29 +310,46 @@ final class AgentGuideUtil {
     private static String webSection(LampConfig.Web web) {
         Tuple<LampConfig.Web.Port> ports = web.published();
         StringBuilder out = new StringBuilder("## Web servers the human can open\n\n");
+        String later = switch (web.publish()) {
+            case OFF -> {
+                out.append("Nothing in this sandbox is published to the human's browser: this lamp has\n")
+                   .append("`[web]` publishing switched off. A web server you start here is for you alone;\n")
+                   .append("to open it in their browser, the human would have to enable `[web]` in the\n")
+                   .append("lamp's settings and start the session again.\n\n");
+                yield "";
+            }
+            case LISTED -> "";
+            case ANY -> "\nA web server you start yourself, on `127.0.0.1` or all addresses and on any port\n"
+                      + "from 1024 up, becomes openable for the human by itself, within a few seconds:\n"
+                      + "oillamp shows them a link to it, named `port-<number>`, such as `port-5173`.\n";
+            case ASK -> "\nWhen you start a web server yourself, on `127.0.0.1` or all addresses and on a\n"
+                      + "port from 1024 up, oillamp asks the human whether to publish that port to their\n"
+                      + "browser. Only if they say yes do they get a link to it, named `port-<number>`.\n"
+                      + "They may say no, and are not asked about that port again this session.\n";
+        };
+        if (web.publish() == LampConfig.Web.Publishing.OFF) return out.toString();
         if (ports.isEmpty()) {
-            out.append(web.publish() == LampConfig.Web.Publishing.OFF
-                    ? "Nothing in this sandbox is published to the human's browser: this lamp has\n"
-                    + "`[web]` publishing switched off. A web server you start here is for you alone;\n"
-                    + "to open it in their browser, the human would have to enable `[web]` in the\n"
-                    + "lamp's settings and start the session again.\n\n"
-                    : "No port of this sandbox is published to the human's browser: the lamp's\n"
+            out.append(later.isEmpty()
+                    ? "No port of this sandbox is published to the human's browser: the lamp's\n"
                     + "`[web]` settings list none. To open a server you start here, the human would\n"
-                    + "have to list its port there and start the session again.\n\n");
-            return out.toString();
+                    + "have to list its port there and start the session again.\n"
+                    : "No port of this sandbox is published from the start: the lamp's `[web]`\n"
+                    + "settings list none.\n" + later);
+            return out.append('\n').toString();
         }
         out.append("The human can open these ports in their own browser, through oillamp, which\n")
            .append("shows them a link for each when the session starts:\n\n");
         for (LampConfig.Web.Port port : ports)
             out.append("- `").append(port.port()).append("` → ").append(port.name()).append('\n');
         out.append("\nA server must listen on `127.0.0.1` (or all addresses) on that port; until one\n")
-           .append("does, the link opens nothing. Other ports are not reachable from their browser.\n");
+           .append("does, the link opens nothing.")
+           .append(later.isEmpty() ? " Other ports are not reachable from their browser.\n" : "\n");
         for (LampConfig.Web.Port opencode : ports.retainIf(port -> port.name().equals("opencode")))
             out.append("\nopencode's web interface is reached by running `opencode serve --port ")
                .append(opencode.port())
                .append("`\nin the shell. The human starts it themselves when they want it; oillamp never\n")
                .append("starts it.\n");
-        return out.append('\n').toString();
+        return out.append(later).append('\n').toString();
     }
 
         /// How the agent works on a schedule, for a lamp that has one: the tools, the rules the host

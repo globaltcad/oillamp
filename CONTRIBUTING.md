@@ -127,7 +127,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
 | `Configuring_A_Lamp_Spec` | the configuration file and its validation |
 | `Starting_The_Sandbox_Spec` | readiness and socket checks |
-| `Supervising_A_Session_Spec` | a whole session: windows, shutdown, failures |
+| `Supervising_A_Session_Spec` | a whole session: windows, shutdown, failures, published web servers |
 | `The_Session_Commands_Spec` | `status`, `stop`, `shell`, `view`, `list` |
 | `Waking_The_Agent_Spec` | the schedule, `ask`, runs and their snapshots, and the agent's scheduling tools, with a stand-in pi |
 | `Deciding_What_The_Sandbox_May_Reach_Spec` | the egress proxy and policy, over the real socket |
@@ -182,6 +182,7 @@ same code path oillamp uses.
 | `Verifying_Terminal_Profiles_Spec` | installed terminals accept oillamp's arguments; terminal emulators return before their window closes |
 | `Verifying_The_Sandbox_Desktop_Spec` | the real image: readiness, SSH login as `agent`, screen size and rendering, vncviewer on a Unix socket, clicking and typing with `lamp`, a playable recording, a clean second session |
 | `Running_A_Lamp_For_An_Application_Spec` | a lamp's whole life through `dev.lamp.Lamp`, with the engine as a separate process |
+| `Verifying_Published_Web_Servers_Spec` | `[web]` in a real sandbox: a listed port and, with `publish = "any"`, a port the agent opens, both answering an HTTP request from this machine; `/proc/net/tcp` read with `podman exec --user lamp` |
 | `Two_Lamps_At_Once_Spec` | one application holding two lamps that must not see each other |
 | `When_An_Application_Or_Its_Sandbox_Dies_Spec` | the application crashing, or the container dying |
 | `Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec` | the model key absent from a real sandbox; real model requests when `EDENAI_API_KEY` is set |

@@ -20,6 +20,7 @@ sealed interface Question {
     default String area() {
         return switch (this) {
             case HostRequest ignored -> "host access";
+            case PublishPort ignored -> "web";
         };
     }
 
@@ -30,5 +31,13 @@ sealed interface Question {
     /// @param what what is about to happen, in words, and where
     record HostRequest(String run, String tool, String what) implements Question {
         @Override public String text() { return what; }
+    }
+
+    /// Whether a port the agent started listening on in the sandbox may be published to this
+    /// machine's browser, with `web.publish = "ask"`.
+    record PublishPort(int sandboxPort) implements Question {
+        @Override public String text() {
+            return "publish port " + sandboxPort + " from the sandbox to this machine's browser";
+        }
     }
 }

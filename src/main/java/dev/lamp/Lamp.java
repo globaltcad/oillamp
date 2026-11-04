@@ -476,13 +476,15 @@ public final class Lamp implements AutoCloseable {
         runToEnd(launcher, listeners, "schedule", directory.toString(), "remove", job).orThrow();
     }
 
-    /// Allows or refuses a host request the session asked the person about, with a
-    /// [LampEvent.HostAccessAsked]. Allowing lets that one request go on; it allows no other.
-    /// A request nobody decides about is refused after a minute.
+    /// Allows or refuses what the session asked the person about: a host request, with a
+    /// [LampEvent.HostAccessAsked], or publishing a port, with a [LampEvent.WebPortAsked].
+    /// Allowing lets that one request go on, or publishes that one port; it allows no other.
+    /// A question nobody decides about is answered no after a minute.
     ///
     /// Runs `oillamp answer <dir> yes|no -- <request>` as a short-lived engine process.
     ///
-    /// @param request the event's [what][LampEvent.HostAccessAsked#what()], as it was given
+    /// @param request the event's `what` ([LampEvent.HostAccessAsked#what()] or
+    ///                [LampEvent.WebPortAsked#what()]), as it was given
     /// @throws LampFailedException when the session waits on no such request, or is not running
     public void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, LampFailedException {
         runToEnd(launcher, listeners, "answer", directory.toString(), allowed ? "yes" : "no", "--", request).orThrow();

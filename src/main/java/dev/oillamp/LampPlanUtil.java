@@ -29,6 +29,8 @@ final class LampPlanUtil {
     /// The container's infra user, which owns everything the agent must not be able to change.
     public static final int INFRA_UID = 1001;
     public static final int INFRA_GID = 1001;
+    /// The container's agent user: the host user, mapped to this uid by `--userns=keep-id`.
+    public static final int AGENT_UID = 1000;
 
     /// Everything the lamp phase needs to know, gathered by [LampPhase].
     ///

@@ -361,6 +361,9 @@ final class ConsoleRenderer {
             case LampEvent.HostAccessAsked asked -> printLine(area("host access")
                     + colour(YELLOW, "◉ ") + "the agent asks you to allow " + asked.tool() + ": "
                     + shortened(NOT_PRINTABLE.matcher(asked.what()).replaceAll(" "), 120));
+            case LampEvent.WebPortAsked asked -> printLine(area("web")
+                    + colour(YELLOW, "◉ ") + "the agent listens on port " + asked.sandboxPort() + ": "
+                    + asked.what() + "? `oillamp answer <dir> yes|no -- \"" + asked.what() + "\"`");
             case LampEvent.HostAccessSettings settings -> printLine(area("host access")
                     + (settings.enabled() ? "on" : "off") + ", judged against:\n"
                     + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));

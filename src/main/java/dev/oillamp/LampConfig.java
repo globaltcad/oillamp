@@ -100,7 +100,8 @@ record LampConfig(
     /// and why `off` exists.
     ///
     /// @param publish which ports are published
-    /// @param ports   the ports `listed` publishes, each with a name; sorted by name
+    /// @param ports   the ports published from the start with `listed`, `any` and `ask`, each with
+    ///                a name; sorted by name
     public record Web(Publishing publish, Tuple<Port> ports) {
 
         public Web {
@@ -113,21 +114,26 @@ record LampConfig(
                 }
         }
 
-        /// The ports a session publishes: none with `off`, the listed ones with `listed`.
+        /// The ports a session publishes as it opens: none with `off`, the listed ones otherwise.
+        /// With `any` and `ask`, more may follow during the session.
         public Tuple<Port> published() {
             return switch (publish) {
                 case OFF -> Tuple.of(Port.class);
-                case LISTED -> ports;
+                case LISTED, ANY, ASK -> ports;
             };
         }
 
-        /// `web.publish`. Later levels, such as publishing whatever the agent starts or asking the
-        /// user first, are further constants here.
+        /// `web.publish`.
         public enum Publishing {
             /// Nothing is published, whatever `ports` lists.
             OFF,
             /// The ports in `ports`, and no others.
-            LISTED;
+            LISTED,
+            /// The ports in `ports`, and every port the agent starts listening on during the session.
+            ANY,
+            /// The ports in `ports`, and each port the agent starts listening on once the person
+            /// allowed it.
+            ASK;
 
             public String configName() { return name().toLowerCase(java.util.Locale.ROOT); }
         }

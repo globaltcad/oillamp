@@ -1486,11 +1486,12 @@ final class CommandExecutionUtil {
     }
 
     /// `oillamp answer <dir> yes|no <question>`: the person's answer to a question the running
-    /// session asked, named by its text. So far every question is about a host request.
+    /// session asked, named by its text: a host request, or publishing a port.
     private static LampExitStatus answer(Machine machine, Context context, Path lampPath, boolean yes, String question) {
         return askTheSession(machine, context, lampPath, "answer", Control.Request.of("answer")
                         .with("question", question).with("yes", String.valueOf(yes)),
-                reply -> context.sink().accept(new LampEvent.Ok("host access", "answered " + (yes ? "yes" : "no"))));
+                reply -> context.sink().accept(new LampEvent.Ok(reply.values().get("area").orElse("host access"),
+                        "answered " + (yes ? "yes" : "no"))));
     }
 
     /// `oillamp follow <dir>`: report everything a running session reports, as it happens,
@@ -1792,13 +1793,17 @@ final class CommandExecutionUtil {
              + "\nhost access  " + describeHostAccess(config.hostAccess());
     }
 
-    /// Which web servers in the sandbox the browser may open: `off`, or `listed` and the ports.
+    /// Which web servers in the sandbox the browser may open: `off`, or the level and the listed
+    /// ports.
     private static String describeWeb(LampConfig.Web web) {
         Tuple<String> ports = Tuple.of(String.class);
         for (LampConfig.Web.Port port : web.ports()) ports = ports.add(port.name() + " " + port.port());
+        String listed = ports.isEmpty() ? "no ports" : String.join(", ", ports);
         return switch (web.publish()) {
             case OFF -> "off";
-            case LISTED -> "listed: " + (ports.isEmpty() ? "no ports" : String.join(", ", ports));
+            case LISTED -> "listed: " + listed;
+            case ANY -> "any: " + listed + ", and every port the agent opens";
+            case ASK -> "ask: " + listed + ", and each port the agent opens that you allow";
         };
     }
 

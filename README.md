@@ -487,7 +487,8 @@ action = "allow"
 hosts  = ["nexus.corp.example.com"]
 
 [web]
-publish = "listed"            # "off" publishes nothing to your browser
+publish = "listed"            # "off": nothing to your browser; "ask": these, and each web server
+                              # the agent starts, once you say yes; "any": every one, unasked
 ports   = { opencode = 4096 } # web servers in the sandbox you can open in your browser
 ```
 

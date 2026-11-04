@@ -190,6 +190,19 @@ From inside a real sandbox, through the real proxy:
 | `curl http://192.168.1.1/` | denied, with the rule quoted, and printed in the supervisor's terminal |
 | `apt-get update` | reaches its mirrors, then cannot write: the root filesystem is read-only |
 
+### Published web servers
+
+`Verifying_Published_Web_Servers_Spec`, with podman 5.7.0 and the real image, a lamp with
+`publish = "any"`:
+
+| Check | Result |
+|---|---|
+| the session reports `opencode` published, port 4096 in the sandbox, linked at `<lamp id>.localhost` | yes |
+| Python's `http.server`, started as the agent on 127.0.0.1:4096, answers a GET to 127.0.0.1:<host port> with `Host: <lamp id>.localhost:<host port>` | 200, through the relay and the infra user's socat on `web-opencode.sock` |
+| `podman exec --user lamp <container> cat /proc/net/tcp /proc/net/tcp6` lists the agent's listener on 5173 | state `0A`, uid `1000`: the container's numbering |
+| a server the agent starts on 5173 is found and published as `port-5173`, with its bridge started by `podman exec --detach --user lamp socat` | yes, within seconds |
+| a GET to `port-5173`'s host port | 200 |
+
 ### The agent's shell
 
 | Check | Result |
@@ -462,11 +475,14 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Not yet tested
 
-- Published web servers (`[web]`) in a real session. Scenarios cover the configuration, the
-  entrypoint's lines, and the host side with a simulated container: the link is reported, listed
-  by `oillamp status` and the session's state, and a TCP connection to it reaches a stand-in for
-  the sandbox's `web-opencode.sock` in both directions. Not yet tried: the real image's socat
-  bridge, `opencode serve` behind it, and a real browser opening the `*.localhost` link.
+- Published web servers with a real browser, and `opencode serve` behind a link. The data path
+  itself is verified on real hardware (see "Published web servers" above), with Python's
+  `http.server` and a plain HTTP request.
+- `web.publish = "ask"` in a real session: the question and its answer are covered by scenarios
+  with a simulated container; detection and the mid-session bridge, which `ask` shares with `any`,
+  are verified for `any` only.
+- A host without IPv6, where `/proc/net/tcp6` is missing: `cat` then fails but still prints
+  `/proc/net/tcp`, whose text is read whatever the exit status.
 
 - The startup and shutdown saves (off by default, `[autosave]`) in a real session with podman. Scenarios cover both with a
   simulated container, ending the session with `oillamp stop`. After Ctrl-C the same shutdown

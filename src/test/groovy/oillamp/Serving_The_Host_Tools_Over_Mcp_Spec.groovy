@@ -318,7 +318,7 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
 
         then: 'the session says no question waits with that text, and the command never ran'
             var closed = thrown(LampFailedException)
-            closed.message.contains('no host-access question waits with that text')
+            closed.message.contains('no question waits with that text')
             !Files.exists(project.resolve('too-late'))
     }
 

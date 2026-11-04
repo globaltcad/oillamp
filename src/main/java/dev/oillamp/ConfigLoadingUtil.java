@@ -322,13 +322,12 @@ final class ConfigLoadingUtil {
     /// `[web]`. A lamp without the table publishes what the built-in defaults say. `ports`, when
     /// given, replaces the default list as a whole, so `ports = {}` lists nothing.
     ///
-    /// Only `off` and `listed` exist so far. Anything else, `any` and `ask` included, is refused
-    /// with the two that do, so that a lamp written for a later oillamp is not quietly read as
-    /// something else.
+    /// Anything other than `off`, `listed`, `any` and `ask` is refused, with the four that exist,
+    /// so that a typo is not quietly read as some level.
     private static LampConfig.Web readWeb(ConfigSection s, LampConfig.Web fallback, Tuple<Forward> forwards) {
         s.allowOnly("publish", "ports");
         LampConfig.Web.Publishing publish = s.oneOf("publish", fallback.publish(),
-                ConfigLoadingUtil::parsePublishing, "\"off\" or \"listed\"");
+                ConfigLoadingUtil::parsePublishing, "\"off\", \"listed\", \"any\" or \"ask\"");
         if (!s.has("ports")) return new LampConfig.Web(publish, defaultPortsBeside(s, fallback.ports(), forwards));
 
         Tuple<LampConfig.Web.Port> ports = Tuple.of(LampConfig.Web.Port.class);

@@ -1061,11 +1061,10 @@ class Configuring_A_Lamp_Spec extends Specification {
     def 'oillamp refuses `web.publish = "#value"`, and names the levels it knows'() {
         reportInfo """
             `web.publish` decides which web servers inside the sandbox the person's browser may
-            open. This oillamp knows two levels: `off` and `listed`. Later versions may add more,
-            such as publishing whatever the agent starts, or asking the person first. A lamp that
-            names such a level, or a typo, must not be read as one of the two that exist, because
-            either guess could publish more or less than the person meant. So oillamp refuses it
-            with `OIL-CONFIG-004`, names `web.publish`, and lists `"off"` and `"listed"`.
+            open. There are four levels: `off`, `listed`, `ask` and `any`. A typo, or a word that is
+            none of them, must not be read as one of the four, because any guess could publish more
+            or less than the person meant. So oillamp refuses it with `OIL-CONFIG-004`, names
+            `web.publish`, and lists the four levels.
         """
         given: 'a lamp whose `oillamp.toml` sets `web.publish = "#value"`'
             var lamp = host.lampPath()
@@ -1074,14 +1073,40 @@ class Configuring_A_Lamp_Spec extends Specification {
         when: '`oillamp config <dir> check` runs'
             var outcome = host.oillamp.run('config', lamp.toString(), 'check')
 
-        then: 'it reports `OIL-CONFIG-004` for `web.publish`, and names `"off"` and `"listed"`'
+        then: 'it reports `OIL-CONFIG-004` for `web.publish`, and names the four levels'
             outcome.status() == LampExitStatus.USAGE
             outcome.reported('OIL-CONFIG-004')
             outcome.console().contains('web.publish')
-            outcome.console().contains('"off" or "listed"')
+            outcome.console().contains('"off", "listed", "any" or "ask"')
 
         where:
-            value << ['any', 'ask', 'on']
+            value << ['on', 'yes', 'all']
+    }
+
+    def 'oillamp accepts `web.publish = "#value"`, which publishes #what'() {
+        reportInfo """
+            Let's consider two people. One uses a lamp as a personal assistant and wants every web
+            page the agent builds to open in their browser without being asked: `publish = "any"`.
+            The other wants to decide each time: `publish = "ask"`, under which oillamp asks before
+            it publishes a port the agent opened. Both levels publish the listed ports as well.
+            `oillamp config <dir> check` accepts both, and `show-effective` says what each means.
+        """
+        given: 'a lamp whose `oillamp.toml` sets `web.publish = "#value"` and no ports of its own'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n\n[web]\npublish = "' + value + '"\n')
+
+        when: '`oillamp config <dir> check` and `show-effective` run'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'the configuration is valid, and `show-effective` says what the level publishes'
+            checked.status() == LampExitStatus.SUCCESS
+            shown.console().contains(effective)
+
+        where:
+            value | what                                                   || effective
+            'any' | 'opencode\'s port and every port the agent opens'      || 'web          any: opencode 4096, and every port the agent opens'
+            'ask' | 'opencode\'s port and each port the person allows'     || 'web          ask: opencode 4096, and each port the agent opens that you allow'
     }
 
     def 'oillamp refuses to publish port #port, because #why'() {
@@ -1267,5 +1292,35 @@ class Configuring_A_Lamp_Spec extends Specification {
         then: 'the lamp with its own list publishes only opencode, and the other publishes both from the user-wide file'
             narrowShown.console().contains('web          listed: opencode 4096\n')
             plainShown.console().contains('web          listed: opencode 4096, site 8080')
+    }
+
+    def '`~/AGENTS.md` tells the agent that with `web.publish = "#value"` #what'() {
+        reportInfo """
+            Let's consider an agent asked to build a web site, in a lamp whose `oillamp.toml` sets
+            `publish = "#value"` under `[web]`. The agent should know what happens when it starts its
+            own web server, so that it can tell the person where to look. With `any`, a server on
+            127.0.0.1 and a port from 1024 up becomes openable for the person by itself, with a link
+            named `port-<number>`. With `ask`, the person is asked first, and may say no. The guide
+            `~/AGENTS.md` says which.
+        """
+        given: 'a lamp whose `oillamp.toml` sets `web.publish = "#value"`'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n\n[web]\npublish = "' + value + '"\n')
+
+        when: '`oillamp at <dir>` starts the session'
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+
+        then: 'the guide still lists opencode\'s port, and says what happens to a server the agent starts'
+            guide.contains('- `4096` → opencode')
+            guide.contains(says)
+            guide.contains('`port-<number>`')
+
+        where:
+            value | what                                                     || says
+            'any' | 'a server it starts becomes openable by itself'          || 'becomes openable for the human by itself'
+            'ask' | 'the person is asked about a server it starts first'     || 'oillamp asks the human whether to publish that port'
     }
 }

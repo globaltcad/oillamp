@@ -68,10 +68,9 @@ in the agent guide and logged. *(D-13)*
 ### Web servers in the sandbox are published to the browser at a level you choose
 
 `[web]` decides which web servers inside the sandbox your browser may open. `publish` is a level,
-not a switch: `off` publishes nothing, `listed` publishes the ports in `web.ports`. Later levels,
-`any` (whatever the agent starts listening on) and `ask` (ask you first), are refused until they
-exist, so a lamp written for them is never read as something else. A lamp without `[web]`
-publishes `opencode = 4096`, opencode's web interface.
+not a switch: `off` publishes nothing, `listed` publishes the ports in `web.ports`, `ask` also each
+port the agent starts listening on once you said yes, and `any` every such port unasked. A lamp
+without `[web]` publishes `opencode = 4096`, opencode's web interface.
 
 - **Levels, because the risk depends on who uses the lamp.** A page from the sandbox runs in your
   browser, where it can send requests to your other local web servers and to other lamps'
@@ -93,6 +92,18 @@ publishes `opencode = 4096`, opencode's web interface.
   warning instead, so a lamp made before `[web]` existed, with a forward on 4096, still starts.
 - **A lamp's `web.ports` replaces the global file's** as a whole, as an array would, so a lamp can
   publish fewer ports than the global file lists, not only more.
+- **What the agent listens on is read from `/proc/net/tcp`, filtered by the agent's uid.** The
+  file needs no tool in the image and no cooperation from the agent, and the uid column tells the
+  agent's sockets from the infra user's bridges without a list of exceptions. It is read every two
+  seconds with the watcher's other checks, so a new server is offered within a few seconds.
+- **With `ask`, a no holds for the session.** The server stays there and is found on every look;
+  asking again each time would leave yes as the only way to stop the questions. A question that
+  could not be asked, because another one was waiting, is not a no.
+- **At most 16 ports the agent opens are published per session.** Each costs a port on this
+  machine, a relay and a bridge, and a test suite can open hundreds. The 17th is warned about once
+  (`OIL-NET-014`); under `ask` only allowed ports count. A port that matters can be listed.
+- **A port whose server stops stays published** until the session ends. Its link then opens
+  nothing. Taking it down would need a second rule for when a port counts as gone, for little gain.
 - **The bridges in the sandbox are not critical.** A web bridge that stops takes only its link
   with it; the proxy and model bridges still end the session when they stop.
 

@@ -125,6 +125,9 @@ final class GeneratedFileTextUtil {
             [web]
             publish = "listed"            # "listed": the ports below; a link answers once a server
                                           # in the sandbox listens on its port
+                                          # "ask": these, and each port the agent opens, once you
+                                          # said yes to it
+                                          # "any": these, and every port the agent opens, unasked
                                           # "off": nothing, whatever the ports say
             ports   = { opencode = 4096 } # name = port inside the sandbox; `opencode serve --port 4096`
                                           # in the sandbox's shell starts opencode's web interface

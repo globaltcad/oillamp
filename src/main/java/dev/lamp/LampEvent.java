@@ -76,8 +76,20 @@ public sealed interface LampEvent {
             implements LampEvent {}
 
     /// A web server inside the sandbox can be opened in the browser, at `port.link()`. Reported
-    /// once per published port, when the session is up. [SessionStateChanged] lists them too.
+    /// once per published port: for the ports published from the start, when the session is up;
+    /// for a port the agent opened later (`web.publish = "any"` or `"ask"`), when it is published.
+    /// [SessionStateChanged] lists them too.
     record WebPublished(LampWebPort port)               implements LampEvent {}
+
+    /// The agent listens on a new port in the sandbox, and the user is asked whether to publish it
+    /// to this machine's browser (`web.publish = "ask"`). [Lamp#decidePermission] with `what`
+    /// answers, as does `oillamp answer <dir> yes|no -- <what>`. A yes publishes it, and
+    /// [WebPublished] follows; a no, or no answer within a minute, keeps it unpublished, and the
+    /// session does not ask about that port again.
+    ///
+    /// @param sandboxPort the port inside the sandbox, such as `5173`
+    /// @param what        the question, in words, and the text to answer it by
+    record WebPortAsked(int sandboxPort, String what)   implements LampEvent {}
 
     /// The agent asks the user to look at its desktop, because it shows them something there.
     /// An application that shows the desktop can open it now.

@@ -119,8 +119,52 @@ final class Supervisor {
     /// the control request `answer`, declined by the state machine when nobody can be asked,
     /// times out after [Question#PATIENCE], or is refused when the session ends; however it
     /// ends, it leaves this map and the state machine hears that it is closed.
-    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Boolean>> questions =
+    private final java.util.concurrent.ConcurrentHashMap<String, Waiting> questions =
             new java.util.concurrent.ConcurrentHashMap<>();
+
+    /// A question that waits for the person, and the answer it will get.
+    private record Waiting(Question question, java.util.concurrent.CompletableFuture<Boolean> answer) {}
+
+    /// What became of the ports the agent started listening on during the session, with
+    /// `web.publish` `any` or `ask`. One value, swapped whole: the watcher and the person's answers
+    /// change it from different threads.
+    private volatile LaterPorts later = LaterPorts.NONE;
+    private final Object changingLater = new Object();
+
+    /// Replaces [#later] with `change` applied to it, one change at a time.
+    private void changeLater(java.util.function.UnaryOperator<LaterPorts> change) {
+        synchronized (changingLater) {
+            later = change.apply(later);
+        }
+    }
+
+    /// The ports the agent opened during the session, as decided so far.
+    ///
+    /// @param published the ones published, each with its relay
+    /// @param asking    the ones the person is being asked about now
+    /// @param declined  the ones not to offer again this session: the person said no or did not
+    ///                  answer, or publishing failed
+    /// @param full      whether [#MOST_LATER_PORTS] was reached, and the person told so
+    private record LaterPorts(Tuple<Published> published, Tuple<Integer> asking, Tuple<Integer> declined,
+                              boolean full) {
+        static final LaterPorts NONE = new LaterPorts(Tuple.of(Published.class), Tuple.of(Integer.class),
+                                                      Tuple.of(Integer.class), false);
+
+        /// Every port with a decision made or under way, which the watcher does not offer again.
+        Tuple<Integer> decided() {
+            return published.mapTo(Integer.class, web -> web.port().sandboxPort()).addAll(asking).addAll(declined);
+        }
+        LaterPorts asking(int port)    { return new LaterPorts(published, asking.add(port), declined, full); }
+        LaterPorts askAgain(int port)  { return new LaterPorts(published, without(asking, port), declined, full); }
+        LaterPorts declined(int port)  { return new LaterPorts(published, without(asking, port), declined.add(port), full); }
+        LaterPorts published(Published web) {
+            return new LaterPorts(published.add(web), without(asking, web.port().sandboxPort()), declined, full);
+        }
+        LaterPorts filledUp()          { return new LaterPorts(published, asking, declined, true); }
+        private static Tuple<Integer> without(Tuple<Integer> ports, int port) {
+            return ports.retainIf(other -> other != port);
+        }
+    }
 
     /// Whether the last question to podman about the container went unanswered, so that a podman
     /// that stops answering is reported once, not every two seconds.
@@ -318,7 +362,8 @@ final class Supervisor {
 
     /// The published web servers, or none before the session has opened them.
     private Tuple<LampWebPort> webPorts() {
-        return served.map(Served::webPorts).orElse(Tuple.of(LampWebPort.class));
+        return served.map(Served::webPorts).orElse(Tuple.of(LampWebPort.class))
+                .addAll(later.published().mapTo(LampWebPort.class, Published::port));
     }
 
     private String describeState() {
@@ -351,12 +396,13 @@ final class Supervisor {
     /// already waits is not asked twice; it is declined.
     private java.util.concurrent.CompletableFuture<Boolean> awaitAnswered(Question question) {
         var answer = new java.util.concurrent.CompletableFuture<Boolean>();
-        if (questions.putIfAbsent(question.text(), answer) != null)
+        Waiting waiting = new Waiting(question, answer);
+        if (questions.putIfAbsent(question.text(), waiting) != null)
             return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException(
                     "the person is already being asked about the same request"));
         var unused = answer.orTimeout(Question.PATIENCE.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)
               .whenComplete((yes, failed) -> {
-                  questions.remove(question.text(), answer);
+                  questions.remove(question.text(), waiting);
                   post(new SessionEvent.UserAnswered(question, Boolean.TRUE.equals(yes)));
               });
         post(new SessionEvent.QuestionAsked(question));
@@ -368,6 +414,7 @@ final class Supervisor {
     private static LampEvent shown(Question question) {
         return switch (question) {
             case Question.HostRequest request -> new LampEvent.HostAccessAsked(request.run(), request.tool(), request.what());
+            case Question.PublishPort publish -> new LampEvent.WebPortAsked(publish.sandboxPort(), publish.text());
         };
     }
 
@@ -382,7 +429,7 @@ final class Supervisor {
             // event the terminal shows (and `oillamp follow` relays, and an application renders).
             case SessionAction.AskTheUser asked -> context.sink().accept(shown(asked.question()));
             case SessionAction.DeclineQuestion declined -> Optional.ofNullable(questions.get(declined.question().text()))
-                    .ifPresent(answer -> answer.completeExceptionally(new IllegalStateException(declined.why())));
+                    .ifPresent(waiting -> waiting.answer().completeExceptionally(new IllegalStateException(declined.why())));
             // Handled by the loop, which records the exit code. Listed so that a new kind of action
             // does not compile until it is handled here.
             case SessionAction.Exit ignored -> { }
@@ -723,12 +770,13 @@ final class Supervisor {
         if (runs.busy()) context.sink().accept(new LampEvent.Info("run",
                 "stopping the agent's run and saving what it did"));
         served.ifPresent(Served::closeTheAgentsDesks);
-        questions.values().forEach(answer -> answer.completeExceptionally(
+        questions.values().forEach(waiting -> waiting.answer().completeExceptionally(
                 new IllegalStateException("the session is ending")));
         runs.stop();
 
         // 1. Stop accepting shells and web connections, and drop the ones that are open.
         served.ifPresent(Served::closeTheWaysIn);
+        for (Published web : later.published()) web.relay().close();
 
         // 2. Ask the container to stop, so the entrypoint can finish the recording on SIGTERM.
         //    Both podman commands are shielded from Ctrl-C, which would otherwise reach them
@@ -891,12 +939,124 @@ final class Supervisor {
                 }
                 boolean due = !Instant.now().isBefore(nextHeartbeat);
                 checkTheEndpoints(due);
+                lookForNewWebServers();
                 if (due) {
                     heartbeat();
                     nextHeartbeat = Instant.now().plus(HEARTBEAT);
                 }
             }
         });
+    }
+
+    // ─── web servers the agent starts ──────────────────────────────────────────────────────
+
+    /// With `web.publish` `any` or `ask`, looks at what the agent listens on in the sandbox, and
+    /// offers each new port: publishes it with `any`, asks the person with `ask`. Called by the
+    /// watcher, every two seconds, while the session runs.
+    private void lookForNewWebServers() {
+        java.util.Optional<java.util.function.IntConsumer> offer = switch (prepared.config().web().publish()) {
+            case OFF, LISTED -> Optional.empty();
+            case ANY -> Optional.of(this::publishLater);
+            case ASK -> Optional.of(this::askToPublish);
+        };
+        if (offer.isEmpty() || !(state instanceof SessionState.Running) || served.isEmpty() || later.full()) return;
+        Tuple<Integer> listening = ListeningPortsUtil.agentPorts(listenersInTheSandbox(), LampPlanUtil.AGENT_UID);
+        for (int port : ListeningPortsUtil.newPorts(listening, notToOffer())) {
+            if (atTheLimit()) return;
+            offer.get().accept(port);
+        }
+    }
+
+    /// The most ports the session publishes while it runs, besides the listed ones. Each costs a
+    /// loopback port on this machine, a relay and a bridge in the sandbox; an agent that opens
+    /// hundreds of ports, such as a test suite that starts a server per test, must not get
+    /// hundreds of each. A port the person needs beyond these can be listed in `web.ports`.
+    static final int MOST_LATER_PORTS = 16;
+
+    /// Whether [#MOST_LATER_PORTS] ports were published during the session. The first time it is
+    /// reached, the person is told, once. Under `ask` only allowed ports count, because only those
+    /// are published.
+    private boolean atTheLimit() {
+        synchronized (changingLater) {
+            if (later.full()) return true;
+            if (later.published().size() < MOST_LATER_PORTS) return false;
+            later = later.filledUp();
+        }
+        context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.tooManyWebPorts(MOST_LATER_PORTS)));
+        return true;
+    }
+
+    /// oillamp's own ports in the sandbox, the forwards', and every port already published or
+    /// decided about.
+    private Tuple<Integer> notToOffer() {
+        return Tuple.of(Integer.class, Forward.PROXY_PORT, Forward.MODEL_PORT)
+                .addAll(prepared.config().forwards().mapTo(Integer.class, Forward::port))
+                .addAll(served.map(Served::webPorts).orElse(Tuple.of(LampWebPort.class))
+                        .mapTo(Integer.class, LampWebPort::sandboxPort))
+                .addAll(later.decided());
+    }
+
+    /// The text of the container's `/proc/net/tcp` and `/proc/net/tcp6`, read as the infra user.
+    /// Empty when podman could not say; the next look tries again.
+    private String listenersInTheSandbox() {
+        return machine.run(Machine.Command
+                .of("podman", "exec", "--user", "lamp", sandbox.container().value(),
+                    "cat", "/proc/net/tcp", "/proc/net/tcp6")
+                .withTimeout(Duration.ofSeconds(10)).labelled("podman exec")).output();
+    }
+
+    /// Asks the person whether to publish `sandboxPort`. A yes publishes it. A no, or no answer in
+    /// time, is remembered, and the port is not offered again this session. A question declined
+    /// unasked, because another one waits or the session is not running, is no answer: the port
+    /// is offered again on a later look.
+    private void askToPublish(int sandboxPort) {
+        changeLater(ports -> ports.asking(sandboxPort));
+        var unused = awaitAnswered(new Question.PublishPort(sandboxPort)).whenComplete((yes, failed) -> {
+            if (Boolean.TRUE.equals(yes))
+                // Not on the thread that answered, which is the control socket's, waiting to reply.
+                Thread.ofVirtual().name("oillamp-publish").start(() -> publishLater(sandboxPort));
+            else if (failed == null || failed instanceof java.util.concurrent.TimeoutException)
+                changeLater(ports -> ports.declined(sandboxPort));
+            else
+                changeLater(ports -> ports.askAgain(sandboxPort));
+        });
+    }
+
+    /// Publishes a port the agent opened during the session, as `port-<n>`: starts the bridge in
+    /// the sandbox, the same socat the entrypoint starts for a listed port, then the relay on
+    /// this machine, and reports the link. A port that fails is a warning, and is not offered
+    /// again. A port whose server stops again stays published for the session; its link then
+    /// opens nothing.
+    private void publishLater(int sandboxPort) {
+        // Several yeses may arrive close together; each checks the limit for itself.
+        if (atTheLimit()) {
+            changeLater(ports -> ports.declined(sandboxPort));
+            return;
+        }
+        LampConfig.Web.Port port = new LampConfig.Web.Port("port-" + sandboxPort, sandboxPort);
+        Machine.Outcome bridge = machine.run(Machine.Command
+                .of("podman", "exec", "--detach", "--user", "lamp", sandbox.container().value(),
+                    "socat", "UNIX-LISTEN:/oillamp/sockets/infra/" + port.socketFileName() + ",fork,unlink-early,mode=666",
+                    "TCP:127.0.0.1:" + sandboxPort)
+                .withTimeout(Duration.ofSeconds(15)).labelled("podman exec"));
+        Result<Published> opened = bridge.succeeded() ? publish(port)
+                : Result.err(ProblemCatalogUtil.webPortNotPublished(port, ProblemCatalogUtil.podmanFailed(
+                        "podman exec", bridge.exitCode(), bridge.errorOutput().strip())));
+        switch (opened) {
+            case Result.Err<Published>(Tuple<LampProblem> problems) -> {
+                changeLater(ports -> ports.declined(sandboxPort));
+                context.sinkAcceptProblems(problems);
+            }
+            case Result.Ok<Published> ok -> {
+                changeLater(ports -> ports.published(ok.value()));
+                // The shutdown may have closed the published relays a moment ago; this one too.
+                if (shuttingDown.get()) ok.value().relay().close();
+                else {
+                    context.sink().accept(new LampEvent.WebPublished(ok.value().port()));
+                    announceState();
+                }
+            }
+        }
     }
 
     /// Connects to the desktop, shell and proxy sockets, and reports when one stops or starts
@@ -1279,11 +1439,12 @@ final class Supervisor {
                 String question = request.arguments().get("question").orElse("");
                 if (question.isEmpty()) yield Control.Reply.failed("say which question, as the event names it");
                 var waiting = questions.get(question);
-                if (waiting == null) yield Control.Reply.failed("no host-access question waits with that text");
+                if (waiting == null) yield Control.Reply.failed("no question waits with that text");
                 boolean yes = request.flag("yes");
                 // Closing the question tells the state machine; see awaitAnswered.
-                waiting.complete(yes);
-                yield Control.Reply.ok().with("question", question).with("answer", yes ? "yes" : "no");
+                waiting.answer().complete(yes);
+                yield Control.Reply.ok().with("question", question).with("answer", yes ? "yes" : "no")
+                        .with("area", waiting.question().area());
             }
             case "schedule-changed" -> {
                 runs.scheduleChanged();

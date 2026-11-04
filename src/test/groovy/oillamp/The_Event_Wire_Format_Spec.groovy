@@ -110,6 +110,7 @@ class The_Event_Wire_Format_Spec extends Specification {
             new LampEvent.SessionStateChanged(new LampSessionStatus('starting', 'coming up', Duration.ZERO, 0,
                     Tuple.of(LampWebPort))),
             new LampEvent.WebPublished(WEB_PORT),
+            new LampEvent.WebPortAsked(5173, 'publish port 5173 from the sandbox to this machine\'s browser'),
             new LampEvent.SessionOpened('20260928-120000', Tuple.of(String, 'ssh', '-T', 'lamp-k3v7x2ab'),
                                         Path.of('/run/user/1000/oillamp/k3v7x2ab/sockets/infra/vnc.sock'), 1920, 1080),
             new LampEvent.LookAtDesktop('the chart you asked for'),

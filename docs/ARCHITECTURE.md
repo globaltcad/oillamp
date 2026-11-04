@@ -934,7 +934,8 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
   creates a `Tick`, which is how timeouts are noticed. Only this thread writes the state; the field
   is `volatile` because others read it.
 - **Sandbox watcher.** Every 2 s runs `podman container inspect` and connects to the VNC, SSH and
-  proxy sockets. Reports a change at once and a health line every 30 s.
+  proxy sockets. Reports a change at once and a health line every 30 s. With `web.publish` `any`
+  or `ask`, it also reads what the agent listens on and offers new ports.
 - **Relay threads.** One accept loop per relay, and two virtual threads per connection (one
   per direction).
 - **Control socket threads.** One accept loop, one thread per connection. A connection that sends
@@ -1364,9 +1365,13 @@ which you start in the sandbox's shell. oillamp never starts a server itself.
 
 ```toml
 [web]
-publish = "listed"            # "listed" or "off"
+publish = "listed"            # "off", "listed", "ask" or "any"
 ports   = { opencode = 4096 } # name = port inside the sandbox
 ```
+
+The levels: `off` publishes nothing; `listed` the ports in `ports`; `ask` those, and each port the
+agent starts listening on once the person said yes; `any` those, and every port the agent starts
+listening on.
 
 A lamp without `[web]` publishes `opencode = 4096`. `publish = "off"` publishes nothing,
 whatever `ports` lists, and so does `ports = {}`. `web.ports` is replaced as a whole by a later
@@ -1403,10 +1408,39 @@ server, such as `opencode serve --port 4096`, once until a connection gets throu
 in the sandbox accepts a connection even when nothing listens on the port and then closes it, so
 the warning appears mostly when the bridge itself is gone.)
 
+**Ports the agent opens (`any` and `ask`).** Every two seconds the sandbox watcher reads the
+container's `/proc/net/tcp` and `/proc/net/tcp6` with `podman exec --user lamp … cat`, and
+`ListeningPortsUtil.agentPorts`, a pure function, picks the ports whose socket is listening
+(state `0A`), on the loopback or every address, and owned by the agent's uid inside the container
+(1000, `LampPlanUtil.AGENT_UID`). The uid alone leaves out the infra user's bridges (3128, 3129,
+the forwards, the web bridges). `ListeningPortsUtil.newPorts` then drops ports below 1024, 3128,
+3129, the forwards' ports and every port already published or decided about.
+
+A new port is published as `port-<n>`: `podman exec --detach --user lamp … socat` starts the same
+bridge the entrypoint starts for a listed port, on `web-port-<n>.sock`; then the relay opens as for
+a listed port, `LampEvent.WebPublished` is reported and `SessionStateChanged` repeats the session's
+state with the new port. A port whose server stops stays published for the rest of the session;
+its link then opens nothing. Failing to publish a port is `OIL-NET-012`, and the port is not
+offered again. At most 16 such ports are published per session (`Supervisor.MOST_LATER_PORTS`),
+so that an agent opening hundreds of ports does not get hundreds of host ports, relays and bridges;
+the first port beyond that is the warning `OIL-NET-014`, once, and from then on no port is
+published or asked about. Under `ask` only the allowed ports count. A port listed in `web.ports`
+is outside the limit.
+
+With `ask`, a new port is first a `Question.PublishPort` (see "Asking the person"), shown as
+`LampEvent.WebPortAsked(sandboxPort, what)` and answered like a host request, with
+`oillamp answer <dir> yes|no -- <what>` or `Lamp.decidePermission`. A yes publishes it. A no, or no
+answer within the patience, is remembered for the session, and the port is not asked about again.
+A question declined unasked, because another one waits or the session is not running, is no
+answer: the port is offered again on a later look. The supervisor keeps all of this in one value,
+`LaterPorts` (published, being asked, declined), replaced whole under a lock; the shutdown closes
+its relays in step 1 with the others.
+
 **The risk.** A page from a published port runs in your browser, not in the sandbox. From there it
 can send requests to your other local web servers, and to other lamps' published ports: your
 browser becomes a bridge between lamps that cannot otherwise reach each other. That is why the
-setting has levels, why `off` exists, and why only the ports you list are published.
+setting has levels, why `off` exists, and why `listed` publishes only the ports you list. `any`
+publishes whatever the agent starts, which is the most convenient and the most open level.
 
 ### The network log
 
@@ -1847,8 +1881,9 @@ with the feature on and neither is refused as it starts (`LampPhase.hostAccessIn
 
 ### Asking the person
 
-Some decisions belong to the person at the session. Each is a `Question`, a sealed type with one
-case so far, `Question.HostRequest` (a host request the checker allowed). A question's `text()` is
+Some decisions belong to the person at the session. Each is a `Question`, a sealed type with two
+cases: `Question.HostRequest` (a host request the checker allowed) and `Question.PublishPort` (a
+port the agent opened, with `web.publish = "ask"`). A question's `text()` is
 what the person sees and answers by, and also its key while it waits.
 
 1. Whoever needs the answer calls `Supervisor.awaitAnswered(question)`, which keeps one future per
@@ -1859,12 +1894,14 @@ what the person sees and answers by, and also its key while it waits.
    already being asked…", "the session is not running…"), so whoever asked hears why rather than
    waiting.
 3. The supervisor turns `AskTheUser` into the public event for that kind of question, with an
-   exhaustive switch; a host request is `LampEvent.HostAccessAsked`, as before.
+   exhaustive switch: `LampEvent.HostAccessAsked` for a host request, `LampEvent.WebPortAsked`
+   for a port.
 4. The answer comes back on the control socket as the request `answer`, naming the question's text,
    from `oillamp answer <dir> yes|no -- <text>` or `Lamp.decidePermission`. No answer within
    `Question.PATIENCE` (60 s) is a no, and so is the session ending.
 5. However it ends, the future posts `SessionEvent.UserAnswered`; the state machine clears `asked`
-   and announces the answer in the question's area (`host access` for a host request).
+   and announces the answer in the question's area (`host access` for a host request, `web` for a
+   port). The control reply names the area too, so that `oillamp answer` prints it.
 
 ## Packaging
 
@@ -1939,7 +1976,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `network.console_denied` | true | print denials in your terminal | yes |
 | `[[network.rules]]` | two deny rules | see "The policy" above | yes |
 | `[[network.forwards]]` | none | see "Forwards" above | yes |
-| `web.publish` | `"listed"` | `listed`: the ports in `web.ports`; `off`: none. See "Published web servers" above | yes |
+| `web.publish` | `"listed"` | `off`: none; `listed`: the ports in `web.ports`; `ask`: those, and each port the agent opens once you allow it; `any`: those, and every port the agent opens. See "Published web servers" above | yes |
 | `web.ports` | `{ opencode = 4096 }` | name = port inside the sandbox, published to the host's browser; a later file replaces it as a whole, like an array | yes |
 | `model.service` | `"https://api.eu.edenai.run"` | where oillamp sends the sandbox's model requests, with the key; `https://`, or `http://` only on this machine's loopback; a path, such as `/v1`, replaces the sandbox's `/v3`; harnesses keep only EU models when it is Eden AI | yes |
 | `model.key_env` | `"EDENAI_API_KEY"` | the host environment variable holding the model key, read when a session starts | yes |
@@ -2070,6 +2107,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-NET-011` | Warning: the network log cannot be written; the session carries on without it. |
 | `OIL-NET-012` | Warning: a web server in the sandbox could not be published; the session carries on without its link. |
 | `OIL-NET-013` | Warning: nothing in the sandbox took a connection to a published web server; start the server. |
+| `OIL-NET-014` | Warning: the session published as many ports the agent opened as it will (16); further ones are neither published nor asked about. |
 | `OIL-SESSION-001` | No session is running for this lamp. |
 | `OIL-SESSION-002` | The session's control socket does not answer. |
 | `OIL-SESSION-003` | The running session refused the request (for example, it is shutting down). |

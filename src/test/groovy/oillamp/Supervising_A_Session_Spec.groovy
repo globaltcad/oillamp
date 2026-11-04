@@ -488,6 +488,223 @@ class Supervising_A_Session_Spec extends Specification {
             session?.join(20_000)
     }
 
+    /**
+     * What the sandbox's `/proc/net/tcp` says in the scenarios about web servers the agent starts.
+     * Three sockets: the agent (uid 1000) listening on 127.0.0.1:5173 (`0100007F:1435`); the infra
+     * user (uid 1001) listening on every address, port 6000 (`00000000:1770`), as one of its bridges
+     * would; and a connection of the agent's from port 5174 (state `01`, not listening).
+     */
+    static final String PROC_NET_TCP = """\
+          sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+           0: 0100007F:1435 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41001 1 0000000000000000 100 0 0 10 0
+           1: 00000000:1770 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 41002 1 0000000000000000 100 0 0 10 0
+           2: 0100007F:1436 0100007F:9C40 01 00000000:00000000 00:00000000 00000000  1000        0 41003 1 0000000000000000 20 4 30 10 -1
+        """.stripIndent()
+
+    /** The lamp id the scenarios about web servers the agent starts give their lamp. */
+    static final String AGENT_ID = 'k3v7x2ab'
+
+    /** Starts a session for a lamp with this `[web]`, whose sandbox's `/proc/net/tcp` is `procNetTcp`. */
+    private Map startASessionWhoseAgentListens(String web, String procNetTcp = PROC_NET_TCP) {
+        host.machine {
+            it.windowsStayOpenFor(Duration.ofSeconds(60))
+              .generatedAgentId(AGENT_ID)
+              .commandSucceeding("podman exec --user lamp oillamp-${AGENT_ID} cat /proc/net/tcp", procNetTcp)
+        }
+        var lamp = host.lampPath()
+        host.givenConfig(lamp, 'schema_version = 1\n\n[web]\n' + web)
+        var reported = new java.util.concurrent.CopyOnWriteArrayList<LampEvent>()
+        var oillamp = host.oillamp.observedBy { reported.add(it) }
+        var session = Thread.start { oillamp.run('at', lamp.toString()) }
+        waitUntil { reported.any { it instanceof LampEvent.Summary && it.title() == 'your session is up' } }
+        [lamp: lamp, reported: reported, session: session]
+    }
+
+    def 'With `web.publish = "any"`, oillamp publishes a web server the agent starts, and nothing of the infra user\'s'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "any"` under `[web]`, used as a
+            personal assistant. The agent builds a small web site and starts its development server
+            on 127.0.0.1, port 5173. The person should be able to open it in their browser without
+            doing anything.
+
+            Every two seconds the session reads the sandbox's `/proc/net/tcp` and `/proc/net/tcp6`,
+            with `podman exec`. A port counts when its socket is listening, on the loopback or every
+            address, and belongs to the agent's user, uid 1000 in the sandbox. That leaves out the
+            infra user's sockets, such as the bridges of the proxy and the forwards, and a socket of
+            the agent's that is a connection rather than a listener. A new port is published as
+            `port-<number>`: the session starts a bridge on `web-port-5173.sock` in the sandbox, the
+            same socat the sandbox starts for a listed port, listens on a loopback port of this
+            machine, and reports `LampEvent.WebPublished`.
+
+            Here the sandbox's `/proc/net/tcp` lists the agent's listener on 5173, a listener of the
+            infra user (uid 1001) on 6000, and a connection of the agent's from 5174. A small server
+            in the scenario stands in for the bridge on `web-port-5173.sock`, and answers "pong" to
+            "ping".
+        """
+        given: 'a session for a lamp with `publish = "any"` and no ports of its own, whose agent listens on 5173'
+            var started = startASessionWhoseAgentListens('publish = "any"\nports = {}\n')
+            var reported = started.reported as List<LampEvent>
+
+        and: 'a stand-in for the bridge on `web-port-5173.sock`, which answers "pong" to "ping"'
+            var bridge = java.nio.channels.ServerSocketChannel.open(java.net.StandardProtocolFamily.UNIX)
+            bridge.bind(java.net.UnixDomainSocketAddress.of(host.runtime.resolve("oillamp/${AGENT_ID}/sockets/infra/web-port-5173.sock")))
+            Thread.start {
+                try (var channel = bridge.accept()) {
+                    java.nio.channels.Channels.newInputStream(channel).readAllBytes()
+                    channel.write(java.nio.ByteBuffer.wrap('pong'.getBytes('UTF-8')))
+                }
+            }
+
+        when: 'the session has looked into the sandbox a few times'
+            waitUntil { reported.any { it instanceof LampEvent.WebPublished } }
+            Thread.sleep(5_000)
+
+        then: 'it published `port-5173`, port 5173 in the sandbox, and nothing else'
+            var published = reported.findAll { it instanceof LampEvent.WebPublished }*.port()
+            published*.name() == ['port-5173']
+            published.first().sandboxPort() == 5173
+
+        and: 'the session\'s state lists it'
+            reported.any { it instanceof LampEvent.SessionStateChanged && it.status().webPorts().contains(published.first()) }
+
+        when: 'a client connects to its port on 127.0.0.1, sends "ping" and finishes sending'
+            var client = java.nio.channels.SocketChannel.open(new InetSocketAddress('127.0.0.1', published.first().hostPort()))
+            client.write(java.nio.ByteBuffer.wrap('ping'.getBytes('UTF-8')))
+            client.shutdownOutput()
+            var answer = new String(java.nio.channels.Channels.newInputStream(client).readAllBytes(), 'UTF-8')
+            client.close()
+
+        then: 'the answer came back from the stand-in in the sandbox'
+            answer == 'pong'
+
+        cleanup:
+            bridge?.close()
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'With `web.publish = "any"`, oillamp publishes at most 16 ports the agent opens, and says so once when there are more'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "any"` under `[web]`, and an
+            agent that runs a test suite which starts a web server per test, 17 of them, on the ports
+            5001 to 5017. Each published port costs a port on this machine, a relay and a bridge in
+            the sandbox, so a session publishes at most 16 ports that the agent opens. The 17th is
+            not published. oillamp warns once with `OIL-NET-014`, which says that further ports are
+            not published this session and that a port can be listed in `web.ports` instead. It
+            does not warn again on each later look into the sandbox.
+        """
+        given: 'a session for a lamp with `publish = "any"` and no ports of its own, whose agent listens on 17 ports'
+            var listeners = (5001..5017).withIndex().collect { int port, int i ->
+                String.format('%4d: 0100007F:%04X 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 %d 1 0000000000000000 100 0 0 10 0', i, port, 42000 + i)
+            }
+            var started = startASessionWhoseAgentListens('publish = "any"\nports = {}\n',
+                    '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n' + listeners.join('\n') + '\n')
+            var reported = started.reported as List<LampEvent>
+
+        when: 'the session has looked into the sandbox several times'
+            waitUntil { reported.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-014' } }
+            Thread.sleep(5_000)
+
+        then: '16 ports are published, the first 16, and not the 17th'
+            var published = reported.findAll { it instanceof LampEvent.WebPublished }*.port()*.sandboxPort()
+            published.size() == 16
+            !published.contains(5017)
+
+        and: 'oillamp warned once with `OIL-NET-014`, which points to `web.ports`'
+            var warnings = reported.findAll { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-NET-014' }
+            warnings.size() == 1
+            warnings.first().problem().toString().contains('web.ports')
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'With `web.publish = "ask"`, oillamp publishes a port the agent starts once the person says yes'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "ask"` under `[web]`. The
+            agent starts a web server on 127.0.0.1, port 5173. Before anything is published, the
+            person is asked, with `LampEvent.WebPortAsked`, whether to publish port 5173 to their
+            browser. An application answers with `Lamp.decidePermission`, a person in a terminal
+            with `oillamp answer <dir> yes -- <question>`. Only a yes publishes it, as `port-5173`.
+        """
+        given: 'a session for a lamp with `publish = "ask"` and no ports of its own, whose agent listens on 5173'
+            var started = startASessionWhoseAgentListens('publish = "ask"\nports = {}\n')
+            var reported = started.reported as List<LampEvent>
+
+        when: 'the session asks the person'
+            waitUntil { reported.any { it instanceof LampEvent.WebPortAsked } }
+            var asked = reported.find { it instanceof LampEvent.WebPortAsked }
+
+        then: 'the question is about port 5173, and nothing is published yet'
+            asked.sandboxPort() == 5173
+            asked.what().contains('publish port 5173')
+            !reported.any { it instanceof LampEvent.WebPublished }
+
+        when: 'the person answers yes, with `oillamp answer <dir> yes -- <question>`'
+            var answered = host.oillamp.run('answer', host.lampPath().toString(), 'yes', '--', asked.what())
+
+        then: 'the answer is taken, and the session publishes `port-5173`'
+            answered.status() == LampExitStatus.SUCCESS
+            waitUntil { reported.any { it instanceof LampEvent.WebPublished } }
+            reported.find { it instanceof LampEvent.WebPublished }.port().name() == 'port-5173'
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'With `web.publish = "ask"`, a port the person refuses stays unpublished, and oillamp does not ask about it again'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "ask"` under `[web]`, and an
+            agent whose web server on port 5173 keeps running. The person is asked once, and says
+            no. The session looks into the sandbox every two seconds and finds the server there
+            each time; asking again each time would turn the question into a nuisance the person
+            can only silence by saying yes. So a no, like no answer within a minute, holds for the
+            rest of the session: the port stays unpublished, and the person is not asked again.
+        """
+        given: 'a session for a lamp with `publish = "ask"`, whose agent listens on 5173'
+            var started = startASessionWhoseAgentListens('publish = "ask"\nports = {}\n')
+            var reported = started.reported as List<LampEvent>
+            waitUntil { reported.any { it instanceof LampEvent.WebPortAsked } }
+            var asked = reported.find { it instanceof LampEvent.WebPortAsked }
+
+        when: 'the person answers no, and the session goes on looking into the sandbox for several seconds'
+            host.oillamp.run('answer', host.lampPath().toString(), 'no', '--', asked.what())
+            Thread.sleep(6_000)
+
+        then: 'nothing is published, and the person was asked only that once'
+            !reported.any { it instanceof LampEvent.WebPublished }
+            reported.count { it instanceof LampEvent.WebPortAsked } == 1
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'With `web.publish = "listed"`, oillamp ignores a web server the agent starts on a port that is not listed'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "listed"` under `[web]`, with no
+            ports listed. The person decided which ports their browser may open, and listed none.
+            When the agent starts a web server on 127.0.0.1, port 5173, oillamp neither publishes it
+            nor asks about it.
+        """
+        given: 'a session for a lamp with `publish = "listed"` and `ports = {}`, whose agent listens on 5173'
+            var started = startASessionWhoseAgentListens('publish = "listed"\nports = {}\n')
+            var reported = started.reported as List<LampEvent>
+
+        when: 'the session runs for several seconds'
+            Thread.sleep(6_000)
+
+        then: 'nothing is published, and the person is asked nothing'
+            !reported.any { it instanceof LampEvent.WebPublished }
+            !reported.any { it instanceof LampEvent.WebPortAsked }
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
     private static void waitUntil(Closure<Boolean> condition) {
         var deadline = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < deadline) {
