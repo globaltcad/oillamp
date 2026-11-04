@@ -46,8 +46,8 @@ public final class HostAccessKeeper {
                 return;
             }
             try {
-                Lamp.HostAccess read = lamp.hostAccess();
-                change(it -> it.readAs(true, HostAccess.PermissionRules.of(read.enabled(), read.requirements())));
+                HostAccess.PermissionRules read = LampApiConversionUtil.permissionRules(lamp.hostAccess());
+                change(it -> it.readAs(true, read));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withProblem(new HostAccess.Problem.CouldNotRead(reason(failed))));
             } catch (InterruptedException interrupted) {
@@ -62,8 +62,8 @@ public final class HostAccessKeeper {
         change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
             try {
-                Lamp.HostAccess written = lamp.hostAccess(rules.on(), rules.requirements());
-                change(it -> it.readAs(true, HostAccess.PermissionRules.of(written.enabled(), written.requirements())));
+                HostAccess.PermissionRules written = LampApiConversionUtil.permissionRules(lamp.hostAccess(rules.on(), rules.requirements()));
+                change(it -> it.readAs(true, written));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));
             } catch (InterruptedException interrupted) {

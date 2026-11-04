@@ -11,9 +11,11 @@ import java.util.Optional;
 
 import dev.gui.model.Conversation;
 import dev.gui.model.History;
+import dev.gui.model.HostAccess;
 import dev.gui.model.Recurrence;
 import dev.gui.model.Schedule;
 import dev.gui.pi.PiEvent;
+import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampAgentProgress;
 import dev.lamp.LampBranch;
@@ -178,5 +180,11 @@ final class LampApiConversionUtil {
         Tuple<String> branches = Tuple.of(String.class);
         for (LampSaveOnBranches removed : planned.removed()) branches = branches.addAll(removed.branches());
         return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
+    }
+
+    /// A lamp's host access as its page shows it: the switch, and the rules Genies wrote as
+    /// JSON, or anything else in the user's own words.
+    static HostAccess.PermissionRules permissionRules(Lamp.HostAccess access) {
+        return HostAccess.PermissionRules.of(access.enabled(), access.requirements());
     }
 }
