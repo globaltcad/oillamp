@@ -16,7 +16,10 @@ import sprouts.Var;
 import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
+import swingtree.api.Layout;
 import swingtree.layout.FlowCell;
+import swingtree.layout.LayoutConstraint;
+import swingtree.layout.MigAddConstraint;
 
 import static swingtree.UI.*;
 
@@ -47,6 +50,19 @@ final class HostAccessPage {
      *
      *  The width decides THREE_FROM, not the size class: the page is laid out at its own width,
      *  so the size class never goes past what fits two texts.
+     *
+     *  Saving is a row of its own, the warning beside the buttons. On a page narrower than
+     *  SAVING_IN_ONE_ROW_FROM, the warning would be squeezed into a column a word wide, so the
+     *  buttons go under it, to the right, and on a page narrower still, one under the other:
+     *
+     *      from SAVING_IN_ONE_ROW_FROM     [warning ……………………………  Undo changes  Save]
+     *      from BUTTONS_SIDE_BY_SIDE_FROM  [warning ………………………………………………………]
+     *                                      [                 Undo changes  Save]
+     *      narrower still, where the two   [warning ……………………………]
+     *      buttons would not fit beside    [          Save          ]
+     *      each other in every language    [      Undo changes      ]
+     *
+     *  The widths are the page's, as the state has them: [GeniesState#area].
      */
     private static final int REFERENCE = 1100;
     private static final int THREE_FROM = 1200;
@@ -57,6 +73,18 @@ final class HostAccessPage {
     private static final FlowCell BESIDE_THE_SWITCH = span(12, 7, 8, UI.VerticalAlignment.CENTER);
     private static final FlowCell FOLDERS = span(12, 6, 4, UI.VerticalAlignment.TOP);
     private static final FlowCell OWN_WORDS = span(12, 12, 4, UI.VerticalAlignment.TOP);
+    private static final int SAVING_IN_ONE_ROW_FROM = 560;
+    private static final int BUTTONS_SIDE_BY_SIDE_FROM = 400;
+    /// The warning, Undo changes and Save, in this order.
+    private static final Layout SAVING_IN_ONE_ROW = savingLayout("[grow][][]", "cell 0 0, growx, wmin 0", "cell 1 0", "cell 2 0");
+    private static final Layout SAVING_UNDER_THE_WARNING = savingLayout("[grow][][]", "cell 0 0, span 3, growx, wmin 0", "cell 1 1", "cell 2 1");
+    private static final Layout SAVING_ONE_UNDER_THE_OTHER = savingLayout("[grow, fill]", "cell 0 0, wmin 0", "cell 0 2", "cell 0 1");
+
+    private static Layout savingLayout(String columns, String warning, String undo, String save) {
+        return
+            Layout.mig(LayoutConstraint.of("fillx, ins 0, gap 12, hidemode 3"), LayoutConstraint.of(columns), LayoutConstraint.of(""))
+            .withChildConstraints(MigAddConstraint.of(warning), MigAddConstraint.of(undo), MigAddConstraint.of(save));
+    }
 
     /// A cell that spans `narrow` columns up to MEDIUM, `large` from LARGE up, and `wide` on a
     /// page wider than [#THREE_FROM].
@@ -208,10 +236,16 @@ final class HostAccessPage {
         Val<Boolean> changed = hostAccess.viewAs(Boolean.class, HostAccess::changed);
         Val<Boolean> canSave = Viewable.of(Boolean.class, changeable, changed, (a, b) -> a && b);
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
+        Val<Layout> layout = state.viewAs(Layout.class, it -> {
+            int width = it.area().width();
+            if (width >= UI.scale(SAVING_IN_ONE_ROW_FROM)) return SAVING_IN_ONE_ROW;
+            if (width >= UI.scale(BUTTONS_SIDE_BY_SIDE_FROM)) return SAVING_UNDER_THE_WARNING;
+            return SAVING_ONE_UNDER_THE_OTHER;
+        });
         return
-            box("fill, ins 0, gap 12, hidemode 3", "[grow][][]")
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, warning, Palette::BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
-            .add("skip 0",
+            box().withLayout(layout)
+            .add(ViewPartsUtil.wrapped(theme, warning, Palette::BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add(
                 button(pageWords.viewAsString(Lang.HostAccessPage::UNDO_CHANGES)).group(Skin.QUIET_BUTTON)
                 .isEnabledIf(canSave)
                 .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved())))
