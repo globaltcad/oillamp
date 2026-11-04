@@ -1,5 +1,6 @@
 package dev.gui;
 
+import java.net.URI;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -194,6 +195,9 @@ public interface Genies {
 
     /// Opens the genie's home folder `folder` in this computer's file manager.
     void showInFileManager(UUID genie, Tuple<String> folder);
+
+    /// Opens `link`, such as one a genie's lamp published, in this computer's browser.
+    void openInBrowser(URI link);
 
     /// The user's documents folder, such as `~/Documents`, where a genie's folders are linked
     /// unless the user picks another.

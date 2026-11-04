@@ -934,6 +934,69 @@ public enum Lang {
                 case CHINESE -> "允许";
             };
         }
+        public String ASKS_TO_PUBLISH_THE_WEB_SERVER_IT_STARTED_ON_PORT(String who, int port) {
+            return switch (lang) {
+                case ENGLISH -> who + " started a web server on port " + port + " and asks to publish it to your browser";
+                case GERMAN -> who + " hat auf Port " + port + " einen Webserver gestartet und bittet darum, ihn für deinen Browser freizugeben";
+                case SPANISH -> who + " ha iniciado un servidor web en el puerto " + port + " y pide publicarlo para tu navegador";
+                case JAPANESE -> who + " がポート " + port + " で Web サーバーを起動し、ブラウザーに公開する許可を求めています";
+                case CHINESE -> who + " 在端口 " + port + " 上启动了一个网页服务器，请求将它发布给你的浏览器";
+            };
+        }
+        public String ALLOW_GIVES_IT_A_LINK_ONLY_THIS_COMPUTERS_BROWSER_CAN_OPEN() {
+            return switch (lang) {
+                case ENGLISH -> "Allow gives it a link that only your browser on this computer can open, while the genie is awake. No answer within a minute counts as no.";
+                case GERMAN -> "Mit Erlauben bekommt er einen Link, den nur dein Browser auf diesem Rechner öffnen kann, solange der Dschinn wach ist. Kommt binnen einer Minute keine Antwort, gilt das als Nein.";
+                case SPANISH -> "Con Permitir recibe un enlace que solo el navegador de este equipo puede abrir, mientras el genio esté despierto. Si no respondes en un minuto, cuenta como un no.";
+                case JAPANESE -> "「許可」を選ぶと、ジーニーが起きている間だけ、このコンピューターのブラウザーでのみ開けるリンクができます。1 分以内に答えがなければ「いいえ」として扱われます。";
+                case CHINESE -> "选择“允许”后，它会得到一个只有这台电脑上的浏览器才能打开的链接，且仅在精灵醒着时有效。一分钟内没有回答就算作拒绝。";
+            };
+        }
+        public String PUBLISHED_FOR_YOUR_BROWSER(String who, String name, String link) {
+            return switch (lang) {
+                case ENGLISH -> who + " published " + name + " for your browser: " + link;
+                case GERMAN -> who + " hat " + name + " für deinen Browser freigegeben: " + link;
+                case SPANISH -> who + " ha publicado " + name + " para tu navegador: " + link;
+                case JAPANESE -> who + " が " + name + " をブラウザーに公開しました：" + link;
+                case CHINESE -> who + " 已将 " + name + " 发布给你的浏览器：" + link;
+            };
+        }
+        public String THE_LINK_WORKS_ON_THIS_COMPUTER_WHILE_THE_GENIE_IS_AWAKE() {
+            return switch (lang) {
+                case ENGLISH -> "The link works on this computer while the genie is awake, once something in its sandbox answers on that port.";
+                case GERMAN -> "Der Link funktioniert auf diesem Rechner, solange der Dschinn wach ist, sobald in seiner Sandbox etwas auf diesem Port antwortet.";
+                case SPANISH -> "El enlace funciona en este equipo mientras el genio esté despierto, en cuanto algo en su sandbox responda en ese puerto.";
+                case JAPANESE -> "リンクは、ジーニーが起きている間、サンドボックス内でそのポートに何かが応答していれば、このコンピューターで使えます。";
+                case CHINESE -> "只要精灵醒着，并且其沙盒中有程序在该端口上响应，这个链接就能在这台电脑上使用。";
+            };
+        }
+        public String OPEN() {
+            return switch (lang) {
+                case ENGLISH -> "Open";
+                case GERMAN -> "Öffnen";
+                case SPANISH -> "Abrir";
+                case JAPANESE -> "開く";
+                case CHINESE -> "打开";
+            };
+        }
+        public String OPEN_IT_IN_YOUR_BROWSER() {
+            return switch (lang) {
+                case ENGLISH -> "Open it in your browser";
+                case GERMAN -> "Im Browser öffnen";
+                case SPANISH -> "Abrirlo en tu navegador";
+                case JAPANESE -> "ブラウザーで開きます";
+                case CHINESE -> "在浏览器中打开";
+            };
+        }
+        public String DISMISS() {
+            return switch (lang) {
+                case ENGLISH -> "Dismiss";
+                case GERMAN -> "Ausblenden";
+                case SPANISH -> "Descartar";
+                case JAPANESE -> "閉じる";
+                case CHINESE -> "关闭";
+            };
+        }
 
         public String MANAGE_THE_GENIES_ACTIONS_SCHEDULE_HISTORY_AND_HOST_ACCESS() {
             return switch (lang) {
