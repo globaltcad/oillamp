@@ -32,6 +32,8 @@ import swingtree.UIForBox;
 import swingtree.UIForButton;
 import swingtree.UIForLabel;
 import swingtree.components.JBox;
+import swingtree.api.Layout;
+import swingtree.layout.LayoutConstraint;
 import swingtree.style.StyledString;
 
 import static swingtree.UI.*;
@@ -190,7 +192,7 @@ final class ViewPartsUtil {
         final Val<Boolean> changeable,
         final Consumer<Boolean> choose
     ) {
-        return oneOf(theme, List.of(Choice.of(false, first), Choice.of(true, second)), chosen, changeable, choose);
+        return oneOf(theme, List.of(Choice.of(false, first), Choice.of(true, second)), chosen, changeable, Val.of(true), choose);
     }
 
     /// One part of a switch: the value choosing it chooses, its words, and what it says to a
@@ -200,18 +202,23 @@ final class ViewPartsUtil {
         static <T> Choice<T> of(T value, Val<String> words, Val<String> tooltip) { return new Choice<>(value, words, Optional.of(tooltip)); }
     }
 
-    /// A switch of parts in a row, one for each of `choices`, as the one between a genie's pages
-    /// in the header: the part of the value `chosen` holds is lit, and choosing a part gives
-    /// its value to `choose`. All are greyed while it cannot be changed.
+    /// A switch of parts, one for each of `choices`, as the one between a genie's pages in the
+    /// header: the part of the value `chosen` holds is lit, and choosing a part gives its value
+    /// to `choose`. All are greyed while it cannot be changed.
+    ///
+    /// The parts stand in a row while `inARow` holds, and one under the other, as wide as each
+    /// other, otherwise. The caller decides that from the width of the page, as the state has
+    /// it: the switch never measures itself to choose.
     static <T> UIForBox<JBox> oneOf(
         final Val<Theme> theme,
         final List<Choice<T>> choices,
         final Val<T> chosen,
         final Val<Boolean> changeable,
+        final Val<Boolean> inARow,
         final Consumer<T> choose
     ) {
         UIForBox<JBox> well =
-            box("ins 2, gap 2")
+            box().withLayout(inARow.viewAs(Layout.class, it -> it ? PARTS_IN_A_ROW : PARTS_ONE_UNDER_THE_OTHER))
             .withStyle(Themed.of(changeable, theme), (can, it) -> {
                 Palette p = can.palette();
                 return it.backgroundColor(p.SMOKE()).border(1, can.item() ? p.BORDER() : p.SMOKE()).borderRadius(11);
@@ -222,6 +229,11 @@ final class ViewPartsUtil {
         }
         return well;
     }
+
+    private static final Layout PARTS_IN_A_ROW =
+        Layout.mig(LayoutConstraint.of("ins 2, gap 2"), LayoutConstraint.of(""), LayoutConstraint.of(""));
+    private static final Layout PARTS_ONE_UNDER_THE_OTHER =
+        Layout.mig(LayoutConstraint.of("fillx, wrap 1, ins 2, gap 2"), LayoutConstraint.of("[grow, fill]"), LayoutConstraint.of(""));
 
     /// How a part of a switch looks: whether it is chosen, and whether it can be changed.
     private record Part(boolean chosen, boolean changeable) {}

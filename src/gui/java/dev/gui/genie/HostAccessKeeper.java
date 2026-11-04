@@ -17,7 +17,7 @@ import dev.lamp.LampDirectory;
 import dev.lamp.LampFailedException;
 
 /// Reads a genie's host access from its lamp, and writes the rules its page shows into it, with
-/// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(boolean, String)]. Writing needs
+/// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(Lamp.HostAccess)]. Writing needs
 /// the genie asleep; the page only offers it then. Also hears the requests the genie's lamp asks
 /// the user while it is awake.
 ///
@@ -37,8 +37,8 @@ public final class HostAccessKeeper {
         this.changes = changes;
     }
 
-    /// Reads the switch and the rules from the lamp's file. A genie that never woke has no lamp
-    /// yet, and so no rules: its host access is off.
+    /// Reads the switch, the rules, and when the user is asked, from the lamp's file. A genie
+    /// that never woke has no lamp yet, and so no rules: its host access is off.
     public void read() {
         work.execute(() -> {
             if (Lamp.agentHome(directory).isEmpty()) {
@@ -62,7 +62,7 @@ public final class HostAccessKeeper {
         change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
             try {
-                HostAccess.PermissionRules written = LampApiConversionUtil.permissionRules(lamp.hostAccess(rules.on(), rules.requirements()));
+                HostAccess.PermissionRules written = LampApiConversionUtil.permissionRules(lamp.hostAccess(LampApiConversionUtil.hostAccess(rules)));
                 change(it -> it.readAs(true, written));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));

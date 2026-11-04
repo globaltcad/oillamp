@@ -1,5 +1,7 @@
 package dev.gui.view;
 
+import java.awt.Color;
+import java.nio.file.Path;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -20,12 +22,14 @@ import swingtree.api.Layout;
 import swingtree.layout.FlowCell;
 import swingtree.layout.LayoutConstraint;
 import swingtree.layout.MigAddConstraint;
+import swingtree.style.StyledString;
 
 import static swingtree.UI.*;
 
-/// A genie's host access: whether its agent may reach this computer, and the permission rules the
-/// checker model judges each of its requests against. Genies writes them into the genie's lamp as
-/// JSON, which the checker reads like any words; see [HostAccess].
+/// A genie's host access: whether its agent may reach this computer, the permission rules the
+/// checker model judges each of its requests against, who lets it run commands, and whether the
+/// user is asked about folders outside their home folder. Genies writes them into the genie's
+/// lamp, the rules as JSON, which the checker reads like any words; see [HostAccess].
 ///
 /// The lamp reads them as it wakes, so they can only be changed while the genie sleeps. While it
 /// is awake, the page shows them, greyed, and says so in a banner.
@@ -46,10 +50,22 @@ final class HostAccessPage {
      *      experimental           12       12     12      7        7             8
      *      each list of folders   12       12     12      6        6             4
      *      in your own words      12       12     12     12       12             4
+     *      who runs commands      12       12     12      7        7             4
+     *      what that choice means 12       12     12      5        5             3
+     *      outside the home       12       12      6      7        7             2
+     *      what that choice means 12       12      6      5        5             3
+     *      how you are asked      12       12     12     12       12            12
      *      saving                 12       12     12     12       12            12
      *
      *  The width decides THREE_FROM, not the size class: the page is laid out at its own width,
      *  so the size class never goes past what fits two texts.
+     *
+     *  The two switches that say when the user is asked, who lets the genie run commands and
+     *  whether it asks about folders outside the home folder, each have their heading above
+     *  them, and what their choice means beside them where there is room: both in one row on
+     *  a page wider than THREE_FROM. The cell of who runs commands is never narrower than its
+     *  three parts in a row, in any language, except on a page narrower than
+     *  PARTS_IN_A_ROW_FROM: there they stand one under the other.
      *
      *  Saving is a row of its own, the warning beside the buttons. On a page narrower than
      *  SAVING_IN_ONE_ROW_FROM, the warning would be squeezed into a column a word wide, so the
@@ -73,6 +89,24 @@ final class HostAccessPage {
     private static final FlowCell BESIDE_THE_SWITCH = span(12, 7, 8, UI.VerticalAlignment.CENTER);
     private static final FlowCell FOLDERS = span(12, 6, 4, UI.VerticalAlignment.TOP);
     private static final FlowCell OWN_WORDS = span(12, 12, 4, UI.VerticalAlignment.TOP);
+    private static final FlowCell WHO_RUNS_COMMANDS = span(12, 12, 7, 4, UI.VerticalAlignment.CENTER);
+    private static final FlowCell BESIDE_WHO_RUNS_COMMANDS = span(12, 12, 5, 3, UI.VerticalAlignment.CENTER);
+    private static final FlowCell OUTSIDE_THE_HOME_FOLDER = span(12, 6, 7, 2, UI.VerticalAlignment.CENTER);
+    private static final FlowCell BESIDE_OUTSIDE_THE_HOME_FOLDER = span(12, 6, 5, 3, UI.VerticalAlignment.CENTER);
+    /// From this width of the page, the three parts of who runs commands stand in a row. Their
+    /// row is about 325 pixels wide in German, the widest of the languages; the page loses
+    /// its padding and the scroll bar, and keeps a margin.
+    private static final int PARTS_IN_A_ROW_FROM = 400;
+    /// The heading and the switch of who runs commands, in this order.
+    private static final Layout PARTS_IN_A_ROW = Layout.mig(
+        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
+    ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""));
+    private static final Layout PARTS_ONE_UNDER_THE_OTHER = Layout.mig(
+        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
+    ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0"));
+    /// The user's home folder, which the genie's lamp reaches without asking: Genies leaves the
+    /// lamp's roots empty, and empty roots are the home folder.
+    private static final Path HOME = Path.of(System.getProperty("user.home"));
     private static final int SAVING_IN_ONE_ROW_FROM = 560;
     private static final int BUTTONS_SIDE_BY_SIDE_FROM = 400;
     /// The warning, Undo changes and Save, in this order.
@@ -89,11 +123,17 @@ final class HostAccessPage {
     /// A cell that spans `narrow` columns up to MEDIUM, `large` from LARGE up, and `wide` on a
     /// page wider than [#THREE_FROM].
     private static FlowCell span(int narrow, int large, int wide, UI.VerticalAlignment align) {
+        return span(narrow, narrow, large, wide, align);
+    }
+
+    /// A cell that spans `narrow` columns up to SMALL, `medium` on a MEDIUM page, `large` from
+    /// LARGE up, and `wide` on a page wider than [#THREE_FROM].
+    private static FlowCell span(int narrow, int medium, int large, int wide, UI.VerticalAlignment align) {
         return AUTO_SPAN(it -> {
             int span = it.parentSize().widthOrElse(0) >= UI.scale(THREE_FROM) ? wide : large;
             return
                 it.align(align)
-                .verySmall(narrow).small(narrow).medium(narrow)
+                .verySmall(narrow).small(narrow).medium(medium)
                 .large(span).veryLarge(span).oversize(span);
         });
     }
@@ -111,6 +151,8 @@ final class HostAccessPage {
     private final Var<String> mayRead;
     private final Var<String> mayChange;
     private final Var<String> words;
+    private final Var<HostAccess.Commands> commands;
+    private final Var<Boolean> askOutsideHome;
     /// The words of the page, unlike [#words], which are the user's own.
     private final Val<Lang.HostAccessPage> pageWords;
     /// Whether the rules may be changed now: the genie sleeps, has a lamp, and nothing is on its way.
@@ -128,6 +170,8 @@ final class HostAccessPage {
         mayRead    = draft.zoomTo(HostAccess.PermissionRules::mayRead, HostAccess.PermissionRules::withMayRead);
         mayChange  = draft.zoomTo(HostAccess.PermissionRules::mayChange, HostAccess.PermissionRules::withMayChange);
         words      = draft.zoomTo(HostAccess.PermissionRules::words, HostAccess.PermissionRules::withWords);
+        commands   = draft.zoomTo(HostAccess.PermissionRules::commands, HostAccess.PermissionRules::withCommands);
+        askOutsideHome = draft.zoomTo(HostAccess.PermissionRules::askOutsideHome, HostAccess.PermissionRules::withAskOutsideHome);
         changeable = genie.viewAs(Boolean.class, it -> asleep(it) && it.hostAccess().lamp() && !it.hostAccess().busy());
     }
 
@@ -161,6 +205,17 @@ final class HostAccessPage {
                 .add(OWN_WORDS,
                     text(Lang.HostAccessPage::ANYTHING_ELSE_IN_YOUR_OWN_WORDS, words, Lang.HostAccessPage::SAY_WHAT_MUST_NOT_HAPPEN)
                 )
+                .add(WHO_RUNS_COMMANDS, commands())
+                .add(BESIDE_WHO_RUNS_COMMANDS, ViewPartsUtil.note(theme, Viewable.of(String.class, commands, pageWords, HostAccessPage::meaning), Val.of(true)))
+                .add(OUTSIDE_THE_HOME_FOLDER, outsideTheHomeFolder())
+                .add(BESIDE_OUTSIDE_THE_HOME_FOLDER,
+                    ViewPartsUtil.note(
+                        theme,
+                        pageWords.viewAsString(it -> it.IT_CAN_ONLY_REACH_YOUR_HOME_FOLDER_WITH_YES_GENIES_ASKS_YOU_ABOUT_OTHERS(HOME.toString())),
+                        Val.of(true)
+                    )
+                )
+                .add(WHOLE, howYouAreAsked())
                 .add(WHOLE, saving())
             );
     }
@@ -229,10 +284,79 @@ final class HostAccessPage {
             );
     }
 
+    // ─── when the user is asked ────────────────────────────────────────────────────────────
+
+    /// Whoever is asked must be there to answer: the page says so while anything asks them.
+    private UIForAnySwing<?, ?> howYouAreAsked() {
+        return
+            panel("fill, ins 10 14 10 14, gap 10", "[grow]")
+            .isVisibleIf(draft.viewAs(Boolean.class, HostAccess.PermissionRules::asksYou))
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, p.BRASS()))
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(
+                    theme,
+                    pageWords.viewAsString(Lang.HostAccessPage::GENIES_ASKS_YOU_AT_THE_TOP_OF_THE_GENIES_PAGES_NO_ANSWER_WITHIN_A_MINUTE_COUNTS_AS_NO),
+                    Palette::TEXT,
+                    Val.of(true)
+                )
+            );
+    }
+
+    /// Who lets it run commands: its heading, and a switch of three parts, each saying what it
+    /// means to a pointer that rests on it. What the chosen one means stands beside it.
+    private UIForAnySwing<?, ?> commands() {
+        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(PARTS_IN_A_ROW_FROM));
+        return
+            box().withLayout(inARow.viewAs(Layout.class, it -> it ? PARTS_IN_A_ROW : PARTS_ONE_UNDER_THE_OTHER))
+            .add(section(Lang.HostAccessPage::WHO_LETS_IT_RUN_COMMANDS))
+            .add(
+                ViewPartsUtil.oneOf(
+                    theme,
+                    java.util.Arrays.stream(HostAccess.Commands.values())
+                        .map(it -> ViewPartsUtil.Choice.of(it, pageWords.viewAsString(page -> name(it, page)), pageWords.viewAsString(page -> meaning(it, page))))
+                        .toList(),
+                    commands,
+                    changeable,
+                    inARow,
+                    it -> commands.set(From.VIEW, it)
+                )
+            );
+    }
+
+    /// The name of a part of the switch of who lets it run commands. Letting the model that
+    /// judges decide alone carries a sign.
+    private static String name(HostAccess.Commands commands, Lang.HostAccessPage words) {
+        return switch (commands) {
+            case NEVER -> words.NOBODY();
+            case YOU_EACH_TIME -> words.YOU_EACH_TIME();
+            case THE_MODEL_ALONE -> words.THE_MODEL_ALONE() + "  ⚠";
+        };
+    }
+
+    /// What choosing a part of the switch of who lets it run commands means.
+    private static String meaning(HostAccess.Commands commands, Lang.HostAccessPage words) {
+        return switch (commands) {
+            case NEVER -> words.IT_CANNOT_RUN_COMMANDS_AT_ALL();
+            case YOU_EACH_TIME -> words.THE_MODEL_TURNS_AWAY_WHAT_CLEARLY_BREAKS_YOUR_RULES_EVERY_OTHER_COMMAND_COMES_TO_YOU();
+            case THE_MODEL_ALONE -> words.COMMANDS_THE_MODEL_ALLOWS_RUN_STRAIGHT_AWAY_SAY_WHICH_ARE_FINE();
+        };
+    }
+
+    // ─── folders outside the home folder ───────────────────────────────────────────────────
+
+    /// Whether it asks about folders outside the home folder: its heading, and No or Yes. What
+    /// that means stands beside it.
+    private UIForAnySwing<?, ?> outsideTheHomeFolder() {
+        return
+            box("fillx, wrap 1, ins 0, gap 8", "[grow]")
+            .add("growx, wmin 0", section(Lang.HostAccessPage::ASK_YOU_ABOUT_FOLDERS_OUTSIDE_YOUR_HOME_FOLDER))
+            .add(ViewPartsUtil.yesOrNo(theme, Theme.langOf(state).viewAs(Lang.Parts.class, Lang::PARTS), askOutsideHome, changeable, yes -> askOutsideHome.set(From.VIEW, yes)));
+    }
+
     // ─── saving ────────────────────────────────────────────────────────────────────────────
 
     private UIForAnySwing<?, ?> saving() {
-        Val<String> warning = Viewable.of(String.class, draft, Theme.langOf(state), (it, lang) -> it.warning(lang).orElse(""));
+        Val<String> warning = Viewable.of(String.class, draft, Theme.langOf(state), (it, lang) -> it.warning(lang, HOME).orElse(""));
         Val<Boolean> changed = hostAccess.viewAs(Boolean.class, HostAccess::changed);
         Val<Boolean> canSave = Viewable.of(Boolean.class, changeable, changed, (a, b) -> a && b);
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
@@ -272,16 +396,29 @@ final class HostAccessPage {
 
     private UUID selected() { return state.get().selected(); }
 
-    /// A section's heading, dimmed while nothing under it can be changed.
+    /// A section's heading, dimmed while nothing under it can be changed. Wrapped, rather than
+    /// cut short, on a narrow page.
     private UIForAnySwing<?, ?> section(Function<Lang.HostAccessPage, String> heading) {
+        Val<Heading> shown = Viewable.of(Heading.class, pageWords.viewAsString(heading), changeable, Heading::new);
         return
-            label(pageWords.viewAsString(heading)).group(Skin.SECTION)
-            .withStyle(Themed.of(changeable, theme), (themed, it) -> {
-                var can = themed.item();
+            box().withMinSize(0, 0)
+            .withStyle(Themed.of(shown, theme), (themed, it) -> {
+                Heading now = themed.item();
                 Palette p = themed.palette();
-                return can ? it : it.componentFont(f -> f.color(ViewPartsUtil.dim(p.SUBTEXT())));
+                Color colour = now.changeable() ? p.SUBTEXT() : ViewPartsUtil.dim(p.SUBTEXT());
+                return it
+                    .padding(1, 0, 1, 0)
+                    .text(t ->
+                        t.content(StyledString.of(f -> f.family(themed.fonts().FONT()).size(11).weight(2f).spacing(0.14f).color(colour), now.text()))
+                        .placement(UI.Placement.TOP_LEFT)
+                        .wrapLines(true)
+                        .autoPreferredHeight(true)
+                    );
             });
     }
+
+    /// A section's heading, and whether what is under it can be changed.
+    private record Heading(String text, boolean changeable) {}
 
     /// One of the three texts: a heading, the text, as tall as the other two so they line up
     /// side by side, and a note under it. While the rules cannot be changed, the text sinks into

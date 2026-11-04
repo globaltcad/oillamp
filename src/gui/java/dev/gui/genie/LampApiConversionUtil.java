@@ -20,6 +20,7 @@ import dev.lamp.LampEvent;
 import dev.lamp.LampAgentProgress;
 import dev.lamp.LampBranch;
 import dev.lamp.LampConversation;
+import dev.lamp.LampHostCommandApproval;
 import dev.lamp.LampJob;
 import dev.lamp.LampJobAuthor;
 import dev.lamp.LampRunOutcome;
@@ -182,9 +183,30 @@ final class LampApiConversionUtil {
         return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
     }
 
-    /// A lamp's host access as its page shows it: the switch, and the rules Genies wrote as
-    /// JSON, or anything else in the user's own words.
+    /// A lamp's host access as its page shows it: the switch, the rules Genies wrote as JSON, or
+    /// anything else in the user's own words, and when the user is asked.
     static HostAccess.PermissionRules permissionRules(Lamp.HostAccess access) {
-        return HostAccess.PermissionRules.of(access.enabled(), access.requirements());
+        return HostAccess.PermissionRules.of(access.enabled(), access.requirements(), commands(access.commands()), access.askTheUser());
+    }
+
+    /// The rules the page shows, as the lamp's file keeps them.
+    static Lamp.HostAccess hostAccess(HostAccess.PermissionRules rules) {
+        return new Lamp.HostAccess(rules.on(), rules.requirements(), approval(rules.commands()), rules.askOutsideHome());
+    }
+
+    private static HostAccess.Commands commands(LampHostCommandApproval approval) {
+        return switch (approval) {
+            case OFF -> HostAccess.Commands.NEVER;
+            case ASK -> HostAccess.Commands.YOU_EACH_TIME;
+            case CHECKER -> HostAccess.Commands.THE_MODEL_ALONE;
+        };
+    }
+
+    private static LampHostCommandApproval approval(HostAccess.Commands commands) {
+        return switch (commands) {
+            case NEVER -> LampHostCommandApproval.OFF;
+            case YOU_EACH_TIME -> LampHostCommandApproval.ASK;
+            case THE_MODEL_ALONE -> LampHostCommandApproval.CHECKER;
+        };
     }
 }
