@@ -63,6 +63,9 @@ final class Supervisor {
     /// first one also stores them all: a few hundred megabytes once a JDK is in there.
     private static final Duration SAVE_ALLOWANCE = Duration.ofMinutes(5);
 
+    /// What the sandbox's SSH server is called in problem messages.
+    private static final String SHELL_LABEL = "the shell (SSH)";
+
     /// How a signal is described in the closing summary. The JVM runs the same shutdown hook for all
     /// three, so it cannot say which one it was.
     private static final String SIGNALLED = "Ctrl-C, this terminal closing, or a kill";
@@ -472,13 +475,18 @@ final class Supervisor {
     /// `session.json` exists, the control socket is already answering.
     private Result<Tuple<LampProblem>> openTheSession() {
         LampLayout layout = prepared.layout();
-        Result<Relay> primaryRelay = Relay.open(layout.primarySshSocket(), layout.agentSshSocket(),
-                1, new PrimaryListener());
+        // The primary relay belongs to the terminal window oillamp opened, so a second connection
+        // is refused and `oillamp shell` suggested.
+        Result<Relay> primaryRelay = Relay.open(new Relay.Route(
+                new Relay.Listening.OnUnixSocket(layout.primarySshSocket()), layout.agentSshSocket(),
+                new Relay.Admission.OnlyOne(ProblemCatalogUtil.extraPrimaryRejected(layout.primarySshSocket())),
+                SHELL_LABEL), new PrimaryListener());
         if (primaryRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
         primary = Optional.of(((Result.Ok<Relay>) primaryRelay).value());
 
-        Result<Relay> extraRelay = Relay.open(layout.extraSshSocket(), layout.agentSshSocket(),
-                Integer.MAX_VALUE, new ExtraListener());
+        Result<Relay> extraRelay = Relay.open(new Relay.Route(
+                new Relay.Listening.OnUnixSocket(layout.extraSshSocket()), layout.agentSshSocket(),
+                new Relay.Admission.AnyNumber(), SHELL_LABEL), new ExtraListener());
         if (extraRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
         extras = Optional.of(((Result.Ok<Relay>) extraRelay).value());
 
@@ -776,7 +784,7 @@ final class Supervisor {
         if (shell != shellAnswering)
             context.sink().accept(shell
                     ? new LampEvent.Ok("health", "the shell is answering again")
-                    : new LampEvent.Warning(ProblemCatalogUtil.sandboxEndpointDead("the shell (SSH)",
+                    : new LampEvent.Warning(ProblemCatalogUtil.sandboxEndpointDead(SHELL_LABEL,
                             prepared.layout().agentSshSocket(), sandbox.container().value(),
                             lastLinesOfTheSandboxLog())));
         desktopAnswering = desktop;

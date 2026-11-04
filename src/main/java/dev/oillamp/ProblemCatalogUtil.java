@@ -749,6 +749,18 @@ final class ProblemCatalogUtil {
             .withFix(Fix.run("clear anything a crashed session left behind", "rm -f " + socket));
     }
 
+    /// A relay could not bind its TCP port on 127.0.0.1.
+    public static LampProblem cannotListenOnLoopback(int port, String label, String reason) {
+        String address = "127.0.0.1:" + port;
+        return error(NET_CANNOT_LISTEN, "Cannot listen on a port",
+                "oillamp could not bind " + address + ": " + reason,
+                "this port is how you reach " + label + "; without it there is no way to it")
+            .withEvidence(new Evidence.Value("address", address))
+            .withFix(Fix.of(port == 0
+                    ? "check that nothing on this machine forbids listening on 127.0.0.1"
+                    : "choose another port, or stop whatever already listens on " + address));
+    }
+
     // ─── the windows of a session ──────────────────────────────────────────────────────────
 
     /// The terminal window was started but never connected.

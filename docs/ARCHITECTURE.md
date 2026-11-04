@@ -51,7 +51,7 @@ These words have one meaning each, in the code and in the documents.
 | **supervisor** | The `oillamp at` process while a session runs. It stays in the foreground of the terminal you started it in. |
 | **primary shell** | The SSH connection from the terminal window oillamp opens. When it connects, the session is up. |
 | **extra shell** | A shell opened with `oillamp shell <dir>`. |
-| **relay** | A Unix socket on the host that forwards each connection into a socket inside the sandbox. Used for SSH. |
+| **relay** | A place on the host, a Unix socket or a port on 127.0.0.1, that forwards each connection into a Unix socket inside the sandbox. It admits either one connection or any number. Used for SSH. |
 | **control socket** | A Unix socket the supervisor listens on, so that `oillamp stop`, `status`, `view`, `shell` and `follow` can talk to a running session. |
 | **egress proxy** | The HTTP proxy inside oillamp that is the sandbox's only way out. "Egress" means outbound. |
 | **forward** | A fixed tunnel from a port inside the sandbox to one address you configured. Not subject to the proxy's rules. |
@@ -930,7 +930,7 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
   is `volatile` because others read it.
 - **Sandbox watcher.** Every 2 s runs `podman container inspect` and connects to the VNC, SSH and
   proxy sockets. Reports a change at once and a health line every 30 s.
-- **Relay threads.** One accept loop per relay socket, and two virtual threads per connection (one
+- **Relay threads.** One accept loop per relay, and two virtual threads per connection (one
   per direction).
 - **Control socket threads.** One accept loop, one thread per connection. A connection that sends
   nothing for 5 s is closed.
