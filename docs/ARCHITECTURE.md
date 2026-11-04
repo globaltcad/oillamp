@@ -947,9 +947,9 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
 
 `Supervisor.shutDown` runs every step, even if an earlier one failed:
 
-0. Close the schedule socket and the desktop socket, tell pi to stop the run in progress, and wait for that run to be
-   saved (at most six minutes); runs still waiting end as interrupted. The sandbox still runs here,
-   so pi can wind down.
+0. Close the schedule socket, the desktop socket and the host-access socket, tell pi to stop the
+   run in progress, and wait for that run to be saved (at most six minutes); runs still waiting end
+   as interrupted. The sandbox still runs here, so pi can wind down.
 1. Close both SSH relays and all their connections.
 2. `podman stop --time <timeouts.stop_seconds> oillamp-<id>`, shielded from Ctrl-C (it runs under
    `setsid --wait`). This lets the entrypoint finish the recording.

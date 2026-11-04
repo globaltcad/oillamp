@@ -95,18 +95,10 @@ final class Supervisor {
     /// already ended.
     private volatile SessionState state;
     private volatile Instant sessionStarted;
-    private volatile Optional<Relay> primary = Optional.empty();
-    private volatile Optional<Relay> extras = Optional.empty();
-    private volatile Optional<Control.Server> control = Optional.empty();
-    private volatile Optional<Egress> egress = Optional.empty();
-    /// The socket through which the agent reads and changes the schedule. Open only while
-    /// `schedule.enabled` is on.
-    private volatile Optional<Control.Server> scheduleDesk = Optional.empty();
-    /// The socket through which the agent asks the user to look at its desktop.
-    private volatile Optional<Control.Server> desktopDesk = Optional.empty();
-    /// The socket of supervised access to the host. Present only while `host_access.enabled`
-    /// is on.
-    private volatile Optional<HostMcp.Server> hostAccessDesk = Optional.empty();
+    /// What the session serves, once [#openTheSession()] has opened all of it; empty before
+    /// that, and for good when opening failed. Set once by the starting thread, and read by the
+    /// event loop and the shutdown sequence, so it is `volatile` for the same reason as `state`.
+    private volatile Optional<Served> served = Optional.empty();
     /// Every time the agent is woken, by a job or by `oillamp ask`.
     private final AgentRunner runs;
     /// Everyone following the session with `oillamp follow`. Every event passes through it.
@@ -167,17 +159,19 @@ final class Supervisor {
         sessionStarted = machine.now();
         state = new SessionState.Starting(sessionStarted, Tuple.of(HostAccess.RunLog.class));
 
-        Result<Tuple<LampProblem>> opened = openTheSession();
-        if (opened instanceof Result.Err<Tuple<LampProblem>>(Tuple<LampProblem> problems)) {
+        Result<Opened> opened = openTheSession();
+        if (opened instanceof Result.Err<Opened>(Tuple<LampProblem> problems)) {
             // The session could not be opened, but the container is already running and must
-            // not be left behind.
+            // not be left behind. What was opened is already closed again.
             context.sinkAcceptProblems(problems);
             context.sinkAcceptProblems(shutDown(new SessionState.ShutdownReason.StartupFailed(
                     problems.first())));
             followers.end();
             return LampExitStatus.SESSION_FAILED;
         }
-        context.sinkAcceptProblems(((Result.Ok<Tuple<LampProblem>>) opened).value());
+        Opened open = ((Result.Ok<Opened>) opened).value();
+        served = Optional.of(open.served());
+        context.sinkAcceptProblems(open.warnings());
 
         Thread hook = new Thread(this::onSignal, "oillamp-shutdown-hook");
         Runtime.getRuntime().addShutdownHook(hook);
@@ -365,7 +359,7 @@ final class Supervisor {
             case SessionAction.Announce announce -> context.sink().accept(announce.event());
             case SessionAction.LaunchViewer viewer -> openViewer(viewer.viewOnly());
             case SessionAction.LaunchTerminal ignored -> openTerminal();
-            case SessionAction.CloseShells ignored -> extras.ifPresent(Relay::close);
+            case SessionAction.CloseShells ignored -> served.ifPresent(open -> open.extras().close());
             case SessionAction.BeginShutdown shutdown -> beginShutdown(shutdown.reason());
             // The state machine decided the person should be asked; here it is turned into the
             // event the terminal shows (and `oillamp follow` relays, and an application renders).
@@ -469,83 +463,160 @@ final class Supervisor {
 
     // ─── opening and closing the session ───────────────────────────────────────────────────
 
+    /// Everything an open session serves.
+    ///
+    /// The relays, the control socket and the egress proxy are always there: a session that
+    /// could not open one of them does not run. The rest depend on the configuration, or, for the
+    /// desktop socket, are tolerated missing.
+    ///
+    /// @param scheduleDesk   the socket through which the agent reads and changes the schedule;
+    ///                       only with `schedule.enabled`
+    /// @param desktopDesk    the socket through which the agent asks the user to look at its
+    ///                       desktop; failing to open it is only a warning
+    /// @param hostAccessDesk the socket of supervised access to the host; only with
+    ///                       `host_access.enabled`
+    private record Served(Relay primary, Relay extras, Control.Server control, Egress egress,
+                          Optional<Control.Server> scheduleDesk, Optional<Control.Server> desktopDesk,
+                          Optional<HostMcp.Server> hostAccessDesk) {
+
+        /// Step 0 of the shutdown: the agent's own sockets, so it cannot start anything new.
+        void closeTheAgentsDesks() {
+            scheduleDesk.ifPresent(Control.Server::close);
+            desktopDesk.ifPresent(Control.Server::close);
+            hostAccessDesk.ifPresent(HostMcp.Server::close);
+        }
+
+        /// Step 1 of the shutdown: no new shells, and the open ones dropped.
+        void closeTheShells() {
+            primary.close();
+            extras.close();
+        }
+
+        /// Step 4 of the shutdown, once the container is gone: the host-only sockets.
+        void closeTheHostSockets() {
+            egress.close();
+            control.close();
+        }
+    }
+
+    /// What [#openTheSession()] opened, and what it has to warn about.
+    private record Opened(Served served, Tuple<LampProblem> warnings) {}
+
     /// Binds everything a session needs before anything is allowed to connect.
     ///
     /// The sockets are bound before `session.json` is written, so that whenever
     /// `session.json` exists, the control socket is already answering.
-    private Result<Tuple<LampProblem>> openTheSession() {
-        LampLayout layout = prepared.layout();
-        // The primary relay belongs to the terminal window oillamp opened, so a second connection
-        // is refused and `oillamp shell` suggested.
-        Result<Relay> primaryRelay = Relay.open(new Relay.Route(
-                new Relay.Listening.OnUnixSocket(layout.primarySshSocket()), layout.agentSshSocket(),
-                new Relay.Admission.OnlyOne(ProblemCatalogUtil.extraPrimaryRejected(layout.primarySshSocket())),
-                SHELL_LABEL), new PrimaryListener());
-        if (primaryRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
-        primary = Optional.of(((Result.Ok<Relay>) primaryRelay).value());
-
-        Result<Relay> extraRelay = Relay.open(new Relay.Route(
-                new Relay.Listening.OnUnixSocket(layout.extraSshSocket()), layout.agentSshSocket(),
-                new Relay.Admission.AnyNumber(), SHELL_LABEL), new ExtraListener());
-        if (extraRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return Result.err(problems);
-        extras = Optional.of(((Result.Ok<Relay>) extraRelay).value());
-
-        Result<Control.Server> server = Control.Server.open(layout.controlSocket(), this::answer);
-        if (server instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
-        control = Optional.of(((Result.Ok<Control.Server>) server).value());
-
-        // The sandbox has no network of its own. Without the proxy, every outbound connection the
-        // agent makes fails, so failing to start it fails the session.
-        // The key is read here, on the host, and kept in memory only. It is never written into
-        // the lamp or the sandbox.
-        LampConfig.Model configured = prepared.config().model();
-        Egress.Model model = new Egress.Model(configured.service(), configured.keyEnv(),
-                machine.environmentVariable(configured.keyEnv()));
-        Result<Egress> proxy = Egress.open(layout, prepared.config(), prepared.session(),
-                model, new EgressListener());
-        if (proxy instanceof Result.Err<Egress>(Tuple<LampProblem> problems)) return Result.err(problems);
-        egress = Optional.of(((Result.Ok<Egress>) proxy).value());
-
-        // The agent's way to the schedule, in the directory of sockets the host serves to the sandbox.
-        if (prepared.config().schedule().enabled()) {
-            Result<Control.Server> desk = Control.Server.open(layout.scheduleSocket(), runs::answerAgent);
-            if (desk instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
-            scheduleDesk = Optional.of(((Result.Ok<Control.Server>) desk).value());
-        }
-
-        Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
-
-        // The way out to the host. Every request on it is judged by a model, and its effect
-        // happens here. A lamp that did not ask for it has no socket at all.
-        if (prepared.config().hostAccess().enabled()) {
-            LampConfig.Model service = prepared.config().model();
-            Optional<String> key = machine.environmentVariable(service.keyEnv());
-            if (key.isEmpty())
-                warnings = warnings.add(HostAccessProblems.checkerHasNoKey(service.keyEnv()));
-            HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
-                    HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
-                    context.sink(), this::awaitAnswered, runs::currentRun,
-                    run -> HostAccess.logOf(handledSoFar().runs(), run),
-                    HostAccess.secretVariables(prepared.config(), service, context.options()));
-            Result<HostMcp.Server> door = HostMcp.Server.open(layout.hostAccessSocket(), granted, prepared.config().hostAccess());
-            if (door instanceof Result.Err<HostMcp.Server>(Tuple<LampProblem> problems)) return Result.err(problems);
-            hostAccessDesk = Optional.of(((Result.Ok<HostMcp.Server>) door).value());
-            granted.announce();
-        }
-
-        // The agent's way to ask the user to look at its desktop. Without it, the session works
-        // as before, and the agent is told so when it asks; so failing to open it is a warning.
-        Result<Control.Server> look = Control.Server.open(layout.desktopSocket(), this::answerAboutTheDesktop);
-        if (look instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) warnings = warnings.addAll(problems);
-        else desktopDesk = Optional.of(((Result.Ok<Control.Server>) look).value());
-
+    ///
+    /// When one of them cannot be opened, or something throws, the ones opened before it are
+    /// closed again, newest first, before this returns, so nothing is left listening. Each server
+    /// that opens adds its closer to `opened`, so a failure further on cannot forget it.
+    private Result<Opened> openTheSession() {
+        Tuple<Runnable> opened = Tuple.of(Runnable.class);
         try {
-            FilesystemUtil.writeFile(layout.sessionMeta(), sessionJson(), PosixMode.PRIVATE_FILE);
-        } catch (IOException e) {
-            // session.json is only informational (the lock decides), so this is a warning.
-            warnings = warnings.add(ProblemCatalogUtil.internal("session.json", ProblemCatalogUtil.reason(e)));
+            LampLayout layout = prepared.layout();
+            // The primary relay belongs to the terminal window oillamp opened, so a second
+            // connection is refused and `oillamp shell` suggested.
+            Result<Relay> primaryRelay = Relay.open(new Relay.Route(
+                    new Relay.Listening.OnUnixSocket(layout.primarySshSocket()), layout.agentSshSocket(),
+                    new Relay.Admission.OnlyOne(ProblemCatalogUtil.extraPrimaryRejected(layout.primarySshSocket())),
+                    SHELL_LABEL), new PrimaryListener());
+            if (primaryRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+            Relay primary = ((Result.Ok<Relay>) primaryRelay).value();
+            opened = opened.add(primary::close);
+
+            Result<Relay> extraRelay = Relay.open(new Relay.Route(
+                    new Relay.Listening.OnUnixSocket(layout.extraSshSocket()), layout.agentSshSocket(),
+                    new Relay.Admission.AnyNumber(), SHELL_LABEL), new ExtraListener());
+            if (extraRelay instanceof Result.Err<Relay>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+            Relay extras = ((Result.Ok<Relay>) extraRelay).value();
+            opened = opened.add(extras::close);
+
+            Result<Control.Server> server = Control.Server.open(layout.controlSocket(), this::answer);
+            if (server instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+            Control.Server control = ((Result.Ok<Control.Server>) server).value();
+            opened = opened.add(control::close);
+
+            // The sandbox has no network of its own. Without the proxy, every outbound connection the
+            // agent makes fails, so failing to start it fails the session.
+            // The key is read here, on the host, and kept in memory only. It is never written into
+            // the lamp or the sandbox.
+            LampConfig.Model configured = prepared.config().model();
+            Egress.Model model = new Egress.Model(configured.service(), configured.keyEnv(),
+                    machine.environmentVariable(configured.keyEnv()));
+            Result<Egress> proxy = Egress.open(layout, prepared.config(), prepared.session(),
+                    model, new EgressListener());
+            if (proxy instanceof Result.Err<Egress>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+            Egress egress = ((Result.Ok<Egress>) proxy).value();
+            opened = opened.add(egress::close);
+
+            // The agent's way to the schedule, in the directory of sockets the host serves to the sandbox.
+            Optional<Control.Server> scheduleDesk = Optional.empty();
+            if (prepared.config().schedule().enabled()) {
+                Result<Control.Server> desk = Control.Server.open(layout.scheduleSocket(), runs::answerAgent);
+                if (desk instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+                Control.Server schedule = ((Result.Ok<Control.Server>) desk).value();
+                opened = opened.add(schedule::close);
+                scheduleDesk = Optional.of(schedule);
+            }
+
+            Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
+
+            // The way out to the host. Every request on it is judged by a model, and its effect
+            // happens here. A lamp that did not ask for it has no socket at all.
+            Optional<HostMcp.Server> hostAccessDesk = Optional.empty();
+            if (prepared.config().hostAccess().enabled()) {
+                LampConfig.Model service = prepared.config().model();
+                Optional<String> key = machine.environmentVariable(service.keyEnv());
+                if (key.isEmpty())
+                    warnings = warnings.add(HostAccessProblems.checkerHasNoKey(service.keyEnv()));
+                HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
+                        HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
+                        context.sink(), this::awaitAnswered, runs::currentRun,
+                        run -> HostAccess.logOf(handledSoFar().runs(), run),
+                        HostAccess.secretVariables(prepared.config(), service, context.options()));
+                Result<HostMcp.Server> door = HostMcp.Server.open(layout.hostAccessSocket(), granted, prepared.config().hostAccess());
+                if (door instanceof Result.Err<HostMcp.Server>(Tuple<LampProblem> problems)) return abandon(problems, opened);
+                HostMcp.Server hostAccess = ((Result.Ok<HostMcp.Server>) door).value();
+                opened = opened.add(hostAccess::close);
+                hostAccessDesk = Optional.of(hostAccess);
+                granted.announce();
+            }
+
+            // The agent's way to ask the user to look at its desktop. Without it, the session works
+            // as before, and the agent is told so when it asks; so failing to open it is a warning.
+            Result<Control.Server> look = Control.Server.open(layout.desktopSocket(), this::answerAboutTheDesktop);
+            Optional<Control.Server> desktopDesk = Optional.empty();
+            if (look instanceof Result.Err<Control.Server>(Tuple<LampProblem> problems)) warnings = warnings.addAll(problems);
+            else {
+                Control.Server desktop = ((Result.Ok<Control.Server>) look).value();
+                opened = opened.add(desktop::close);
+                desktopDesk = Optional.of(desktop);
+            }
+
+            try {
+                FilesystemUtil.writeFile(layout.sessionMeta(), sessionJson(), PosixMode.PRIVATE_FILE);
+            } catch (IOException e) {
+                // session.json is only informational (the lock decides), so this is a warning.
+                warnings = warnings.add(ProblemCatalogUtil.internal("session.json", ProblemCatalogUtil.reason(e)));
+            }
+            return Result.ok(new Opened(new Served(primary, extras, control, egress,
+                    scheduleDesk, desktopDesk, hostAccessDesk), warnings));
+        } catch (RuntimeException bug) {
+            closeNewestFirst(opened);
+            throw bug;
         }
-        return Result.ok(warnings);
+    }
+
+    /// Gives up opening the session: closes what was opened so far and passes the problems on.
+    private static Result<Opened> abandon(Tuple<LampProblem> problems, Tuple<Runnable> opened) {
+        closeNewestFirst(opened);
+        return Result.err(problems);
+    }
+
+    /// Closes in the reverse order of opening, the usual order for undoing. On a failed start
+    /// nothing is connected yet, so the shutdown sequence's order does not matter here.
+    private static void closeNewestFirst(Tuple<Runnable> opened) {
+        for (Runnable close : opened.reversed()) close.run();
     }
 
     /// The session's own record, read by `oillamp at` on a busy lamp and by `status`.
@@ -585,16 +656,13 @@ final class Supervisor {
         // 0. Stop the agent's run, if one is going, and save it, while the sandbox still runs.
         if (runs.busy()) context.sink().accept(new LampEvent.Info("run",
                 "stopping the agent's run and saving what it did"));
-        scheduleDesk.ifPresent(Control.Server::close);
-        desktopDesk.ifPresent(Control.Server::close);
-        hostAccessDesk.ifPresent(HostMcp.Server::close);
+        served.ifPresent(Served::closeTheAgentsDesks);
         questions.values().forEach(answer -> answer.completeExceptionally(
                 new IllegalStateException("the session is ending")));
         runs.stop();
 
         // 1. Stop accepting shells, and drop the ones that are open.
-        primary.ifPresent(Relay::close);
-        extras.ifPresent(Relay::close);
+        served.ifPresent(Served::closeTheShells);
 
         // 2. Ask the container to stop, so the entrypoint can finish the recording on SIGTERM.
         //    Both podman commands are shielded from Ctrl-C, which would otherwise reach them
@@ -624,8 +692,7 @@ final class Supervisor {
                         ? "; the recording may end a moment early" : "")));
 
         // 4. The host-only sockets, and the windows that were opened onto the session.
-        egress.ifPresent(Egress::close);
-        control.ifPresent(Control.Server::close);
+        served.ifPresent(Served::closeTheHostSockets);
         for (Machine.Window viewer : viewers) viewer.close();
         terminal.ifPresent(Machine.Window::close);
 
