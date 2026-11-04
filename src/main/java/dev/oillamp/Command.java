@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import dev.lamp.LampHostCommandApproval;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
 
@@ -100,10 +101,18 @@ sealed interface Command {
     /// `model` is the model the running session's agent answers with from its next run on, as
     /// the service names it.
     record Model(Path lamp, String model, Context.Options options) implements Command {}
-    /// `enabled` is `on` or `off`, and `requirementsEnv` the variable that holds the new
-    /// requirements; with neither, the command only says what the lamp's file has.
+    /// `enabled` is `on` or `off`, `requirementsEnv` the variable that holds the new
+    /// requirements, `commands` who approves a command on the host and `askTheUser` whether a
+    /// request past the roots goes to the person; with none, the command only says what the
+    /// lamp's file has.
     record HostAccess(Path lamp, Optional<Boolean> enabled, Optional<String> requirementsEnv,
-                      Context.Options options) implements Command {}
+                      Optional<LampHostCommandApproval> commands, Optional<Boolean> askTheUser,
+                      Context.Options options) implements Command {
+        /// Whether the command only reads the lamp's file.
+        boolean onlyReads() {
+            return enabled.isEmpty() && requirementsEnv.isEmpty() && commands.isEmpty() && askTheUser.isEmpty();
+        }
+    }
     /// The person's answer to a host-access question, named by its text as the event gave it.
     record Answer(Path lamp, boolean yes, String question, Context.Options options) implements Command {}
 
@@ -214,6 +223,10 @@ sealed interface Command {
                     "--background needs a value, for example --background \"#15121c\"", usageOf("at"));
             case "--requirements-env" -> ProblemCatalogUtil.usage(
                     "--requirements-env needs a value, for example --requirements-env MY_RULES", usageOf("host-access"));
+            case "--commands" -> ProblemCatalogUtil.usage(
+                    "--commands needs a value: off, ask or checker", usageOf("host-access"));
+            case "--ask-the-user" -> ProblemCatalogUtil.usage(
+                    "--ask-the-user needs a value: on or off", usageOf("host-access"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -489,7 +502,18 @@ sealed interface Command {
                 if (switched.isPresent() && !switched.get().equals("on") && !switched.get().equals("off"))
                     yield Result.err(ProblemCatalogUtil.usage(
                             "`oillamp host-access` \"" + switched.get() + "\": expected on or off", usageOf("host-access")));
-                yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv, options));
+                Optional<String> commands = values.get("--commands");
+                Optional<LampHostCommandApproval> approval = commands.flatMap(Command::commandApproval);
+                if (commands.isPresent() && approval.isEmpty())
+                    yield Result.err(ProblemCatalogUtil.usage("--commands \"" + commands.get()
+                          + "\": expected off, ask (the checker, then you, for every command) or checker (the checker alone)",
+                          usageOf("host-access")));
+                Optional<String> askTheUser = values.get("--ask-the-user");
+                if (askTheUser.isPresent() && !askTheUser.get().equals("on") && !askTheUser.get().equals("off"))
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "--ask-the-user \"" + askTheUser.get() + "\": expected on or off", usageOf("host-access")));
+                yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv,
+                        approval, askTheUser.map("on"::equals), options));
             }
             case "answer" -> {
                 if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
@@ -569,7 +593,7 @@ sealed interface Command {
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
                 .put("model",      ValueSet.of("--embedded"))
-                .put("host-access", ValueSet.of("--requirements-env", "--embedded"))
+                .put("host-access", ValueSet.of("--requirements-env", "--commands", "--ask-the-user", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of(String.class))
@@ -586,7 +610,7 @@ sealed interface Command {
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
-            "--security-requirements-env", "--requirements-env", "--wallpaper", "--background",
+            "--security-requirements-env", "--requirements-env", "--commands", "--ask-the-user", "--wallpaper", "--background",
             "--in", "--after", "--instead-of");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
@@ -623,6 +647,16 @@ sealed interface Command {
     /// The lines of [#usage] that describe `command`, such as `oillamp stop <dir>`, or the four
     /// of `oillamp history`. Only the lines indented by two spaces name a command; the lines
     /// below them describe it.
+    /// `host_access.commands` as `--commands` names it: `off`, `ask` or `checker`.
+    private static Optional<LampHostCommandApproval> commandApproval(String word) {
+        return switch (word) {
+            case "off" -> Optional.of(LampHostCommandApproval.OFF);
+            case "ask" -> Optional.of(LampHostCommandApproval.ASK);
+            case "checker" -> Optional.of(LampHostCommandApproval.CHECKER);
+            default -> Optional.empty();
+        };
+    }
+
     static String usageOf(String command) {
         java.util.List<String> lines = usage().lines()
                 .filter(line -> line.startsWith("  ") && !line.startsWith("   ")).map(String::strip)
@@ -792,12 +826,18 @@ sealed interface Command {
                     as pi's default. A run in progress finishes on the model it started with.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
-              host-access <dir> [on | off] [--requirements-env <name>]
-                    Say whether the agent may ask to reach the host, and what the checker
-                    judges its requests against: `enabled` and `requirements` under
-                    [host_access] in oillamp.toml. With on or off, or the requirements this
-                    variable holds, write them there, and change nothing else in the file.
-                    Writing needs the session to be stopped.
+              host-access <dir> [on | off] [--requirements-env <name>] [--commands <who>] [--ask-the-user on | off]
+                    Say whether the agent may ask to reach the host, what the checker judges
+                    its requests against, and when you are asked too: `enabled`,
+                    `requirements`, `commands` and `ask_the_user` under [host_access] in
+                    oillamp.toml. With any of these, write them there, and change nothing
+                    else in the file. Writing needs the session to be stopped.
+                      --requirements-env  the variable that holds the new requirements
+                      --commands          who approves a shell command on this machine: off
+                                          (no such tool), ask (the checker, then you) or
+                                          checker (the checker alone)
+                      --ask-the-user      on: ask you, rather than refuse, a request the
+                                          checker allows that reaches past the roots
               answer <dir> (yes | no) "<question>"
                     Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]

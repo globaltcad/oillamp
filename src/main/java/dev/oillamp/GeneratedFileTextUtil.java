@@ -259,6 +259,15 @@ final class GeneratedFileTextUtil {
                     COMPREPLY=($(compgen -W 'lamp waves waves-light waves-dark' -- "$current"))
                     return
                 fi
+                # `oillamp host-access <dir> --commands ask --ask-the-user on`: the options' values.
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --commands ]; then
+                    COMPREPLY=($(compgen -W 'off ask checker' -- "$current"))
+                    return
+                fi
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --ask-the-user ]; then
+                    COMPREPLY=($(compgen -W 'on off' -- "$current"))
+                    return
+                fi
                 # `--background "#15121c"`: a colour, which nothing here can guess.
                 if [ "${COMP_WORDS[COMP_CWORD-1]}" = --background ]; then
                     COMPREPLY=()
@@ -299,7 +308,7 @@ final class GeneratedFileTextUtil {
                             history)       options="$options --message --all --delete --yes" ;;
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
-                            host-access)   options="$options --requirements-env" ;;
+                            host-access)   options="$options --requirements-env --commands --ask-the-user" ;;
                             recordings)    options="$options --open --prune --dry-run" ;;
                             doctor|config) options="$options --dry-run --no-install" ;;
                             update)        options="$options --system --dry-run --no-install" ;;

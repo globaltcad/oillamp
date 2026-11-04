@@ -16,6 +16,7 @@ import dev.lamp.LampWebPort
 import dev.lamp.LampRun
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
+import dev.lamp.LampHostCommandApproval
 import dev.lamp.LampHostRisk
 import dev.lamp.LampHostVerdict
 import spock.lang.Narrative
@@ -181,7 +182,8 @@ class The_Event_Wire_Format_Spec extends Specification {
                     Duration.ofSeconds(2)),
             new LampEvent.HostAccessRefused('run-12', 'host_read_file', 'that path is outside the lamp\'s roots'),
             new LampEvent.HostAccessAsked('run-12', 'host_run', 'run `inkscape report.svg`, in ~/Documents'),
-            new LampEvent.HostAccessSettings(true, '{"may_read": ["~/Documents"]}\nAnd nothing private.'),
+            new LampEvent.HostAccessSettings(true, '{"may_read": ["~/Documents"]}\nAnd nothing private.',
+                    LampHostCommandApproval.ASK, true),
             new LampEvent.AutosaveSettings(false, true, true, false, 10),
             new LampEvent.HistoryGrowthLimit(0.00003),
             new LampEvent.HistoryGrowthLimit(2),

@@ -199,8 +199,9 @@ public final class Lamp implements AutoCloseable {
     static HostAccess hostAccessOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.HostAccessSettings(boolean enabled, String requirements))
-                return new HostAccess(enabled, requirements);
+            if (event instanceof LampEvent.HostAccessSettings(boolean enabled, String requirements,
+                                                              LampHostCommandApproval commands, boolean askTheUser))
+                return new HostAccess(enabled, requirements, commands, askTheUser);
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no host access settings"));
     }
 
@@ -257,13 +258,23 @@ public final class Lamp implements AutoCloseable {
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no job"));
     }
 
-    /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
-    /// `oillamp.toml`, as [LampDirectory#hostAccess()] reads them and [LampDirectory#hostAccess(boolean, String)]
+    /// The values in the `[host_access]` table of a lamp's `oillamp.toml` that a person decides
+    /// on, as [LampDirectory#hostAccess()] reads them and [LampDirectory#hostAccess(HostAccess)]
     /// writes them.
+    ///
+    /// The checker is the fast path: it judges every request against `requirements`, and asks
+    /// nobody. The person is the slow one, and only in two cases, each after the checker allowed
+    /// the request: a command, when `commands` is [LampHostCommandApproval#ASK], and a request
+    /// past the lamp's roots, when `askTheUser` is on. A session tells a program about either with
+    /// a [LampEvent.HostAccessAsked], and the program answers with [Lamp#decidePermission].
     ///
     /// @param enabled      whether a session gives the agent the host tools
     /// @param requirements the text the checker model judges every host request against
-    public record HostAccess(boolean enabled, String requirements) {}
+    /// @param commands     who approves a shell command the agent wants to run on the host
+    /// @param askTheUser   whether a request the checker allows that reaches past the lamp's
+    ///                     roots goes to the person, rather than being refused
+    public record HostAccess(boolean enabled, String requirements, LampHostCommandApproval commands,
+                             boolean askTheUser) {}
 
     /// When oillamp saves a lamp by itself, so that it can go back there: the `[autosave]` table
     /// of its `oillamp.toml`, as [LampDirectory#autosave()] reads it and [LampDirectory#autosave(Autosave)]

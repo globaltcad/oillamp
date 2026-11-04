@@ -483,9 +483,9 @@ public final class LampDirectory {
                 LampEvent.ResetDone.class);
     }
 
-    /// Reads the values of `enabled` and `requirements` in the `[host_access]` table of this
-    /// lamp's `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads
-    /// them.
+    /// Reads the values of `enabled`, `requirements`, `commands` and `ask_the_user` in the
+    /// `[host_access]` table of this lamp's `oillamp.toml`, merged over
+    /// `~/.config/oillamp/config.toml` as a session reads them.
     ///
     /// Runs `oillamp host-access <dir>` as a short-lived engine process. It only reads the
     /// file, so it works whether or not a session is running.
@@ -498,7 +498,9 @@ public final class LampDirectory {
     }
 
     /// Sets the values of `enabled` and `requirements` in the `[host_access]` table of this
-    /// lamp's `oillamp.toml`, and returns them as the file now has them.
+    /// lamp's `oillamp.toml`, and returns the values [#hostAccess()] reads as the file now has
+    /// them. `commands` and `ask_the_user` stay as they are; [#hostAccess(Lamp.HostAccess)]
+    /// sets all four.
     ///
     /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS`
     /// as a short-lived engine process. The requirements are passed in that environment
@@ -524,6 +526,33 @@ public final class LampDirectory {
         return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners, Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, requirements),
                 "host-access", directory.toString(), enabled ? "on" : "off",
                 "--requirements-env", Lamp.SECURITY_REQUIREMENTS_VARIABLE));
+    }
+
+    /// Sets all four values of [Lamp.HostAccess] in the `[host_access]` table of this lamp's
+    /// `oillamp.toml`: `enabled`, `requirements`, `commands` and `ask_the_user`. Returns them as
+    /// the file now has them.
+    ///
+    /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS
+    /// --commands off|ask|checker --ask-the-user on|off` as a short-lived engine process, which
+    /// changes only those keys, as [#hostAccess(boolean, String)] does with its two. It writes the
+    /// file only when the result is a valid configuration.
+    ///
+    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+    /// reads the file only when it starts.
+    ///
+    /// @param wanted the values to write; `requirements` may be empty only when `enabled` is false
+    /// @return the values as the file now has them
+    /// @throws LampFailedException when the sandbox is running, or the settings are not valid, such
+    ///                     as on with no requirements; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public Lamp.HostAccess hostAccess(Lamp.HostAccess wanted)
+            throws IOException, InterruptedException, LampFailedException {
+        return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners,
+                Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, wanted.requirements()),
+                "host-access", directory.toString(), Lamp.onOff(wanted.enabled()),
+                "--requirements-env", Lamp.SECURITY_REQUIREMENTS_VARIABLE,
+                "--commands", wanted.commands().name().toLowerCase(Locale.ROOT),
+                "--ask-the-user", Lamp.onOff(wanted.askTheUser())));
     }
 
     /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of

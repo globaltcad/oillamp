@@ -186,8 +186,7 @@ final class CommandExecutionUtil {
             case Command.Ask ask       -> ask(machine, context, ask);
             case Command.Cancel cancel -> cancel(machine, context, cancel.lamp(), cancel.run());
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
-            case Command.HostAccess access -> hostAccess(machine, context, access.lamp(), access.enabled(),
-                                                          access.requirementsEnv());
+            case Command.HostAccess access -> hostAccess(machine, context, access);
             case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
     }
@@ -1317,14 +1316,15 @@ final class CommandExecutionUtil {
                         "the agent answers with " + model + " from its next run on")));
     }
 
-    /// `oillamp host-access <dir> [on|off] [--requirements-env <name>]`: what the lamp's file
-    /// says about host access, after writing what was given into it.
+    /// `oillamp host-access <dir> [on|off] [--requirements-env <name>] [--commands <who>]
+    /// [--ask-the-user on|off]`: what the lamp's file says about host access, after writing what
+    /// was given into it.
     ///
-    /// Only `enabled` and `requirements` under `[host_access]` change; see [ConfigFileEditUtil]
-    /// and [#changeConfig].
-    private static LampExitStatus hostAccess(Machine machine, Context context, Path lampPath,
-                                         Optional<Boolean> enabled, Optional<String> requirementsEnv) {
-        Result<LampLayout> found = layoutOf(machine, lampPath);
+    /// Only the keys given under `[host_access]` change; see [ConfigFileEditUtil] and
+    /// [#changeConfig].
+    private static LampExitStatus hostAccess(Machine machine, Context context, Command.HostAccess asked) {
+        Optional<String> requirementsEnv = asked.requirementsEnv();
+        Result<LampLayout> found = layoutOf(machine, asked.lamp());
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1336,8 +1336,8 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         LampConfig.HostAccess now = ((Result.Ok<LampConfig>) before).value().hostAccess();
-        if (enabled.isEmpty() && requirementsEnv.isEmpty()) {
-            context.sink().accept(new LampEvent.HostAccessSettings(now.enabled(), now.requirements()));
+        if (asked.onlyReads()) {
+            context.sink().accept(hostAccessSettings(now));
             return LampExitStatus.SUCCESS;
         }
 
@@ -1349,13 +1349,18 @@ final class CommandExecutionUtil {
             context.sinkAcceptProblems(tooLong);
             return exitStatusFor(tooLong);
         }
-        LampConfig.HostAccess wanted = new LampConfig.HostAccess(enabled.orElse(now.enabled()),
+        LampConfig.HostAccess wanted = new LampConfig.HostAccess(asked.enabled().orElse(now.enabled()),
                 requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
-                now.commands(), now.allowAdditive(), now.askTheUser());
+                asked.commands().orElse(now.commands()), now.allowAdditive(), asked.askTheUser().orElse(now.askTheUser()));
         return changeConfig(machine, context, layout, "[host_access]",
-                file -> ConfigFileEditUtil.withHostAccess(file, enabled, requirements),
+                file -> ConfigFileEditUtil.withHostAccess(file, asked.enabled(), requirements, asked.commands(), asked.askTheUser()),
                 ((Result.Ok<LampConfig>) before).value().withHostAccess(wanted),
-                () -> context.sink().accept(new LampEvent.HostAccessSettings(wanted.enabled(), wanted.requirements())));
+                () -> context.sink().accept(hostAccessSettings(wanted)));
+    }
+
+    /// What a person decides on in `[host_access]`, as `oillamp host-access` reports it.
+    private static LampEvent.HostAccessSettings hostAccessSettings(LampConfig.HostAccess access) {
+        return new LampEvent.HostAccessSettings(access.enabled(), access.requirements(), access.commands(), access.askTheUser());
     }
 
     /// `oillamp history <dir> autosave [<moment> on|off]...`: when the lamp's file says oillamp

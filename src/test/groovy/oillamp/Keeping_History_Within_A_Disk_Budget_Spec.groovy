@@ -237,7 +237,7 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             written == 0.5d
             directory.historyMaxGrowthGb() == 0.5d
             def after = Files.readString(lamp.resolve('oillamp.toml'))
-            after.contains('max_growth_gb  = 0.5        # GB beyond the first snapshot; 0 = never delete snapshots\n')
+            after.contains('max_growth_gb  = 0.5      # GB beyond the first snapshot; 0 = never delete snapshots\n')
             after.readLines().findAll { !it.startsWith('max_growth_gb') } == before.readLines().findAll { !it.startsWith('max_growth_gb') }
 
         and: '`oillamp history <dir> max-growth` says the same'

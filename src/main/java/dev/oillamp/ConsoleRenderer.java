@@ -365,7 +365,14 @@ final class ConsoleRenderer {
                     + colour(YELLOW, "◉ ") + "the agent listens on port " + asked.sandboxPort() + ": "
                     + asked.what() + "? `oillamp answer <dir> yes|no -- \"" + asked.what() + "\"`");
             case LampEvent.HostAccessSettings settings -> printLine(area("host access")
-                    + (settings.enabled() ? "on" : "off") + ", judged against:\n"
+                    + (settings.enabled() ? "on" : "off")
+                    + ", commands " + switch (settings.commands()) {
+                        case OFF -> "off";
+                        case ASK -> "approved by the checker, then you";
+                        case CHECKER -> "approved by the checker alone";
+                    }
+                    + (settings.askTheUser() ? ", asks you about a request past the roots" : "")
+                    + ", judged against:\n"
                     + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));
             case LampEvent.AutosaveSettings settings -> printLine(area("autosave")
                     + "startup " + onOff(settings.startup()) + ", shutdown " + onOff(settings.shutdown())

@@ -4,15 +4,19 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.lamp.LampHostCommandApproval;
+
 /// Changes a few keys of one table in the text of a lamp's `oillamp.toml`, and nothing else:
 /// every other line, the user's comments among them, stays as it was. What
-/// `oillamp host-access <dir> on|off`, `oillamp history <dir> autosave ...` and
+/// `oillamp host-access <dir> on|off ...`, `oillamp history <dir> autosave ...` and
 /// `oillamp history <dir> max-growth <gb>` write, for an application's settings page.
 ///
 /// This edits lines, it does not parse TOML. So the caller reads the result back with
@@ -24,15 +28,20 @@ final class ConfigFileEditUtil {
 
     /// A table's header, such as `[host_access]` or `[[network.rules]]`, with an optional comment.
     private static final Pattern TABLE = Pattern.compile("\\s*\\[\\[?[^\\]\\[]+\\]\\]?\\s*(#.*)?");
-    /// A key set to a bare value, such as `startup    = false   # as a session starts`. Only its
-    /// value is replaced, so the alignment and the comment stay.
-    private static final Pattern BARE = Pattern.compile("(\\s*[A-Za-z0-9_-]+\\s*=\\s*)(true|false|[-+0-9_.]+)(\\s*(#.*)?)");
+    /// A key set to a bare value or a short string, such as `startup    = false   # as a session
+    /// starts` or `commands = "off"    # shell commands`. Only its value is replaced, so the
+    /// alignment and the comment stay. A string with an escape in it is not short.
+    private static final Pattern BARE = Pattern.compile("(\\s*[A-Za-z0-9_-]+\\s*=\\s*)(true|false|[-+0-9_.]+|\"[^\"\\\\]*\")(\\s*(#.*)?)");
 
-    /// `file` with `enabled` and `requirements` under `[host_access]` set to what is given.
-    static String withHostAccess(String file, Optional<Boolean> enabled, Optional<String> requirements) {
+    /// `file` with `enabled`, `requirements`, `commands` and `ask_the_user` under `[host_access]`
+    /// set to what is given.
+    static String withHostAccess(String file, Optional<Boolean> enabled, Optional<String> requirements,
+                                 Optional<LampHostCommandApproval> commands, Optional<Boolean> askTheUser) {
         SequencedMap<String, String> values = new LinkedHashMap<>();
         enabled.ifPresent(on -> values.put("enabled", on.toString()));
         requirements.ifPresent(text -> values.put("requirements", text(text)));
+        commands.ifPresent(who -> values.put("commands", "\"" + who.name().toLowerCase(Locale.ROOT) + "\""));
+        askTheUser.ifPresent(on -> values.put("ask_the_user", on.toString()));
         return withValues(file, "host_access", values);
     }
 
@@ -73,9 +82,10 @@ final class ConfigFileEditUtil {
             Optional<String> key = open.isEmpty() ? keyOf(line).filter(values::containsKey) : Optional.empty();
             if (key.isPresent()) {
                 for (open = stillOpen(line, ""); !open.isEmpty() && i + 1 < end; ) open = stillOpen(lines.get(++i), open);
+                String value = Objects.requireNonNull(values.get(key.get()));
                 Matcher bare = BARE.matcher(line);
-                rows.add(bare.matches() ? bare.group(1) + values.get(key.get()) + bare.group(3)
-                                        : key.get() + " = " + values.get(key.get()));
+                rows.add(bare.matches() ? bare.group(1) + inColumn(value, bare.group(2), bare.group(3))
+                                        : key.get() + " = " + value);
                 found.add(key.get());
                 continue;
             }
@@ -89,6 +99,16 @@ final class ConfigFileEditUtil {
         out.addAll(rows);
         out.addAll(lines.subList(end, lines.size()));
         return String.join("\n", out) + "\n";
+    }
+
+    /// `value` in place of `old`, followed by `rest`, a comment with the space before it, such that
+    /// the comment stays in its column: `true` over `false` gets one more space. A value too long
+    /// for that pushes the comment along, one space after it.
+    private static String inColumn(String value, String old, String rest) {
+        String comment = rest.stripLeading();
+        if (comment.isEmpty()) return value + rest;
+        int column = old.length() + rest.length() - comment.length();
+        return value + " ".repeat(Math.max(1, column - value.length())) + comment;
     }
 
     /// The bare key a line sets, such as `enabled` in `enabled = true`.

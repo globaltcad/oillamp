@@ -347,19 +347,25 @@ lamp's file instead, so the file stays what decides:
 
 ```java
 LampDirectory lamp = Lamp.at(dir);
-Lamp.HostAccess now = lamp.hostAccess();   // enabled, requirements
-lamp.hostAccess(true, requirementsText);                // only while the lamp sleeps
+Lamp.HostAccess now = lamp.hostAccess();   // enabled, requirements, commands, askTheUser
+lamp.hostAccess(new Lamp.HostAccess(true, requirementsText,
+        LampHostCommandApproval.ASK, true));   // all four, only while the lamp sleeps
+lamp.hostAccess(true, requirementsText);       // the first two; the others stay as they are
 ```
 
-- Only `enabled` and `requirements` under `[host_access]` change. Each line is replaced where it
-  is; every other line of the file, the user's comments too, stays as it was.
+- Only the keys given under `[host_access]` change: `enabled`, `requirements`, `commands` and
+  `ask_the_user`, the four a person decides on. Each line is replaced where it is, and a value
+  with a comment after it keeps the comment's column; every other line of the file, the user's
+  comments too, stays as it was. `roots`, `checker_model`, `max_read_bytes` and `allow_additive`
+  are left to the file.
 - The changed file is read back as `at` reads it, and written only when it is valid and says
   exactly what was asked. On with no requirements is refused, as it would be in the file.
 - A lamp whose sandbox runs is refused with `LAMP_BUSY` (OIL-LOCK-001): the session read the file
   as it started.
 - The requirements stay free text. Genies writes the JSON its page builds there, and the checker
   reads it like any other words.
-- The same from a terminal: `oillamp host-access <dir> [on|off] [--requirements-env <name>]`.
+- The same from a terminal: `oillamp host-access <dir> [on|off] [--requirements-env <name>]
+  [--commands off|ask|checker] [--ask-the-user on|off]`.
 
 ### Events
 

@@ -292,13 +292,18 @@ public sealed interface LampEvent {
     /// @param what what is about to happen, in words, and where
     record HostAccessAsked(String run, String tool, String what) implements LampEvent {}
 
-    /// The values of `enabled` and `requirements` in the `[host_access]` table of a lamp's
-    /// `oillamp.toml`. Reported by `oillamp host-access`, after reading them or after writing them.
+    /// The values of `enabled`, `requirements`, `commands` and `ask_the_user` in the
+    /// `[host_access]` table of a lamp's `oillamp.toml`. Reported by `oillamp host-access`, after
+    /// reading them or after writing them.
     ///
     /// @param enabled      the value of `enabled`: whether a session gives the agent the host tools
     /// @param requirements the value of `requirements`: the text the checker model judges every
     ///                     host request against
-    record HostAccessSettings(boolean enabled, String requirements) implements LampEvent {}
+    /// @param commands     the value of `commands`: who approves a shell command on the host
+    /// @param askTheUser   the value of `ask_the_user`: whether a request the checker allows that
+    ///                     reaches past the lamp's roots goes to the person, rather than being refused
+    record HostAccessSettings(boolean enabled, String requirements, LampHostCommandApproval commands,
+                              boolean askTheUser) implements LampEvent {}
 
     /// The values under `[autosave]` in a lamp's `oillamp.toml`: when oillamp saves the lamp by
     /// itself. Reported by `oillamp history <dir> autosave`, after reading them or after

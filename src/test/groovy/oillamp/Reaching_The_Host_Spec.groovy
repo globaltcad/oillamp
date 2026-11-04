@@ -5,6 +5,7 @@ import dev.lamp.LampDirectory
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampFailedException
+import dev.lamp.LampHostCommandApproval
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
@@ -887,7 +888,7 @@ class Reaching_The_Host_Spec extends Specification {
             var written = settings.hostAccess(true, rules)
 
         then: 'the file says it, and nothing else in it changed'
-            written == new Lamp.HostAccess(true, rules)
+            written == new Lamp.HostAccess(true, rules, LampHostCommandApproval.OFF, false)
             settings.hostAccess() == written
             var file = Files.readString(host.lampPath().resolve('oillamp.toml'))
             file.startsWith('schema_version = 1\n# my own note\n[host_access]\nenabled = true\n')
@@ -1025,6 +1026,159 @@ class Reaching_The_Host_Spec extends Specification {
             'a quote at the end'        | 'It ends with a quote\''
             'a tab and a CR'            | 'A tab\there, and a carriage return\r\nthere.'
             'backslash and quotes'      | 'Back\\slash and "quotes".'
+    }
+
+    def 'A program reads and writes when the person is asked, besides the checker, and the comments in the file stay'() {
+        reportInfo """
+            Let's consider what the checker leaves to the person. The checker is the fast path: it
+            judges every request against the requirements, and asks nobody. The person is the slow
+            path, and only in two cases, each after the checker already said yes:
+
+            | key in `[host_access]` | `Lamp.HostAccess`      | the person is asked about                          |
+            |------------------------|------------------------|----------------------------------------------------|
+            | `commands`             | `commands()`           | each shell command, when it is `ASK`               |
+            | `ask_the_user`         | `askTheUser()`         | a request that reaches past the lamp's `roots`     |
+
+            Why two settings, and not one? `commands` decides whether the agent may run shell
+            commands on the host at all, and who approves them: nobody (`OFF`, there is no such
+            tool), the checker and then the person (`ASK`), or the checker alone (`CHECKER`). A
+            command names no path oillamp could check before it runs, so this is the most
+            dangerous tier there is, and it is closed unless the user opens it. `ask_the_user` is
+            about the file tools instead: the roots are a fence the checker cannot widen, and with
+            `ask_the_user` on, a request past them goes to the person rather than being refused.
+
+            A program with a settings page, such as Genies, reads all four values the person
+            decides on with `LampDirectory.hostAccess()`, and writes them with
+            `LampDirectory.hostAccess(Lamp.HostAccess)`. Like the older
+            `hostAccess(enabled, requirements)`, which writes only the first two and leaves the
+            others as they are, it changes those lines and nothing else: in a file oillamp wrote,
+            each value keeps its place in the column and the comment that explains it.
+        """
+        given: 'a lamp whose file has the [host_access] table as oillamp writes it for a new lamp'
+            aLampThatHasRun(host.lampPath())
+            host.givenConfig(host.lampPath(), """\
+                schema_version = 1
+
+                [host_access]
+                enabled = false
+                requirements = \'\'\'
+                \'\'\'
+                roots             = ["${host.home.resolve('Documents')}"]
+                commands          = "off"    # shell commands here: "off", "ask" (the checker, then you,
+                                             # for every one) or "checker" (the checker alone)
+                allow_additive    = true     # writing and copying files out, opening pages, notifications
+                ask_the_user      = false    # ask you, rather than refuse, a request outside roots
+                """.stripIndent())
+            var settings = Lamp.at(host.lampPath()).launchedBy(host.launcher)
+
+        expect: 'a new lamp asks the person nothing: no commands at all, and no way past the roots'
+            settings.hostAccess() == new Lamp.HostAccess(false, '', LampHostCommandApproval.OFF, false)
+
+        when: 'the program lets the agent run commands, each approved by the checker and then the person, and lets the person decide about the roots'
+            var written = settings.hostAccess(new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true))
+
+        then: 'reading the file back gives what was written'
+            written == new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true)
+            settings.hostAccess() == written
+
+        and: 'each value changed where it was, and kept its column and its comment'
+            var file = Files.readString(host.lampPath().resolve('oillamp.toml'))
+            file.contains('commands          = "ask"    # shell commands here: "off", "ask" (the checker, then you,\n'
+                        + '                             # for every one) or "checker" (the checker alone)\n')
+            file.contains('ask_the_user      = true     # ask you, rather than refuse, a request outside roots\n')
+            file.contains('allow_additive    = true     # writing and copying files out, opening pages, notifications\n')
+
+        when: 'later, the program writes only the switch and the requirements, the older way'
+            var switchedOff = settings.hostAccess(false, REQUIREMENTS)
+
+        then: 'host access is off, and the person\'s two choices are still in the file for the day it is on again'
+            switchedOff == new Lamp.HostAccess(false, REQUIREMENTS, LampHostCommandApproval.ASK, true)
+    }
+
+    def 'What a program wrote is what the next session does: it asks the person about a command and about a read past the roots'() {
+        reportInfo """
+            Let's consider a program that turned both kinds of asking on through the Lamp API, and
+            then starts the lamp. Settings in a file are only worth something if a session acts on
+            them, so let's follow two requests through it.
+
+            First the agent wants to run `rm -rf build` on the host. The checker allows it, but
+            with `commands` at `ASK` that is not enough: the session sends a `HostAccessAsked`
+            event that names the command and where it would run, and waits. The person says no,
+            so the command never runs and the agent hears why.
+
+            Then the agent wants to read a note in `~/Notes`, which is not under the lamp's roots.
+            Without `ask_the_user` that would be refused before the checker even hears of it. With
+            it, the checker judges it, and the person is asked. This time they say yes, and the
+            agent gets the note.
+
+            Both answers go back the same way, with `Lamp.decidePermission`, naming the question
+            by the words the event gave.
+        """
+        given: 'a lamp whose program let the person decide about commands and about the roots'
+            Files.createDirectories(host.home.resolve('Notes'))
+            Files.writeString(host.home.resolve('Notes/today.md'), 'Call the bank.')
+            aLampThatHasRun(host.lampPath())
+            host.givenConfig(host.lampPath(), """\
+                schema_version = 1
+                [host_access]
+                roots = ["${host.home.resolve('Documents')}"]
+                """.stripIndent())
+            Lamp.at(host.lampPath()).launchedBy(host.launcher)
+                .hostAccess(new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true))
+            checker.verdict = '{"decision":"allow","risk":"executing","reason":"The user asked for a clean build."}'
+            start()
+
+        when: 'the agent asks to run a command, and the person says no'
+            var command = CompletableFuture.supplyAsync { ask('host_bash', [command: 'rm -rf build', cwd: '~/Documents']) }
+            var askedAboutTheCommand = waitFor(LampEvent.HostAccessAsked) { it.tool() == 'host_bash' }
+            answer(askedAboutTheCommand.what(), false)
+
+        then: 'the person saw the whole command and where it would run, and the agent heard their no'
+            askedAboutTheCommand.what() == 'run in ~/Documents: rm -rf build'
+            var refused = command.get(30, TimeUnit.SECONDS)
+            refused.isError
+            McpClient.text(refused).contains('said no')
+
+        when: 'the agent reads a note past the roots, and the person says yes'
+            checker.verdict = StandInChecker.ALLOW_PASSIVE
+            var read = CompletableFuture.supplyAsync { ask('host_read_file', [path: '~/Notes/today.md']) }
+            var askedAboutTheNote = waitFor(LampEvent.HostAccessAsked) { it.tool() == 'host_read_file' }
+            answer(askedAboutTheNote.what(), true)
+
+        then: 'the person was told the note lies outside the roots, and the agent got it'
+            askedAboutTheNote.what().contains('outside the lamp\'s roots')
+            var allowed = read.get(30, TimeUnit.SECONDS)
+            !allowed.isError
+            McpClient.text(allowed).contains('Call the bank.')
+    }
+
+    def 'Oillamp refuses to write `--commands #commands --ask-the-user #askTheUser`, and the file stays as it was'() {
+        reportInfo """
+            The Lamp API can only name values that exist: `LampHostCommandApproval` has three, and
+            `askTheUser` is a boolean. A person at the terminal can type anything, though, so
+            `oillamp host-access` checks each word before it touches the file. A word it does not
+            know is refused with the words it would take, because a typo must never open the
+            executing tier, nor close it by surprise.
+        """
+        given: 'a lamp whose file runs commands only after the person said yes'
+            aLampThatHasRun(host.lampPath())
+            host.givenConfig(host.lampPath(), 'schema_version = 1\n[host_access]\ncommands = "ask"\n')
+            var before = Files.readString(host.lampPath().resolve('oillamp.toml'))
+
+        when: 'a person types the options with a word oillamp does not take'
+            var typed = host.oillamp.run('host-access', host.lampPath().toString(),
+                    '--commands', commands, '--ask-the-user', askTheUser)
+
+        then: 'oillamp says which words it takes, and the file is as it was'
+            !typed.succeeded()
+            typed.errors().any { it.whatHappened().contains(expected) }
+            Files.readString(host.lampPath().resolve('oillamp.toml')) == before
+
+        where:
+            commands     | askTheUser || expected
+            'always'     | 'on'       || 'expected off, ask (the checker, then you, for every command) or checker (the checker alone)'
+            'ASK'        | 'on'       || 'expected off, ask (the checker, then you, for every command) or checker (the checker alone)'
+            'ask'        | 'yes'      || 'expected on or off'
     }
 
     def 'The checker judges with the model the agent answers with, and follows it when it changes'() {

@@ -536,8 +536,8 @@ class Travelling_Back_In_Time_Spec extends Specification {
             written == new Lamp.Autosave(true, true, false, false, 30)
             settings.autosave() == written
             var file = Files.readString(lamp.resolve('oillamp.toml'))
-            file.contains('startup    = true   # as a session starts, before the sandbox runs\n')
-            file.contains('after_run  = false    # as a run ends, with the agent\'s last message\n')
+            file.contains('startup    = true    # as a session starts, before the sandbox runs\n')
+            file.contains('after_run  = false   # as a run ends, with the agent\'s last message\n')
             file.contains('chat_quiet_minutes = 30\n')
 
         and: '`oillamp history <dir> autosave` lists the same values'
