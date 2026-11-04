@@ -17,6 +17,7 @@ import spock.lang.Title
 import sprouts.Tuple
 
 import javax.swing.SwingUtilities
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -301,8 +302,8 @@ class KeepingAGeniesHostAccessSpec extends Specification {
         given:
             var asked = Instant.parse('2026-10-19T12:00:00Z')
             var access = HostAccess.UNREAD
-                    .permissionRequested(new HostAccess.RequestForPermission('host_run', 'run `inkscape a.svg`', asked))
-                    .permissionRequested(new HostAccess.RequestForPermission('host_read_file', 'read ~/Notes/today.md', asked))
+                    .permissionRequested(new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool('host_run'), 'run `inkscape a.svg`', asked))
+                    .permissionRequested(new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool('host_read_file'), 'read ~/Notes/today.md', asked))
 
         expect: 'both wait, the oldest first'
             access.waitingAt(asked.plusSeconds(30))*.what() == ['run `inkscape a.svg`', 'read ~/Notes/today.md']
@@ -316,6 +317,102 @@ class KeepingAGeniesHostAccessSpec extends Specification {
         and: 'when the lamp goes out, none waits'
             access.wentOut().waitingAt(asked).isEmpty()
     }
+
+    def 'A web server the genie\'s lamp publishes shows its link under the genie\'s header, until the lamp goes out'() {
+        reportInfo """
+            Let's consider a genie whose lamp's `oillamp.toml` lists opencode's port 4096 under
+            `[web]`, as every lamp's file does unless the person changed it. As the genie wakes,
+            its lamp publishes that port to this computer's browser and reports it with
+            `LampEvent.WebPublished`, which carries the link to open, such as
+            `http://k3v7x2ab.localhost:41237/`. Genies keeps it in the genie's
+            `HostAccess.published()`, and the banner under the genie's header shows it, with Open
+            and Dismiss. Dismiss puts it away with `HostAccess.putAway`. When the genie falls
+            asleep, its lamp goes out, and the link with it: there is nothing to open any more.
+        """
+        when: 'the genie wakes'
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+
+        then: 'its lamp published opencode\'s port, with a link under localhost for this computer\'s browser'
+            waitUntil { !app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty() }
+            var published = app.state().get().find(jafar).orElseThrow().hostAccess().published().first()
+            published.name() == 'opencode'
+            published.link().scheme == 'http'
+            published.link().host.endsWith('.localhost')
+
+        and: 'Dismiss would put it away'
+            app.state().get().find(jafar).orElseThrow().hostAccess().putAway(published).published().isEmpty()
+
+        when: 'the genie falls asleep'
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+
+        then: 'the link went with its lamp'
+            app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty()
+    }
+
+    def 'A web server the agent starts is a request under the genie\'s header, which the user answers'() {
+        reportInfo """
+            Let's consider a genie whose lamp's `oillamp.toml` says `publish = "ask"` under `[web]`.
+            Its agent starts a web server on port 5173 in the sandbox. Before the lamp publishes
+            it, it asks the user with `LampEvent.WebPortAsked`, and Genies shows the question in
+            the banner under the genie's header, as it shows a request of the agent's to reach
+            this computer: a `HostAccess.RequestForPermission`, here about `WebPort(5173)`, which
+            the lamp waits a minute for. The user's Allow calls `Genies.decidePermission` with the
+            question's words, as for any request, and the lamp publishes the server as
+            `port-5173`, whose link then shows in the banner. When the genie falls asleep, the
+            question, had it still waited, and the link go with the lamp.
+        """
+        given: 'a sandbox in which the agent listens on 127.0.0.1, port 5173'
+            sandbox.machine {
+                it.generatedAgentId(AGENT_ID)
+                  .commandSucceeding("podman exec --user lamp oillamp-${AGENT_ID} cat /proc/net/tcp", AGENT_LISTENS_ON_5173)
+            }
+
+        and: 'a genie that woke once, whose lamp\'s file then says `publish = "ask"`'
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            var file = app.lampOf(jafar).resolve('oillamp.toml')
+            Files.writeString(file, Files.readString(file).replaceFirst('publish = "listed"', 'publish = "ask"'))
+
+        when: 'the genie wakes, and its agent\'s server is found'
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { !app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty() }
+            var request = app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).first()
+
+        then: 'the lamp asks about port 5173'
+            request.about() == new HostAccess.RequestForPermission.About.WebPort(5173)
+            request.what().contains('publish port 5173')
+
+        when: 'the user allows it'
+            SwingUtilities.invokeAndWait { app.decidePermission(jafar, request.what(), true) }
+
+        then: 'the question is answered, and the lamp publishes the server as `port-5173`'
+            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().published().any { it.name() == 'port-5173' } }
+            app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty()
+
+        when: 'the genie falls asleep'
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+
+        then: 'neither a question nor a link is left'
+            app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty()
+            app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty()
+    }
+
+    /** The lamp id the scenario about a web server the agent starts gives the genie's lamp. */
+    static final String AGENT_ID = 'k3v7x2ab'
+
+    /**
+     * What the sandbox's `/proc/net/tcp` says in the scenario about a web server the agent starts:
+     * the agent (uid 1000) listening on 127.0.0.1:5173 (`0100007F:1435`).
+     */
+    static final String AGENT_LISTENS_ON_5173 = """\
+          sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+           0: 0100007F:1435 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41001 1 0000000000000000 100 0 0 10 0
+        """.stripIndent()
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 

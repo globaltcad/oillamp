@@ -1,5 +1,6 @@
 package dev.gui.genie;
 
+import java.net.URI;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -129,5 +130,10 @@ public final class GenieHomeUtil {
     /// Opens `folder` in this computer's file manager, with `xdg-open`, without waiting for it.
     public static void showInFileManager(Path folder) throws IOException {
         new ProcessBuilder("xdg-open", folder.toString()).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+    }
+
+    /// Opens `link` in this computer's browser, with `xdg-open`, without waiting for it.
+    public static void openInBrowser(URI link) throws IOException {
+        new ProcessBuilder("xdg-open", link.toString()).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
     }
 }
