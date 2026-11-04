@@ -3,6 +3,7 @@ package dev.gui.view;
 import java.awt.Color;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import dev.gui.Genies;
@@ -18,6 +19,9 @@ import sprouts.Var;
 import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
+import swingtree.animation.Animation;
+import swingtree.animation.AnimationStatus;
+import swingtree.animation.LifeTime;
 import swingtree.api.Layout;
 import swingtree.layout.FlowCell;
 import swingtree.layout.LayoutConstraint;
@@ -30,6 +34,9 @@ import static swingtree.UI.*;
 /// checker model judges each of its requests against, who lets it run commands, and whether the
 /// user is asked about folders outside their home folder. Genies writes them into the genie's
 /// lamp, the rules as JSON, which the checker reads like any words; see [HostAccess].
+///
+/// What all of it means, and how a request goes from the genie to this computer, the page
+/// explains in a panel under its title, which the user unfolds with the `?` beside it.
 ///
 /// The lamp reads them as it wakes, so they can only be changed while the genie sleeps. While it
 /// is awake, the page shows them, greyed, and says so in a banner.
@@ -157,6 +164,10 @@ final class HostAccessPage {
     private final Val<Lang.HostAccessPage> pageWords;
     /// Whether the rules may be changed now: the genie sleeps, has a lamp, and nothing is on its way.
     private final Val<Boolean> changeable;
+    /// Whether the user wants the explanation unfolded, and how far it has unfolded on its way there.
+    private final Var<Boolean> explained = Var.of(false);
+    private final Var<Unfolding> unfolding = Var.of(Unfolding.FOLDED);
+    private boolean unfoldingPlays;
 
     HostAccessPage(Var<GeniesState> state, Genies app) {
         this.state = state;
@@ -245,7 +256,17 @@ final class HostAccessPage {
         Val<String> problem = Viewable.of(String.class, hostAccess, pageWords, (it, page) -> it.problem().map(why -> why.words(page.lang())).orElse(""));
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
-            .add(label(pageWords.viewAsString(Lang.HostAccessPage::HOST_ACCESS)).group(Skin.EMPTY_TITLE))
+            // The title, and the explanation that unfolds under it, with no gap of its own
+            // between them: the explanation brings its own as it opens.
+            .add("growx, wmin 0",
+                box("fillx, wrap 1, ins 0, gap 0", "[grow]")
+                .add(
+                    box("ins 0, gap 10", "[][]push")
+                    .add(label(pageWords.viewAsString(Lang.HostAccessPage::HOST_ACCESS)).group(Skin.EMPTY_TITLE))
+                    .add("aligny center", whatItMeans())
+                )
+                .add("growx, wmin 0", explanation())
+            )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
             // As loud as the banner of a request for permission: the user should not have to
             // find out by typing that nothing they type is kept.
@@ -257,6 +278,120 @@ final class HostAccessPage {
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true)))
             )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
+    }
+
+    // ─── what it all means ─────────────────────────────────────────────────────────────────
+
+    /// The `?` beside the title, which unfolds the explanation, and folds it away again. Lit
+    /// while it is unfolded.
+    private UIForAnySwing<?, ?> whatItMeans() {
+        return
+            button("?").group(Skin.ICON_BUTTON)
+            .withTooltip(Viewable.of(String.class, explained, pageWords, (open, page) -> open ? page.FOLD_THE_EXPLANATION_AWAY() : page.HOW_HOST_ACCESS_WORKS()))
+            .withStyle(Themed.of(explained, theme), (themed, it) -> {
+                boolean open = themed.item();
+                Palette p = themed.palette();
+                return it
+                    .prefSize(22, 22).minSize(22, 22).maxSize(22, 22)
+                    .padding(0)
+                    .borderRadius(11)
+                    .border(1, open ? p.BRASS() : p.BORDER())
+                    .backgroundColor(open ? p.RAISED() : p.TRANSPARENT())
+                    .cursor(UI.Cursor.HAND)
+                    .componentFont(f -> f.family(themed.fonts().FONT()).size(12).weight(2f).color(open ? p.BRASS() : p.SUBTEXT()));
+            })
+            .onClick(_ -> {
+                explained.update(From.VIEW, open -> !open);
+                unfold();
+            });
+    }
+
+    /// The explanation, in a panel that opens as tall as its words, as far as it has unfolded;
+    /// the words are laid out as tall as they are all along, and the panel shows as much of
+    /// them as it is tall.
+    private UIForAnySwing<?, ?> explanation() {
+        Val<String> genieName = genie.viewAsString(Genie::name);
+        return
+            // The gap above the panel opens with it, so that it does not come at once either.
+            box().withLayout(unfolding.viewAs(Layout.class, it -> belowTheTitle(it.height())))
+            .add(
+                // Laid out while folded too, then no taller than nothing, so that its words
+                // have their width before it opens. How tall it opens to, its layout asks its
+                // words, at the width they have, on every pass: see UnfoldingLayout.
+                box().withLayout(unfolding.viewAs(Layout.class, it -> new UnfoldingLayout(it.height())))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).borderRadius(12))
+                .add(
+                    box("fillx, wrap 1, ins 14 16 16 16, gap 10", "[grow]")
+                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::HOW_IT_WORKS), 11, 2f, Palette::SUBTEXT))
+                    .add("growx, wmin 0",
+                        faded(Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::THE_MAIN_SWITCH_GIVES_IT_TOOLS_TO_REACH_THIS_COMPUTER_AT_ALL), 12, 1f, Palette::TEXT)
+                    )
+                    .add("growx, wmin 0",
+                        faded(pageWords.viewAsString(Lang.HostAccessPage::A_REQUEST_THE_CHECKER_JUDGES_IT_YOU_DECIDE_WHERE_YOU_ARE_ASKED_IT_HAPPENS), 12, 2f, Palette::BRASS)
+                    )
+                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::EVERY_REQUEST_FIRST_GOES_TO_A_SEPARATE_MODEL_THE_CHECKER), 12, 1f, Palette::TEXT))
+                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::YOUR_HOME_FOLDER_IS_A_FENCE_THE_CHECKER_CANNOT_WIDEN), 12, 1f, Palette::TEXT))
+                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::COMMANDS_ARE_DIFFERENT_SO_YOU_CHOOSE_WHO_APPROVES_THEM), 12, 1f, Palette::TEXT))
+                    .add("growx, wmin 0",
+                        faded(pageWords.viewAsString(Lang.HostAccessPage::WHEN_YOU_ARE_ASKED_THE_QUESTION_APPEARS_AT_THE_TOP_OF_THE_GENIES_PAGES), 12, 1f, Palette::TEXT)
+                    )
+                )
+            );
+    }
+
+    /// The room of the explanation under the title: as far below the title as it has opened.
+    private static Layout belowTheTitle(double part) {
+        return
+            Layout.mig(
+                LayoutConstraint.of("fillx, ins " + Math.round(part * 8) + " 0 0 0, gap 0"),
+                LayoutConstraint.of("[grow, fill]"),
+                LayoutConstraint.of("")
+            )
+            .withChildConstraints(MigAddConstraint.of("growx, wmin 0"));
+    }
+
+    /// Words of the explanation, as faded in as it has unfolded, wrapped to the width they get.
+    /// A text area that cannot be typed in, rather than words painted by the style engine:
+    /// it knows how tall its words are from its width alone, before they were ever painted,
+    /// and so the panel knows from the start how far to open.
+    private UIForAnySwing<?, ?> faded(Val<String> text, int size, float weight, Function<Palette, Color> colour) {
+        return
+            textArea(text).peek(ViewPartsUtil::softWrap)
+            .isEditableIf(false)
+            .isFocusableIf(false)
+            .withStyle(Themed.of(unfolding, theme), (themed, it) -> {
+                Color shade = ViewPartsUtil.withAlpha(colour.apply(themed.palette()), (int) Math.round(255 * themed.item().words()));
+                return it
+                    .backgroundColor(themed.palette().TRANSPARENT())
+                    .border(0, themed.palette().TRANSPARENT())
+                    .padding(0)
+                    .cursor(UI.Cursor.DEFAULT)
+                    .componentFont(f -> f.family(themed.fonts().FONT()).size(size).weight(weight).color(shade));
+            });
+    }
+
+
+    /// Unfolds the explanation, or folds it away, one frame after the other, until it arrived
+    /// where the user wants it. The user may change their mind on the way: it turns back from
+    /// where it is.
+    private void unfold() {
+        if (unfoldingPlays || unfolding.get().arrived(explained.get())) return;
+        unfoldingPlays = true;
+        UI.animateFor(LifeTime.of(1, TimeUnit.SECONDS)).asLongAs(_ -> !unfolding.get().arrived(explained.get())).go(new Animation() {
+            private double previous;
+
+            @Override public void run(AnimationStatus status) {
+                double elapsed = status.repeats() + status.progress();
+                unfolding.update(From.VIEW, it -> it.toward(explained.get(), elapsed - previous));
+                previous = elapsed;
+            }
+
+            @Override public void finish(AnimationStatus status) {
+                unfoldingPlays = false;
+                // The user may have changed their mind between the last frame and this callback.
+                unfold();
+            }
+        });
     }
 
     // ─── the switch, and what it switches ──────────────────────────────────────────────────
