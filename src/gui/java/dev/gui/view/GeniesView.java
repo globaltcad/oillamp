@@ -931,49 +931,115 @@ public final class GeniesView extends JPanel {
             .add("cell 0 1, span 4, growx, wmin 0", pagesBelow());
     }
 
-    /// A request the selected genie's lamp asks the user to allow, such as running a program,
-    /// under the header on every page of the genie, with Allow and Refuse next to it. The oldest
-    /// first; the next one, if any, takes its place once the user decided. The lamp refuses a
-    /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then.
-    private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
-        Val<String> request = Viewable.of(String.class, genie, state, (it, s) ->
-            it.hostAccess()
-            .waitingAt(s.now())
-            .stream()
-            .findFirst()
-            .map(HostAccess.RequestForPermission::what)
-            .orElse("")
-        );
-        Val<Boolean> shown = Viewable.of(Boolean.class, visible, request, (on, what) -> on && !what.isEmpty());
+    /*
+     *  The banner's words stand beside its two buttons; on a page narrower than
+     *  BANNER_IN_ONE_ROW_FROM, they would be squeezed into a column a few words wide, so the
+     *  buttons go under them, to the right:
+     *
+     *      from BANNER_IN_ONE_ROW_FROM   [what it asks, what the answer means …   Refuse  Allow]
+     *      narrower                      [what it asks, what the answer means ………………………………]
+     *                                    [                                    Refuse  Allow]
+     *
+     *  The width is the page's, as the state has it: [GeniesState#area].
+     */
+    private static final int BANNER_IN_ONE_ROW_FROM = 560;
+    /// The words, the quiet button and the flame button, in this order.
+    private static final Layout BANNER_IN_ONE_ROW = bannerLayout("[grow][][]", "cell 0 0, growx, wmin 0", "cell 1 0", "cell 2 0");
+    private static final Layout BUTTONS_UNDER_THE_WORDS = bannerLayout("[grow][][]", "cell 0 0, span 3, growx, wmin 0", "cell 1 1", "cell 2 1");
+
+    private static Layout bannerLayout(String columns, String words, String quiet, String flame) {
         return
-            panel("fill, ins 10 14 10 14, gap 12, hidemode 3", "[grow][][]")
+            Layout.mig(LayoutConstraint.of("fill, ins 10 14 10 14, gap 12, hidemode 3"), LayoutConstraint.of(columns), LayoutConstraint.of(""))
+            .withChildConstraints(MigAddConstraint.of(words), MigAddConstraint.of(quiet), MigAddConstraint.of(flame));
+    }
+
+    /// What the banner under the header shows about the selected genie's lamp: the oldest request
+    /// it still waits on the user's decision about, or else the oldest web server it published
+    /// that the user did not put away yet, or nothing.
+    private sealed interface Banner {
+        record Nothing() implements Banner {}
+        record Asking(HostAccess.RequestForPermission request) implements Banner {}
+        record Link(HostAccess.Published server) implements Banner {}
+    }
+
+    /// What the banner shows of `access` at `now`. A request comes first: the lamp waits only
+    /// [HostAccess#PATIENCE] for an answer, and a link waits as long as the user likes.
+    private static Banner banner(HostAccess access, Instant now) {
+        Optional<HostAccess.RequestForPermission> request = access.waitingAt(now).stream().findFirst();
+        if (request.isPresent()) return new Banner.Asking(request.get());
+        return access.published().stream().findFirst().<Banner>map(Banner.Link::new).orElse(new Banner.Nothing());
+    }
+
+    /// What the banner says, in two lines: what it is about, and what the user's answer means.
+    private static String saying(Banner banner, String genie, Lang.Header words) {
+        return switch (banner) {
+            case Banner.Nothing _ -> "";
+            case Banner.Asking asking -> switch (asking.request().about()) {
+                case HostAccess.RequestForPermission.About.HostTool _ -> words.ASKS_YOU_TO_ALLOW(genie, asking.request().what());
+                case HostAccess.RequestForPermission.About.WebPort port -> words.ASKS_TO_PUBLISH_THE_WEB_SERVER_IT_STARTED_ON_PORT(genie, port.sandboxPort());
+            };
+            case Banner.Link link -> words.PUBLISHED_FOR_YOUR_BROWSER(genie, link.server().name(), link.server().link().toString());
+        };
+    }
+
+    private static String meaning(Banner banner, Lang.Header words) {
+        return switch (banner) {
+            case Banner.Nothing _ -> "";
+            case Banner.Asking asking -> switch (asking.request().about()) {
+                case HostAccess.RequestForPermission.About.HostTool _ -> words.A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO();
+                case HostAccess.RequestForPermission.About.WebPort _ -> words.ALLOW_GIVES_IT_A_LINK_ONLY_THIS_COMPUTERS_BROWSER_CAN_OPEN();
+            };
+            case Banner.Link _ -> words.THE_LINK_WORKS_ON_THIS_COMPUTER_WHILE_THE_GENIE_IS_AWAKE();
+        };
+    }
+
+    /// Under the header on every page of the genie: a request the selected genie's lamp asks the
+    /// user to allow, such as running a program or publishing a web server, with Refuse and
+    /// Allow; or a web server it published, with its link, Open and Dismiss. The oldest request
+    /// first; the next one, if any, takes its place once the user decided. The lamp refuses a
+    /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then. A link
+    /// stays until the user dismisses it, or the lamp goes out.
+    private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
+        Val<Banner> banner = Viewable.of(Banner.class, genie, state, (it, s) -> banner(it.hostAccess(), s.now()));
+        Val<Boolean> shown = Viewable.of(Boolean.class, visible, banner, (on, what) -> on && !(what instanceof Banner.Nothing));
+        Val<Boolean> link = banner.viewAs(Boolean.class, it -> it instanceof Banner.Link);
+        Val<Layout> layout = state.viewAs(Layout.class, it -> it.area().width() >= UI.scale(BANNER_IN_ONE_ROW_FROM) ? BANNER_IN_ONE_ROW : BUTTONS_UNDER_THE_WORDS);
+        return
+            panel().withLayout(layout)
             .isVisibleIf(shown)
             .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderAt(UI.Edge.LEFT, 3, p.BRASS()).borderAt(UI.Edge.BOTTOM, 1, p.BORDER()))
-            .add("growx, wmin 0",
+            .add(
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
                         theme,
-                        Viewable.of(String.class, state, request, (s, what) -> s.lang().HEADER().ASKS_YOU_TO_ALLOW(s.genie().name(), what)),
+                        Viewable.of(String.class, state, banner, (s, what) -> saying(what, s.genie().name(), s.lang().HEADER())),
                         Palette::TEXT,
                         Val.of(true)
                     )
                 )
-                .add("growx, wmin 0",
-                    ViewPartsUtil.note(
-                        theme,
-                        headerWords.viewAsString(Lang.Header::A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO),
-                        Val.of(true)
-                    )
-                )
+                .add("growx, wmin 0", ViewPartsUtil.note(theme, Viewable.of(String.class, banner, headerWords, GeniesView::meaning), Val.of(true)))
             )
             .add(
-                button(headerWords.viewAsString(Lang.Header::REFUSE)).group(Skin.QUIET_BUTTON)
-                .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), false))
+                button(Viewable.of(String.class, link, headerWords, (isLink, words) -> isLink ? words.DISMISS() : words.REFUSE())).group(Skin.QUIET_BUTTON)
+                .onClick(_ -> {
+                    switch (banner.get()) {
+                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.request().what(), false);
+                        case Banner.Link shownLink -> genie.update(From.VIEW, it -> it.withHostAccess(it.hostAccess().putAway(shownLink.server())));
+                        case Banner.Nothing _ -> {}
+                    }
+                })
             )
             .add(
-                button(headerWords.viewAsString(Lang.Header::ALLOW)).group(Skin.FLAME_BUTTON)
-                .onClick(_ -> app.decidePermission(genie.get().id(), request.get(), true))
+                button(Viewable.of(String.class, link, headerWords, (isLink, words) -> isLink ? words.OPEN() : words.ALLOW())).group(Skin.FLAME_BUTTON)
+                .withTooltip(Viewable.of(String.class, link, headerWords, (isLink, words) -> isLink ? words.OPEN_IT_IN_YOUR_BROWSER() : ""))
+                .onClick(_ -> {
+                    switch (banner.get()) {
+                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.request().what(), true);
+                        case Banner.Link shownLink -> app.openInBrowser(shownLink.server().link());
+                        case Banner.Nothing _ -> {}
+                    }
+                })
             );
     }
 

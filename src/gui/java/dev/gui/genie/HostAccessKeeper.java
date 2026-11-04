@@ -19,7 +19,7 @@ import dev.lamp.LampFailedException;
 /// Reads a genie's host access from its lamp, and writes the rules its page shows into it, with
 /// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(Lamp.HostAccess)]. Writing needs
 /// the genie asleep; the page only offers it then. Also hears the requests the genie's lamp asks
-/// the user while it is awake.
+/// the user while it is awake, and the web servers it published.
 ///
 /// Each call starts an engine process that ends by itself, which takes a moment, so the work is
 /// done one piece after the other on a thread of its own, and the calls return at once.
@@ -72,13 +72,25 @@ public final class HostAccessKeeper {
         });
     }
 
-    /// While the genie is awake: its lamp asks the user to allow a request.
+    /// While the genie is awake: its lamp asks the user to allow a request, a host tool's or
+    /// publishing a web server, or tells them it published one.
     void onLampEvent(LampEvent event, Instant now) {
-        if (event instanceof LampEvent.HostAccessAsked asked)
-            change(it -> it.permissionRequested(new HostAccess.RequestForPermission(asked.tool(), asked.what(), now)));
+        switch (event) {
+            case LampEvent.HostAccessAsked asked -> change(it -> it.permissionRequested(
+                new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool(asked.tool()), asked.what(), now)
+            ));
+            case LampEvent.WebPortAsked asked -> change(it -> it.permissionRequested(
+                new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.WebPort(asked.sandboxPort()), asked.what(), now)
+            ));
+            case LampEvent.WebPublished published -> change(it -> it.webPublished(
+                new HostAccess.Published(published.port().name(), published.port().link())
+            ));
+            default -> {}
+        }
     }
 
-    /// The genie's lamp went out, and every question it asked went with it.
+    /// The genie's lamp went out, and every question it asked, and every web server it
+    /// published, went with it.
     void wentOut() {
         change(HostAccess::wentOut);
     }

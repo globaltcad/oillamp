@@ -509,6 +509,16 @@ public final class GeniesBackend implements Genies {
         }));
     }
 
+    @Override public void openInBrowser(URI link) {
+        Thread.ofVirtual().name("open in browser").start(() -> {
+            try {
+                GenieHomeUtil.openInBrowser(link);
+            } catch (IOException failed) {
+                report(new IOException("could not open " + link + " in the browser", failed));
+            }
+        });
+    }
+
     @Override public Path documents() { return documents; }
 
     // ─── the schedule ──────────────────────────────────────────────────────────────────────
