@@ -3002,6 +3002,105 @@ public enum Lang {
             };
         }
 
+        public String WHO_LETS_IT_RUN_COMMANDS() {
+            return switch (lang) {
+                case ENGLISH -> "WHO LETS IT RUN COMMANDS?";
+                case GERMAN -> "WER LÄSST IHN BEFEHLE AUSFÜHREN?";
+                case SPANISH -> "¿QUIÉN LE DEJA EJECUTAR COMANDOS?";
+                case JAPANESE -> "コマンドの実行を誰が許可しますか？";
+                case CHINESE -> "谁来允许它运行命令？";
+            };
+        }
+        public String NOBODY() {
+            return switch (lang) {
+                case ENGLISH -> "Nobody";
+                case GERMAN -> "Niemand";
+                case SPANISH -> "Nadie";
+                case JAPANESE -> "誰も許可しない";
+                case CHINESE -> "谁都不允许";
+            };
+        }
+        public String IT_CANNOT_RUN_COMMANDS_AT_ALL() {
+            return switch (lang) {
+                case ENGLISH -> "It can't run commands at all. The safest choice.";
+                case GERMAN -> "Er kann gar keine Befehle ausführen. Die sicherste Wahl.";
+                case SPANISH -> "No puede ejecutar comandos en absoluto. La opción más segura.";
+                case JAPANESE -> "コマンドを一切実行できません。最も安全な選択です。";
+                case CHINESE -> "它完全不能运行命令。最安全的选择。";
+            };
+        }
+        public String YOU_EACH_TIME() {
+            return switch (lang) {
+                case ENGLISH -> "You, each time";
+                case GERMAN -> "Du, jedes Mal";
+                case SPANISH -> "Tú, cada vez";
+                case JAPANESE -> "毎回あなたが";
+                case CHINESE -> "每次由你决定";
+            };
+        }
+        public String THE_MODEL_TURNS_AWAY_WHAT_CLEARLY_BREAKS_YOUR_RULES_EVERY_OTHER_COMMAND_COMES_TO_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "The model that judges turns away a command that clearly breaks your rules. Every other one comes to you, and runs only once you say yes.";
+                case GERMAN -> "Das prüfende Modell weist einen Befehl ab, der klar gegen deine Regeln verstößt. Jeder andere kommt zu dir und läuft erst, wenn du Ja sagst.";
+                case SPANISH -> "El modelo que juzga rechaza un comando que rompa claramente tus reglas. Cualquier otro te llega a ti, y solo se ejecuta cuando dices que sí.";
+                case JAPANESE -> "明らかにルールに反するコマンドは、判断するモデルが断ります。それ以外のコマンドはすべてあなたに届き、あなたが許可したときだけ実行されます。";
+                case CHINESE -> "明显违反你规则的命令会被审核模型拒绝。其他每条命令都会交给你，只有你同意后才会运行。";
+            };
+        }
+        public String THE_MODEL_ALONE() {
+            return switch (lang) {
+                case ENGLISH -> "The model alone";
+                case GERMAN -> "Das Modell allein";
+                case SPANISH -> "Solo el modelo";
+                case JAPANESE -> "モデルだけ";
+                case CHINESE -> "仅由模型决定";
+            };
+        }
+        public String COMMANDS_THE_MODEL_ALLOWS_RUN_STRAIGHT_AWAY_SAY_WHICH_ARE_FINE() {
+            return switch (lang) {
+                case ENGLISH -> "Commands the model allows run straight away, without asking you, and a command can do anything you can. Say in your own words which commands are fine, such as \"builds in ~/project\" or \"never delete anything\".";
+                case GERMAN -> "Befehle, die das Modell erlaubt, laufen sofort, ohne dich zu fragen, und ein Befehl kann alles, was du kannst. Schreib in deinen eigenen Worten, welche Befehle in Ordnung sind, etwa „Builds in ~/projekt“ oder „nie etwas löschen“.";
+                case SPANISH -> "Los comandos que el modelo permite se ejecutan enseguida, sin preguntarte, y un comando puede hacer todo lo que tú puedes. Di con tus propias palabras qué comandos están bien, como «compilar en ~/proyecto» o «no borrar nunca nada».";
+                case JAPANESE -> "モデルが許可したコマンドは、あなたに確認せずにすぐ実行されます。コマンドはあなたができることを何でもできます。どのコマンドなら良いかを自由記述欄に書いてください。例：「~/project でのビルド」「何も削除しない」";
+                case CHINESE -> "模型允许的命令会立即运行，不会询问你，而命令能做你能做的任何事。请用你自己的话写明哪些命令可以运行，例如“在 ~/project 中构建”或“永远不要删除任何东西”。";
+            };
+        }
+        public String ASK_YOU_ABOUT_FOLDERS_OUTSIDE_YOUR_HOME_FOLDER() {
+            return switch (lang) {
+                case ENGLISH -> "ASK YOU ABOUT FOLDERS OUTSIDE YOUR HOME FOLDER?";
+                case GERMAN -> "DICH BEI ORDNERN AUSSERHALB DEINES PERSÖNLICHEN ORDNERS FRAGEN?";
+                case SPANISH -> "¿PREGUNTARTE POR CARPETAS FUERA DE TU CARPETA PERSONAL?";
+                case JAPANESE -> "ホームフォルダーの外のフォルダーについて確認しますか？";
+                case CHINESE -> "主目录以外的文件夹是否询问你？";
+            };
+        }
+        public String IT_CAN_ONLY_REACH_YOUR_HOME_FOLDER_WITH_YES_GENIES_ASKS_YOU_ABOUT_OTHERS(String home) {
+            return switch (lang) {
+                case ENGLISH -> "It can only reach your home folder, " + home + ". With Yes, when it wants a folder elsewhere that your rules allow, such as a USB stick under /media, Genies asks you instead of refusing.";
+                case GERMAN -> "Er erreicht nur deinen persönlichen Ordner, " + home + ". Mit Ja fragt Genies dich, statt abzulehnen, wenn er einen Ordner anderswo will, den deine Regeln erlauben, etwa einen USB-Stick unter /media.";
+                case SPANISH -> "Solo puede acceder a tu carpeta personal, " + home + ". Con Sí, cuando quiera una carpeta de otro sitio que tus reglas permiten, como una memoria USB en /media, Genies te pregunta en lugar de rechazarla.";
+                case JAPANESE -> "アクセスできるのはホームフォルダー " + home + " の中だけです。「はい」にすると、ルールで許可された別の場所のフォルダー（/media の USB メモリーなど）を求めたとき、拒否せずに Genies があなたに確認します。";
+                case CHINESE -> "它只能访问你的主目录 " + home + "。选“是”后，当它需要你的规则允许的其他位置的文件夹（例如 /media 下的 U 盘）时，Genies 会询问你，而不是直接拒绝。";
+            };
+        }
+        public String GENIES_ASKS_YOU_AT_THE_TOP_OF_THE_GENIES_PAGES_NO_ANSWER_WITHIN_A_MINUTE_COUNTS_AS_NO() {
+            return switch (lang) {
+                case ENGLISH -> "Genies asks you at the top of the genie's pages. No answer within a minute counts as no, so whatever it asks while you're away is refused.";
+                case GERMAN -> "Genies fragt dich oben auf den Seiten des Dschinns. Kommt binnen einer Minute keine Antwort, gilt das als Nein, also wird alles abgelehnt, was er fragt, während du weg bist.";
+                case SPANISH -> "Genies te pregunta arriba, en las páginas del genio. Si no respondes en un minuto, cuenta como un no, así que lo que pregunte mientras no estás se rechaza.";
+                case JAPANESE -> "Genies はジーニーのページの上部であなたに確認します。1 分以内に答えがなければ「いいえ」として扱われるので、離席中の確認はすべて拒否されます。";
+                case CHINESE -> "Genies 会在精灵页面的顶部询问你。一分钟内没有回答就算作拒绝，所以你不在时它提出的请求都会被拒绝。";
+            };
+        }
+        public String IS_OUTSIDE_YOUR_HOME_FOLDER_SO_THE_LAMP_REFUSES_IT_UNLESS_YOU_ARE_ASKED(String folder) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + folder + "\" is outside your home folder, so the lamp refuses it unless you let Genies ask you.";
+                case GERMAN -> "„" + folder + "“ liegt außerhalb deines persönlichen Ordners, also lehnt die Lampe es ab, es sei denn, du lässt Genies dich fragen.";
+                case SPANISH -> "«" + folder + "» está fuera de tu carpeta personal, así que la lámpara lo rechaza, salvo que dejes que Genies te pregunte.";
+                case JAPANESE -> "「" + folder + "」はホームフォルダーの外にあるため、Genies があなたに確認するようにしない限り、ランプはこれを拒否します。";
+                case CHINESE -> "“" + folder + "”位于你的主目录之外，因此除非你允许 Genies 询问你，神灯会拒绝它。";
+            };
+        }
         public String NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST() {
             return switch (lang) {
                 case ENGLISH -> "Nothing is listed, so the model that judges will refuse every request.";

@@ -1,5 +1,6 @@
 package dev.gui.model;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -12,12 +13,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import sprouts.Tuple;
 
-/// A genie's host access as its page shows it: whether its agent may reach this computer, and
-/// the rules the checker model judges each of its requests against.
+/// A genie's host access as its page shows it: whether its agent may reach this computer, the
+/// rules the checker model judges each of its requests against, and when the user decides too.
 ///
-/// Both live in the genie's lamp, as `enabled` and `requirements` under `[host_access]` in its
-/// `oillamp.toml`. Genies writes the requirements as JSON built from [PermissionRules], and reads them back
-/// into it. There is no permission system here: the checker reads the JSON as it would any words.
+/// All live in the genie's lamp, as `enabled`, `requirements`, `commands` and `ask_the_user`
+/// under `[host_access]` in its `oillamp.toml`. Genies writes the requirements as JSON built from
+/// [PermissionRules], and reads them back into it. There is no permission system here: the
+/// checker reads the JSON as it would any words.
 ///
 /// The lamp's file can only be changed while the genie sleeps, since a session reads it as it
 /// starts; the page says so while it is awake.
@@ -69,23 +71,61 @@ public record HostAccess(
     /// How long the lamp waits for the user to allow a request. It refuses the request after that.
     public static final Duration PATIENCE = Duration.ofSeconds(60);
 
+    /// Who lets the agent run a command on this computer: `commands` in the lamp's file. A
+    /// command names no folder the lamp could check, and can do anything the user can.
+    public enum Commands {
+        /// Nobody: the agent cannot run commands at all.
+        NEVER,
+        /// The user, each time: the checker model refuses only a command that clearly breaks the
+        /// rules, and the user is asked before any other runs.
+        YOU_EACH_TIME,
+        /// The checker model alone: what it allows runs straight away.
+        THE_MODEL_ALONE;
+
+        /// Whether the user is asked before a command runs.
+        public boolean asksYou() { return this == YOU_EACH_TIME; }
+    }
+
     /// The user's rules for the genie, as the page edits them.
     ///
-    /// @param on        whether the agent may ask to reach this computer at all
-    /// @param mayRead   folders it may read, one per line, such as `~/Documents`
-    /// @param mayChange folders it may read and change, one per line
-    /// @param words     anything else, in the user's own words
-    public record PermissionRules(boolean on, String mayRead, String mayChange, String words) {
+    /// @param on             whether the agent may ask to reach this computer at all
+    /// @param mayRead        folders it may read, one per line, such as `~/Documents`
+    /// @param mayChange      folders it may read and change, one per line
+    /// @param words          anything else, in the user's own words
+    /// @param commands       who lets it run a command
+    /// @param askOutsideHome whether a request for a folder outside the user's home folder,
+    ///                       which the checker model allowed, goes to the user rather than being
+    ///                       refused: `ask_the_user`. The lamp's roots, which Genies leaves empty,
+    ///                       are the home folder
+    public record PermissionRules(boolean on, String mayRead, String mayChange, String words, Commands commands, boolean askOutsideHome) {
 
-        public static final PermissionRules OFF = new PermissionRules(false, "", "", "");
+        public static final PermissionRules OFF = new PermissionRules(false, "", "", "", Commands.NEVER, false);
+
+        /// What the requirements tell the checker model about commands, which lifts "refuse
+        /// everything else" for them; with [Commands#NEVER] they say nothing, as before there
+        /// were commands. Written in English, for the model. While the user is asked, the
+        /// model turns away only what clearly breaks the rules, and lets every other command
+        /// through to them. While it decides alone,
+        /// which commands are fine is the user's to say, in their own words: Genies adds no rule
+        /// of its own.
+        public static final String THE_PERSON_APPROVES_EVERY_COMMAND =
+            "The person approves every command themselves. Refuse only a command that clearly breaks "
+            + "these settings or the user's own words; allow every other one, so that it reaches the person.";
+        public static final String COMMANDS_ARE_SWITCHED_ON =
+            "Commands are switched on. Judge each one against these settings and the user's own words.";
 
         private static final ObjectMapper JSON = new ObjectMapper();
         private static final String WRITTEN_BY = "Genies, from the genie's host access page";
 
-        public PermissionRules withOn(boolean on)              { return new PermissionRules(on, mayRead, mayChange, words); }
-        public PermissionRules withMayRead(String mayRead)     { return new PermissionRules(on, mayRead, mayChange, words); }
-        public PermissionRules withMayChange(String mayChange) { return new PermissionRules(on, mayRead, mayChange, words); }
-        public PermissionRules withWords(String words)         { return new PermissionRules(on, mayRead, mayChange, words); }
+        public PermissionRules withOn(boolean on)                         { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+        public PermissionRules withMayRead(String mayRead)                { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+        public PermissionRules withMayChange(String mayChange)            { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+        public PermissionRules withWords(String words)                    { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+        public PermissionRules withCommands(Commands commands)            { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+        public PermissionRules withAskOutsideHome(boolean askOutsideHome) { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
+
+        /// Whether the lamp may ask the user about a request, which then waits for them.
+        public boolean asksYou() { return commands.asksYou() || askOutsideHome; }
 
         /// The requirements Genies writes into the lamp's file: these rules as JSON, for the
         /// checker model to read. Empty while host access is off and there are no rules at all.
@@ -107,34 +147,46 @@ public record HostAccess(
             ArrayNode change = json.putArray("folders_it_may_read_and_change");
             folders(mayChange).forEach(change::add);
             if (!words.isBlank()) json.put("in_the_users_own_words", words.strip());
+            switch (commands) {
+                case NEVER -> {}
+                case YOU_EACH_TIME -> json.put("commands", THE_PERSON_APPROVES_EVERY_COMMAND);
+                case THE_MODEL_ALONE -> json.put("commands", COMMANDS_ARE_SWITCHED_ON);
+            }
             return json;
         }
 
         /// Permission rules read back from the lamp's file. Requirements that are not JSON Genies wrote,
         /// such as rules a person wrote into `oillamp.toml` by hand, become the user's own words,
-        /// so that nothing of them is lost.
-        public static PermissionRules of(boolean enabled, String requirements) {
+        /// so that nothing of them is lost. What the requirements say about commands is not read
+        /// back: `commands` says it, and the requirements follow from it.
+        public static PermissionRules of(boolean enabled, String requirements, Commands commands, boolean askOutsideHome) {
             Optional<JsonNode> json;
             try {
                 json = Optional.of(JSON.readTree(requirements)).filter(it -> it.path("written_by").asText().equals(WRITTEN_BY));
             } catch (Exception notJson) {
                 json = Optional.empty();
             }
-            if (json.isEmpty()) return new PermissionRules(enabled, "", "", requirements.strip());
+            if (json.isEmpty()) return new PermissionRules(enabled, "", "", requirements.strip(), commands, askOutsideHome);
             JsonNode rule = json.get();
             return new PermissionRules(enabled, lines(rule.path("folders_it_may_read")), lines(rule.path("folders_it_may_read_and_change")),
-                             rule.path("in_the_users_own_words").asText(""));
+                             rule.path("in_the_users_own_words").asText(""), commands, askOutsideHome);
         }
 
         /// What the user may want to look at before saving; empty when nothing stands out. Only a
         /// warning: the model that judges reads words too, so "everything" is a rule it
         /// understands, and these rules save whatever they say.
-        public Optional<String> warning(Lang lang) {
+        ///
+        /// @param home the user's home folder, which the lamp reaches without asking the user
+        public Optional<String> warning(Lang lang, Path home) {
             Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
             for (String folder : folders(mayRead + "\n" + mayChange))
                 if (!folder.startsWith("/") && !folder.startsWith("~"))
                     return Optional.of(words.IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS(folder));
-            if (on && empty())
+            if (!askOutsideHome)
+                for (String folder : folders(mayRead + "\n" + mayChange))
+                    if (folder.startsWith("/") && !Path.of(folder).normalize().startsWith(home))
+                        return Optional.of(words.IS_OUTSIDE_YOUR_HOME_FOLDER_SO_THE_LAMP_REFUSES_IT_UNLESS_YOU_ARE_ASKED(folder));
+            if (on && empty() && !commands.asksYou())
                 return Optional.of(words.NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST());
             return Optional.empty();
         }
