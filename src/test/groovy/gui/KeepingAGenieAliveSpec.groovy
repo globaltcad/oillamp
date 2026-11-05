@@ -422,7 +422,7 @@ class KeepingAGenieAliveSpec extends Specification {
             and in its chat.
         """
         given:
-            runner = new GenieRunner(lamp, { dir, name, settings, key, wallpaper, progress, events ->
+            runner = new GenieRunner(lamp, { dir, name, lang, settings, key, wallpaper, progress, events ->
                 progress.accept(new Genie.Activity.CheckingThisComputer())
                 throw new IOException('podman is not installed')
             } as LampLighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -466,9 +466,9 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
                         listeners << events
-                        real.light(directory, name, settings, key, wallpaper, progress, events)
+                        real.light(directory, name, lang, settings, key, wallpaper, progress, events)
                     },
                     unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
                     { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -659,8 +659,8 @@ class KeepingAGenieAliveSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
-            noted(real.light(directory, name, settings, key, wallpaper, progress, events))
+        var light = { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+            noted(real.light(directory, name, lang, settings, key, wallpaper, progress, events))
         }
         var join = { Path directory, Consumer<LampEvent> events ->
             real.join(directory, events).map { noted(it) }

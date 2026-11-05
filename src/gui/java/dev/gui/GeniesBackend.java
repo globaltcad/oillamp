@@ -272,6 +272,7 @@ public final class GeniesBackend implements Genies {
                     runner(id)
                     .wake(
                         genie.name(),
+                        now.lang(),
                         now.settings(),
                         key.get(),
                         wallpaper,
