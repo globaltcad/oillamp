@@ -21,6 +21,7 @@ import dev.gui.desktop.Desktop;
 import dev.gui.model.Conversation;
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Handout;
 import dev.gui.model.History;
 import dev.gui.model.Notice;
@@ -132,7 +133,7 @@ public final class GenieRunner {
     /// @param key       the model key, from the settings or the environment; the lamp's engine keeps it
     /// @param wallpaper the sandbox desktop's wallpaper, if the lamp is new
     public void wake(String name, Settings settings, String key, LampWallpaper wallpaper) {
-        wake(name, settings, key, wallpaper, "", "");
+        wake(name, Lang.ENGLISH, settings, key, wallpaper, "", "");
     }
 
     /// Wakes the genie in one of its conversations.
@@ -142,6 +143,7 @@ public final class GenieRunner {
     /// @param leaf         the entry to continue after, or empty for where the conversation stands
     public void wake(
         final String name,
+        final Lang lang,
         final Settings settings,
         final String key,
         final LampWallpaper wallpaper,
@@ -164,7 +166,7 @@ public final class GenieRunner {
                                 what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
                             )
                         : lighter.light(
-                                directory, name, settings, key, wallpaper,
+                                directory, name, lang, settings, key, wallpaper,
                                  what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
                             );
                 lamp = Optional.of(lit);

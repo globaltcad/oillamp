@@ -48,6 +48,7 @@ public interface LampLighter {
     /// Starts the lamp in `directory` and returns once its sandbox runs.
     ///
     /// @param name     the genie's name, which it is told in its instructions
+    /// @param lang     the language the genie is told to answer in
     /// @param settings the model service and the model the genie answers with
     /// @param key      the model key, which the lamp's engine keeps on the host
     /// @param wallpaper the sandbox desktop's wallpaper, for a lamp lit for the first time; a
@@ -59,6 +60,7 @@ public interface LampLighter {
     Lit light(
         final Path directory,
         final String name,
+        final Lang lang,
         final Settings settings,
         final String key,
         final LampWallpaper wallpaper,
@@ -81,7 +83,7 @@ public interface LampLighter {
         final Consumer<LampEvent> events
     ) throws IOException, InterruptedException {
         Path name = directory.getFileName();
-        return light(directory, name == null ? directory.toString() : name.toString(), settings, key,
+        return light(directory, name == null ? directory.toString() : name.toString(), Lang.ENGLISH, settings, key,
                      LampWallpaper.WAVES_DARK, progress, events);
     }
 
