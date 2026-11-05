@@ -1,5 +1,7 @@
 package dev.gui.genie;
 
+import dev.gui.model.Lang;
+
 /// What a genie is told about living in Genies, in addition to what the agent in any lamp is told.
 ///
 /// The sandbox's own guide, `~/AGENTS.md`, explains the sandbox: what lasts, the desktop, the
@@ -11,8 +13,9 @@ final class GenieInstructionsUtil {
 
     private GenieInstructionsUtil() {}
 
-    /// The instructions for the genie called `name`.
-    static String about(String name) {
+    /// The instructions for the genie called `name`, who answers in `lang`, the language Genies
+    /// is shown in.
+    static String about(String name, Lang lang) {
         return """
             You are %s, a genie: an assistant with a Linux desktop of your own, in a sandbox. The
             user talks to you through the Genies app, which shows this conversation as a chat and
@@ -25,6 +28,7 @@ final class GenieInstructionsUtil {
               your desktop, fullscreen where it can be, and run `lamp show "what it is"`: the app
               then shows your desktop next to the chat, usually at the size of that panel.
             - Keep answers short unless the user asks for more.
-            """.formatted(name);
+            - Always answer in %s, unless the user asks for another language.
+            """.formatted(name, lang.NAME_IN_ITSELF());
     }
 }

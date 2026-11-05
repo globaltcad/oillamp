@@ -74,7 +74,7 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
             var state = Var.of(GeniesState.of(Tuple.of(Genie, genie), Settings.defaults(), Optional.of('sk-env'))
                     .withPage(GeniesState.Page.SETTINGS))
             // Held until the end: the app watches the page through views it keeps, which go when it goes.
-            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, wallpaper, progress, events -> throw new IOException('no lamps here') } as LampLighter,
+            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, lang, settings, key, wallpaper, progress, events -> throw new IOException('no lamps here') } as LampLighter,
                                  new OllamaKeeper(tmp.resolve('ollama')))
 
         when: 'the user changes the model, then clicks the genie instead of Done'
@@ -99,7 +99,7 @@ class KeepingGeniesBetweenRunsSpec extends Specification {
             var genie = Genie.named('Genie 1')
             var state = Var.of(GeniesState.of(Tuple.of(Genie, genie), Settings.defaults(), Optional.of('sk-env')))
             // Held until the end: the app watches the palette through a view it keeps, which goes when it goes.
-            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, settings, key, wallpaper, progress, events -> throw new IOException('no lamps here') } as LampLighter,
+            var app = new GeniesBackend(state, new Shelf(tmp), { directory, name, lang, settings, key, wallpaper, progress, events -> throw new IOException('no lamps here') } as LampLighter,
                                  new OllamaKeeper(tmp.resolve('ollama')))
 
         expect: 'a shelf without look.json reads no palette'
