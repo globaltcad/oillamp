@@ -414,12 +414,16 @@ class Supervising_A_Session_Spec extends Specification {
             }
 
         when: 'oillamp reports the published port'
-            var published = reported.find { it instanceof LampEvent.WebPublished }.port()
+            var event = reported.find { it instanceof LampEvent.WebPublished } as LampEvent.WebPublished
+            var published = event.port()
 
         then: 'it is `opencode`, port 4096 in the sandbox, with a link to `<lamp id>.localhost` on the port oillamp listens on'
             published.name() == 'opencode'
             published.sandboxPort() == 4096
             published.link() == URI.create("http://${agentId}.localhost:${published.hostPort()}/")
+
+        and: 'it says the lamp listed it, rather than the agent opening it'
+            !event.openedByTheAgent()
 
         and: 'the session\'s state lists the same port, for an application that joins later'
             waitUntil { reported.any { it instanceof LampEvent.SessionStateChanged && it.status().webPorts().contains(published) } }
@@ -563,6 +567,9 @@ class Supervising_A_Session_Spec extends Specification {
             var published = reported.findAll { it instanceof LampEvent.WebPublished }*.port()
             published*.name() == ['port-5173']
             published.first().sandboxPort() == 5173
+
+        and: 'it says the agent opened it'
+            reported.find { it instanceof LampEvent.WebPublished }.openedByTheAgent()
 
         and: 'the session\'s state lists it'
             reported.any { it instanceof LampEvent.SessionStateChanged && it.status().webPorts().contains(published.first()) }

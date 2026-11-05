@@ -1052,7 +1052,7 @@ final class Supervisor {
                 // The shutdown may have closed the published relays a moment ago; this one too.
                 if (shuttingDown.get()) ok.value().relay().close();
                 else {
-                    context.sink().accept(new LampEvent.WebPublished(ok.value().port()));
+                    context.sink().accept(new LampEvent.WebPublished(ok.value().port(), true));
                     announceState();
                 }
             }
@@ -1120,7 +1120,7 @@ final class Supervisor {
         LampConfig config = prepared.config();
         context.sink().accept(new LampEvent.SessionOpened(prepared.session().value(), SandboxSshUtil.commandArgv(layout),
                 layout.vncSocket(), config.display().width(), config.display().height()));
-        for (LampWebPort port : webPorts()) context.sink().accept(new LampEvent.WebPublished(port));
+        for (LampWebPort port : webPorts()) context.sink().accept(new LampEvent.WebPublished(port, false));
         // The sandbox is up, so the agent can be woken from now on. Only now, so that an
         // application hears of a job's run only after it has heard that the session is open.
         runs.begin();

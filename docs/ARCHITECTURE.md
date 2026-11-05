@@ -1396,7 +1396,8 @@ The data path, for each published port:
    ports, and every supervisor has its own, so no process is shared between lamps. A port that
    cannot be bound is the warning `OIL-NET-012`, and the session runs without it. The bridge in
    the sandbox is not critical either: if it stops, the container logs it and the session goes on.
-4. When the session is up, it reports `LampEvent.WebPublished` for each port, and the terminal
+4. When the session is up, it reports `LampEvent.WebPublished` for each port, with
+   `openedByTheAgent` false, and the terminal
    prints `opencode: http://<lamp id>.localhost:<port>/ → port 4096 in the sandbox`. The ports are
    also in `LampSessionStatus.webPorts` and in `oillamp status`.
 
@@ -1418,7 +1419,7 @@ the forwards, the web bridges). `ListeningPortsUtil.newPorts` then drops ports b
 
 A new port is published as `port-<n>`: `podman exec --detach --user lamp … socat` starts the same
 bridge the entrypoint starts for a listed port, on `web-port-<n>.sock`; then the relay opens as for
-a listed port, `LampEvent.WebPublished` is reported and `SessionStateChanged` repeats the session's
+a listed port, `LampEvent.WebPublished` is reported with `openedByTheAgent` true, and `SessionStateChanged` repeats the session's
 state with the new port. A port whose server stops stays published for the rest of the session;
 its link then opens nothing. Failing to publish a port is `OIL-NET-012`, and the port is not
 offered again. At most 16 such ports are published per session (`Supervisor.MOST_LATER_PORTS`),

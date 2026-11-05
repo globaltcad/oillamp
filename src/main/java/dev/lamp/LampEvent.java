@@ -75,11 +75,19 @@ public sealed interface LampEvent {
     record SessionOpened(String session, Tuple<String> command, Path desktop, int desktopWidth, int desktopHeight)
             implements LampEvent {}
 
-    /// A web server inside the sandbox can be opened in the browser, at `port.link()`. Reported
-    /// once per published port: for the ports published from the start, when the session is up;
+    /// A port inside the sandbox can be reached from this machine's browser, at `port.link()`.
+    /// Reported once per published port: for the ports `web.ports` lists, when the session is up;
     /// for a port the agent opened later (`web.publish = "any"` or `"ask"`), when it is published.
     /// [SessionStateChanged] lists them too.
-    record WebPublished(LampWebPort port)               implements LampEvent {}
+    ///
+    /// Only the opening is published: whether a server answers there is up to the sandbox. A
+    /// listed port is open from the start, whether or not anything in the sandbox ever listens
+    /// on it.
+    ///
+    /// @param port             the port, and the link that reaches it
+    /// @param openedByTheAgent whether the agent opened it during the session, rather than
+    ///                         `web.ports` listing it
+    record WebPublished(LampWebPort port, boolean openedByTheAgent) implements LampEvent {}
 
     /// The agent listens on a new port in the sandbox, and the user is asked whether to publish it
     /// to this machine's browser (`web.publish = "ask"`). [Lamp#decidePermission] with `what`
