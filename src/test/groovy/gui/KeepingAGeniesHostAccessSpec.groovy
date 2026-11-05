@@ -5,6 +5,7 @@ import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.HostAccess
 import dev.gui.model.Lang
+import dev.gui.model.Notifications
 import dev.gui.model.Settings
 import dev.lamp.Lamp
 import dev.lamp.LampHostCommandApproval
@@ -293,29 +294,59 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             '/home/jafar/../anna' | false          || '"/home/jafar/../anna" is outside your home folder, so the lamp refuses it unless you let Genies ask you.'
     }
 
-    def 'A request for permission waits a minute for the user, and goes once they decided'() {
+    def 'A request for permission waits a minute for the user, and is kept with its answer'() {
         reportInfo """
             Some requests the checker allowed need the user too, such as running a program. The
-            lamp asks, and refuses the request when nobody decided within a minute, so the page
-            stops showing it then.
+            lamp asks, and refuses the request when nobody decided within a minute, so the banner
+            under the genie's header stops showing it then. Genies keeps each question in the
+            genie's `Notifications`, with what became of it: once the banner no longer shows it,
+            the user can still look back on what was asked, and what they answered.
         """
         given:
             var asked = Instant.parse('2026-10-19T12:00:00Z')
-            var access = HostAccess.UNREAD
-                    .permissionRequested(new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool('host_run'), 'run `inkscape a.svg`', asked))
-                    .permissionRequested(new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool('host_read_file'), 'read ~/Notes/today.md', asked))
+            var notifications = Notifications.NONE
+                    .asked(new Notifications.HostTool('host_run', 'run `inkscape a.svg`'), asked)
+                    .asked(new Notifications.HostTool('host_read_file', 'read ~/Notes/today.md'), asked)
 
         expect: 'both wait, the oldest first'
-            access.waitingAt(asked.plusSeconds(30))*.what() == ['run `inkscape a.svg`', 'read ~/Notes/today.md']
+            notifications.waitingAt(asked.plusSeconds(30))*.about()*.what() == ['run `inkscape a.svg`', 'read ~/Notes/today.md']
 
-        and: 'after a minute, neither does'
-            access.waitingAt(asked.plus(HostAccess.PATIENCE)).isEmpty()
+        and: 'after a minute, neither does, and both went unanswered'
+            notifications.waitingAt(asked.plus(Notifications.PATIENCE)).isEmpty()
+            notifications.all()*.statusAt(asked.plus(Notifications.PATIENCE)) == [Notifications.Status.UNANSWERED] * 2
 
-        and: 'once the user decided about one, the other is next'
-            access.permissionDecided('run `inkscape a.svg`').waitingAt(asked)*.what() == ['read ~/Notes/today.md']
+        when: 'the user allows one'
+            var decided = notifications.decided('run `inkscape a.svg`', true)
 
-        and: 'when the lamp goes out, none waits'
-            access.wentOut().waitingAt(asked).isEmpty()
+        then: 'the other is next, and the first is kept as allowed'
+            decided.waitingAt(asked)*.about()*.what() == ['read ~/Notes/today.md']
+            decided.all()*.status() == [Notifications.Status.ALLOWED, Notifications.Status.WAITING]
+
+        and: 'when the lamp goes out, none waits, and both are still there'
+            decided.wentOut().waitingAt(asked).isEmpty()
+            decided.wentOut().all()*.status() == [Notifications.Status.ALLOWED, Notifications.Status.UNANSWERED]
+    }
+
+    def 'A genie keeps its notifications up to a limit, but never drops one still waiting for the user'() {
+        reportInfo """
+            A genie that runs for days may ask a lot. Its `Notifications` keep at most
+            `Notifications.MOST`; past that, the oldest that need nothing of the user any more go
+            first. A question still waiting, or a link that still works, stays.
+        """
+        given: 'a question nobody answered yet, then many the user answered'
+            var at = Instant.parse('2026-10-19T12:00:00Z')
+            var notifications = Notifications.NONE.asked(new Notifications.HostTool('host_run', 'run `make`'), at)
+            for (int i = 0; i < Notifications.MOST + 10; i++)
+                notifications = notifications.asked(new Notifications.HostTool('host_run', "run `step $i`"), at)
+                                             .decided("run `step $i`", false)
+
+        expect: 'there are no more than the limit, and the waiting one is first among them'
+            notifications.all().size() == Notifications.MOST
+            notifications.all().first().about().what() == 'run `make`'
+            notifications.all().first().status() == Notifications.Status.WAITING
+
+        and: 'the eleven oldest answered ones went, to make room for the waiting one too'
+            notifications.all().get(1).about().what() == 'run `step 11`'
     }
 
     def 'A web server the genie\'s lamp publishes shows its link under the genie\'s header, until the lamp goes out'() {
@@ -325,30 +356,33 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             its lamp publishes that port to this computer's browser and reports it with
             `LampEvent.WebPublished`, which carries the link to open, such as
             `http://k3v7x2ab.localhost:41237/`. Genies keeps it in the genie's
-            `HostAccess.published()`, and the banner under the genie's header shows it, with Open
-            and Dismiss. Dismiss puts it away with `HostAccess.putAway`. When the genie falls
-            asleep, its lamp goes out, and the link with it: there is nothing to open any more.
+            `Notifications` as `SHOWN`, and the banner under the genie's header shows it, with Open
+            and Dismiss. Dismiss puts it away with `Notifications.putAway`, and it is kept as
+            `PUT_AWAY`. When the genie falls asleep, its lamp goes out, and the link with it:
+            there is nothing to open any more, and it is kept as `GONE`.
         """
         when: 'the genie wakes'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
 
         then: 'its lamp published opencode\'s port, with a link under localhost for this computer\'s browser'
-            waitUntil { !app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty() }
-            var published = app.state().get().find(jafar).orElseThrow().hostAccess().published().first()
+            waitUntil { !app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty() }
+            var shown = app.state().get().find(jafar).orElseThrow().notifications().links().first()
+            var published = shown.about() as Notifications.Published
             published.name() == 'opencode'
             published.link().scheme == 'http'
             published.link().host.endsWith('.localhost')
 
         and: 'Dismiss would put it away'
-            app.state().get().find(jafar).orElseThrow().hostAccess().putAway(published).published().isEmpty()
+            app.state().get().find(jafar).orElseThrow().notifications().putAway(shown).links().isEmpty()
 
         when: 'the genie falls asleep'
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
-        then: 'the link went with its lamp'
-            app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty()
+        then: 'the link went with its lamp, and is kept as gone'
+            app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty()
+            app.state().get().find(jafar).orElseThrow().notifications().all().find { it.about() == published }.status() == Notifications.Status.GONE
     }
 
     def 'A web server the agent starts is a request under the genie\'s header, which the user answers'() {
@@ -357,11 +391,12 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             Its agent starts a web server on port 5173 in the sandbox. Before the lamp publishes
             it, it asks the user with `LampEvent.WebPortAsked`, and Genies shows the question in
             the banner under the genie's header, as it shows a request of the agent's to reach
-            this computer: a `HostAccess.RequestForPermission`, here about `WebPort(5173)`, which
+            this computer: a `Notifications.Question`, here a `WebPort` about port 5173, which
             the lamp waits a minute for. The user's Allow calls `Genies.decidePermission` with the
             question's words, as for any request, and the lamp publishes the server as
             `port-5173`, whose link then shows in the banner. When the genie falls asleep, the
-            question, had it still waited, and the link go with the lamp.
+            question, had it still waited, and the link go with the lamp; both are kept, with what
+            became of them.
         """
         given: 'a sandbox in which the agent listens on 127.0.0.1, port 5173'
             sandbox.machine {
@@ -379,27 +414,29 @@ class KeepingAGeniesHostAccessSpec extends Specification {
 
         when: 'the genie wakes, and its agent\'s server is found'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
-            waitUntil { !app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty() }
-            var request = app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).first()
+            waitUntil { !app.state().get().find(jafar).orElseThrow().notifications().waitingAt(Instant.now()).isEmpty() }
+            var request = app.state().get().find(jafar).orElseThrow().notifications().waitingAt(Instant.now()).first()
 
         then: 'the lamp asks about port 5173'
-            request.about() == new HostAccess.RequestForPermission.About.WebPort(5173)
-            request.what().contains('publish port 5173')
+            request.about() instanceof Notifications.WebPort
+            request.about().sandboxPort() == 5173
+            request.about().what().contains('publish port 5173')
 
         when: 'the user allows it'
-            SwingUtilities.invokeAndWait { app.decidePermission(jafar, request.what(), true) }
+            SwingUtilities.invokeAndWait { app.decidePermission(jafar, request.about().what(), true) }
 
         then: 'the question is answered, and the lamp publishes the server as `port-5173`'
-            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().published().any { it.name() == 'port-5173' } }
-            app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty()
+            waitUntil { app.state().get().find(jafar).orElseThrow().notifications().links().any { it.about().name() == 'port-5173' } }
+            app.state().get().find(jafar).orElseThrow().notifications().waitingAt(Instant.now()).isEmpty()
 
         when: 'the genie falls asleep'
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
-        then: 'neither a question nor a link is left'
-            app.state().get().find(jafar).orElseThrow().hostAccess().waitingAt(Instant.now()).isEmpty()
-            app.state().get().find(jafar).orElseThrow().hostAccess().published().isEmpty()
+        then: 'neither a question nor a link is left, and the question is kept as allowed'
+            app.state().get().find(jafar).orElseThrow().notifications().waitingAt(Instant.now()).isEmpty()
+            app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty()
+            app.state().get().find(jafar).orElseThrow().notifications().all().find { it.about() == request.about() }.status() == Notifications.Status.ALLOWED
     }
 
     /** The lamp id the scenario about a web server the agent starts gives the genie's lamp. */
