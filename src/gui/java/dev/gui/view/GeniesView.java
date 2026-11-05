@@ -1077,7 +1077,7 @@ public final class GeniesView extends JPanel {
                 case Notifications.HostTool tool -> words.ASKS_YOU_TO_ALLOW(genie, tool.what());
                 case Notifications.WebPort port -> words.ASKS_TO_PUBLISH_THE_WEB_SERVER_IT_STARTED_ON_PORT(genie, port.sandboxPort());
             };
-            case Banner.Link link -> words.PUBLISHED_FOR_YOUR_BROWSER(genie, link.server().name(), link.server().link().toString());
+            case Banner.Link link -> words.LISTENS_ON_A_PORT_YOUR_BROWSER_CAN_NOW_REACH(genie, link.server().sandboxPort(), link.server().link().toString());
         };
     }
 
@@ -1088,7 +1088,7 @@ public final class GeniesView extends JPanel {
                 case Notifications.HostTool _ -> words.A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO();
                 case Notifications.WebPort _ -> words.ALLOW_GIVES_IT_A_LINK_ONLY_THIS_COMPUTERS_BROWSER_CAN_OPEN();
             };
-            case Banner.Link _ -> words.THE_LINK_WORKS_ON_THIS_COMPUTER_WHILE_THE_GENIE_IS_AWAKE();
+            case Banner.Link _ -> words.THE_LINK_IS_AN_OPENING_INTO_THE_SANDBOX();
         };
     }
 

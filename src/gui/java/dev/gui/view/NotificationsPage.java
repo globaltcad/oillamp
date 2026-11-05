@@ -396,7 +396,7 @@ final class NotificationsPage {
         static RowWords of(Row row, Lang.NotificationsPage page) {
             Instant now = Instant.now();
             return switch (row.item()) {
-                case Notification n -> new RowWords(summary(n.about(), page), status(n, row.status(), page), when(n.at(), now) + extra(n.about()), details(n.about()));
+                case Notification n -> new RowWords(summary(n.about(), page), status(n, row.status(), page), when(n.at(), now) + extra(n.about()), details(n.about(), page));
                 case Trouble t -> new RowWords(t.what(), "", when(t.when(), now) + " · " + t.where(), "");
                 default -> new RowWords("", "", "", "");
             };
@@ -406,7 +406,9 @@ final class NotificationsPage {
             return switch (about) {
                 case Notifications.HostTool tool -> page.ASKED_YOU(tool.what());
                 case Notifications.WebPort port -> page.ASKED_TO_PUBLISH_THE_WEB_SERVER_ON_PORT(port.sandboxPort());
-                case Notifications.Published server -> page.PUBLISHED(server.name());
+                case Notifications.Published server -> server.openedByTheAgent()
+                                                       ? page.LISTENS_ON_PORT_NOW_OPEN_TO_YOUR_BROWSER(server.sandboxPort())
+                                                       : page.PORT_OPEN_TO_YOUR_BROWSER_AS_THE_LAMP_LISTS_IT(server.sandboxPort(), server.name());
                 case Notifications.Judged judged -> (judged.allowed() ? page.THE_CHECKER_ALLOWED(judged.tool()) : page.THE_CHECKER_REFUSED(judged.tool()))
                                                     + (judged.said().isBlank() ? "" : ": " + judged.said());
                 case Notifications.Refused refused -> page.REFUSED_A_REQUEST_FOR(refused.tool());
@@ -420,7 +422,7 @@ final class NotificationsPage {
                 case ALLOWED -> page.ALLOWED();
                 case REFUSED -> page.REFUSED();
                 case UNANSWERED -> page.UNANSWERED();
-                case SHOWN, PUT_AWAY -> page.LINK_WORKS();
+                case SHOWN, PUT_AWAY -> page.LINK_OPEN();
                 case GONE -> page.LINK_GONE();
                 case TOLD -> switch (n.about()) {
                     case Notifications.Judged judged -> judged.allowed() ? page.ALLOWED() : page.REFUSED();
@@ -443,11 +445,11 @@ final class NotificationsPage {
         }
 
         /// What the lamp said beyond the summary, as it said it.
-        private static String details(Notifications.About about) {
+        private static String details(Notifications.About about, Lang.NotificationsPage page) {
             return switch (about) {
                 case Notifications.HostTool tool -> tool.what();
                 case Notifications.WebPort port -> port.what();
-                case Notifications.Published server -> server.link().toString();
+                case Notifications.Published server -> page.THE_LINK_LEADS_TO_PORT_IN_THE_SANDBOX(server.link().toString(), server.sandboxPort());
                 case Notifications.Judged judged -> judged.reason();
                 case Notifications.Refused refused -> refused.why();
                 case Notifications.Warned warned -> warned.whatHappened();
