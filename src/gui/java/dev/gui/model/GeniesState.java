@@ -104,10 +104,10 @@ public record GeniesState(
         }
     }
 
-    /// The selected genie's chat, its schedule, its history, its host access or what can be done
-    /// with it, or the settings every genie shares.
+    /// The selected genie's chat, its schedule, its history, its host access, what can be done
+    /// with it or its notifications, or the settings every genie shares.
     public enum Page {
-        CHAT, ACTIONS, SCHEDULE, HISTORY, HOST_ACCESS, SETTINGS;
+        CHAT, ACTIONS, SCHEDULE, HISTORY, HOST_ACCESS, NOTIFICATIONS, SETTINGS;
 
         /// Whether this is one of a genie's pages beside its chat, which a narrow header gathers
         /// behind its Manage button.
@@ -326,10 +326,11 @@ public record GeniesState(
         return withGenies(rest).withSelected(next).withPage(rest.isEmpty() ? Page.SETTINGS : page);
     }
 
-    /// Shows genie `id`: its schedule, its history, its host access or its actions when another
-    /// genie's is on show, and its chat otherwise.
+    /// Shows genie `id`: its schedule, its history, its host access, its actions or its
+    /// notifications when another genie's is on show, and its chat otherwise.
     public GeniesState select(UUID id) {
-        return find(id).isPresent() ? withSelected(id).withPage(page.managing() ? page : Page.CHAT) : this;
+        boolean kept = page.managing() || page == Page.NOTIFICATIONS;
+        return find(id).isPresent() ? withSelected(id).withPage(kept ? page : Page.CHAT) : this;
     }
 
     /// The selected genie's schedule, laid out around [#now].

@@ -2,6 +2,7 @@ package dev.gui.view;
 
 import java.awt.Color;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import swingtree.api.IconDeclaration;
@@ -55,6 +56,13 @@ final class SignSvgUtil {
         "<circle cx='3.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>"
         + "<circle cx='8' cy='8' r='1.2' fill='currentColor' stroke='none'/>"
         + "<circle cx='12.5' cy='8' r='1.2' fill='currentColor' stroke='none'/>";
+
+    /// A bell: what a genie's lamp asked and told the user. With a dot of `dot` on it, when given:
+    /// something new needs a look.
+    static String bell(Optional<Color> dot) {
+        String bell = "<path d='M4 11V7.2a4 4 0 0 1 8 0V11l1.3 1.5H2.7z'/><path d='M6.6 14.2a1.5 1.5 0 0 0 2.8 0'/>";
+        return dot.map(it -> bell + String.format("<circle cx='12.4' cy='3.6' r='2.6' fill='#%02x%02x%02x' stroke='none'/>", it.getRed(), it.getGreen(), it.getBlue())).orElse(bell);
+    }
 
     /// `drawing`, one of the signs above, in `colour`, sixteen units square.
     static IconDeclaration sign(String drawing, Color colour) {
