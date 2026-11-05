@@ -101,6 +101,12 @@ public final class GeniesView extends JPanel {
     private final HistoryPage historyPage;
     private final HostAccessPage hostAccessPage;
     private final ActionsPage actionsPage;
+    private final NotificationsPage notificationsPage;
+    /// The page the user was on before the bell showed the notifications, which the bell goes
+    /// back to; and the page and genie shown last, to know what the user leaves.
+    private GeniesState.Page beforeNotifications = GeniesState.Page.CHAT;
+    private GeniesState.Page lastPage;
+    private UUID lastSelected;
     private final WakePicture wakePicture;
     /// Whether the draft is setting the composer's text, which then is not written back into it.
     private boolean settingDraft = false;
@@ -175,6 +181,24 @@ public final class GeniesView extends JPanel {
         historyPage = new HistoryPage(state, app, look);
         hostAccessPage = new HostAccessPage(state, app);
         actionsPage = new ActionsPage(state, app, () -> historyPage.save(this), this::confirmDelete);
+        notificationsPage = new NotificationsPage(state, app, look);
+        // A genie's notifications count as seen when the user opens them, and once more as they
+        // leave them, for what came while they looked.
+        lastPage = page.get();
+        lastSelected = selected.get();
+        Viewable.cast(page).onChange(From.ALL, it -> {
+            GeniesState.Page now = it.currentValue().orElse(GeniesState.Page.CHAT);
+            if (now == GeniesState.Page.NOTIFICATIONS || lastPage == GeniesState.Page.NOTIFICATIONS) seen(selected.get());
+            lastPage = now;
+        });
+        Viewable.cast(selected).onChange(From.ALL, it -> {
+            UUID now = it.currentValue().orElse(GeniesState.NONE);
+            if (page.get() == GeniesState.Page.NOTIFICATIONS) {
+                seen(lastSelected);
+                seen(now);
+            }
+            lastSelected = now;
+        });
         wakePicture = new WakePicture(genie, palette);
 
         UI.use(look, () ->
@@ -326,7 +350,7 @@ public final class GeniesView extends JPanel {
                     )
                     .isVisibleIf(state.viewAs(Boolean.class, it -> !it.troubles().isEmpty()))
                     .withTooltip(windowWords.viewAsString(Lang.Window::GENIES_CARRIED_ON_CLICK_TO_SEE_WHAT_HAPPENED))
-                    .onClick(_ -> showTroubles())
+                    .onClick(_ -> showTroublesOrNotifications())
                 )
                 .add("growx, wmin 0",
                     ViewPartsUtil.wrapped(
@@ -846,17 +870,20 @@ public final class GeniesView extends JPanel {
         Val<Boolean> onHistory = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HISTORY);
         Val<Boolean> onHostAccess = page.viewAs(Boolean.class, it -> it == GeniesState.Page.HOST_ACCESS);
         Val<Boolean> onActions = page.viewAs(Boolean.class, it -> it == GeniesState.Page.ACTIONS);
+        Val<Boolean> onNotifications = page.viewAs(Boolean.class, it -> it == GeniesState.Page.NOTIFICATIONS);
         Val<Boolean> onSettings = page.viewAs(Boolean.class, it -> it == GeniesState.Page.SETTINGS);
         Val<Boolean> hasGenies = state.viewAs(Boolean.class, GeniesState::hasGenies);
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
             .add("growx, wmin 0", header(Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> !a && b)))
-            .add("growx, wmin 0", requestForPermission(Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> !a && b)))
+            // Not over the notifications: the question is on top of them there.
+            .add("growx, wmin 0", requestForPermission(Viewable.of(Boolean.class, page, hasGenies, (it, b) -> it != GeniesState.Page.SETTINGS && it != GeniesState.Page.NOTIFICATIONS && b)))
             .add("grow, push, wmin 0", conversation(Viewable.of(Boolean.class, onChat, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", schedulePage.view(Viewable.of(Boolean.class, onSchedule, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", historyPage.view(Viewable.of(Boolean.class, onHistory, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", hostAccessPage.view(Viewable.of(Boolean.class, onHostAccess, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", actionsPage.view(Viewable.of(Boolean.class, onActions, hasGenies, (a, b) -> a && b)))
+            .add("grow, push, wmin 0", notificationsPage.view(Viewable.of(Boolean.class, onNotifications, hasGenies, (a, b) -> a && b)))
             .add("grow, push, wmin 0", SettingsPage.of(state, app, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
     }
 
@@ -885,7 +912,7 @@ public final class GeniesView extends JPanel {
                     .componentFont(f -> f.color(p.TROUBLE()))
                 )
                 .withTooltip(headerWords.viewAsString(Lang.Header::SOMETHING_WENT_WRONG_IN_GENIES_NOT_ONLY_IN_THIS_GENIE))
-                .onClick(_ -> showTroubles())
+                .onClick(_ -> showTroublesOrNotifications())
             )
             .add("cell 1 0", ViewPartsUtil.lamp(phase, 30))
             .add("cell 2 0, growx, wmin 0",
@@ -927,8 +954,78 @@ public final class GeniesView extends JPanel {
                     .onClick(_ -> app.sleep(genie.get().id()))
                 )
                 .add(pages())
+                .add("gapleft 2", bell())
             )
             .add("cell 0 1, span 4, growx, wmin 0", pagesBelow());
+    }
+
+    /*
+     *  The bell, at the right edge of the header, after the switch between the pages and apart
+     *  from it: not one of the genie's pages, but what its lamp asked and told the user, which
+     *  the bell shows over whichever page the user is on, and goes back to that page from.
+     *
+     *      [💬 Chat | ⚡ Actions | 📅 Schedule | 🕘 History | 🏠 Access]  (🔔)
+     *
+     *  Round, as the `?` of the host access page, and lit with brass while it shows the
+     *  notifications. While something worth a look came since the user last looked, or a
+     *  question waits on them, or something went wrong in Genies, a dot of flame sits on it.
+     */
+    private UIForAnySwing<?, ?> bell() {
+        Val<Boolean> open = page.viewAs(Boolean.class, it -> it == GeniesState.Page.NOTIFICATIONS);
+        Val<Boolean> needsALook = Viewable.of(Boolean.class, genie, state, (it, s) ->
+            it.notifications().needsALook(s.now()) || !s.troubles().isEmpty()
+        );
+        Val<Bell> looks = Viewable.of(Bell.class, open, needsALook, Bell::new);
+        return
+            button("").group(Skin.ICON_BUTTON)
+            .withTooltip(Viewable.of(String.class, looks, headerWords, (it, words) ->
+                it.open() ? words.BACK_FROM_THE_NOTIFICATIONS()
+                : it.needsALook() ? words.NOTIFICATIONS_SOMETHING_NEW_NEEDS_A_LOOK()
+                : words.NOTIFICATIONS_WHAT_THE_GENIES_LAMP_ASKED_AND_TOLD_YOU()
+            ))
+            .withStyle(Themed.of(looks, theme), (themed, it) -> {
+                Bell bell = themed.item();
+                Palette p = themed.palette();
+                Color pen = bell.open() ? p.BRASS() : bell.needsALook() ? p.TEXT() : p.SUBTEXT();
+                return it
+                    .prefSize(30, 30).minSize(30, 30).maxSize(30, 30)
+                    .padding(0)
+                    .borderRadius(15)
+                    .border(1, bell.open() ? p.BRASS() : p.BORDER())
+                    .backgroundColor(bell.open() ? p.RAISED() : p.TRANSPARENT())
+                    .icon(SignSvgUtil.sign(SignSvgUtil.bell(bell.needsALook() && !bell.open() ? Optional.of(p.FLAME()) : Optional.empty()), pen));
+            })
+            .onClick(_ -> toggleNotifications());
+    }
+
+    /// How the bell looks: whether it shows the notifications, and whether something needs a look.
+    private record Bell(boolean open, boolean needsALook) {}
+
+    /// Shows the selected genie's notifications, or goes back to the page the user was on before.
+    private void toggleNotifications() {
+        if (page.get() == GeniesState.Page.NOTIFICATIONS) {
+            page.set(From.VIEW, beforeNotifications == GeniesState.Page.SETTINGS ? GeniesState.Page.CHAT : beforeNotifications);
+            return;
+        }
+        beforeNotifications = page.get();
+        page.set(From.VIEW, GeniesState.Page.NOTIFICATIONS);
+    }
+
+    /// The user looked at genie `id`'s notifications. Later, not while the state tells its views
+    /// of a change.
+    private void seen(UUID id) {
+        if (id == null || id.equals(GeniesState.NONE)) return;
+        SwingUtilities.invokeLater(() -> state.update(From.VIEW, s -> s.update(id, it -> it.withNotifications(it.notifications().seenAt(Instant.now())))));
+    }
+
+    /// What went wrong: on the notifications page, while there are genies to show it beside, and
+    /// in a dialog otherwise.
+    private void showTroublesOrNotifications() {
+        if (!state.get().hasGenies()) {
+            showTroubles();
+            return;
+        }
+        if (page.get() != GeniesState.Page.NOTIFICATIONS) toggleNotifications();
     }
 
     /*
