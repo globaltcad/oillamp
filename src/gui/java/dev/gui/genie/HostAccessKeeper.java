@@ -11,6 +11,7 @@ import java.util.function.UnaryOperator;
 
 import dev.gui.model.Genie;
 import dev.gui.model.HostAccess;
+import dev.gui.model.Notifications;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampDirectory;
@@ -73,30 +74,29 @@ public final class HostAccessKeeper {
     }
 
     /// While the genie is awake: its lamp asks the user to allow a request, a host tool's or
-    /// publishing a web server, or tells them it published one.
+    /// publishing a web server, or tells them it published one. Each is kept in the genie's
+    /// [Notifications].
     void onLampEvent(LampEvent event, Instant now) {
         switch (event) {
-            case LampEvent.HostAccessAsked asked -> change(it -> it.permissionRequested(
-                new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.HostTool(asked.tool()), asked.what(), now)
-            ));
-            case LampEvent.WebPortAsked asked -> change(it -> it.permissionRequested(
-                new HostAccess.RequestForPermission(new HostAccess.RequestForPermission.About.WebPort(asked.sandboxPort()), asked.what(), now)
-            ));
-            case LampEvent.WebPublished published -> change(it -> it.webPublished(
-                new HostAccess.Published(published.port().name(), published.port().link())
-            ));
+            case LampEvent.HostAccessAsked asked -> changeNotifications(it -> it.asked(new Notifications.HostTool(asked.tool(), asked.what()), now));
+            case LampEvent.WebPortAsked asked -> changeNotifications(it -> it.asked(new Notifications.WebPort(asked.sandboxPort(), asked.what()), now));
+            case LampEvent.WebPublished published -> changeNotifications(it -> it.published(new Notifications.Published(published.port().name(), published.port().link()), now));
             default -> {}
         }
     }
 
-    /// The genie's lamp went out, and every question it asked, and every web server it
-    /// published, went with it.
+    /// The genie's lamp went out: no question it asked waits any more, and no web server it
+    /// published can be opened.
     void wentOut() {
-        change(HostAccess::wentOut);
+        changeNotifications(Notifications::wentOut);
     }
 
     private void change(UnaryOperator<HostAccess> change) {
         changes.accept(genie -> genie.withHostAccess(change.apply(genie.hostAccess())));
+    }
+
+    private void changeNotifications(UnaryOperator<Notifications> change) {
+        changes.accept(genie -> genie.withNotifications(change.apply(genie.notifications())));
     }
 
     private static String reason(Exception failed) {
