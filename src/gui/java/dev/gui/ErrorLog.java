@@ -55,6 +55,7 @@ public final class ErrorLog implements Thread.UncaughtExceptionHandler {
         String what = failed.toString().replaceAll("\\s+", " ");
         StackTraceElement[] stack = failed.getStackTrace();
         String kind = what + (stack.length == 0 ? "" : " at " + stack[0]);
+        AppLog.shared().add(AppLog.Level.ERROR, where, what);
         if (last.filter(kind::equals).isPresent()) {
             write(now + "  again, in " + where + ": " + what + "\n");
             return;
