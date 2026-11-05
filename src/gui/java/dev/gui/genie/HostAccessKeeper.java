@@ -3,7 +3,9 @@ package dev.gui.genie;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -16,6 +18,7 @@ import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
 import dev.lamp.LampDirectory;
 import dev.lamp.LampFailedException;
+import dev.lamp.LampHostVerdict;
 
 /// Reads a genie's host access from its lamp, and writes the rules its page shows into it, with
 /// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(Lamp.HostAccess)]. Writing needs
@@ -73,11 +76,24 @@ public final class HostAccessKeeper {
         });
     }
 
+    /// What the agent asked of each tool in each run, as [LampEvent.HostAccessRequested] said,
+    /// until the checker decided: [LampEvent.HostAccessDecided] does not say it again.
+    private final Map<String, String> requested = new ConcurrentHashMap<>();
+
     /// While the genie is awake: its lamp asks the user to allow a request, a host tool's or
-    /// publishing a web server, or tells them it published one. Each is kept in the genie's
-    /// [Notifications].
+    /// publishing a web server, or tells them it published one, what the checker model decided
+    /// about a request, that one was refused, or that something went wrong. Each is kept in the
+    /// genie's [Notifications].
     void onLampEvent(LampEvent event, Instant now) {
         switch (event) {
+            case LampEvent.HostAccessRequested asked -> requested.put(asked.run() + " " + asked.tool(), asked.said());
+            case LampEvent.HostAccessDecided decided -> {
+                String said = Optional.ofNullable(requested.remove(decided.run() + " " + decided.tool())).orElse("");
+                LampHostVerdict verdict = decided.verdict();
+                changeNotifications(it -> it.told(new Notifications.Judged(decided.tool(), said, verdict.allowed(), verdict.risk().name(), verdict.reason()), now));
+            }
+            case LampEvent.HostAccessRefused refused -> changeNotifications(it -> it.told(new Notifications.Refused(refused.tool(), refused.why()), now));
+            case LampEvent.Warning warning -> changeNotifications(it -> it.told(new Notifications.Warned(warning.problem().title(), warning.problem().whatHappened()), now));
             case LampEvent.HostAccessAsked asked -> changeNotifications(it -> it.asked(new Notifications.HostTool(asked.tool(), asked.what()), now));
             case LampEvent.WebPortAsked asked -> changeNotifications(it -> it.asked(new Notifications.WebPort(asked.sandboxPort(), asked.what()), now));
             case LampEvent.WebPublished published -> changeNotifications(it -> it.published(new Notifications.Published(published.port().name(), published.port().link()), now));
@@ -88,6 +104,7 @@ public final class HostAccessKeeper {
     /// The genie's lamp went out: no question it asked waits any more, and no web server it
     /// published can be opened.
     void wentOut() {
+        requested.clear();
         changeNotifications(Notifications::wentOut);
     }
 
