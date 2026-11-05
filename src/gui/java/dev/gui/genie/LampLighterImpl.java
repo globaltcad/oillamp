@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.model.Genie;
+import dev.gui.model.Lang;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
 import dev.lamp.LampEvent;
@@ -56,6 +57,7 @@ public final class LampLighterImpl implements LampLighter {
     public Lit light(
         final Path directory,
         final String name,
+        final Lang lang,
         final Settings settings,
         final String key,
         final LampWallpaper wallpaper,
@@ -70,7 +72,7 @@ public final class LampLighterImpl implements LampLighter {
         }
         return light(
                 lampDir
-                    .instructions(GenieInstructionsUtil.about(name))
+                    .instructions(GenieInstructionsUtil.about(name, lang))
                     .enableScheduling()
                     .wallpaper(wallpaper),
                 settings,
