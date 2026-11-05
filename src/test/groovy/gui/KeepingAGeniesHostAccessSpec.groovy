@@ -349,39 +349,42 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             notifications.all().get(1).about().what() == 'run `step 11`'
     }
 
-    def 'A web server the genie\'s lamp publishes shows its link under the genie\'s header, until the lamp goes out'() {
+    def 'A port the genie\'s lamp lists is kept among its notifications, not shown under its header, until the lamp goes out'() {
         reportInfo """
             Let's consider a genie whose lamp's `oillamp.toml` lists opencode's port 4096 under
             `[web]`, as every lamp's file does unless the person changed it. As the genie wakes,
-            its lamp publishes that port to this computer's browser and reports it with
-            `LampEvent.WebPublished`, which carries the link to open, such as
-            `http://k3v7x2ab.localhost:41237/`. Genies keeps it in the genie's
-            `Notifications` as `SHOWN`, and the banner under the genie's header shows it, with Open
-            and Dismiss. Dismiss puts it away with `Notifications.putAway`, and it is kept as
-            `PUT_AWAY`. When the genie falls asleep, its lamp goes out, and the link with it:
-            there is nothing to open any more, and it is kept as `GONE`.
+            its lamp opens that port to this computer's browser and reports it with
+            `LampEvent.WebPublished`, which carries the link, such as
+            `http://k3v7x2ab.localhost:41237/`, and says that the agent did not open it. Nobody
+            did anything, so the banner under the genie's header does not show it: Genies keeps it
+            in the genie's `Notifications` as `PUT_AWAY`, an open link the notifications page lists
+            with Open. Whether anything in the sandbox answers there, neither Genies nor the lamp
+            knows. When the genie falls asleep, its lamp goes out, and the link closes with it: it
+            is kept as `GONE`.
         """
         when: 'the genie wakes'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
 
-        then: 'its lamp published opencode\'s port, with a link under localhost for this computer\'s browser'
-            waitUntil { !app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty() }
-            var shown = app.state().get().find(jafar).orElseThrow().notifications().links().first()
-            var published = shown.about() as Notifications.Published
+        then: 'its lamp opened opencode\'s port 4096, with a link under localhost for this computer\'s browser'
+            waitUntil { app.state().get().find(jafar).orElseThrow().notifications().all().any { it.about() instanceof Notifications.Published } }
+            var kept = app.state().get().find(jafar).orElseThrow().notifications().all().find { it.about() instanceof Notifications.Published }
+            var published = kept.about() as Notifications.Published
             published.name() == 'opencode'
+            published.sandboxPort() == 4096
+            !published.openedByTheAgent()
             published.link().scheme == 'http'
             published.link().host.endsWith('.localhost')
 
-        and: 'Dismiss would put it away'
-            app.state().get().find(jafar).orElseThrow().notifications().putAway(shown).links().isEmpty()
+        and: 'it is kept as an open link, but not shown under the genie\'s header'
+            kept.status() == Notifications.Status.PUT_AWAY
+            app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty()
 
         when: 'the genie falls asleep'
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
-        then: 'the link went with its lamp, and is kept as gone'
-            app.state().get().find(jafar).orElseThrow().notifications().links().isEmpty()
+        then: 'the link closed with its lamp, and is kept as gone'
             app.state().get().find(jafar).orElseThrow().notifications().all().find { it.about() == published }.status() == Notifications.Status.GONE
     }
 
@@ -396,7 +399,8 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             question's words, as for any request, and the lamp publishes the server as
             `port-5173`, whose link then shows in the banner. When the genie falls asleep, the
             question, had it still waited, and the link go with the lamp; both are kept, with what
-            became of them.
+            became of them. Unlike a port the lamp lists, this one the agent opened, and so it
+            shows under the header, and Dismiss puts it away with `Notifications.putAway`.
         """
         given: 'a sandbox in which the agent listens on 127.0.0.1, port 5173'
             sandbox.machine {
@@ -428,6 +432,12 @@ class KeepingAGeniesHostAccessSpec extends Specification {
         then: 'the question is answered, and the lamp publishes the server as `port-5173`'
             waitUntil { app.state().get().find(jafar).orElseThrow().notifications().links().any { it.about().name() == 'port-5173' } }
             app.state().get().find(jafar).orElseThrow().notifications().waitingAt(Instant.now()).isEmpty()
+
+        and: 'its link shows under the header, as one the agent opened, which Dismiss would put away'
+            var shown = app.state().get().find(jafar).orElseThrow().notifications().links().find { it.about().name() == 'port-5173' }
+            shown.about().openedByTheAgent()
+            shown.about().sandboxPort() == 5173
+            app.state().get().find(jafar).orElseThrow().notifications().putAway(shown).links().isEmpty()
 
         when: 'the genie falls asleep'
             SwingUtilities.invokeAndWait { app.sleep(jafar) }

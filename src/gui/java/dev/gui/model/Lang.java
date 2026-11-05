@@ -957,22 +957,22 @@ public enum Lang {
                 case CHINESE -> "选择“允许”后，它会得到一个只有这台电脑上的浏览器才能打开的链接，且仅在精灵醒着时有效。一分钟内没有回答就算作拒绝。";
             };
         }
-        public String PUBLISHED_FOR_YOUR_BROWSER(String who, String name, String link) {
+        public String LISTENS_ON_A_PORT_YOUR_BROWSER_CAN_NOW_REACH(String who, int port, String link) {
             return switch (lang) {
-                case ENGLISH -> who + " published " + name + " for your browser: " + link;
-                case GERMAN -> who + " hat " + name + " für deinen Browser freigegeben: " + link;
-                case SPANISH -> who + " ha publicado " + name + " para tu navegador: " + link;
-                case JAPANESE -> who + " が " + name + " をブラウザーに公開しました：" + link;
-                case CHINESE -> who + " 已将 " + name + " 发布给你的浏览器：" + link;
+                case ENGLISH -> who + " listens on port " + port + " in its sandbox, which your browser can now reach: " + link;
+                case GERMAN -> who + " lauscht in seiner Sandbox auf Port " + port + ", den dein Browser jetzt erreichen kann: " + link;
+                case SPANISH -> who + " escucha en el puerto " + port + " de su sandbox, al que tu navegador ya puede llegar: " + link;
+                case JAPANESE -> who + " がサンドボックスのポート " + port + " で待ち受けています。ブラウザーからそのポートに届くようになりました：" + link;
+                case CHINESE -> who + " 正在其沙箱的端口 " + port + " 上监听，你的浏览器现在可以访问该端口：" + link;
             };
         }
-        public String THE_LINK_WORKS_ON_THIS_COMPUTER_WHILE_THE_GENIE_IS_AWAKE() {
+        public String THE_LINK_IS_AN_OPENING_INTO_THE_SANDBOX() {
             return switch (lang) {
-                case ENGLISH -> "The link works on this computer while the genie is awake, once something in its sandbox answers on that port.";
-                case GERMAN -> "Der Link funktioniert auf diesem Rechner, solange der Dschinn wach ist, sobald in seiner Sandbox etwas auf diesem Port antwortet.";
-                case SPANISH -> "El enlace funciona en este equipo mientras el genio esté despierto, en cuanto algo en su sandbox responda en ese puerto.";
-                case JAPANESE -> "リンクは、ジーニーが起きている間、サンドボックス内でそのポートに何かが応答していれば、このコンピューターで使えます。";
-                case CHINESE -> "只要精灵醒着，并且其沙盒中有程序在该端口上响应，这个链接就能在这台电脑上使用。";
+                case ENGLISH -> "The link is an opening into the genie's sandbox, for the browser on this computer only, while the genie is awake. Whatever listens on that port answers; neither Genies nor the lamp knows what that is.";
+                case GERMAN -> "Der Link ist eine Öffnung in die Sandbox des Dschinns, nur für den Browser auf diesem Rechner und nur, solange der Dschinn wach ist. Es antwortet, was auf diesem Port lauscht; weder Genies noch die Lampe weiß, was das ist.";
+                case SPANISH -> "El enlace es una abertura hacia el sandbox del genio, solo para el navegador de este equipo y mientras el genio esté despierto. Responde lo que escuche en ese puerto; ni Genies ni la lámpara saben qué es.";
+                case JAPANESE -> "このリンクはジーニーのサンドボックスへの入り口で、ジーニーが起きている間、このコンピューターのブラウザーからだけ開けます。応答するのはそのポートで待ち受けているものですが、それが何かは Genies にもランプにも分かりません。";
+                case CHINESE -> "这个链接是通往精灵沙箱的一个入口，仅在精灵醒着时、仅供这台电脑上的浏览器使用。应答的是在该端口上监听的程序；Genies 和神灯都不知道那是什么。";
             };
         }
         public String OPEN() {
@@ -3444,13 +3444,33 @@ public enum Lang {
             };
         }
 
-        public String PUBLISHED(String name) {
+        public String LISTENS_ON_PORT_NOW_OPEN_TO_YOUR_BROWSER(int port) {
             return switch (lang) {
-                case ENGLISH -> "Published " + name;
-                case GERMAN -> name + " veröffentlicht";
-                case SPANISH -> "Publicó " + name;
-                case JAPANESE -> name + " を公開しました";
-                case CHINESE -> "已发布 " + name;
+                case ENGLISH -> "Listens on port " + port + ", now open to your browser";
+                case GERMAN -> "Lauscht auf Port " + port + ", jetzt offen für deinen Browser";
+                case SPANISH -> "Escucha en el puerto " + port + ", ahora abierto a tu navegador";
+                case JAPANESE -> "ポート " + port + " で待ち受け中、ブラウザーに開かれました";
+                case CHINESE -> "正在端口 " + port + " 上监听，现已向你的浏览器开放";
+            };
+        }
+
+        public String PORT_OPEN_TO_YOUR_BROWSER_AS_THE_LAMP_LISTS_IT(int port, String name) {
+            return switch (lang) {
+                case ENGLISH -> "Port " + port + " is open to your browser, as the lamp lists it for " + name;
+                case GERMAN -> "Port " + port + " ist offen für deinen Browser, wie die Lampe ihn für " + name + " vorsieht";
+                case SPANISH -> "El puerto " + port + " está abierto a tu navegador, como la lámpara lo indica para " + name;
+                case JAPANESE -> "ランプの設定どおり、" + name + " 用のポート " + port + " がブラウザーに開かれています";
+                case CHINESE -> "按照神灯的设置，为 " + name + " 准备的端口 " + port + " 已向你的浏览器开放";
+            };
+        }
+
+        public String THE_LINK_LEADS_TO_PORT_IN_THE_SANDBOX(String link, int port) {
+            return switch (lang) {
+                case ENGLISH -> link + " leads to port " + port + " in the sandbox. Whatever listens there answers, if anything does.";
+                case GERMAN -> link + " führt zu Port " + port + " in der Sandbox. Dort antwortet, was auf ihm lauscht, falls etwas lauscht.";
+                case SPANISH -> link + " lleva al puerto " + port + " del sandbox. Responde lo que escuche allí, si es que algo escucha.";
+                case JAPANESE -> link + " はサンドボックスのポート " + port + " につながります。そこで何かが待ち受けていれば、それが応答します。";
+                case CHINESE -> link + " 通往沙箱中的端口 " + port + "。若有程序在那里监听，就由它应答。";
             };
         }
 
@@ -3524,13 +3544,13 @@ public enum Lang {
             };
         }
 
-        public String LINK_WORKS() {
+        public String LINK_OPEN() {
             return switch (lang) {
-                case ENGLISH -> "Link works";
-                case GERMAN -> "Link geht";
-                case SPANISH -> "El enlace funciona";
-                case JAPANESE -> "リンク有効";
-                case CHINESE -> "链接可用";
+                case ENGLISH -> "Link open";
+                case GERMAN -> "Link offen";
+                case SPANISH -> "Enlace abierto";
+                case JAPANESE -> "リンク開通中";
+                case CHINESE -> "链接已开放";
             };
         }
 

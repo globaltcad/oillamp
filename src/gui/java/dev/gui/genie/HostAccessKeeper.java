@@ -96,7 +96,8 @@ public final class HostAccessKeeper {
             case LampEvent.Warning warning -> changeNotifications(it -> it.told(new Notifications.Warned(warning.problem().title(), warning.problem().whatHappened()), now));
             case LampEvent.HostAccessAsked asked -> changeNotifications(it -> it.asked(new Notifications.HostTool(asked.tool(), asked.what()), now));
             case LampEvent.WebPortAsked asked -> changeNotifications(it -> it.asked(new Notifications.WebPort(asked.sandboxPort(), asked.what()), now));
-            case LampEvent.WebPublished published -> changeNotifications(it -> it.published(new Notifications.Published(published.port().name(), published.port().link()), now));
+            case LampEvent.WebPublished published -> changeNotifications(it -> it.published(new Notifications.Published(
+                    published.port().name(), published.port().sandboxPort(), published.port().link(), published.openedByTheAgent()), now));
             default -> {}
         }
     }
