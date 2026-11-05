@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
+import dev.gui.AppLog;
 import dev.gui.desktop.Desktop;
 import dev.gui.model.Conversation;
 import dev.gui.model.Conversations;
@@ -387,6 +388,19 @@ public final class GenieRunner {
         hostAccess.wentOut();
     }
 
+    /// `event` in the [AppLog], as a line from this genie's lamp: its warnings and failures as
+    /// such, its notes as information, and everything else as detail.
+    private void logged(LampEvent event) {
+        AppLog.Level level = switch (event) {
+            case LampEvent.Failure _ -> AppLog.Level.ERROR;
+            case LampEvent.Warning _ -> AppLog.Level.WARN;
+            case LampEvent.Info _, LampEvent.Ok _, LampEvent.StepStarted _, LampEvent.SessionStateChanged _ -> AppLog.Level.INFO;
+            default -> AppLog.Level.DEBUG;
+        };
+        AppLog log = AppLog.shared();
+        if (log.keeps(level)) log.add(level, "lamp " + directory.getFileName(), event.toString());
+    }
+
     /// The catch-up of a lamp being joined has ended. A question of the user's that the genie
     /// answers becomes this chat's run again, and the chat shows it; then what was held back is
     /// heard, in order.
@@ -478,7 +492,9 @@ public final class GenieRunner {
     private Consumer<LampEvent> heardFromThisLamp() {
         long lampNumber = lampsPutOut.get();
         return event -> {
-            if (lampNumber == lampsPutOut.get()) onLampEvent(event);
+            if (lampNumber != lampsPutOut.get()) return;
+            logged(event);
+            onLampEvent(event);
         };
     }
 

@@ -13,7 +13,7 @@ import org.slf4j.spi.MDCAdapter;
 import org.slf4j.spi.SLF4JServiceProvider;
 
 /// Takes what SwingTree and Sprouts log through slf4j: their errors to the [ErrorLog], their
-/// warnings to the error output, the rest nowhere.
+/// warnings to the error output, and all of it, as far as it keeps that level, to the [AppLog].
 ///
 /// SwingTree catches an exception thrown in an event handler, such as a button's, and logs it
 /// instead of letting it through. Without this, Genies would never hear of it: oillamp binds slf4j
@@ -42,9 +42,9 @@ public final class LoggedErrors implements SLF4JServiceProvider {
             this.name = name;
         }
 
-        @Override public boolean isTraceEnabled() { return false; }
-        @Override public boolean isDebugEnabled() { return false; }
-        @Override public boolean isInfoEnabled() { return false; }
+        @Override public boolean isTraceEnabled() { return AppLog.shared().keeps(AppLog.Level.TRACE); }
+        @Override public boolean isDebugEnabled() { return AppLog.shared().keeps(AppLog.Level.DEBUG); }
+        @Override public boolean isInfoEnabled() { return AppLog.shared().keeps(AppLog.Level.INFO); }
         @Override public boolean isWarnEnabled() { return true; }
         @Override public boolean isErrorEnabled() { return true; }
 
@@ -58,10 +58,14 @@ public final class LoggedErrors implements SLF4JServiceProvider {
             final @Nullable Throwable thrown
         ) {
             String message = MessageFormatter.basicArrayFormat(pattern, arguments);
-            if (level == Level.ERROR && Thread.getDefaultUncaughtExceptionHandler() instanceof ErrorLog log)
+            // The error log hands its errors to the app log itself.
+            if (level == Level.ERROR && Thread.getDefaultUncaughtExceptionHandler() instanceof ErrorLog log) {
                 log.record(name + ", which logged: " + message,
                            thrown != null ? thrown : new IllegalStateException(message));
-            else
+                return;
+            }
+            AppLog.shared().add(AppLog.Level.valueOf(level.name()), name, message + (thrown == null ? "" : ": " + thrown));
+            if (level == Level.ERROR || level == Level.WARN)
                 System.err.println("genies: " + level + " from " + name + ": " + message
                                    + (thrown == null ? "" : ": " + thrown));
         }
