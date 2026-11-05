@@ -491,14 +491,14 @@ public final class GeniesView extends JPanel {
                     html(
                         Viewable.of(String.class, shown, state, (it, s) ->
                             "⌂  " + (
-                                !it.hostAccess().waitingAt(s.now()).isEmpty()
+                                !it.notifications().waitingAt(s.now()).isEmpty()
                                     ? s.lang().WINDOW().ASKS_YOU_TO_ALLOW_SOMETHING()
                                     : s.lang().WINDOW().MAY_REACH_THIS_COMPUTER()
                             )
                         )
                     )
                     .isVisibleIf(Viewable.of(Boolean.class, shown, state, (it, s) ->
-                        it.hostAccess().saved().on() || !it.hostAccess().waitingAt(s.now()).isEmpty()
+                        it.hostAccess().saved().on() || !it.notifications().waitingAt(s.now()).isEmpty()
                     ))
                     .withStyle(theme, (now, it) -> it
                         .componentFont(f -> f
@@ -953,30 +953,32 @@ public final class GeniesView extends JPanel {
             .withChildConstraints(MigAddConstraint.of(words), MigAddConstraint.of(quiet), MigAddConstraint.of(flame));
     }
 
-    /// What the banner under the header shows about the selected genie's lamp: the oldest request
-    /// it still waits on the user's decision about, or else the oldest web server it published
-    /// that the user did not put away yet, or nothing.
+    /// What the banner under the header shows about the selected genie's lamp: the oldest question
+    /// it still waits on the user's answer to, or else the oldest web server it published that
+    /// the user did not put away yet, or nothing. Each is one of the genie's [Notifications].
     private sealed interface Banner {
         record Nothing() implements Banner {}
-        record Asking(HostAccess.RequestForPermission request) implements Banner {}
-        record Link(HostAccess.Published server) implements Banner {}
+        record Asking(Notifications.Question question) implements Banner {}
+        record Link(Notifications.Notification shown, Notifications.Published server) implements Banner {}
     }
 
-    /// What the banner shows of `access` at `now`. A request comes first: the lamp waits only
-    /// [HostAccess#PATIENCE] for an answer, and a link waits as long as the user likes.
-    private static Banner banner(HostAccess access, Instant now) {
-        Optional<HostAccess.RequestForPermission> request = access.waitingAt(now).stream().findFirst();
-        if (request.isPresent()) return new Banner.Asking(request.get());
-        return access.published().stream().findFirst().<Banner>map(Banner.Link::new).orElse(new Banner.Nothing());
+    /// What the banner shows of `notifications` at `now`. A question comes first: the lamp waits
+    /// only [Notifications#PATIENCE] for an answer, and a link waits as long as the user likes.
+    private static Banner banner(Notifications notifications, Instant now) {
+        for (Notifications.Notification waiting : notifications.waitingAt(now))
+            if (waiting.about() instanceof Notifications.Question question) return new Banner.Asking(question);
+        for (Notifications.Notification shown : notifications.links())
+            if (shown.about() instanceof Notifications.Published server) return new Banner.Link(shown, server);
+        return new Banner.Nothing();
     }
 
     /// What the banner says, in two lines: what it is about, and what the user's answer means.
     private static String saying(Banner banner, String genie, Lang.Header words) {
         return switch (banner) {
             case Banner.Nothing _ -> "";
-            case Banner.Asking asking -> switch (asking.request().about()) {
-                case HostAccess.RequestForPermission.About.HostTool _ -> words.ASKS_YOU_TO_ALLOW(genie, asking.request().what());
-                case HostAccess.RequestForPermission.About.WebPort port -> words.ASKS_TO_PUBLISH_THE_WEB_SERVER_IT_STARTED_ON_PORT(genie, port.sandboxPort());
+            case Banner.Asking asking -> switch (asking.question()) {
+                case Notifications.HostTool tool -> words.ASKS_YOU_TO_ALLOW(genie, tool.what());
+                case Notifications.WebPort port -> words.ASKS_TO_PUBLISH_THE_WEB_SERVER_IT_STARTED_ON_PORT(genie, port.sandboxPort());
             };
             case Banner.Link link -> words.PUBLISHED_FOR_YOUR_BROWSER(genie, link.server().name(), link.server().link().toString());
         };
@@ -985,9 +987,9 @@ public final class GeniesView extends JPanel {
     private static String meaning(Banner banner, Lang.Header words) {
         return switch (banner) {
             case Banner.Nothing _ -> "";
-            case Banner.Asking asking -> switch (asking.request().about()) {
-                case HostAccess.RequestForPermission.About.HostTool _ -> words.A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO();
-                case HostAccess.RequestForPermission.About.WebPort _ -> words.ALLOW_GIVES_IT_A_LINK_ONLY_THIS_COMPUTERS_BROWSER_CAN_OPEN();
+            case Banner.Asking asking -> switch (asking.question()) {
+                case Notifications.HostTool _ -> words.A_MODEL_ALLOWED_IT_ALREADY_THIS_ONE_NEEDS_YOU_TOO();
+                case Notifications.WebPort _ -> words.ALLOW_GIVES_IT_A_LINK_ONLY_THIS_COMPUTERS_BROWSER_CAN_OPEN();
             };
             case Banner.Link _ -> words.THE_LINK_WORKS_ON_THIS_COMPUTER_WHILE_THE_GENIE_IS_AWAKE();
         };
@@ -997,10 +999,10 @@ public final class GeniesView extends JPanel {
     /// user to allow, such as running a program or publishing a web server, with Refuse and
     /// Allow; or a web server it published, with its link, Open and Dismiss. The oldest request
     /// first; the next one, if any, takes its place once the user decided. The lamp refuses a
-    /// request nobody decided about after [HostAccess#PATIENCE], and it goes away then. A link
+    /// request nobody decided about after [Notifications#PATIENCE], and it goes away then. A link
     /// stays until the user dismisses it, or the lamp goes out.
     private UIForAnySwing<?, ?> requestForPermission(Val<Boolean> visible) {
-        Val<Banner> banner = Viewable.of(Banner.class, genie, state, (it, s) -> banner(it.hostAccess(), s.now()));
+        Val<Banner> banner = Viewable.of(Banner.class, genie, state, (it, s) -> banner(it.notifications(), s.now()));
         Val<Boolean> shown = Viewable.of(Boolean.class, visible, banner, (on, what) -> on && !(what instanceof Banner.Nothing));
         Val<Boolean> link = banner.viewAs(Boolean.class, it -> it instanceof Banner.Link);
         Val<Layout> layout = state.viewAs(Layout.class, it -> it.area().width() >= UI.scale(BANNER_IN_ONE_ROW_FROM) ? BANNER_IN_ONE_ROW : BUTTONS_UNDER_THE_WORDS);
@@ -1024,8 +1026,8 @@ public final class GeniesView extends JPanel {
                 button(Viewable.of(String.class, link, headerWords, (isLink, words) -> isLink ? words.DISMISS() : words.REFUSE())).group(Skin.QUIET_BUTTON)
                 .onClick(_ -> {
                     switch (banner.get()) {
-                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.request().what(), false);
-                        case Banner.Link shownLink -> genie.update(From.VIEW, it -> it.withHostAccess(it.hostAccess().putAway(shownLink.server())));
+                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.question().what(), false);
+                        case Banner.Link shownLink -> genie.update(From.VIEW, it -> it.withNotifications(it.notifications().putAway(shownLink.shown())));
                         case Banner.Nothing _ -> {}
                     }
                 })
@@ -1035,7 +1037,7 @@ public final class GeniesView extends JPanel {
                 .withTooltip(Viewable.of(String.class, link, headerWords, (isLink, words) -> isLink ? words.OPEN_IT_IN_YOUR_BROWSER() : ""))
                 .onClick(_ -> {
                     switch (banner.get()) {
-                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.request().what(), true);
+                        case Banner.Asking asking -> app.decidePermission(genie.get().id(), asking.question().what(), true);
                         case Banner.Link shownLink -> app.openInBrowser(shownLink.server().link());
                         case Banner.Nothing _ -> {}
                     }
