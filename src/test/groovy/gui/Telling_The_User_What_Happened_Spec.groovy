@@ -61,7 +61,7 @@ class Telling_The_User_What_Happened_Spec extends Specification {
         """
         given:
             var notifications = Notifications.NONE
-                .published(new Notifications.Published('opencode', URI.create('http://k3v7x2ab.localhost:41237/')), AT)
+                .published(new Notifications.Published('opencode', 4096, URI.create('http://k3v7x2ab.localhost:41237/'), false), AT)
                 .told(new Notifications.Warned('The sandbox image is old', 'It was made 41 days ago.'), AT)
                 .asked(new Notifications.HostTool('host_run', 'run `make test`'), AT.plusSeconds(1))
                 .seenAt(AT.plusSeconds(2))
