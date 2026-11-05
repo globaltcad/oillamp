@@ -215,7 +215,7 @@ public final class GenieRunner {
     /// The user allows or refuses a request the genie's lamp asked them about, named by its words.
     public void decidePermission(String request, boolean allowed) {
         Optional<LampLighter.Lit> lit = lamp;
-        changes.accept(genie -> genie.withHostAccess(genie.hostAccess().permissionDecided(request)));
+        changes.accept(genie -> genie.withNotifications(genie.notifications().decided(request, allowed)));
         if (lit.isEmpty()) return;
         Thread.ofVirtual().name("permission").start(() -> {
             try {

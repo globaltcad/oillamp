@@ -1,9 +1,6 @@
 package dev.gui.model;
 
-import java.net.URI;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -11,8 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import sprouts.Tuple;
 
 /// A genie's host access as its page shows it: whether its agent may reach this computer, the
 /// rules the checker model judges each of its requests against, and when the user decides too.
@@ -33,18 +28,13 @@ import sprouts.Tuple;
 /// @param busy      whether a save is on its way to the lamp
 /// @param problem   what failed last, the reading or the save, with why in the lamp's words; empty
 ///                  when it did not
-/// @param requestsForPermission the requests the genie's lamp asks the user to allow, oldest first
-/// @param published the web servers in the genie's sandbox its lamp published to this computer's
-///                  browser, which the user did not put away yet, oldest first
 public record HostAccess(
     boolean read,
     boolean lamp,
     PermissionRules saved,
     PermissionRules draft,
     boolean busy,
-    Optional<Problem> problem,
-    Tuple<RequestForPermission> requestsForPermission,
-    Tuple<Published> published
+    Optional<Problem> problem
 ) {
 
     /// What failed last, which the page says until the next save. Each says why in `reason`, in
@@ -69,11 +59,7 @@ public record HostAccess(
         }
     }
 
-    public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, Optional.empty(),
-                                                           Tuple.of(RequestForPermission.class), Tuple.of(Published.class));
-
-    /// How long the lamp waits for the user to allow a request. It refuses the request after that.
-    public static final Duration PATIENCE = Duration.ofSeconds(60);
+    public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, Optional.empty());
 
     /// Who lets the agent run a command on this computer: `commands` in the lamp's file. A
     /// command names no folder the lamp could check, and can do anything the user can.
@@ -206,73 +192,16 @@ public record HostAccess(
         }
     }
 
-    /// A request the genie's lamp asks the user to allow, such as running a command or publishing
-    /// a web server.
-    ///
-    /// @param about what it asks about
-    /// @param what  what is about to happen, in the lamp's words; the user's decision names the
-    ///              request by this
-    /// @param at    when the lamp asked
-    public record RequestForPermission(About about, String what, Instant at) {
-
-        /// What a request is about, which is what its question says to the user.
-        public sealed interface About {
-            /// A request of the agent's to reach this computer with `tool`, such as `host_bash`,
-            /// which the checker model allowed already, and which needs the user too.
-            record HostTool(String tool) implements About {}
-            /// Publishing the web server the agent started on `sandboxPort` in its sandbox to this
-            /// computer's browser.
-            record WebPort(int sandboxPort) implements About {}
-        }
-    }
-
-    /// A web server in the genie's sandbox that its lamp published to this computer's browser.
-    ///
-    /// @param name what the lamp calls it, such as `opencode` or `port-5173`
-    /// @param link what to open in a browser, such as `http://k3v7x2ab.localhost:41237/`
-    public record Published(String name, URI link) {}
-
-    public HostAccess withDraft(PermissionRules draft)     { return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission, published); }
-    public HostAccess withBusy(boolean busy)     { return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission, published); }
-    public HostAccess withProblem(Problem problem) { return new HostAccess(read, lamp, saved, draft, busy, Optional.of(problem), requestsForPermission, published); }
-    public HostAccess noProblem()                 { return new HostAccess(read, lamp, saved, draft, busy, Optional.empty(), requestsForPermission, published); }
+    public HostAccess withDraft(PermissionRules draft)     { return new HostAccess(read, lamp, saved, draft, busy, problem); }
+    public HostAccess withBusy(boolean busy)     { return new HostAccess(read, lamp, saved, draft, busy, problem); }
+    public HostAccess withProblem(Problem problem) { return new HostAccess(read, lamp, saved, draft, busy, Optional.of(problem)); }
+    public HostAccess noProblem()                 { return new HostAccess(read, lamp, saved, draft, busy, Optional.empty()); }
 
     /// Read from the lamp, or saved to it: what the page shows is what the file has.
     public HostAccess readAs(boolean lamp, PermissionRules rules) {
-        return new HostAccess(true, lamp, rules, rules, false, Optional.empty(), requestsForPermission, published);
+        return new HostAccess(true, lamp, rules, rules, false, Optional.empty());
     }
 
     /// Whether the page shows rules the lamp's file does not have yet.
     public boolean changed() { return !draft.equals(saved); }
-
-    public HostAccess permissionRequested(RequestForPermission request) {
-        return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission.add(request), published);
-    }
-
-    /// The user allowed or refused the request the lamp described as `what`.
-    public HostAccess permissionDecided(String what) {
-        return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission.removeIf(it -> it.what().equals(what)), published);
-    }
-
-    /// The requests the lamp still waits on the user's decision about at `now`.
-    public Tuple<RequestForPermission> waitingAt(Instant now) {
-        return requestsForPermission.retainIf(it -> it.at().plus(PATIENCE).isAfter(now));
-    }
-
-    /// The lamp published a web server; one it published before under that name is replaced.
-    public HostAccess webPublished(Published server) {
-        return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission,
-                              published.removeIf(it -> it.name().equals(server.name())).add(server));
-    }
-
-    /// The user put the link to a published web server away.
-    public HostAccess putAway(Published server) {
-        return new HostAccess(read, lamp, saved, draft, busy, problem, requestsForPermission, published.remove(server));
-    }
-
-    /// The genie's lamp went out, and with it every request it waited on the user's decision
-    /// about, and every web server it published.
-    public HostAccess wentOut() {
-        return new HostAccess(read, lamp, saved, draft, busy, problem, Tuple.of(RequestForPermission.class), Tuple.of(Published.class));
-    }
 }

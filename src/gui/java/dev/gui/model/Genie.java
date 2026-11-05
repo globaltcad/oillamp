@@ -29,6 +29,7 @@ import sprouts.Tuple;
 /// @param schedule  the jobs that wake it, as its schedule page shows them
 /// @param history   the moments its home was saved at, as its history page shows them
 /// @param hostAccess whether it may reach this computer, and its rules, as its host access page shows them
+/// @param notifications what its lamp asked the user, or told them, and what became of it
 /// @param home      where its home is on this computer, and its folders, as its Actions page shows them
 /// @param elsewhere its lamp's directory, when Genies did not make it: a lamp someone lit with
 ///                  `oillamp at`, which Genies found running or was given. Nothing for a lamp on
@@ -48,6 +49,7 @@ public record Genie(
     Schedule schedule,
     History history,
     HostAccess hostAccess,
+    Notifications notifications,
     Home home,
     Optional<Path> elsewhere
 ) implements HasId<UUID> {
@@ -187,27 +189,29 @@ public record Genie(
             Schedule.unread(ZoneId.systemDefault()),
             History.UNREAD,
             HostAccess.UNREAD,
+            Notifications.NONE,
             Home.UNREAD,
             Optional.empty()
         );
     }
 
-    public Genie withName(String name)             { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withPhase(Phase phase)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withActivity(Activity activity)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withTranscript(Transcript transcript) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withDraft(String draft)           { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withTokens(int tokens)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withHandouts(Tuple<Handout> handouts) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
+    public Genie withName(String name)             { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withPhase(Phase phase)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withActivity(Activity activity)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withTranscript(Transcript transcript) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withDraft(String draft)           { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withTokens(int tokens)            { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withHandouts(Tuple<Handout> handouts) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
     /// Closing the desktop also forgets what the genie said it shows there.
-    public Genie withDesktopShown(boolean shown)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, shown, shown ? showing : "", conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withShowing(String showing)       { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withConversations(Conversations conversations) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withSchedule(Schedule schedule)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withHistory(History history)      { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withHostAccess(HostAccess hostAccess) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withHome(Home home)               { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
-    public Genie withElsewhere(Optional<Path> elsewhere) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, home, elsewhere); }
+    public Genie withDesktopShown(boolean shown)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, shown, shown ? showing : "", conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withShowing(String showing)       { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withConversations(Conversations conversations) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withSchedule(Schedule schedule)   { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withHistory(History history)      { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withHostAccess(HostAccess hostAccess) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withNotifications(Notifications notifications) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withHome(Home home)               { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
+    public Genie withElsewhere(Optional<Path> elsewhere) { return new Genie(id, name, phase, activity, transcript, draft, tokens, handouts, desktopShown, showing, conversations, schedule, history, hostAccess, notifications, home, elsewhere); }
 
     /// A genie whose lamp someone lit with `oillamp at`, in `directory`, not Genies: named as its
     /// directory is, asleep until Genies finds its lamp lit and joins it.
