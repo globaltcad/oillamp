@@ -77,6 +77,11 @@ public enum Lang {
         return new HostAccessPage(this);
     }
 
+    /// The words of what a genie's lamp asked the user and told them, and of Genies' log.
+    public NotificationsPage NOTIFICATIONS_PAGE() {
+        return new NotificationsPage(this);
+    }
+
     /// The words of the settings every genie shares, and the welcome above them.
     public SettingsPage SETTINGS_PAGE() {
         return new SettingsPage(this);
@@ -1105,6 +1110,36 @@ public enum Lang {
                 case SPANISH -> "Acceso al equipo: si el genio puede acceder a este equipo, y con qué reglas";
                 case JAPANESE -> "ホストへのアクセス：ジーニーがこのコンピューターにアクセスできるかどうかと、そのルール";
                 case CHINESE -> "主机访问：精灵能否访问这台电脑，以及相关规则";
+            };
+        }
+
+        public String NOTIFICATIONS_WHAT_THE_GENIES_LAMP_ASKED_AND_TOLD_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Notifications: what the genie's lamp asked and told you";
+                case GERMAN -> "Benachrichtigungen: was die Lampe des Dschinns dich gefragt und dir gesagt hat";
+                case SPANISH -> "Notificaciones: lo que la lámpara del genio te preguntó y te contó";
+                case JAPANESE -> "通知: ジーニーのランプが尋ねたこと、伝えたこと";
+                case CHINESE -> "通知：精灵的灯问过你和告诉过你的事";
+            };
+        }
+
+        public String NOTIFICATIONS_SOMETHING_NEW_NEEDS_A_LOOK() {
+            return switch (lang) {
+                case ENGLISH -> "Notifications: something new needs a look";
+                case GERMAN -> "Benachrichtigungen: etwas Neues will angesehen werden";
+                case SPANISH -> "Notificaciones: hay algo nuevo que mirar";
+                case JAPANESE -> "通知: 新しく確認が必要なものがあります";
+                case CHINESE -> "通知：有新内容需要查看";
+            };
+        }
+
+        public String BACK_FROM_THE_NOTIFICATIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Back to where you were";
+                case GERMAN -> "Zurück dorthin, wo du warst";
+                case SPANISH -> "Volver a donde estabas";
+                case JAPANESE -> "元の画面に戻る";
+                case CHINESE -> "回到之前的页面";
             };
         }
     }
@@ -3254,6 +3289,331 @@ public enum Lang {
                 case CHINESE -> "这里什么都没有列出，因此审核模型会拒绝所有请求。";
             };
         }
+    }
+
+    /// The words of a genie's notifications: what its lamp asked the user and told them, what
+    /// went wrong in Genies, and its log.
+    public record NotificationsPage(Lang lang) {
+        public String NOTIFICATIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Notifications";
+                case GERMAN -> "Benachrichtigungen";
+                case SPANISH -> "Notificaciones";
+                case JAPANESE -> "通知";
+                case CHINESE -> "通知";
+            };
+        }
+
+        public String WHAT_THE_LAMP_ASKED_AND_TOLD_YOU(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "What " + genie + "'s lamp asked you and told you, and what went on inside Genies.";
+                case GERMAN -> "Was die Lampe von " + genie + " dich gefragt und dir gesagt hat, und was in Genies vor sich ging.";
+                case SPANISH -> "Lo que la lámpara de " + genie + " te preguntó y te contó, y lo que pasó dentro de Genies.";
+                case JAPANESE -> genie + " のランプがあなたに尋ねたこと、伝えたこと、そして Genies の中で起きたことです。";
+                case CHINESE -> genie + " 的灯问过你什么、告诉过你什么，以及 Genies 内部发生了什么。";
+            };
+        }
+
+        public String ASKED_OF_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Asked of you";
+                case GERMAN -> "Fragen an dich";
+                case SPANISH -> "Preguntas para ti";
+                case JAPANESE -> "あなたへの質問";
+                case CHINESE -> "问你的事";
+            };
+        }
+
+        public String NOTHING_WAS_ASKED_YET() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing was asked yet.";
+                case GERMAN -> "Bisher wurde nichts gefragt.";
+                case SPANISH -> "Aún no se ha preguntado nada.";
+                case JAPANESE -> "まだ何も尋ねられていません。";
+                case CHINESE -> "还没有问过任何事。";
+            };
+        }
+
+        public String FROM_THE_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "From the lamp";
+                case GERMAN -> "Von der Lampe";
+                case SPANISH -> "De la lámpara";
+                case JAPANESE -> "ランプから";
+                case CHINESE -> "来自灯";
+            };
+        }
+
+        public String NOTHING_WAS_REPORTED_YET() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing was reported yet.";
+                case GERMAN -> "Bisher wurde nichts gemeldet.";
+                case SPANISH -> "Aún no se ha informado nada.";
+                case JAPANESE -> "まだ何も報告されていません。";
+                case CHINESE -> "还没有任何报告。";
+            };
+        }
+
+        public String INSIDE_GENIES() {
+            return switch (lang) {
+                case ENGLISH -> "Inside Genies";
+                case GERMAN -> "In Genies";
+                case SPANISH -> "Dentro de Genies";
+                case JAPANESE -> "Genies の内部";
+                case CHINESE -> "Genies 内部";
+            };
+        }
+
+        public String NOTHING_WENT_WRONG() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing went wrong.";
+                case GERMAN -> "Nichts ist schiefgelaufen.";
+                case SPANISH -> "Nada salió mal.";
+                case JAPANESE -> "問題は起きていません。";
+                case CHINESE -> "没有出错。";
+            };
+        }
+
+        public String CLEAR() {
+            return switch (lang) {
+                case ENGLISH -> "Clear";
+                case GERMAN -> "Leeren";
+                case SPANISH -> "Vaciar";
+                case JAPANESE -> "クリア";
+                case CHINESE -> "清空";
+            };
+        }
+
+        public String REMOVE_ALL_BUT_THE_QUESTIONS_STILL_WAITING_FOR_YOUR_ANSWER() {
+            return switch (lang) {
+                case ENGLISH -> "Remove all of these, but the questions still waiting for your answer";
+                case GERMAN -> "Alle entfernen, außer den Fragen, die noch auf deine Antwort warten";
+                case SPANISH -> "Quitar todo, salvo las preguntas que aún esperan tu respuesta";
+                case JAPANESE -> "まだ回答を待っている質問以外をすべて削除します";
+                case CHINESE -> "移除全部，仍在等你回答的问题除外";
+            };
+        }
+
+        public String REMOVE_WHAT_WENT_WRONG_THE_ERROR_LOG_KEEPS_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Remove what went wrong from here; the error log keeps it";
+                case GERMAN -> "Entfernt, was schiefgelaufen ist, von hier; das Fehlerprotokoll behält es";
+                case SPANISH -> "Quita de aquí lo que salió mal; el registro de errores lo conserva";
+                case JAPANESE -> "ここから削除します。エラーログには残ります";
+                case CHINESE -> "从这里移除出错记录；错误日志会保留它们";
+            };
+        }
+
+        public String REMOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Remove";
+                case GERMAN -> "Entfernen";
+                case SPANISH -> "Quitar";
+                case JAPANESE -> "削除";
+                case CHINESE -> "移除";
+            };
+        }
+
+        public String CLICK_TO_SHOW_OR_HIDE_THE_DETAILS() {
+            return switch (lang) {
+                case ENGLISH -> "Click to show or hide the details";
+                case GERMAN -> "Klicken, um die Details zu zeigen oder auszublenden";
+                case SPANISH -> "Haz clic para mostrar u ocultar los detalles";
+                case JAPANESE -> "クリックで詳細を表示・非表示";
+                case CHINESE -> "点击显示或隐藏详情";
+            };
+        }
+
+        public String ASKED_YOU(String what) {
+            return switch (lang) {
+                case ENGLISH -> "Asked you: " + what;
+                case GERMAN -> "Hat dich gefragt: " + what;
+                case SPANISH -> "Te preguntó: " + what;
+                case JAPANESE -> "質問: " + what;
+                case CHINESE -> "问你：" + what;
+            };
+        }
+
+        public String ASKED_TO_PUBLISH_THE_WEB_SERVER_ON_PORT(int port) {
+            return switch (lang) {
+                case ENGLISH -> "Asked to publish the web server on port " + port;
+                case GERMAN -> "Wollte den Webserver auf Port " + port + " veröffentlichen";
+                case SPANISH -> "Pidió publicar el servidor web del puerto " + port;
+                case JAPANESE -> "ポート " + port + " の Web サーバーの公開を求めました";
+                case CHINESE -> "请求发布端口 " + port + " 上的网页服务器";
+            };
+        }
+
+        public String PUBLISHED(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Published " + name;
+                case GERMAN -> name + " veröffentlicht";
+                case SPANISH -> "Publicó " + name;
+                case JAPANESE -> name + " を公開しました";
+                case CHINESE -> "已发布 " + name;
+            };
+        }
+
+        public String THE_CHECKER_ALLOWED(String tool) {
+            return switch (lang) {
+                case ENGLISH -> "The checker allowed " + tool;
+                case GERMAN -> "Das prüfende Modell hat " + tool + " erlaubt";
+                case SPANISH -> "El modelo que juzga permitió " + tool;
+                case JAPANESE -> "判断するモデルが " + tool + " を許可しました";
+                case CHINESE -> "审核模型允许了 " + tool;
+            };
+        }
+
+        public String THE_CHECKER_REFUSED(String tool) {
+            return switch (lang) {
+                case ENGLISH -> "The checker refused " + tool;
+                case GERMAN -> "Das prüfende Modell hat " + tool + " abgelehnt";
+                case SPANISH -> "El modelo que juzga rechazó " + tool;
+                case JAPANESE -> "判断するモデルが " + tool + " を拒否しました";
+                case CHINESE -> "审核模型拒绝了 " + tool;
+            };
+        }
+
+        public String REFUSED_A_REQUEST_FOR(String tool) {
+            return switch (lang) {
+                case ENGLISH -> "A request for " + tool + " was refused";
+                case GERMAN -> "Eine Anfrage für " + tool + " wurde abgelehnt";
+                case SPANISH -> "Se rechazó una petición de " + tool;
+                case JAPANESE -> tool + " へのリクエストが拒否されました";
+                case CHINESE -> "对 " + tool + " 的请求被拒绝";
+            };
+        }
+
+        public String WAITS_FOR_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Waits for you";
+                case GERMAN -> "Wartet auf dich";
+                case SPANISH -> "Te espera";
+                case JAPANESE -> "回答待ち";
+                case CHINESE -> "等你回答";
+            };
+        }
+
+        public String ALLOWED() {
+            return switch (lang) {
+                case ENGLISH -> "Allowed";
+                case GERMAN -> "Erlaubt";
+                case SPANISH -> "Permitido";
+                case JAPANESE -> "許可";
+                case CHINESE -> "已允许";
+            };
+        }
+
+        public String REFUSED() {
+            return switch (lang) {
+                case ENGLISH -> "Refused";
+                case GERMAN -> "Abgelehnt";
+                case SPANISH -> "Rechazado";
+                case JAPANESE -> "拒否";
+                case CHINESE -> "已拒绝";
+            };
+        }
+
+        public String UNANSWERED() {
+            return switch (lang) {
+                case ENGLISH -> "Unanswered";
+                case GERMAN -> "Unbeantwortet";
+                case SPANISH -> "Sin respuesta";
+                case JAPANESE -> "未回答";
+                case CHINESE -> "未回答";
+            };
+        }
+
+        public String LINK_WORKS() {
+            return switch (lang) {
+                case ENGLISH -> "Link works";
+                case GERMAN -> "Link geht";
+                case SPANISH -> "El enlace funciona";
+                case JAPANESE -> "リンク有効";
+                case CHINESE -> "链接可用";
+            };
+        }
+
+        public String LINK_GONE() {
+            return switch (lang) {
+                case ENGLISH -> "Link gone";
+                case GERMAN -> "Link weg";
+                case SPANISH -> "Enlace caducado";
+                case JAPANESE -> "リンク無効";
+                case CHINESE -> "链接已失效";
+            };
+        }
+
+        public String WARNING() {
+            return switch (lang) {
+                case ENGLISH -> "Warning";
+                case GERMAN -> "Warnung";
+                case SPANISH -> "Aviso";
+                case JAPANESE -> "警告";
+                case CHINESE -> "警告";
+            };
+        }
+
+        public String SHOW_THE_LOG() {
+            return switch (lang) {
+                case ENGLISH -> "Show the log";
+                case GERMAN -> "Protokoll zeigen";
+                case SPANISH -> "Mostrar el registro";
+                case JAPANESE -> "ログを表示";
+                case CHINESE -> "显示日志";
+            };
+        }
+
+        public String HIDE_THE_LOG() {
+            return switch (lang) {
+                case ENGLISH -> "Hide the log";
+                case GERMAN -> "Protokoll ausblenden";
+                case SPANISH -> "Ocultar el registro";
+                case JAPANESE -> "ログを隠す";
+                case CHINESE -> "隐藏日志";
+            };
+        }
+
+        public String FILTER() {
+            return switch (lang) {
+                case ENGLISH -> "Filter…";
+                case GERMAN -> "Filtern…";
+                case SPANISH -> "Filtrar…";
+                case JAPANESE -> "絞り込み…";
+                case CHINESE -> "筛选…";
+            };
+        }
+
+        public String WHAT_WAS_LOGGED_THE_LAST_LINES(int lines) {
+            return switch (lang) {
+                case ENGLISH -> "What Genies, its libraries and the genies' lamps logged: the last " + lines + " lines, the newest at the bottom.";
+                case GERMAN -> "Was Genies, seine Bibliotheken und die Lampen der Dschinns protokolliert haben: die letzten " + lines + " Zeilen, die neuesten unten.";
+                case SPANISH -> "Lo que registraron Genies, sus bibliotecas y las lámparas de los genios: las últimas " + lines + " líneas, las más nuevas abajo.";
+                case JAPANESE -> "Genies、そのライブラリ、ジーニーのランプが記録したものです。最新 " + lines + " 行で、新しいものが下です。";
+                case CHINESE -> "Genies、它的库以及精灵的灯记录的内容：最近 " + lines + " 行，最新的在最下面。";
+            };
+        }
+
+        public String NO_LINE_MATCHES() {
+            return switch (lang) {
+                case ENGLISH -> "No line matches.";
+                case GERMAN -> "Keine Zeile passt.";
+                case SPANISH -> "Ninguna línea coincide.";
+                case JAPANESE -> "一致する行はありません。";
+                case CHINESE -> "没有匹配的行。";
+            };
+        }
+
+        public String SHOW_LINES_OF_THIS_LEVEL_AND_ABOVE() {
+            return switch (lang) {
+                case ENGLISH -> "Show the lines of this level and above";
+                case GERMAN -> "Zeilen dieser Stufe und darüber zeigen";
+                case SPANISH -> "Mostrar las líneas de este nivel y superiores";
+                case JAPANESE -> "このレベル以上の行を表示";
+                case CHINESE -> "显示此级别及以上的行";
+            };
+        }
+
     }
 
     /// The words of the settings every genie shares, and of the welcome above them while there
