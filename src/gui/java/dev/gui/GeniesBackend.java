@@ -1,5 +1,7 @@
 package dev.gui;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -56,6 +58,8 @@ import sprouts.Viewable;
 /// reports what happens as changes to its genie, which are applied here, on Swing's event
 /// thread, one at a time.
 public final class GeniesBackend implements Genies {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GeniesBackend.class);
 
     /// How long closing or deleting waits for a genie's lamp to go out or be let go.
     private static final long SECONDS_TO_LET_GO_OF_A_LAMP = 180;
@@ -409,6 +413,7 @@ public final class GeniesBackend implements Genies {
                 });
             } catch (IOException unknown) {
                 // Asked again next time.
+                LOG.debug("Could not find out which lamps are lit", unknown);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -479,6 +484,7 @@ public final class GeniesBackend implements Genies {
                 if (where.isPresent()) read = Optional.of(GenieHomeUtil.read(where.get(), folder));
             } catch (IOException gone) {
                 // Deleted, or made a link, since it was shown.
+                LOG.debug("Could not read the folder {} of a genie's home", folder, gone);
             }
             Optional<Home.Folder> fresh = read;
             SwingUtilities.invokeLater(() -> state.update(it -> it.update(id, genie -> genie.withHome(

@@ -1,5 +1,8 @@
 package dev.gui.genie;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.nio.file.NoSuchFileException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,6 +41,8 @@ import sprouts.Tuple;
 ///
 /// The directory is `$XDG_DATA_HOME/genies`, which is usually `~/.local/share/genies`.
 public final class Shelf {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Shelf.class);
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -78,6 +83,7 @@ public final class Shelf {
                                          .withConversations(Conversations.NONE.withFolded(true)));
             } catch (IllegalArgumentException notAnIdOrAPath) {
                 // An entry someone edited by hand into something else is skipped.
+                LOG.warn("Skipped an entry of genies.json that names no genie: {}", entry, notAnIdOrAPath);
             }
         }
         return genies;
@@ -201,7 +207,10 @@ public final class Shelf {
     private JsonNode read(String name) {
         try {
             return JSON.readTree(Files.readString(root.resolve(name), StandardCharsets.UTF_8));
-        } catch (IOException missingOrBroken) {   // JacksonException is one too
+        } catch (NoSuchFileException missing) {
+            return JSON.createObjectNode();
+        } catch (IOException broken) {   // JacksonException is one too
+            LOG.warn("Could not read {}, so Genies goes on as without it", root.resolve(name), broken);
             return JSON.createObjectNode();
         }
     }
