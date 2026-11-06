@@ -35,28 +35,46 @@ import dev.gui.model.Palette;
 /// None of them, as on a computer without a desktop of these kinds, says nothing.
 ///
 /// It also says which language the desktop speaks, so that the first window speaks it too, if
-/// Genies does; again only until the user picks one.
+/// Genies does; again only until the user picks one. On Linux the locale variables say it; on
+/// Windows and macOS, where a program started from the Start menu or the Finder has none of
+/// them, the language the computer was set up in, as Java was told it, does.
 public final class SystemLook {
 
     private final Function<String, Optional<String>> environment;
     private final Function<List<String>, String> commands;
     private final Optional<Path> home;
+    private final Optional<Locale> computer;
 
-    /// The look the clues give.
+    /// The look the clues give, the language from the environment alone.
     ///
     /// @param environment the environment Genies was started from, by variable
     /// @param commands    what a command prints, or nothing when it is not there or fails
     /// @param home        the user's home, with the files desktops keep their settings in; none to
     ///                    read no files
     public SystemLook(Function<String, Optional<String>> environment, Function<List<String>, String> commands, Optional<Path> home) {
+        this(environment, commands, home, Optional.empty());
+    }
+
+    /// The look the clues give.
+    ///
+    /// @param computer the language the computer was set up in, for when the environment names
+    ///                 none, as on Windows and macOS; none to go by the environment alone
+    public SystemLook(
+        Function<String, Optional<String>> environment,
+        Function<List<String>, String> commands,
+        Optional<Path> home,
+        Optional<Locale> computer
+    ) {
         this.environment = environment;
         this.commands = commands;
         this.home = home;
+        this.computer = computer;
     }
 
     /// The look of the computer Genies runs on, started from `environment`.
     public static SystemLook ofThisComputer(Function<String, Optional<String>> environment) {
-        return new SystemLook(environment, SystemLook::output, Optional.of(Path.of(System.getProperty("user.home"))));
+        return new SystemLook(environment, SystemLook::output, Optional.of(Path.of(System.getProperty("user.home"))),
+                              Optional.of(Locale.getDefault(Locale.Category.DISPLAY)));
     }
 
     /// The look `environment` alone gives, without asking the computer anything: for Genies on
@@ -81,16 +99,29 @@ public final class SystemLook {
             .map(dark -> dark ? Palette.DARK : Palette.LIGHT);
     }
 
-    /// The language the desktop speaks, if Genies speaks it: the one of the locale its programs
-    /// are started with, such as `de_DE.UTF-8`, which `LC_ALL`, `LC_MESSAGES` and `LANG` name, the
-    /// first set deciding, as for any other program.
+    /// The language the desktop speaks, if Genies speaks it, as a program's messages are chosen:
+    ///
+    /// 1. the locale its programs are started with, such as `de_DE.UTF-8`, which `LC_ALL`,
+    ///    `LC_MESSAGES` and `LANG` name, the first set deciding;
+    /// 2. but before it, unless that locale is the plain `C` or `POSIX`, the first language of
+    ///    `LANGUAGE`, GNU's list of them in order, such as `es:en`, that Genies speaks;
+    /// 3. and when no variable names a locale, the language the computer was set up in.
     public Optional<Lang> lang() {
-        return Stream.of("LC_ALL", "LC_MESSAGES", "LANG")
+        Optional<String> locale = Stream.of("LC_ALL", "LC_MESSAGES", "LANG")
             .map(environment)
             .flatMap(Optional::stream)
             .filter(it -> !it.isBlank())
-            .findFirst()
-            .flatMap(SystemLook::spoken);
+            .findFirst();
+        boolean plain = locale.map(it -> it.equals("C") || it.startsWith("C.") || it.equals("POSIX")).orElse(false);
+        Optional<Lang> preferred = plain ? Optional.empty() : environment.apply("LANGUAGE").stream()
+            .flatMap(it -> Stream.of(it.split(":")))
+            .filter(it -> !it.isBlank())
+            .map(SystemLook::spoken)
+            .flatMap(Optional::stream)
+            .findFirst();
+        if (preferred.isPresent()) return preferred;
+        if (locale.isPresent()) return locale.flatMap(SystemLook::spoken);
+        return computer.flatMap(it -> spoken(it.getLanguage()));
     }
 
     /// The language `locale` names by its first part, such as `de` in `de_DE.UTF-8`, if Genies
