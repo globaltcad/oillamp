@@ -62,26 +62,48 @@ final class HomeFolders {
 
     /*
      *  A responsive grid inside the tile: the tree, and what links the folder chosen in it, side
-     *  by side from LARGE up; below, the tree on top.
+     *  by side from LARGE up; below, the tree on top. Where that folder is on this computer comes
+     *  last, the whole width, as a slim strip of its own.
      *
      *                  very small  small  medium  large  very large  oversize
-     *      the tree        12        12     12      7        7          7
-     *      linking         12        12     12      5        5          5
+     *      the tree        12        12     12      7        7          5
+     *      linking         12        12     12      5        5          7
+     *      where           12        12     12     12       12         12
      *
      *  The grid sits in the tile's layout, which asks it how tall it is at its width; a preferred
-     *  size set on it would answer instead. So the two parts' own widths make the width the
-     *  size classes are measured against: TREE_WIDTH and LINKING_WIDTH, side by side.
+     *  size set on it would answer instead. So the parts' own widths make the width the size
+     *  classes are measured against: TREE_WIDTH and PART_WIDTH, side by side. The strip claims no
+     *  width of its own, so it does not count.
+     *
+     *  Inside the strip, a grid of its own: the path, with the way to open it beside it once
+     *  the strip is wider than the two side by side, PATH_WIDTH and the link's own width.
+     *
+     *                  very small  small  medium  large  very large  oversize
+     *      the path        12        12     12     12       12          8
+     *      opening it      12        12     12     12       12          4
      */
     private static final int TREE_WIDTH = 420;
-    private static final int LINKING_WIDTH = 300;
+    private static final int PART_WIDTH = 300;
+    private static final int PATH_WIDTH = 360;
     private static final int TREE_HEIGHT = 250;
     private static final FlowCell TREE = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP).fill(true)
-        .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(7)
+        .verySmall(12).small(12).medium(12).large(7).veryLarge(7).oversize(5)
     );
     private static final FlowCell LINKING = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP)
-        .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(5)
+        .verySmall(12).small(12).medium(12).large(5).veryLarge(5).oversize(7)
+    );
+    private static final FlowCell WHERE = AUTO_SPAN(it ->
+        it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
+    );
+    private static final FlowCell PATH = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.CENTER)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(8)
+    );
+    private static final FlowCell OPENING = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.CENTER)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(4)
     );
 
     /// What the last link came to, and `what` it says of that: where the link is, or why there
@@ -182,10 +204,23 @@ final class HomeFolders {
     }
 
     UIForAnySwing<?, ?> view() {
-        // The tile asks the grid how tall it is at the width it has, which it gives the grid
-        // after. At a new width, the grid's parts may stand side by side or one under the other,
-        // so the tile asks again.
-        ComponentAdapter relayout = new ComponentAdapter() {
+        return
+            panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 14)
+            .withMinSize(0, 0)
+            .peek(it -> it.addComponentListener(relayoutAtNewWidth()))
+            // The grid's gaps are at its edges too; outside the tile's own edges, they line up
+            // with the words above.
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-14))
+            .add(TREE, tree())
+            .add(LINKING, linking())
+            .add(WHERE, where());
+    }
+
+    /// For a grid in a layout that asks it how tall it is at the width it has, which it gives
+    /// the grid after. At a new width, the grid's parts may stand side by side or one under the
+    /// other, so the layout asks again.
+    private static ComponentAdapter relayoutAtNewWidth() {
+        return new ComponentAdapter() {
             private int width = -1;
             @Override public void componentResized(ComponentEvent event) {
                 if (event.getComponent().getWidth() == width) return;
@@ -193,15 +228,6 @@ final class HomeFolders {
                 event.getComponent().getParent().revalidate();
             }
         };
-        return
-            panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 14, 14)
-            .withMinSize(0, 0)
-            .peek(it -> it.addComponentListener(relayout))
-            // The grid's gaps are at its edges too; outside the tile's own edges, they line up
-            // with the words above.
-            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-14))
-            .add(TREE, tree())
-            .add(LINKING, linking());
     }
 
     // ─── the tree ──────────────────────────────────────────────────────────────────────────
@@ -337,21 +363,43 @@ final class HomeFolders {
         }
     }
 
-    // ─── linking ───────────────────────────────────────────────────────────────────────────
+    // ─── where the folder is ───────────────────────────────────────────────────────────────
 
-    private UIForAnySwing<?, ?> linking() {
+    /// Where the chosen folder is on this computer, and a way to open it there.
+    private UIForAnySwing<?, ?> where() {
         Val<String> where = Viewable.of(String.class, home, chosen, (it, folder) ->
             it.where()
             .map(at -> folder.stream().reduce(at, Path::resolve, (a, _) -> a).toString())
             .orElse("")
         );
-        Val<String> documentsName = Val.of(String.valueOf(app.documents().getFileName()));
-        Val<Boolean> nameable = Viewable.of(Boolean.class, linkable, linkName, (can, name) -> can && !name.isBlank());
-        Val<String> said = Viewable.of(String.class, outcome, words, Outcome::words);
         return
-            box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[0:" + LINKING_WIDTH + ", grow]")
+            // Claiming no width, so that the folders' grid measures itself by its other parts.
+            box("fillx, wrap 1, ins 0, gap 4, hidemode 3", "[0:0, grow]")
             .add("growx, wmin 0", label(words.viewAsString(Lang.HomeFolders::ON_THIS_COMPUTER)).group(Skin.SECTION))
-            // A field nobody types in, but that the path can be selected and copied from.
+            .add("growx, wmin 0",
+                panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 4)
+                .withMinSize(0, 0)
+                .peek(it -> it.addComponentListener(relayoutAtNewWidth()))
+                // The grid's gaps are at its edges too; outside, they line up with the heading.
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-4, -8, -4, -8))
+                .add(PATH, path(where))
+                // In a box, where it keeps its own width, at the left of its cell.
+                .add(OPENING,
+                    box("ins 0")
+                    .add(
+                        ViewPartsUtil.link(theme, words.viewAsString(Lang.HomeFolders::OPEN_IN_YOUR_FILE_MANAGER))
+                        .isEnabledIf(linkable)
+                        .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
+                    )
+                )
+            );
+    }
+
+    /// The path, in a field nobody types in, but that it can be selected and copied from. It
+    /// claims PATH_WIDTH, whatever its length, so that the strip's grid measures itself by that.
+    private UIForAnySwing<?, ?> path(Val<String> where) {
+        return
+            box("fillx, ins 0", "[0:" + PATH_WIDTH + ", grow]")
             .add("growx, wmin 0",
                 textField(where).group(Skin.INPUT)
                 .isEditableIf(false)
@@ -362,13 +410,18 @@ final class HomeFolders {
                     .padding(4, 0, 4, 0)
                     .componentFont(f -> f.family(now.fonts().MONO()).size(12).color(now.palette().SUBTEXT()))
                 )
-            )
-            .add(
-                ViewPartsUtil.link(theme, words.viewAsString(Lang.HomeFolders::OPEN_IN_YOUR_FILE_MANAGER))
-                .isEnabledIf(linkable)
-                .onClick(_ -> app.showInFileManager(selected.get(), chosen.get()))
-            )
-            .add("growx, wmin 0, gaptop 6", label(words.viewAsString(Lang.HomeFolders::THE_LINKS_NAME)).group(Skin.SECTION))
+            );
+    }
+
+    // ─── linking ───────────────────────────────────────────────────────────────────────────
+
+    private UIForAnySwing<?, ?> linking() {
+        Val<String> documentsName = Val.of(String.valueOf(app.documents().getFileName()));
+        Val<Boolean> nameable = Viewable.of(Boolean.class, linkable, linkName, (can, name) -> can && !name.isBlank());
+        Val<String> said = Viewable.of(String.class, outcome, words, Outcome::words);
+        return
+            box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[0:" + PART_WIDTH + ", grow]")
+            .add("growx, wmin 0", label(words.viewAsString(Lang.HomeFolders::THE_LINKS_NAME)).group(Skin.SECTION))
             .add("growx, wmin 0",
                 textField(linkName).group(Skin.INPUT)
                 .isEnabledIf(linkable)
