@@ -33,6 +33,7 @@ final class SignSvgUtil {
     static final String GENIES = "<path d='M2.5 4h11M2.5 8h11M2.5 12h11'/>";
     static final String DELETE = "<path d='M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-9M6.8 7v4.5M9.2 7v4.5'/>";
     static final String NEW = "<path d='M8 3v10M3 8h10'/>";
+    static final String SEARCH = "<circle cx='7' cy='7' r='4.5'/><path d='M10.4 10.4L14 14'/>";
     static final String FOLD = "<path d='M4 10l4-4 4 4'/>";
     static final String UNFOLD = "<path d='M4 6l4 4 4-4'/>";
     static final String SETTINGS =
