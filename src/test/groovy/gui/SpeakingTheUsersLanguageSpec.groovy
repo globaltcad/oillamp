@@ -39,7 +39,8 @@ Genies says every text of its window in English, German, Spanish, Japanese or Ch
 user picks one beside the palette on the settings page, it speaks the language of the desktop it
 starts on, if it is one of these, and English otherwise. The desktop's language is the one of the
 locale its programs are started with, which `LC_ALL`, `LC_MESSAGES` and `LANG` name, the first set
-deciding, as for any other program.
+deciding, after GNU's `LANGUAGE` list, as for any other program; where none is set, as on Windows
+and macOS, it is the language the computer was set up in.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class SpeakingTheUsersLanguageSpec extends Specification {
@@ -68,6 +69,28 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             [LANG: 'fr_FR.UTF-8']                                || null
             [LANG: 'C']                                          || null
             [:]                                                  || null
+            [LANGUAGE: 'es:en', LANG: 'de_DE.UTF-8']             || Lang.SPANISH
+            [LANGUAGE: 'fr:ja', LANG: 'de_DE.UTF-8']             || Lang.JAPANESE
+            [LANGUAGE: 'fr', LANG: 'de_DE.UTF-8']                || Lang.GERMAN
+            [LANGUAGE: 'es', LANG: 'C.UTF-8']                    || null
+    }
+
+    def 'Where no variable names a locale, as on Windows and macOS, SystemLook takes the language the computer was set up in'() {
+        reportInfo """
+            Let's consider a Spanish speaker who starts Genies from the Start menu of Windows or
+            the Finder of macOS: no locale variable is set, but the computer was set up in
+            Spanish, as Java's default locale says. `SystemLook.lang()` then takes that one. A
+            locale variable, where one is set, still decides.
+        """
+        expect:
+            new SystemLook({ String name -> Optional.ofNullable(variables[name]) }, { '' }, Optional.empty(), Optional.of(computer)).lang() == Optional.ofNullable(lang)
+
+        where:
+            variables              | computer                         || lang
+            [:]                    | Locale.forLanguageTag('es-MX')   || Lang.SPANISH
+            [:]                    | Locale.forLanguageTag('zh-TW')   || Lang.CHINESE
+            [:]                    | Locale.forLanguageTag('fr-FR')   || null
+            [LANG: 'de_DE.UTF-8']  | Locale.forLanguageTag('es-ES')   || Lang.GERMAN
     }
 
     def 'Genies speaks the language of the desktop until the user picks one, and theirs from then on'() {
