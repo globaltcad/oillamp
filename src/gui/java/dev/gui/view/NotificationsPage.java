@@ -78,6 +78,11 @@ final class NotificationsPage {
     private static final FlowCell INSIDE = span(12, 12, 4);
     /// How tall the log is, unfolded.
     private static final int LOG_HEIGHT = 320;
+    /// From what page width on the log's levels stand in a row, in SwingTree's unscaled pixels:
+    /// wide enough for them and a short filter field beside them.
+    private static final int LEVELS_IN_A_ROW_FROM = 480;
+    /// How narrow the log's filter field may get.
+    private static final int FILTER_AT_LEAST = 70;
     /// How often the log looks for new lines while it is unfolded, in milliseconds.
     private static final int LOG_EVERY = 600;
     private static final DateTimeFormatter TODAY = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
@@ -467,15 +472,30 @@ final class NotificationsPage {
 
     /*
      *  The log unfolds under the cards, across the page, as the explanation on the host access
-     *  page does: first the panel opens, then its lines fade in. Above the lines, which level
-     *  and up to show, and words a line must hold:
+     *  page does: first the panel opens, then its lines fade in. Above the lines, words a line
+     *  must hold, and which level and up to show:
      *
-     *      [ERROR | WARN | INFO | DEBUG | TRACE]   Filter… [__________]
+     *      What was logged, the last … lines
+     *      🔍 Filter… [________________]   [ERROR | WARN | INFO | DEBUG | TRACE]
      *      12:03:44.120  INFO   lamp 1b2c…  Info[area=…, text=…]
      *      …
+     *
+     *  On a page narrower than LEVELS_IN_A_ROW_FROM, the levels stand one under the other, and
+     *  what was logged moves beside them, with room around it, over the filter, which stays on
+     *  the lines:
+     *
+     *                                    [ERROR]
+     *         What was logged, the       [WARN ]
+     *           last … lines             [INFO ]
+     *                                    [DEBUG]
+     *      🔍 Filter… [______________]   [TRACE]
+     *      12:03:44.120  INFO   lamp 1b2c…  Info[area=…, text=…]
      */
     private UIForAnySwing<?, ?> theLog() {
-        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(560));
+        // The area is in SwingTree's unscaled pixels, as the threshold is.
+        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= LEVELS_IN_A_ROW_FROM);
+        Val<Boolean> stacked = inARow.viewAs(Boolean.class, it -> !it);
+        Val<String> whatWasLogged = words.viewAsString(page -> page.WHAT_WAS_LOGGED_THE_LAST_LINES(AppLog.MOST));
         List<ViewPartsUtil.Choice<AppLog.Level>> levels = new ArrayList<>();
         for (AppLog.Level level : AppLog.Level.values())
             levels.add(ViewPartsUtil.Choice.of(level, Val.of(level.name()), words.viewAsString(Lang.NotificationsPage::SHOW_LINES_OF_THIS_LEVEL_AND_ABOVE)));
@@ -483,22 +503,20 @@ final class NotificationsPage {
             box().withLayout(logUnfolding.viewAs(Layout.class, it -> new UnfoldingLayout(it.height())))
             .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).borderRadius(14))
             .add(
-                box("fillx, wrap 1, ins 12 14 14 14, gap 8", "[grow]")
-                .add("growx, wmin 0", ViewPartsUtil.note(theme, words.viewAsString(page -> page.WHAT_WAS_LOGGED_THE_LAST_LINES(AppLog.MOST)), Val.of(true)))
+                box("fillx, wrap 1, ins 12 14 14 14, gap 8, hidemode 3", "[grow]")
+                .add("growx, wmin 0", ViewPartsUtil.note(theme, whatWasLogged, inARow))
                 .add("growx, wmin 0",
-                    box("fillx, ins 0, gap 10, hidemode 3", "[][grow]")
-                    .add(ViewPartsUtil.oneOf(theme, levels, least, Val.of(true), inARow, level -> least.set(From.VIEW, level)))
-                    .add("growx, wmin 80, aligny center",
-                        textField(filter).group(Skin.INPUT)
-                        .withTooltip(words.viewAsString(Lang.NotificationsPage::FILTER))
-                        // FlatLaf's grey words in the empty field, in the language of the moment.
-                        .peek(field -> {
-                            field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, words.get().FILTER());
-                            Viewable.cast(words).onChange(From.ALL, it -> it.currentValue().ifPresent(now ->
-                                field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, now.FILTER())
-                            ));
-                        })
+                    box("fill, ins 0, gap 10, hidemode 3", "[grow][]")
+                    .add("grow, wmin 0",
+                        box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][]")
+                        // Its room around it comes from insets: gaps would stay when it is hidden.
+                        .add("growx, wmin 0, aligny center",
+                            box("fillx, ins 6 12 10 12", "[grow]").isVisibleIf(stacked)
+                            .add("growx, wmin 0", ViewPartsUtil.note(theme, whatWasLogged, Val.of(true)))
+                        )
+                        .add("growx, wmin " + FILTER_AT_LEAST + ", aligny bottom", filterField())
                     )
+                    .add("aligny bottom", ViewPartsUtil.oneOf(theme, levels, least, Val.of(true), inARow, level -> least.set(From.VIEW, level)))
                 )
                 .add("growx, wmin 0, h " + LOG_HEIGHT + "!",
                     scrollPane().withEmptyBorder(0)
@@ -513,6 +531,31 @@ final class NotificationsPage {
                     )
                 )
             );
+    }
+
+    /// Where the user types words a line of the log must hold, with a magnifying glass before them.
+    private UIForAnySwing<?, ?> filterField() {
+        return
+            textField(filter).group(Skin.INPUT)
+            .withTooltip(words.viewAsString(Lang.NotificationsPage::FILTER))
+            .withStyle(palette, (p, it) -> it
+                .padding(6, 10, 6, 30)
+                // In front: the field paints its own background over what lies behind its words.
+                .image(UI.Layer.FOREGROUND, img -> img
+                    .image(SignSvgUtil.sign(SignSvgUtil.SEARCH, p.SUBTEXT()))
+                    .placement(UI.Placement.LEFT)
+                    .size(14, 14)
+                    // An offset, not padding: the size includes the padding.
+                    .horizontalOffset(10)
+                )
+            )
+            // FlatLaf's grey words in the empty field, in the language of the moment.
+            .peek(field -> {
+                field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, words.get().FILTER());
+                Viewable.cast(words).onChange(From.ALL, it -> it.currentValue().ifPresent(now ->
+                    field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, now.FILTER())
+                ));
+            });
     }
 
     /// Unfolds the log, or folds it away, one frame after the other, until it arrived where the
