@@ -92,6 +92,10 @@ public final class Lamp implements AutoCloseable {
     private final LampLauncher launcher;
     private final Process engine;
     private final List<Consumer<LampEvent>> listeners;
+    /// The last lines the engine wrote to its error output, for when it ends without a word.
+    private final InternalLampUtil.ErrorOutput errors;
+    /// Whether the engine reported a [LampEvent.Failure], which then says why it ended.
+    private volatile boolean failureReported;
     private final CountDownLatch runningOrEnded = new CountDownLatch(1);
     private final CountDownLatch ended = new CountDownLatch(1);
     /// How to run a command in the sandbox, once the engine has said so. Present means running.
@@ -113,6 +117,7 @@ public final class Lamp implements AutoCloseable {
         this.engine = engine;
         this.listeners = listeners;
         this.holding = holding;
+        this.errors = new InternalLampUtil.ErrorOutput(engine, "lamp-engine-errors-" + directory.getFileName());
     }
 
     /// Starts describing the lamp in `directory`, which oillamp creates if it does not exist.
@@ -739,6 +744,9 @@ public final class Lamp implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 code = -1;
             }
+            // Before anyone waiting hears that it ended, so that they hear why with it.
+            if (code >= 0 && InternalLampUtil.endedUnexplained(code, failureReported))
+                deliver(new LampEvent.Failure(InternalLampUtil.engineEnded(code, errors.text())));
             exit = Optional.of(LampExitStatus.ofCode(code).orElse(LampExitStatus.ERROR));
             runningOrEnded.countDown();
             ended.countDown();
@@ -751,6 +759,7 @@ public final class Lamp implements AutoCloseable {
             opened = Optional.of(session);
             runningOrEnded.countDown();
         }
+        if (event instanceof LampEvent.Failure) failureReported = true;
         InternalLampUtil.passToListeners(listeners, event);
     }
 
@@ -770,23 +779,30 @@ public final class Lamp implements AutoCloseable {
 
     /// Starts the engine with this process's own Java runtime and classpath, so that the
     /// application and the engine are always the same version of oillamp. The engine's error
-    /// output goes where the application's does.
+    /// output is passed on to the application's, and its last lines are kept, to say why it
+    /// ended when it could not report that itself.
     ///
     /// The engine runs in a session of its own (`setsid`), so a session left running is not hung
     /// up when the terminal the application was started from closes. One still held ends anyway,
     /// with the application.
+    ///
+    /// @throws IOException when this Java runtime has no `java` to start the engine with, as a
+    ///                     runtime cut down for a single application may not
     private static Process sameJava(List<String> arguments, Map<String, String> environment) throws IOException {
+        Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+        if (!Files.isExecutable(java))
+            throw new IOException("cannot start oillamp's engine: this Java runtime has no " + java);
         List<String> command = new ArrayList<>(
                 List.of(
                         "setsid",
-                        Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                        java.toString(),
                         "-cp",
                         System.getProperty("java.class.path"),
                         ENGINE
                 )
         );
         command.addAll(arguments);
-        ProcessBuilder builder = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT);
+        ProcessBuilder builder = new ProcessBuilder(command);
         builder.environment().putAll(environment);
         return builder.start();
     }

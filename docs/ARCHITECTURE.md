@@ -2139,3 +2139,4 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-HOSTACCESS-014` | An application gave host-access rules for a lamp whose file has the feature off. |
 | `OIL-HOSTACCESS-015` | Host access is on, but no model judges: no `checker_model`, and no model for the session. |
 | `OIL-INTERNAL-001` | A bug in oillamp. |
+| `OIL-ENGINE-001` | The engine's process ended without reporting a problem, such as a Java runtime that could not start; reported by `Lamp`, with the engine's exit code and the end of its error output. |

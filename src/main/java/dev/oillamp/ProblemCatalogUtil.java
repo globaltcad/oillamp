@@ -104,6 +104,8 @@ final class ProblemCatalogUtil {
     public static final Code SANDBOX_STATE_UNKNOWN = new Code("OIL-SANDBOX-006");
     public static final Code EXEC_NOT_FOUND        = new Code("OIL-EXEC-001");
     public static final Code INTERNAL              = new Code("OIL-INTERNAL-001");
+    /// Reported not by the engine but by `dev.lamp`, for an engine that ended without a word.
+    public static final Code ENGINE_ENDED          = new Code("OIL-ENGINE-001");
 
     // ─── network ───────────────────────────────────────────────────────────────────────────
 

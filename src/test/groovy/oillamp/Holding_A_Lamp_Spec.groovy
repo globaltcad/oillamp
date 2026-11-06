@@ -3,6 +3,8 @@ package oillamp
 import dev.lamp.LampExitStatus
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
+import dev.lamp.LampLauncher
+import dev.lamp.LampProblem
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
@@ -425,6 +427,71 @@ class Holding_A_Lamp_Spec extends Specification {
             lamp.exitStatus().isPresent()
             lamp.exitStatus().get() != LampExitStatus.SUCCESS
             received.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-LAMP-003' }
+
+        cleanup:
+            lamp?.close()
+    }
+
+    def 'When the engine exits without reporting a problem, `Lamp` reports `OIL-ENGINE-001` with the engine\'s exit code and error output'() {
+        reportInfo """
+            Let's consider an application that bundles a Java runtime without `bin/java`. `Lamp`
+            starts the engine with `setsid` and that `java`, so `setsid` cannot execute it: it
+            writes one line to its error output and exits with 127. The engine never runs, and
+            no `LampEvent` reaches the application.
+
+            The application still needs to tell its user why the lamp did not start. So when the
+            engine's process exits without having reported a `Failure`, `Lamp` reports one
+            itself, with problem `OIL-ENGINE-001`. Its `whatHappened` names the exit code and the
+            last line of the engine's error output, and its evidence holds that error output.
+
+            Here a shell command stands in for the failing engine process.
+        """
+        given: 'a launcher whose process writes `setsid`\'s complaint about a missing `java` to its error output, and exits with 127'
+            var missing = 'setsid: failed to execute /opt/app/lib/runtime/bin/java: No such file or directory'
+            LampLauncher noJava = { arguments, environment ->
+                new ProcessBuilder('sh', '-c', "echo '${missing}' >&2; exit 127").start()
+            }
+
+        when: 'the application starts a lamp with this launcher, and listens to its events'
+            var lamp = Lamp.at(host.lampPath()).onEvent { received << it }.launchedBy(noJava).start()
+
+        then: '`awaitRunning` returns false, and `exitStatus()` is `ERROR`, which stands for every exit code oillamp does not use, such as 127'
+            !lamp.awaitRunning(Duration.ofSeconds(30))
+            lamp.exitStatus() == Optional.of(LampExitStatus.ERROR)
+
+        and: 'the listener received exactly one `Failure`, with problem `OIL-ENGINE-001`'
+            var problems = received.findAll { it instanceof LampEvent.Failure }*.problem()
+            problems*.code()*.value() == ['OIL-ENGINE-001']
+
+        and: 'its `whatHappened` names exit code 127 and ends with the line from the error output'
+            problems.first().whatHappened().contains('code 127')
+            problems.first().whatHappened().endsWith(missing)
+
+        and: 'its evidence holds the error output as an `Excerpt`'
+            problems.first().evidence().toList().any { it instanceof LampProblem.Evidence.Excerpt && it.text() == missing }
+
+        cleanup:
+            lamp?.close()
+    }
+
+    def 'When the engine reports its own `Failure`, `Lamp` adds no `OIL-ENGINE-001`'() {
+        reportInfo """
+            `Lamp` reports `OIL-ENGINE-001` only for an engine that exited without reporting a
+            problem. An engine that refuses to start reports a `Failure` that says why, and that
+            is the problem the application should show. A second `Failure` saying only that the
+            engine exited would add nothing.
+
+            Here the lamp's directory is the home directory, which the engine refuses with
+            `OIL-LAMP-003`.
+        """
+        given: 'a lamp whose directory is the home directory'
+            var lamp = Lamp.at(host.home).onEvent { received << it }.launchedBy(host.launcher).start()
+
+        expect: '`awaitRunning` returns false, because the engine refused the directory and exited'
+            !lamp.awaitRunning(Duration.ofSeconds(30))
+
+        and: 'the listener received one `Failure`, the engine\'s own `OIL-LAMP-003`'
+            received.findAll { it instanceof LampEvent.Failure }*.problem()*.code()*.value() == ['OIL-LAMP-003']
 
         cleanup:
             lamp?.close()
