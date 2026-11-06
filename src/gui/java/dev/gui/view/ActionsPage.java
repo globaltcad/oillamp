@@ -45,23 +45,25 @@ import static swingtree.UI.*;
 final class ActionsPage {
 
     /*
-     *  A responsive grid of tiles: two side by side from LARGE up, one under the other below.
-     *  The genie's folders follow, the whole width, as a tree needs it, with a grid of its own
-     *  inside (see HomeFolders). Deleting the genie comes last, the whole width, away from the rest.
+     *  A responsive grid of tiles: all four in one row once the page is wider than its
+     *  reference, as in a full-screen window, two by two from MEDIUM up, and one under the other
+     *  below. The genie's folders follow, the whole width, as a tree needs it, with a grid of its
+     *  own inside (see HomeFolders). Deleting the genie comes last, the whole width, away from the
+     *  rest.
      *
      *                 very small  small  medium  large  very large  oversize
      *      on top          12       12     12     12       12          12
-     *      a tile          12       12     12      6        6           6
+     *      a tile          12       12      6      6        6           3
      *      the folders     12       12     12     12       12          12
      *      deleting        12       12     12     12       12          12
      */
-    private static final int REFERENCE = 900;
+    private static final int REFERENCE = 1300;
     private static final FlowCell WHOLE = AUTO_SPAN(it ->
         it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
     );
     private static final FlowCell TILE = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP).fill(true)
-        .verySmall(12).small(12).medium(12).large(6).veryLarge(6).oversize(6)
+        .verySmall(12).small(12).medium(6).large(6).veryLarge(6).oversize(3)
     );
 
     private final Var<GeniesState> state;
