@@ -1,5 +1,7 @@
 package dev.gui.genie;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -53,6 +55,8 @@ import sprouts.Tuple;
 /// Waking and sleeping take long, so they run one after the other on a thread of the runner's
 /// own; the calls return at once.
 public final class GenieRunner {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GenieRunner.class);
 
     private final Path directory;
     private final LampLighter lighter;
@@ -734,6 +738,7 @@ public final class GenieRunner {
                 changes.accept(genie -> genie.outbox(files));
             } catch (IOException | InterruptedException stillThere) {
                 // Looked for again after the next answer.
+                LOG.debug("Could not look into the outbox", stillThere);
             }
         }));
     }
@@ -771,11 +776,18 @@ public final class GenieRunner {
     }
 
     /// Why the genie broke when lighting or joining its lamp failed with `failed`.
+    /// Why `failed` broke the genie, as the user is shown it. The exception itself, with where it
+    /// happened, goes to the log, as the user's words leave that out.
     private static Genie.Broke why(Exception failed) {
-        return failed instanceof LampLighter.Failed known ? known.why() : new Genie.Broke.Failed(reasonOf(failed));
+        if (!(failed instanceof LampLighter.Failed known)) return new Genie.Broke.Failed(reasonOf(failed));
+        LOG.warn("Shown to the user as: {}", known.getMessage(), known);
+        return known.why();
     }
 
+    /// What `failed` says, as the user is shown it; logged with the exception, for the same reason.
     private static String reasonOf(Exception failed) {
-        return Optional.ofNullable(failed.getMessage()).filter(message -> !message.isBlank()).orElse(failed.toString());
+        String reason = Optional.ofNullable(failed.getMessage()).filter(message -> !message.isBlank()).orElse(failed.toString());
+        LOG.warn("Shown to the user as: {}", reason, failed);
+        return reason;
     }
 }
