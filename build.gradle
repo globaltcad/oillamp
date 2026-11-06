@@ -408,7 +408,9 @@ def geniesApp = tasks.register('geniesApp') {
                     '--main-class', 'dev.gui.Main',
                     '--icon', new File(icons.get(), "256x256/apps/${id}.png").absolutePath,
                     '--add-modules', modules,
-                    '--jlink-options', '--strip-debug --strip-native-commands --no-header-files --no-man-pages --compress zip-6',
+                    // Not --strip-native-commands: a lamp's engine runs in a process of its own,
+                    // started with lib/runtime/bin/java, which that would leave out.
+                    '--jlink-options', '--strip-debug --no-header-files --no-man-pages --compress zip-6',
                     '--dest', target.absolutePath
         }
     }
