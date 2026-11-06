@@ -48,18 +48,26 @@ final class ActionsPage {
      *  A responsive grid of tiles: all four in one row once the page is wider than its
      *  reference, as in a full-screen window, two by two from MEDIUM up, and one under the other
      *  below. The genie's folders follow, the whole width, as a tree needs it, with a grid of its
-     *  own inside (see HomeFolders). Deleting the genie comes last, the whole width, away from the
-     *  rest.
+     *  own inside (see HomeFolders). Deleting the genie comes last, away from the rest: the whole
+     *  width, but beside the folders, as wide as a tile, when the tiles are in one row.
      *
      *                 very small  small  medium  large  very large  oversize
      *      on top          12       12     12     12       12          12
      *      a tile          12       12      6      6        6           3
-     *      the folders     12       12     12     12       12          12
-     *      deleting        12       12     12     12       12          12
+     *      the folders     12       12     12     12       12           9
+     *      deleting        12       12     12     12       12           3
      */
     private static final int REFERENCE = 1300;
     private static final FlowCell WHOLE = AUTO_SPAN(it ->
         it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
+    );
+    private static final FlowCell FOLDERS = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP).fill(true)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(9)
+    );
+    private static final FlowCell DELETING = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP).fill(true)
+        .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(3)
     );
     private static final FlowCell TILE = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP).fill(true)
@@ -129,8 +137,8 @@ final class ActionsPage {
                 .add(TILE, startingAfresh())
                 .add(TILE, saving())
                 .add(TILE, sleepingOrWaking())
-                .add(WHOLE, folders())
-                .add(WHOLE, deleting())
+                .add(FOLDERS, folders())
+                .add(DELETING, deleting())
             );
     }
 
@@ -348,7 +356,8 @@ final class ActionsPage {
         final UIForAnySwing<?, ?> doing
     ) {
         return
-            panel("fill, ins 4 4 4 4, gap 6 12, hidemode 3", "[][grow]").group(Skin.TILE)
+            // Stretched to the height of its row, a tile keeps what it says at the top.
+            panel("fillx, ins 4 4 4 4, gap 6 12, hidemode 3", "[][grow]").group(Skin.TILE)
             .add("cell 0 0, top, gaptop 2", sign)
             .add("cell 1 0, growx, wmin 0",
                 label(title)
