@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -45,6 +47,8 @@ import sprouts.Tuple;
 /// resources, prompts or sampling: a resource read would be a second way to host data, past the
 /// gate.
 final class HostMcp {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HostMcp.class);
 
     private HostMcp() {}
 
@@ -317,6 +321,7 @@ final class HostMcp {
                     client = channel.accept();
                 } catch (IOException e) {
                     if (closing) return;
+                    LOG.warn("The host tools socket could not accept a connection", e);
                     continue;
                 }
                 connections.add(client);

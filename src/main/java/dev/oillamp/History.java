@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -76,6 +78,8 @@ import sprouts.ValueSet;
 /// The history is outside the agent directory and never mounted into the container, so the agent
 /// cannot rewrite its own past.
 final class History {
+
+    private static final Logger LOG = LoggerFactory.getLogger(History.class);
 
     /// The name of the list of exact permissions, at the top of every snapshot's tree.
     static final String MODES_FILE = ".oillamp-modes";
@@ -624,6 +628,7 @@ final class History {
                 FilesystemUtil.writeBytes(repository.resolve(FILE_STATS), tally.stats.written(), PosixMode.PRIVATE_FILE);
             } catch (IOException notKept) {
                 // The next save reads every file again, as without them.
+                LOG.warn("Could not keep the history's file stats", notKept);
             }
         }
         if (Files.isRegularFile(layout.config(), LinkOption.NOFOLLOW_LINKS))

@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -56,6 +58,8 @@ import sprouts.Tuple;
 /// How requests are handled and logged is described in `docs/ARCHITECTURE.md`,
 /// "The network".
 final class Egress implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Egress.class);
 
     /// A request head larger than this is not a proxy request.
     private static final int HEADER_LIMIT = 64 * 1024;
@@ -595,6 +599,7 @@ final class Egress implements AutoCloseable {
             return new Resolution(addresses, addresses.isEmpty());
         } catch (Exception failed) {
             task.cancel(true);
+            LOG.debug("Could not resolve {}", host, failed);
             return new Resolution(Tuple.of(IpAddress.class), true);
         }
     }

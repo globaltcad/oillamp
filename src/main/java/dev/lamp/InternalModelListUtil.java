@@ -1,5 +1,7 @@
 package dev.lamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
@@ -27,6 +29,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// the engine; `Listing_A_Services_Models_Spec` and `Choosing_The_Model_For_A_Lamp_Spec` show both ask the
 /// same place.
 final class InternalModelListUtil {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InternalModelListUtil.class);
 
     private InternalModelListUtil() {}
 
@@ -79,7 +83,7 @@ final class InternalModelListUtil {
                 ids.add(id);
             }
         } catch (JacksonException notAList) {
-            // None.
+            LOG.warn("The model service's list of models is not JSON, so it names none", notAList);
         }
         return List.copyOf(ids);
     }

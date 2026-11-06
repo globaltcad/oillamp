@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -55,6 +57,8 @@ import sprouts.Tuple;
 /// requirements and the reasoning are not in the log: they belong to the user and to the agent,
 /// and the log is a record of what happened, not a copy of what was said.
 final class HostAccess implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HostAccess.class);
 
     /// How many tool calls of the current run the checker sees. Enough to show what the run is
     /// doing; short enough that the request itself stays the largest thing in the prompt.
@@ -454,6 +458,7 @@ final class HostAccess implements AutoCloseable {
         } catch (IOException unwritable) {
             // The log is for the user, not for the decision: a log that cannot be written must
             // not turn an allowed request into a refused one, or the other way round.
+            LOG.warn("Could not add to the host-access log {}", logFile(), unwritable);
         }
     }
 

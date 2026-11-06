@@ -1,5 +1,7 @@
 package dev.lamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
@@ -39,6 +41,8 @@ import sprouts.Tuple;
 /// (for example an event kind from a newer oillamp) is read as nothing rather than as an error.
 final class InternalEventJsonUtil {
 
+    private static final Logger LOG = LoggerFactory.getLogger(InternalEventJsonUtil.class);
+
     private InternalEventJsonUtil() {}
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -53,6 +57,7 @@ final class InternalEventJsonUtil {
             JsonNode node = MAPPER.readTree(line);
             return Optional.of((LampEvent) decode(node, LampEvent.class));
         } catch (JacksonException | IllegalArgumentException | ClassCastException | NullPointerException unreadable) {
+            LOG.warn("Left out a line that is not a lamp event: {}", line.length() > 300 ? line.substring(0, 300) + " …" : line, unreadable);
             return Optional.empty();
         }
     }

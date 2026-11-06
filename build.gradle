@@ -56,10 +56,13 @@ dependencies {
 
     // Persistent collections: the only collection types allowed in domain records.
     implementation group: 'io.github.globaltcad', name: 'sprouts', version: '2.8.0'
-    // Sprouts pulls slf4j-api, which prints a "no providers found" warning on every run.
-    // oillamp deliberately has no logging framework - it reports through LampEvent - so give
-    // slf4j a no-op binding rather than letting it talk to the user.
-    runtimeOnly group: 'org.slf4j', name: 'slf4j-nop', version: '2.0.17'
+    // What oillamp reports to its user goes through LampEvent. slf4j is for what only a developer
+    // needs: a failure that was handled, but whose stack trace would otherwise be lost. The engine
+    // writes warnings to its error output (see simplelogger.properties), which a Lamp passes on
+    // to the application's own logging. Run it with -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
+    // for more.
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.17'
+    runtimeOnly group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.17'
 
     // TOML for oillamp.toml, JSON for lamp.json and podman's output.
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.20.0'

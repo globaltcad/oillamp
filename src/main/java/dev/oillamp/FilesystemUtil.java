@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -41,6 +43,8 @@ import sprouts.Tuple;
 /// host. A directory it replaced by a symbolic link would otherwise lead oillamp's writes to
 /// wherever the link points, such as the user's own `~/.bashrc`.
 final class FilesystemUtil {
+
+    private static final Logger LOG = LoggerFactory.getLogger(FilesystemUtil.class);
 
     private FilesystemUtil() {}
 
@@ -346,6 +350,7 @@ final class FilesystemUtil {
         try {
             return Files.isReadable(path) ? Optional.of(Files.readString(path)) : Optional.empty();
         } catch (IOException e) {
+            LOG.debug("Could not read {}", path, e);
             return Optional.empty();
         }
     }

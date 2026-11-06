@@ -1,5 +1,7 @@
 package dev.lamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sprouts.Tuple;
 
 import java.io.BufferedReader;
@@ -17,6 +19,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 class InternalLampUtil {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InternalLampUtil.class);
 
     private InternalLampUtil() {}
 
@@ -57,8 +61,8 @@ class InternalLampUtil {
     }
 
     /// The last lines a process wrote to its error output. They are read on a thread of their
-    /// own, so that the process never stops on a full pipe, and passed on to this application's
-    /// error output, where they would have gone anyway.
+    /// own, so that the process never stops on a full pipe, and logged as warnings, so that the
+    /// application's own logging shows what the engine wrote.
     static final class ErrorOutput {
 
         /// How many of the last lines are kept, and how long each may be.
@@ -80,7 +84,7 @@ class InternalLampUtil {
             try (var input = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = input.readLine()) != null) {
-                    System.err.println(line);
+                    LOG.warn("engine: {}", line);
                     String cut = line.length() > LONGEST_LINE ? line.substring(0, LONGEST_LINE) + " …" : line;
                     synchronized (lines) {
                         lines.addLast(cut);

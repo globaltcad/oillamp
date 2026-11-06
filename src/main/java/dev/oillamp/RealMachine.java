@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.EOFException;
@@ -39,6 +41,8 @@ import sprouts.Tuple;
 /// - **Always a timeout.** When it expires, the process and all its child processes are
 ///   killed, so a hung `podman` cannot leave processes behind.
 final class RealMachine implements Machine {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RealMachine.class);
 
     /// At most this many characters of a command's output are kept, so a very noisy build cannot
     /// exhaust memory. See [Captured] for which ones.
@@ -336,6 +340,7 @@ final class RealMachine implements Machine {
         try {
             return Files.isReadable(path) ? Optional.of(Files.readString(path)) : Optional.empty();
         } catch (IOException e) {
+            LOG.debug("Could not read {}", path, e);
             return Optional.empty();
         }
     }

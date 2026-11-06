@@ -1,5 +1,7 @@
 package dev.lamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -59,6 +61,8 @@ import java.util.function.Consumer;
 /// agent's home, so the application never needs to know where pi keeps them, or what they look
 /// like.
 public final class Lamp implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Lamp.class);
 
     /// The engine's main class. Named as text, because this package must not depend on the engine.
     static final String ENGINE = "dev.oillamp.OilLamp";
@@ -323,6 +327,7 @@ public final class Lamp implements AutoCloseable {
                     InternalPiSessionFileUtil.parse(SESSIONS + "/" + folder.getFileName() + "/" + name, lines).ifPresent(found::add);
                 } catch (IOException | UncheckedIOException unreadable) {
                     // Being written, or gone since it was listed: left out until the next look.
+                    LOG.debug("Left out the conversation {}, which could not be read", file, unreadable);
                 }
             }
         }

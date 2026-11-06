@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,6 +59,8 @@ import sprouts.Tuple;
 /// version, so it has no versioning. You can speak it from a shell:
 /// `echo '{"op":"status"}' | socat - UNIX-CONNECT:<control.sock>`.
 final class Control {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Control.class);
 
     private Control() {}
 
@@ -201,6 +205,7 @@ final class Control {
                     client = channel.accept();
                 } catch (IOException e) {
                     if (closing) return;
+                    LOG.warn("The control socket could not accept a connection", e);
                     continue;
                 }
                 Thread.ofVirtual().name("oillamp-control-request").start(() -> answerOneRequest(client, handler));
@@ -217,6 +222,7 @@ final class Control {
                 if (reply.stream().isPresent()) reply.stream().get().writeTo(event -> write(client, event + "\n"));
             } catch (IOException e) {
                 // A malformed, abandoned or silent connection must not end the session.
+                LOG.debug("Gave up on a control connection", e);
             } catch (InterruptedException e) {
                 // The session is going away; so does the connection.
             }
