@@ -1,0 +1,391 @@
+package dev.gui.view
+
+import dev.gui.model.Genie
+import dev.gui.model.Palette
+import spock.lang.Specification
+import spock.lang.Narrative
+import spock.lang.Subject
+import spock.lang.Title
+
+import java.awt.image.BufferedImage
+
+@Title('Waking a genie: a truthful start and a moment to say hello')
+@Narrative('''
+
+The wake picture should make a genie feel present without claiming that its sandbox is ready
+before it is. While startup takes its time, the lamp burns and progress reports continue.
+Once ready, that genie's own avatar takes form from the flame and waves before the conversation
+returns. The greeting is presentation only: it must not delay the genie's ability to work.
+
+Failure, sleeping, retrying and changing the selected genie must leave no stale greeting behind.
+These scenarios advance immutable presentation values explicitly, without waiting for a real
+sandbox or a wall clock. The rendering scenario checks that the shared welcome scene actually
+draws the expected genie, not just that the presentation records its identity.
+
+''')
+@Subject([WakeScene, WelcomeScene])
+class WakingAGeniePictureSpec extends Specification {
+
+    def 'A long start keeps the lamp burning until the real genie is ready'() {
+        reportInfo '''
+            **Subject:** the wake picture while the sandbox is starting.
+
+            The first startup can take minutes. An elapsed animation must not make the genie pop
+            out and imply that it is ready while the sandbox is still being built. Its lamp
+            should keep burning until the real lifecycle reports readiness; only then should
+            the flame-to-genie sequence begin. Startup progress belongs to the real lifecycle,
+            not to an invented percentage derived from the animation clock.
+        '''
+        given: 'Juniper has started waking'
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie).follows(genie.waking())
+
+        when: 'two minutes pass without the sandbox becoming ready'
+            var waiting = starting.after(120)
+
+        then: 'the lamp still animates in the burning part of the scene, with no emerging genie'
+            starting.moving()
+            waiting.moving()
+            !waiting.emerging()
+            waiting.moment() >= 3.6 && waiting.moment() < 4.6
+
+        when: 'the actual genie becomes ready'
+            var ready = waiting.follows(genie.waking().awake())
+
+        then: 'emergence starts from the beginning, however long startup took'
+            ready.emerging()
+            ready.moment() == 4.6
+    }
+
+    def 'After taking form, the genie has time to wave before its conversation returns'() {
+        reportInfo '''
+            **Subject:** the greeting between readiness and returning to the conversation.
+
+            The emergence is a greeting, not merely a transition flash. The user should have
+            time to recognise the genie and see it wave after it takes form. The 2.2-second
+            emergence is followed by another 1.6 seconds of animation, then the conversation
+            may return. Advancing the scene during that pause matters: holding a still image
+            would give the user more time, but would lose the wave itself.
+        '''
+        given: 'Juniper has just become ready after waking'
+            var genie = Genie.named('Juniper')
+            var ready = WakeScene.of(genie.waking()).follows(genie.waking().awake())
+
+        expect: 'the greeting continues after formation and the shared scene keeps advancing'
+            ready.after(2.2).emerging()
+            ready.after(3).moving()
+            ready.after(3).moment() > WelcomeScene.FORMED
+            ready.after(3.5).moment() > ready.after(2.2).moment()
+
+        and: 'the presentation releases the conversation after the greeting ends'
+            !ready.after(3.9).emerging()
+            !ready.after(4).moving()
+    }
+
+    def 'A quick start still forms the right avatar and does not delay the real lifecycle'() {
+        reportInfo '''
+            **Subject:** avatar identity and readiness during a fast startup.
+
+            Even when the sandbox starts almost immediately, the user should see their own
+            genie emerge, with the colour and outfit used on its card. The greeting must not
+            keep a ready genie waiting: it can already answer a message while the picture
+            finishes. Moving from ready to working must preserve that greeting rather than
+            restart it. Selecting a genie that was already awake is not a new wake and should
+            not manufacture another emergence.
+        '''
+        given: 'Juniper becomes ready after only a tenth of a second'
+            var genie = Genie.named('Juniper')
+            var ready = WakeScene.of(genie.waking()).after(0.1).follows(genie.waking().awake())
+            var working = ready.after(1).follows(genie.withPhase(Genie.Phase.WORKING))
+        expect: 'the picture greets with Juniper’s avatar while readiness and work take effect immediately'
+            ready.phase() == Genie.Phase.READY
+            ready.emerging()
+            working.emerging()
+            working.released() == ready.released()
+            working.play().pip() == GenieSvgUtil.appearanceOf(genie.id())
+            !WakeScene.of(genie.withPhase(Genie.Phase.READY)).moving()
+    }
+
+    def 'A failed wake stops the animation, and retry lights the lamp afresh'() {
+        reportInfo '''
+            **Subject:** failure and a subsequent retry.
+
+            A failure must stop the hopeful startup animation; it must not eventually show a
+            successful emergence merely because time passed. When the user tries again, the
+            new attempt starts with the lamp catching, without inheriting elapsed time or a
+            pending greeting from the failed attempt.
+        '''
+        given: 'Juniper has spent ten seconds starting its sandbox'
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie.waking()).after(10)
+
+        when: 'startup fails because no model is available'
+            var broken = starting.follows(genie.broken(new Genie.Broke.Failed('No model')))
+
+        then: 'no startup or successful greeting animation continues'
+            !broken.moving()
+            broken.moment() == 1
+
+        when: 'the user retries waking Juniper'
+            var retry = broken.follows(genie.waking())
+
+        then: 'the new attempt animates from the beginning, without a previously released genie'
+            retry.moving()
+            retry.seconds() == 0
+            retry.released() == -1
+    }
+
+    def 'Putting the genie to sleep cancels its unfinished greeting'() {
+        reportInfo '''
+            **Subject:** sleeping while the wake greeting is still visible.
+
+            The user can put a ready genie to sleep before its greeting finishes. The picture
+            must follow that choice immediately: continuing to form or wave would contradict
+            the sleeping state. No remaining greeting should outlive the lifecycle it depicts.
+        '''
+        given: 'Juniper is partway through its emergence'
+            var genie = Genie.named('Juniper')
+            var emerging = WakeScene.of(genie.waking()).follows(genie.waking().awake()).after(0.5)
+
+        expect: 'sleeping cancels the greeting and returns the scene to the cold lamp'
+            !emerging.follows(genie.asleep()).moving()
+            emerging.follows(genie.asleep()).moment() == 1
+    }
+
+    def 'Selecting another genie never carries the previous genie’s greeting across'() {
+        reportInfo '''
+            **Subject:** the wake picture when the selected genie changes.
+
+            A greeting belongs to one genie. Switching to Sami must not leave Juniper emerging
+            above Sami's name, nor borrow Juniper's elapsed startup time. A sleeping Sami gets
+            its sleeping picture; a Sami that is still waking gets a fresh view of its own
+            starting lamp. In both cases the appearance must come from Sami's identity.
+        '''
+        given: 'Juniper is emerging and Sami is another genie in the list'
+            var genie = Genie.named('Juniper')
+            var starting = WakeScene.of(genie.waking()).after(10)
+            var emerging = starting.follows(genie.waking().awake()).after(0.5)
+            var other = Genie.named('Sami')
+
+        expect: 'selecting sleeping Sami discards Juniper’s greeting and uses Sami’s appearance'
+            !emerging.follows(other).moving()
+            emerging.follows(other).id() == other.id()
+            emerging.follows(other).play().pip() == GenieSvgUtil.appearanceOf(other.id())
+
+        and: 'selecting waking Sami begins its own startup picture'
+            starting.follows(other.waking()).moving()
+            starting.follows(other.waking()).seconds() == 0
+    }
+
+    def 'Progress reports do not restart the picture and the completed scene contains its genie'() {
+        reportInfo '''
+            **Subject:** progress updates and rendering the genie from the shared welcome scene.
+
+            A startup may report many steps. Updating the status text should not repeatedly
+            extinguish and relight the picture: the presentation must continue uninterrupted.
+            Once ready, the welcome renderer must visibly form the selected genie's avatar.
+            Checking pixels in its own body colour verifies that the shared scene draws the
+            genie, rather than leaving a lit lamp despite recording the correct identity.
+        '''
+        given: 'Juniper’s lamp has been lighting for two seconds and reports an image build'
+            var genie = Genie.named('Juniper')
+            var waiting = WakeScene.of(genie.waking()).after(2)
+            var reported = waiting.follows(genie.waking().lampSays(new Genie.Activity.MakingTheSandbox()))
+            var formed = reported.follows(genie.waking().awake()).after(3)
+            var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+            var graphics = picture.createGraphics()
+        when: 'Juniper becomes ready and its formed greeting is painted'
+            WelcomeScene.paint(graphics, Palette.DARK, 320, 220, formed.play(), formed.moment())
+            graphics.dispose()
+        then: 'the progress report preserved the presentation and Juniper’s body colour appears in the picture'
+            reported == waiting
+            var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
+            (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
+    }
+
+    def 'Putting a genie to sleep plays its waking backwards, and the flame waits for the lamp to be out'() {
+        reportInfo '''
+            **Subject:** the picture while the lamp is put out.
+
+            Stopping a sandbox, and saving the genie's home, can take a while. The user should
+            see that something happens, and that it is the reverse of waking: the genie sinks
+            back into the flame it came from. The flame then burns on, calmly, for as long as
+            the lamp takes to go out, and only once it is really out does the flame dwindle and
+            leave a wisp of smoke. As with waking, the picture must not claim more than the
+            lifecycle says: an elapsed animation alone never puts the flame out.
+        '''
+        given: 'Juniper has been awake a while, and is put to sleep'
+            var genie = Genie.named('Juniper')
+            var awake = WakeScene.of(genie.waking().awake()).after(30)
+            var falling = awake.follows(genie.waking().awake().fallingAsleep())
+
+        expect: 'the play starts from the formed genie and runs backwards'
+            falling.moving()
+            falling.moment() == WelcomeScene.FORMED
+            falling.after(1).moment() < WelcomeScene.FORMED
+
+        and: 'a minute later, with the lamp not yet out, the flame still burns calmly'
+            falling.after(60).moving()
+            falling.after(60).moment() >= 3.6 && falling.after(60).moment() < 4.6
+
+        when: 'the lamp is out'
+            var out = falling.after(60).follows(genie.asleep())
+
+        then: 'the flame dwindles to the cold lamp, smoke rises, and the picture then rests'
+            out.goingOut()
+            out.playing()
+            out.after(0.5).moment() < 3.6
+            out.after(3).moving()
+            !out.after(5).moving()
+            out.after(5).moment() == 1
+    }
+
+    def 'The picture keeps playing the very moment a genie is awake or asleep'() {
+        reportInfo '''
+            **Subject:** the hand-over from the lifecycle to the end of the play.
+
+            While a genie wakes or falls asleep, its picture stands in place of its conversation,
+            and it stays there while the genie greets or its flame goes out. The picture's own
+            clock follows the genie a moment after the genie changes. In that moment it must
+            not count as finished, or the conversation would flash up for a single frame.
+        '''
+        given: 'Juniper is waking, and its picture has not yet heard of anything else'
+            var genie = sprouts.Var.of(Genie.named('Juniper').waking())
+            var picture = new WakePicture(genie, sprouts.Val.of(Palette.DARK))
+
+        when: 'Juniper is awake'
+            genie.set(genie.get().awake())
+
+        then: 'the picture already plays the greeting'
+            picture.playing().get()
+
+        when: 'later, Juniper is falling asleep, and its lamp goes out'
+            var sleepy = sprouts.Var.of(genie.get().fallingAsleep())
+            var putOut = new WakePicture(sleepy, sprouts.Val.of(Palette.DARK))
+            sleepy.set(sleepy.get().asleep())
+
+        then: 'the picture already plays the flame going out'
+            putOut.playing().get()
+    }
+
+    def 'A quick shutdown still shows the genie go back into its lamp'() {
+        reportInfo '''
+            **Subject:** a lamp that goes out before the picture has caught up.
+
+            A sandbox may stop in a moment. The genie should still be seen going back into its
+            lamp, rather than vanishing: the picture finishes sinking it into the flame, and
+            only then puts the flame out. Being asleep already, the genie can be woken again
+            meanwhile, which starts the waking picture afresh.
+        '''
+        given: 'Juniper is put to sleep, and its lamp is out a tenth of a second later'
+            var genie = Genie.named('Juniper')
+            var falling = WakeScene.of(genie.waking().awake()).follows(genie.waking().awake().fallingAsleep())
+            var out = falling.after(0.1).follows(genie.asleep())
+
+        expect: 'the genie keeps sinking into the flame before the flame goes out'
+            out.after(1).moment() > 3.6
+            out.after(1).moving()
+            out.after(2.1 + 0.5).moment() < 3.6
+            !out.after(2.1 + 5).moving()
+
+        and: 'waking it again lights the lamp afresh'
+            out.after(1).follows(genie.waking()).seconds() == 0
+            out.after(1).follows(genie.waking()).released() == -1
+    }
+
+    def 'Put to sleep while it greets, a genie goes back from where it was'() {
+        reportInfo '''
+            **Subject:** sleeping while the wake greeting still plays.
+
+            The user can put a genie to sleep before its greeting ends. The picture should not
+            jump to a fully formed genie only to take it back: it runs backwards from the moment
+            it had reached.
+        '''
+        given: 'Juniper is half a second into taking form'
+            var genie = Genie.named('Juniper')
+            var emerging = WakeScene.of(genie.waking()).follows(genie.waking().awake()).after(0.5)
+
+        when: 'it is put to sleep'
+            var falling = emerging.follows(genie.waking().awake().fallingAsleep())
+
+        then: 'the play goes back from that same moment'
+            Math.abs(falling.moment() - emerging.moment()) < 1e-9
+            falling.after(0.2).moment() < emerging.moment()
+    }
+
+    def 'While the lamp is put out, the genie is back in the flame and the lamp still burns'() {
+        reportInfo '''
+            **Subject:** rendering the shutdown picture.
+
+            Once the genie has sunk back, the picture must show a burning lamp without the
+            genie: no pixel in the genie's body colour remains, while the flame's light is
+            still there.
+        '''
+        given: 'Juniper has been falling asleep for three seconds'
+            var genie = Genie.named('Juniper')
+            var falling = WakeScene.of(genie.waking().awake()).follows(genie.waking().awake().fallingAsleep()).after(3)
+            var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+            var graphics = picture.createGraphics()
+        when: 'the picture is painted'
+            WelcomeScene.light(graphics, Palette.DARK, 320, 220, 0, falling.play(), falling.moment())
+            WelcomeScene.paint(graphics, Palette.DARK, 320, 220, falling.play(), falling.moment())
+            graphics.dispose()
+        then: 'Juniper is gone into the lamp, and its flame still lights the picture'
+            var colour = GenieSvgUtil.appearanceOf(genie.id()).colour().getRGB()
+            !(0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) == colour } }
+            (0..<320).any { x -> (0..<220).any { y -> picture.getRGB(x, y) != 0xff000000 } }
+    }
+
+    def 'Once the flame is out, its smoke rises slowly and becomes the sleeping lamp\'s wisp'() {
+        reportInfo '''
+            **Subject:** the last act of putting a genie to sleep.
+
+            The smoke of a flame that went out should not be there all at once. It is the last
+            act, after the flame is gone: it rises from the wick, slowly, and settles into the
+            wisp that stands above a sleeping genie's lamp, so the play ends gently and the
+            still picture that follows looks the same as its last moment. While the flame still
+            dwindles there is no smoke yet, and no smoke stands in for it either.
+        '''
+        given: 'Juniper\'s lamp is out after a long shutdown'
+            var genie = Genie.named('Juniper')
+            var out = WakeScene.of(genie.waking().awake())
+                    .follows(genie.waking().awake().fallingAsleep()).after(10)
+                    .follows(genie.asleep())
+
+        expect: 'while the flame dwindles, there is no smoke yet'
+            out.smoke() == 0
+            out.after(1.5).smoke() == 0
+            out.after(1.5).moment() > 1
+
+        and: 'then the smoke rises, slowly, until it stands as on a sleeping lamp'
+            out.after(2.5).smoke() > 0
+            out.after(3.5).smoke() > out.after(2.5).smoke()
+            out.after(4.9).smoke() < 1
+            out.after(5).smoke() == -1
+
+        when: 'the smoke is painted halfway and fully risen, and the sleeping lamp after it'
+            var half = paint(out.after(3.5).play(), 1, 0.5)
+            var risen = paint(out.after(3.5).play(), 1, 1)
+            var still = paint(out.after(5).play(), 1, -1)
+            var none = paint(out.after(1).play(), 1, 0)
+
+        then: 'there is more smoke as it rises, none before it does, and the last moment is the still picture'
+            smoky(none) < smoky(half)
+            smoky(half) < smoky(risen)
+            Math.abs(smoky(risen) - smoky(still)) <= smoky(still) / 10
+    }
+
+    private static BufferedImage paint(WelcomeScene.Play play, double moment, double smoke) {
+        var picture = new BufferedImage(320, 220, BufferedImage.TYPE_INT_RGB)
+        var graphics = picture.createGraphics()
+        WelcomeScene.paint(graphics, Palette.DARK, 320, 220, play, moment, smoke)
+        graphics.dispose()
+        return picture
+    }
+
+    /// How many points of `picture` above the lamp's wick are clearly smoke, on the black night:
+    /// the wisp, not the faint puffs drifting off it.
+    private static int smoky(BufferedImage picture) {
+        (0..<320).sum { x -> (0..<160).count { y -> ((picture.getRGB(x, y) >> 16) & 0xff) > 20 } } as int
+    }
+}
