@@ -612,6 +612,25 @@ public final class GenieRunner {
         });
     }
 
+    /// Tells the awake genie called `name` to answer in `lang` from its next message on, in
+    /// whatever conversation, without its lamp going out: its instructions, which say the
+    /// language, are given to the lamp again. A sleeping genie is told when it next wakes. A lamp
+    /// from elsewhere keeps the instructions its own configuration gives it.
+    public void useLanguage(String name, Lang lang) {
+        work.execute(() -> {
+            Optional<LampLighter.Lit> lit = lamp;
+            if (fromElsewhere || lit.isEmpty()) return;
+            try {
+                lit.get().useInstructions(GenieInstructionsUtil.about(name, lang));
+            } catch (IOException | LampFailedException failed) {
+                LOG.warn("{} keeps answering in the language it was told before, as its lamp did not take the new one",
+                        name, failed);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
     private void showProblem(Notice problem) {
         changes.accept(genie -> genie.withTranscript(genie.transcript().problem(problem)));
     }
