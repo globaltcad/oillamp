@@ -49,6 +49,10 @@ public sealed interface Notice {
     /// The user stopped the genie before its answer was done.
     record Stopped() implements Notice {}
 
+    /// The user's message failed before it reached the genie's conversation, so the genie
+    /// knows nothing of it.
+    record NotDelivered() implements Notice {}
+
     /// The model is asked again, the `attempt`th time of `attempts`, after it failed for `why`;
     /// empty when the chat said why already.
     record TryingAgain(Optional<Notice> why, int attempt, int attempts) implements Notice {}
@@ -96,6 +100,7 @@ public sealed interface Notice {
             case KeepsAnsweringWith it -> words.THE_GENIE_KEEPS_ANSWERING_WITH_UNTIL_IT_WAKES_AGAIN(it.model(), it.reason());
             case SavedFile it -> words.SAVED_TO(it.name(), it.target());
             case Stopped _ -> words.STOPPED_BEFORE_THE_ANSWER_WAS_DONE();
+            case NotDelivered _ -> words.THIS_MESSAGE_DID_NOT_REACH_THE_GENIE_SEND_IT_AGAIN();
             case TryingAgain it -> it.why().map(why -> why.words(lang) + " ").orElse("")
                                    + words.TRYING_AGAIN(it.attempt(), it.attempts());
             case CouldNotTake it -> words.THE_GENIE_COULD_NOT_TAKE_THAT(it.reason());
