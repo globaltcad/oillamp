@@ -4,35 +4,52 @@ import sprouts.Association;
 import sprouts.Tuple;
 import sprouts.ValueSet;
 
-/// The host packages oillamp needs, each with the reason it is needed.
+/// The host packages oillamp needs on one [DistroFamily], each with the reason it is needed.
 ///
 /// The reasons are shown to the user before anything is installed, so they know what is about
-/// to change on their machine and why. The list is keyed by [DistroFamily]; today every
-/// family gets the Debian list, which is also what is printed for manual installation elsewhere.
+/// to change on their machine and why. The same program has a different package name in some
+/// families; [DistroFamily#UNKNOWN] gets the Debian names, which are listed for the user to
+/// look up.
 record HostRequirements(DistroFamily family, Tuple<String> packages,
                                Association<String, String> reasons) {
 
-    public static HostRequirements forFamily(DistroFamily family) {
-        return switch (family) {
-            case DEBIAN -> debian();
-            case RPM, ARCH, UNKNOWN -> new HostRequirements(family, debian().packages(), debian().reasons());
-        };
+    /// One thing oillamp needs, with its package name in each family.
+    private record Need(String debian, String fedora, String suse, String arch, String reason) {
+        String nameIn(DistroFamily family) {
+            return switch (family) {
+                case DEBIAN, UNKNOWN -> debian;
+                case FEDORA          -> fedora;
+                case SUSE            -> suse;
+                case ARCH            -> arch;
+            };
+        }
     }
 
-    private static HostRequirements debian() {
-        Association<String, String> why = Association.betweenSorted(String.class, String.class)
-            .put("podman",           "runs the sandbox container, rootless and without a daemon")
-            .put("crun",             "the OCI runtime podman uses to start the container; Ubuntu "
-                                   + "defaults to runc, which cannot pass the GPU render group in")
-            .put("slirp4netns",      "gives rootless podman a network while the image is built; "
-                                   + "the sandbox itself then runs with --network=none")
-            .put("uidmap",           "newuidmap/newgidmap, which rootless podman needs to map container users")
-            .put("catatonit",        "the init process inside the container, so orphaned processes get reaped")
-            .put("socat",            "bridges the SSH connection over a Unix socket instead of a TCP port")
-            .put("openssh-client",   "ssh and ssh-keygen for the terminal window and the per-lamp keys")
-            .put("tigervnc-viewer",  "the window in which you watch the agent's desktop");
-        Tuple<String> packages = Tuple.of(String.class, why.keySet());
-        return new HostRequirements(DistroFamily.DEBIAN, packages, why);
+    private static final Tuple<Need> NEEDS = Tuple.of(Need.class,
+        new Need("podman", "podman", "podman", "podman",
+                 "runs the sandbox container, rootless and without a daemon"),
+        new Need("crun", "crun", "crun", "crun",
+                 "the OCI runtime podman uses to start the container; Ubuntu "
+               + "defaults to runc, which cannot pass the GPU render group in"),
+        new Need("slirp4netns", "slirp4netns", "slirp4netns", "slirp4netns",
+                 "gives rootless podman a network while the image is built; "
+               + "the sandbox itself then runs with --network=none"),
+        new Need("uidmap", "shadow-utils", "shadow", "shadow",
+                 "newuidmap/newgidmap, which rootless podman needs to map container users"),
+        new Need("catatonit", "catatonit", "catatonit", "catatonit",
+                 "the init process inside the container, so orphaned processes get reaped"),
+        new Need("socat", "socat", "socat", "socat",
+                 "bridges the SSH connection over a Unix socket instead of a TCP port"),
+        new Need("openssh-client", "openssh-clients", "openssh-clients", "openssh",
+                 "ssh and ssh-keygen for the terminal window and the per-lamp keys"),
+        new Need("tigervnc-viewer", "tigervnc", "tigervnc", "tigervnc",
+                 "the window in which you watch the agent's desktop"));
+
+    public static HostRequirements forFamily(DistroFamily family) {
+        Association<String, String> why = Association.betweenSorted(String.class, String.class);
+        for (Need need : NEEDS)
+            why = why.put(need.nameIn(family), need.reason());
+        return new HostRequirements(family, Tuple.of(String.class, why.keySet()), why);
     }
 
     /// The packages from this table that are not installed yet, in table order.
@@ -41,10 +58,5 @@ record HostRequirements(DistroFamily family, Tuple<String> packages,
         for (String pkg : packages)
             if (!installed.contains(pkg)) missing = missing.add(pkg);
         return missing;
-    }
-
-    /// The command oillamp runs to install the packages, and prints when it is not allowed to.
-    public String installCommand(Tuple<String> missing) {
-        return "sudo apt-get install -y --no-install-recommends " + String.join(" ", missing);
     }
 }

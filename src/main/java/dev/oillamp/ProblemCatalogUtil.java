@@ -28,7 +28,7 @@ final class ProblemCatalogUtil {
     // ─── codes ─────────────────────────────────────────────────────────────────────────────
 
     public static final Code HOST_NOT_LINUX        = new Code("OIL-HOST-001");
-    public static final Code HOST_NOT_APT          = new Code("OIL-HOST-002");
+    public static final Code HOST_UNKNOWN_DISTRIBUTION = new Code("OIL-HOST-002");
     public static final Code HOST_NO_GRAPHICS      = new Code("OIL-HOST-003");
     public static final Code HOST_NO_SUBIDS        = new Code("OIL-HOST-010");
     public static final Code PKG_MISSING           = new Code("OIL-PKG-001");
@@ -180,13 +180,14 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.Value("os.name", osName));
     }
 
-    public static LampProblem hostNotApt(String distroId, Tuple<String> requiredPackages) {
-        return error(HOST_NOT_APT, "Unsupported Linux distribution (no APT)",
-                "the distribution reports ID=" + distroId + ", which oillamp cannot install packages on",
-                "v1 installs host prerequisites with apt-get; on other distributions you have to "
-              + "install them yourself, after which oillamp works normally")
+    public static LampProblem hostUnknownDistribution(String distroId, Tuple<String> requiredPackages) {
+        return error(HOST_UNKNOWN_DISTRIBUTION, "Unsupported Linux distribution",
+                "the distribution reports ID=" + distroId + ", whose package manager oillamp does not know",
+                "oillamp installs host prerequisites with apt-get, dnf, zypper or pacman; on other "
+              + "distributions you have to install them yourself")
             .withEvidence(new Evidence.File(Path.of("/etc/os-release"), "ID=" + distroId))
-            .withEvidence(new Evidence.Value("packages oillamp needs", String.join(" ", requiredPackages)))
+            .withEvidence(new Evidence.Value("packages oillamp needs (Debian's names)",
+                                             String.join(" ", requiredPackages)))
             .withFix(Fix.of("install the listed packages with your distribution's package manager, "
                           + "then run oillamp again"))
             .withFix(Fix.run("skip the check once the packages are there", "oillamp doctor"));
@@ -248,13 +249,13 @@ final class ProblemCatalogUtil {
             .withFix(Fix.of("or install the prerequisites yourself; oillamp then needs no root rights"));
     }
 
-    public static LampProblem installFailed(Evidence.Command command) {
+    public static LampProblem installFailed(PackageManager manager, Evidence.Command command) {
         return error(PKG_INSTALL_FAILED, "Package installation failed",
-                "apt-get exited with code " + command.exitCode(),
+                manager.executable() + " exited with code " + command.exitCode(),
                 "without the prerequisites oillamp cannot start a sandbox")
             .withEvidence(command)
-            .withFix(Fix.run("update the package lists and try again", "sudo apt-get update"))
-            .withFix(Fix.of("apt-get's output above shows the underlying error"));
+            .withFix(Fix.run("update the package lists and try again", manager.refreshCommand()))
+            .withFix(Fix.of(manager.executable() + "'s output above shows the underlying error"));
     }
 
     /// pkexec ran nothing: it exits with 126 when the person closed its password window, and

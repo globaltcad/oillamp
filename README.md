@@ -38,8 +38,9 @@ flowchart LR
 
 ### What you need
 
-- 🐧 **Linux** on a 64-bit Intel or AMD machine. Developed and tested on **Ubuntu 24.04**; other
-  distributions should work but have not been tried.
+- 🐧 **Linux** on a 64-bit Intel or AMD machine. Developed and tested on **Ubuntu 24.04**. oillamp
+  also installs what it needs on Fedora, openSUSE and Arch, and the distributions built like them,
+  but has not been tried there.
 - 🪟 **A graphical desktop session** (Wayland or X11), because oillamp opens windows.
 - That's it. You do **not** need Java, Docker or root. If `podman` (the program that runs the
   sandbox) is missing, oillamp installs it for you and asks for your password once.

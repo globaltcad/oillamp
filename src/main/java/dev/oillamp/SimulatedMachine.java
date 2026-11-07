@@ -1198,6 +1198,8 @@ final class SimulatedMachine implements Machine {
             script("id -Gn", String.join(" ", groups) + "\n");
             script("nproc", processors + "\n");
             script("dpkg-query", dpkgQueryOutput(), installedPackages.isEmpty() ? 1 : 0);
+            script("rpm -q", rpmQueryOutput(), installedPackages.isEmpty() ? 1 : 0);
+            script("pacman -Q", pacmanQueryOutput(), installedPackages.isEmpty() ? 1 : 0);
             script("sudo -n true", "", sudo == Sudo.PASSWORDLESS ? 0 : 1);
 
             podmanVersion.ifPresentOrElse(version -> {
@@ -1250,6 +1252,20 @@ final class SimulatedMachine implements Machine {
             }
             subIds.ifPresent(range ->
                     out.append(userName).append(':').append(range[0]).append(':').append(range[1]).append('\n'));
+            return out.toString();
+        }
+
+        /// Mimics `rpm -q --queryformat '%{NAME}\n'`: the bare names of the installed packages.
+        private String rpmQueryOutput() {
+            StringBuilder out = new StringBuilder();
+            for (String pkg : installedPackages) out.append(pkg).append('\n');
+            return out.toString();
+        }
+
+        /// Mimics `pacman -Q`: the name and version of each installed package.
+        private String pacmanQueryOutput() {
+            StringBuilder out = new StringBuilder();
+            for (String pkg : installedPackages) out.append(pkg).append(" 1.0-1\n");
             return out.toString();
         }
 

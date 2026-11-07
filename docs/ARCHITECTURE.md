@@ -80,7 +80,7 @@ table lists every part that runs, what it is written in, where it runs and as wh
 | `oillamp` launcher (`src/packaging/launcher.sh`) | POSIX shell | host, you | Unpacks the bundled Java runtime once, then `exec`s it. |
 | oillamp (`dev.oillamp`) | Java 25 | host, you | Checks the host, prepares the lamp, builds the image, starts the container, supervises the session, **is** the network proxy. |
 | `podman`, `crun` | third-party | host, you | Build the image, run the container, `podman unshare` for infra-owned files. |
-| `apt-get`, `usermod` via `sudo` (or `pkexec` without a terminal) | third-party | host, root | Install missing host packages and add subordinate ids. Only with your consent. |
+| `apt-get`, `dnf`, `zypper` or `pacman`, and `usermod`, via `sudo` (or `pkexec` without a terminal) | third-party | host, root | Install missing host packages and add subordinate ids. Only with your consent. |
 | `ssh-keygen` | third-party | host, you | Makes the lamp's client and host keys. |
 | your terminal emulator + `ssh` + `socat` | third-party | host, you | The shell window. `ssh` reaches the sandbox through `socat` and a Unix socket. |
 | `vncviewer` (TigerVNC) | third-party | host, you | The desktop viewer window. |
@@ -2048,12 +2048,12 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | Code | Meaning |
 |---|---|
 | `OIL-HOST-001` | Not Linux. |
-| `OIL-HOST-002` | Not an apt-based distribution; install the listed packages yourself. |
+| `OIL-HOST-002` | A distribution whose package manager oillamp does not know (it knows apt-get, dnf, zypper and pacman); install the listed packages yourself. |
 | `OIL-HOST-003` | No graphical session (`WAYLAND_DISPLAY` and `DISPLAY` unset). |
 | `OIL-HOST-010` | No subordinate uid/gid range of at least 65536 ids. |
 | `OIL-PKG-001` | Required host packages are missing. |
 | `OIL-PKG-002` | oillamp cannot become root: sudo needs a password and there is neither a terminal nor pkexec in a desktop session, or sudo is not installed. |
-| `OIL-PKG-003` | `apt-get install` failed. |
+| `OIL-PKG-003` | The package manager's install command failed. |
 | `OIL-PKG-004` | pkexec ran nothing: its password window was closed, or it got no permission. |
 | `OIL-PODMAN-001` | podman too old. |
 | `OIL-PODMAN-002` | podman is not rootless. |

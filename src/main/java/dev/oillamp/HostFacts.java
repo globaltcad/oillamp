@@ -36,6 +36,5 @@ record HostFacts(
     }
 
     public boolean isLinux()  { return os.isLinux(); }
-    public boolean isAptBased(){ return os.family() == DistroFamily.DEBIAN; }
     public boolean hasGraphicalSession() { return !(session instanceof GraphicalSession.None); }
 }

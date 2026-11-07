@@ -343,6 +343,14 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
             return distribution("fedora", "", versionId, "Fedora Linux " + versionId);
         }
 
+        public SimulationBuilder opensuse(String versionId) {
+            return distribution("opensuse-leap", "suse opensuse", versionId, "openSUSE Leap " + versionId);
+        }
+
+        public SimulationBuilder arch() {
+            return distribution("arch", "", "", "Arch Linux");
+        }
+
         public SimulationBuilder distribution(String id, String idLike, String versionId, String prettyName) {
             builder.osRelease(id, idLike, versionId, prettyName);
             return this;

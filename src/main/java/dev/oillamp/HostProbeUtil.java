@@ -27,7 +27,7 @@ final class HostProbeUtil {
 
     private static final Duration QUICK = Duration.ofSeconds(5);
 
-    public static HostFacts probe(Machine machine, HostRequirements requirements, Path lampPathHint) {
+    public static HostFacts probe(Machine machine, Path lampPathHint) {
         OsRelease os = probeOsRelease(machine);
         UserInfo user = probeUser(machine);
         Optional<PodmanFacts> podman = probePodman(machine);
@@ -38,7 +38,7 @@ final class HostProbeUtil {
                 user,
                 runtimeDirectory(machine, user.uid()),
                 session,
-                probeInstalledPackages(machine, requirements),
+                probeInstalledPackages(machine, os.family()),
                 probeSubIds(machine, user),
                 podman,
                 probeUserNamespaces(machine, podman),
@@ -114,22 +114,16 @@ final class HostProbeUtil {
         return new GraphicalSession.None();
     }
 
-    /// Asks dpkg about exactly the packages oillamp needs. A package that is not installed makes
-    /// dpkg-query exit non-zero while still reporting the others, so the exit code is ignored and
-    /// the output is what counts.
-    private static ValueSet<String> probeInstalledPackages(Machine machine, HostRequirements requirements) {
-        Tuple<String> argv = Tuple.of(String.class, "dpkg-query", "-W", "-f=${Package} ${Status}\n");
-        argv = argv.addAll(requirements.packages());
+    /// Asks the family's package manager about exactly the packages oillamp needs there. On a
+    /// distribution whose package manager oillamp does not know, it cannot ask, and reports none.
+    private static ValueSet<String> probeInstalledPackages(Machine machine, DistroFamily family) {
+        if (family.packageManager().isEmpty()) return ValueSet.of(String.class);
+        PackageManager manager = family.packageManager().get();
+        Tuple<String> argv = manager.query(HostRequirements.forFamily(family).packages());
         Machine.Outcome outcome = machine.run(new Machine.Command(argv,
                 Association.between(String.class, String.class),
-                Optional.empty(), QUICK, "dpkg-query", false));
-        ValueSet<String> installed = ValueSet.of(String.class);
-        for (String line : outcome.output().split("\n", -1)) {
-            if (!line.contains("install ok installed")) continue;
-            String name = line.substring(0, line.indexOf(' ')).trim();
-            if (!name.isEmpty()) installed = installed.add(name);
-        }
-        return installed;
+                Optional.empty(), QUICK, argv.first(), false));
+        return manager.installedIn(outcome.output());
     }
 
     private static SubIdFacts probeSubIds(Machine machine, UserInfo user) {

@@ -500,15 +500,49 @@ class Checking_The_Machine_Spec extends Specification {
             127      | 'it got no permission'                  | 'Error executing command as another user: Not authorized'    | 'pkexec could not get permission'
     }
 
-    def 'On a Linux without apt, `oillamp doctor` lists the packages to install by hand'() {
+    def 'On #distribution, `oillamp at` plans to install podman and `newuidmap` with #manager, under the package names #distribution uses'() {
         reportInfo """
-            Oillamp can only install packages with apt, the package manager of Debian and Ubuntu,
-            and nothing else in oillamp depends on the distribution. So on Fedora or Arch,
-            `oillamp doctor` reports `OIL-HOST-002` with the list of packages oillamp needs, for
-            the user to install themselves.
+            Let's consider a ${distribution} machine on which everything oillamp needs is
+            installed except podman and `newuidmap`, the program with which rootless podman maps
+            the container's users onto the subordinate ids. Each family of distributions installs
+            packages with its own package manager, and some give the same program a different
+            package name: Debian's package `uidmap`, which holds `newuidmap`, is `shadow-utils`
+            on Fedora and `shadow` on openSUSE and Arch.
+
+            So on ${distribution}, oillamp plans to run `${command}`. An earlier oillamp knew only
+            `apt-get`, and refused to install anything outside Debian and Ubuntu. The scenario
+            reads the plan of `oillamp at --dry-run`, on a machine where sudo needs no password.
         """
-        given: 'a Fedora machine'
-            host.machine { it.fedora('42') }
+        given: 'a #distribution machine with everything oillamp needs under #distribution\'s package names, except podman and the package that holds `newuidmap`'
+            host.machine { os(it).withPackages(*installed).withoutPodman() }
+
+        when: '`oillamp at <dir> --dry-run` is run'
+            var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
+
+        then: 'the step that installs packages would run exactly `#command`'
+            outcome.stepDetails().any { it.startsWith(command + '\n') }
+
+        and: 'oillamp reports no `OIL-HOST-002`, the problem of a distribution it cannot install packages on'
+            !outcome.reported('OIL-HOST-002')
+
+        where:
+            distribution         | manager  | os                       | installed                                                                   | command
+            'Fedora 42'          | 'dnf'    | { it.fedora('42') }      | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo dnf install -y podman shadow-utils'
+            'openSUSE Leap 16.0' | 'zypper' | { it.opensuse('16.0') }  | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo zypper --non-interactive install --no-recommends podman shadow'
+            'Arch Linux'         | 'pacman' | { it.arch() }            | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh', 'tigervnc']         | 'sudo pacman -S --needed --noconfirm podman shadow'
+    }
+
+    def 'On a Linux whose package manager oillamp does not know, `oillamp doctor` lists the packages to install by hand'() {
+        reportInfo """
+            Oillamp installs packages with apt-get, dnf, zypper or pacman: the package managers of
+            Debian, Fedora, openSUSE and Arch, and of the distributions built like them. Let's
+            consider Gentoo, which is none of these. There `oillamp doctor` reports `OIL-HOST-002`
+            with the packages oillamp needs, under Debian's names, for the user to look up and
+            install themselves. It reports no `OIL-PKG-001` besides: that problem's remedy is an
+            install command, and oillamp knows none for Gentoo.
+        """
+        given: 'a Gentoo machine'
+            host.machine { it.distribution('gentoo', '', '2.17', 'Gentoo Linux') }
 
         when: '`oillamp doctor` is run'
             var outcome = host.oillamp.run('doctor')
@@ -520,6 +554,9 @@ class Checking_The_Machine_Spec extends Specification {
             var problem = outcome.errors().find { it.code().value() == 'OIL-HOST-002' }
             problem.evidence().any { it.toString().contains('podman') }
             problem.evidence().any { it.toString().contains('tigervnc-viewer') }
+
+        and: 'it reports no `OIL-PKG-001`'
+            !outcome.reported('OIL-PKG-001')
     }
 
     def 'Oillamp installs nothing for a lamp configured with `host.auto_install = false`'() {

@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import java.util.Optional;
+
 import dev.lamp.LampStartupPhase;
 import dev.lamp.LampProblem;
 
@@ -40,34 +42,38 @@ final class HostPlanUtil {
         }
     }
 
-    public static Result<Plan> plan(HostFacts facts, HostRequirements requirements, Options options) {
+    public static Result<Plan> plan(HostFacts facts, Options options) {
         if (!facts.isLinux())
             return Result.err(ProblemCatalogUtil.hostNotLinux(facts.os().osName()));
 
         Tuple<LampProblem> problems = Tuple.of(LampProblem.class);
         Tuple<Step> steps = Tuple.of(Step.class);
 
-        if (!facts.isAptBased())
-            problems = problems.add(ProblemCatalogUtil.hostNotApt(facts.os().id(), requirements.packages()));
+        HostRequirements requirements = HostRequirements.forFamily(facts.os().family());
+        Optional<PackageManager> manager = facts.os().family().packageManager();
+        if (manager.isEmpty())
+            problems = problems.add(ProblemCatalogUtil.hostUnknownDistribution(facts.os().id(), requirements.packages()));
 
         if (options.requiresGraphicalSession() && !facts.hasGraphicalSession())
             problems = problems.add(ProblemCatalogUtil.hostNoGraphics());
 
         // ── packages ───────────────────────────────────────────────────────────────────────
-        Tuple<String> missing = requirements.missingFrom(facts.installedPackages());
+        // Without a package manager, the problem above already lists every package.
+        Tuple<String> missing = manager.isEmpty() ? Tuple.of(String.class)
+                : requirements.missingFrom(facts.installedPackages());
         // If podman is not installed at all, "podman not found" tells the user nothing they were
         // not just told. Report the missing package and leave it at that.
         boolean podmanIsAbsent = missing.contains("podman");
         if (!missing.isEmpty()) {
             if (!options.mayInstall() || options.afterFixes()) {
                 problems = problems.add(ProblemCatalogUtil.packagesMissing(
-                        missing, requirements.installCommand(missing), options.installing()));
+                        missing, typedInstallCommand(manager.get(), missing), options.installing()));
             } else if (options.willExecute() && facts.rootAccess() instanceof RootAccess.Unavailable none) {
                 problems = problems.add(ProblemCatalogUtil.noSudo(none.reason()));
                 problems = problems.add(ProblemCatalogUtil.packagesMissing(
-                        missing, requirements.installCommand(missing), options.installing()));
+                        missing, typedInstallCommand(manager.get(), missing), options.installing()));
             } else {
-                steps = steps.add(installStep(requirements, missing, facts.rootAccess()));
+                steps = steps.add(installStep(requirements, manager.get(), missing, facts.rootAccess()));
             }
         }
 
@@ -127,14 +133,17 @@ final class HostPlanUtil {
         return problems;
     }
 
-    private static Step.InstallPackages installStep(HostRequirements requirements, Tuple<String> missing,
-                                                    RootAccess root) {
+    /// The install command for a person to type at a terminal.
+    private static String typedInstallCommand(PackageManager manager, Tuple<String> missing) {
+        return String.join(" ", new RootAccess.Sudo().asRoot(manager.install(missing)));
+    }
+
+    private static Step.InstallPackages installStep(HostRequirements requirements, PackageManager manager,
+                                                    Tuple<String> missing, RootAccess root) {
         ValueSet<String> packages = ValueSet.of(String.class, missing);
         Association<String, String> reasons = Association.betweenSorted(String.class, String.class);
         for (String pkg : missing)
             reasons = reasons.put(pkg, requirements.reasons().get(pkg).orElse("required by oillamp"));
-        Tuple<String> command = Tuple.of(String.class, "apt-get", "install", "-y", "--no-install-recommends")
-                .addAll(missing);
-        return new Step.InstallPackages(root.asRoot(command), packages, reasons);
+        return new Step.InstallPackages(manager, root.asRoot(manager.install(missing)), packages, reasons);
     }
 }

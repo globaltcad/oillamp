@@ -40,17 +40,13 @@ final class HostPhase {
     ///                   told to do about missing packages.
     public Outcome prepare(Path lampPathHint, boolean requiresDisplay,
                            Installing installing) {
-        // The package names are the same for every family oillamp knows, so one probe suffices;
-        // the planner refuses a non-APT distribution afterwards, with the list to install by hand.
-        HostRequirements requirements =
-                HostRequirements.forFamily(DistroFamily.DEBIAN);
-        HostFacts facts = HostProbeUtil.probe(machine, requirements, lampPathHint);
+        HostFacts facts = HostProbeUtil.probe(machine, lampPathHint);
         // A dry run is allowed to plan things it could not currently carry out: the user asked
         // what oillamp *would* do, and "I cannot sudo right now" is not an answer to that.
         HostPlanUtil.Options options = new HostPlanUtil.Options(
                 installing, requiresDisplay, false, !context.options().dryRun());
 
-        Result<Plan> planned = HostPlanUtil.plan(facts, requirements, options);
+        Result<Plan> planned = HostPlanUtil.plan(facts, options);
         if (planned instanceof Result.Err<Plan> failure)
             return new Outcome(facts, failure);
 
@@ -68,8 +64,8 @@ final class HostPhase {
             return new Outcome(facts, Result.ok(done, planned.warnings().addAll(executed.warnings())));
 
         // Re-probe: the machine is not the one we planned against any more.
-        HostFacts after = HostProbeUtil.probe(machine, requirements, lampPathHint);
-        Result<Plan> verified = HostPlanUtil.plan(after, requirements, options.verifying());
+        HostFacts after = HostProbeUtil.probe(machine, lampPathHint);
+        Result<Plan> verified = HostPlanUtil.plan(after, options.verifying());
         if (verified instanceof Result.Err<Plan> failure)
             return new Outcome(after, Result.err(failure.problems()));
         describe(after);

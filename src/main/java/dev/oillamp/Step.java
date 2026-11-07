@@ -33,7 +33,7 @@ sealed interface Step {
     /// Installs host packages with the command the planner chose for this machine.
     ///
     /// @param command the whole command line, run as root
-    record InstallPackages(Tuple<String> command, ValueSet<String> packages,
+    record InstallPackages(PackageManager manager, Tuple<String> command, ValueSet<String> packages,
                            Association<String, String> reasons) implements Step {}
 
     /// Gives the user a block of subordinate ids, so rootless podman can map the container's users.

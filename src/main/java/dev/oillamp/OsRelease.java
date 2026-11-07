@@ -12,7 +12,8 @@ record OsRelease(String osName, String id, Tuple<String> idLike, String versionI
     /// Which package manager this distribution uses, judged from `ID` and `ID_LIKE`.
     public DistroFamily family() {
         if (matches("debian") || matches("ubuntu")) return DistroFamily.DEBIAN;
-        if (matches("fedora") || matches("rhel"))   return DistroFamily.RPM;
+        if (matches("fedora") || matches("rhel"))   return DistroFamily.FEDORA;
+        if (matches("suse") || matches("opensuse")) return DistroFamily.SUSE;
         if (matches("arch"))                        return DistroFamily.ARCH;
         return DistroFamily.UNKNOWN;
     }

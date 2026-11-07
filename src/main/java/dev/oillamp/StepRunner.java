@@ -300,11 +300,11 @@ final class StepRunner {
     }
 
     private Result<Step> installPackages(Step.InstallPackages step) {
-        Machine.Outcome outcome = run("apt-get", Duration.ofMinutes(10), step.command());
+        Machine.Outcome outcome = run(step.manager().executable(), Duration.ofMinutes(10), step.command());
         if (outcome.succeeded()) return Result.ok(step);
         if (pkexecRefused(step.command(), outcome))
             return Result.err(ProblemCatalogUtil.pkexecRefused(evidenceOf(outcome, step.command())));
-        return Result.err(ProblemCatalogUtil.installFailed(evidenceOf(outcome, step.command())));
+        return Result.err(ProblemCatalogUtil.installFailed(step.manager(), evidenceOf(outcome, step.command())));
     }
 
     private Result<Step> addSubIds(Step.AddSubIds step) {
