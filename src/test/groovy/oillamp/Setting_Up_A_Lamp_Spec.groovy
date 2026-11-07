@@ -95,6 +95,10 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             oillamp can become root makes no difference to it. And on exactly such a machine, a
             dry run is what someone wants: to read the plan before deciding whether to give
             oillamp their password at all.
+
+            The remedies of `OIL-PKG-002` name the two ways oillamp can ask for the password:
+            sudo in a terminal, and `pkexec` in a desktop session. An earlier oillamp also told
+            the user to drop `--no-install`, a flag that was never passed.
         """
         given: 'a machine without podman and without pkexec, where sudo needs a password and there is no terminal to ask for one'
             host.machine { it.withoutPodman().withoutPkexec().sudoNeedsPassword().interactive(false) }
@@ -117,6 +121,14 @@ class Setting_Up_A_Lamp_Spec extends Specification {
 
         then: 'it reports `OIL-PKG-002`, because now it would really need root rights'
             real.reported('OIL-PKG-002')
+
+        and: 'the remedies of `OIL-PKG-002` name a terminal, where sudo can ask for the password, and pkexec'
+            var noRoot = real.errors().find { it.code().value() == 'OIL-PKG-002' }
+            noRoot.fixes().any { it.description().contains('terminal') }
+            noRoot.fixes().any { it.description().contains('pkexec') }
+
+        and: 'no remedy of any problem mentions `--no-install`'
+            real.problems().every { problem -> problem.fixes().every { !it.description().contains('--no-install') } }
     }
 
     def '`oillamp at` creates the agent\'s home in the lamp, and keeps the settings, keys, logs and recordings outside it'() {

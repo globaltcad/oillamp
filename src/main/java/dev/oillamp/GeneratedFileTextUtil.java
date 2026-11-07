@@ -172,7 +172,8 @@ final class GeneratedFileTextUtil {
             extra_apt_packages = []
 
             [host]
-            auto_install = true       # install missing host packages with sudo apt-get (logged)
+            auto_install = true       # install missing host packages as root, through sudo, or through
+                                      # pkexec where there is no terminal (logged)
 
             [timeouts]
             container_ready_seconds  = 60

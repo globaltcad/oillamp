@@ -218,32 +218,34 @@ final class ProblemCatalogUtil {
 
     public static LampProblem packagesMissing(Tuple<String> missing, String installCommand,
                                           Installing installing) {
-        // The second fix depends on why oillamp is not installing them itself. A `doctor` user
-        // never passed --no-install, so telling them to drop it would be confusing.
-        String letOillampDoIt = switch (installing) {
-            case ALLOWED, DECLINED ->
-                    "or let oillamp install them by running without --no-install";
-            case DECLINED_IN_CONFIG ->
-                    "or let oillamp install them: set `auto_install = true` under [host] in "
-                  + "oillamp.toml or ~/.config/oillamp/config.toml";
-            case NEVER ->
-                    "or run `oillamp at <dir>`, which installs them for you after one sudo prompt "
-                  + "(this command only ever looks)";
-        };
-        return error(PKG_MISSING, "Required host packages missing",
+        LampProblem problem = error(PKG_MISSING, "Required host packages missing",
                 "these packages are not installed: " + String.join(" ", missing),
                 "oillamp drives podman, connects SSH through a Unix socket with socat, and opens "
               + "the desktop with a VNC viewer; each missing package disables one of those")
-            .withFix(Fix.run("install them", installCommand))
-            .withFix(Fix.of(letOillampDoIt));
+            .withFix(Fix.run("install them", installCommand));
+        // The second fix depends on why oillamp is not installing them itself. Where it was
+        // allowed to, it tried, or could not become root, which `OIL-PKG-002` or the installer's
+        // own output explains; a flag to drop would point at one nobody passed.
+        return switch (installing) {
+            case ALLOWED -> problem;
+            case DECLINED -> problem.withFix(Fix.of(
+                    "or let oillamp install them by running without --no-install"));
+            case DECLINED_IN_CONFIG -> problem.withFix(Fix.of(
+                    "or let oillamp install them: set `auto_install = true` under [host] in "
+                  + "oillamp.toml or ~/.config/oillamp/config.toml"));
+            case NEVER -> problem.withFix(Fix.of(
+                    "or run `oillamp at <dir>`, which installs them for you after one sudo prompt "
+                  + "(this command only ever looks)"));
+        };
     }
 
     public static LampProblem noSudo(String detail) {
-        return error(PKG_NO_SUDO, "Cannot run sudo",
+        return error(PKG_NO_SUDO, "Cannot become root",
                 detail,
                 "host packages and the subordinate id range can only be set up with root rights")
-            .withFix(Fix.of("run oillamp from an interactive terminal so sudo can ask for your password"))
-            .withFix(Fix.of("or install the prerequisites yourself and re-run with --no-install"));
+            .withFix(Fix.of("run oillamp from an interactive terminal, where sudo can ask for your password"))
+            .withFix(Fix.of("or, in a desktop session, install pkexec, which asks for it in a window"))
+            .withFix(Fix.of("or install the prerequisites yourself; oillamp then needs no root rights"));
     }
 
     public static LampProblem installFailed(Evidence.Command command) {
