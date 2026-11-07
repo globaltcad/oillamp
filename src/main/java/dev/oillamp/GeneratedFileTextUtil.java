@@ -249,7 +249,7 @@ final class GeneratedFileTextUtil {
             # For this shell only:      eval "$(oillamp completion bash)"
             # For every future shell:   echo 'eval "$(oillamp completion bash)"' >> ~/.bashrc
             _oillamp() {
-                local commands='at update view shell stop status follow list remove history schedule ask cancel model host-access answer conversations recordings doctor config completion guide about version help'
+                local commands='at update view shell stop status follow list remove history schedule ask cancel model instructions host-access answer conversations recordings doctor config completion guide about version help'
                 local current="${COMP_WORDS[COMP_CWORD]}"
                 local before=""
                 [ "$COMP_CWORD" -ge 2 ] && before="${COMP_WORDS[COMP_CWORD-2]}"
@@ -308,6 +308,7 @@ final class GeneratedFileTextUtil {
                             history)       options="$options --message --all --delete --yes" ;;
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
+                            instructions)  options="$options --instructions-env" ;;
                             host-access)   options="$options --requirements-env --commands --ask-the-user" ;;
                             recordings)    options="$options --open --prune --dry-run" ;;
                             doctor|config) options="$options --dry-run --no-install" ;;

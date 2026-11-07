@@ -330,6 +330,7 @@ oillamp schedule <dir> [add ...] # list or change the jobs that wake the agent
 oillamp ask <dir> "<prompt>"     # wake the agent in a running session, print its answer
 oillamp cancel <dir> [<run>]     # stop the agent's run
 oillamp model <dir> <id>         # answer with this model from the next run on, without restarting
+oillamp instructions <dir> --instructions-env <name> # follow new instructions from the next run on
 oillamp conversations <dir> [<id>] # list the agent's conversations, or show one
 oillamp recordings <dir>         # list screen recordings (if recording is on)
 oillamp config <dir> check       # validate the lamp's oillamp.toml

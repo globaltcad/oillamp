@@ -186,6 +186,7 @@ final class CommandExecutionUtil {
             case Command.Ask ask       -> ask(machine, context, ask);
             case Command.Cancel cancel -> cancel(machine, context, cancel.lamp(), cancel.run());
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
+            case Command.Instructions instructions -> instructions(machine, context, instructions.lamp());
             case Command.HostAccess access -> hostAccess(machine, context, access);
             case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
@@ -223,7 +224,7 @@ final class CommandExecutionUtil {
     ///
     /// @return an error when the variable is not set, is empty, or holds more than
     ///         [PiSetupUtil#LONGEST_INSTRUCTIONS]
-    private static Result<Optional<String>> instructions(Machine machine, Context context) {
+    private static Result<Optional<String>> instructions(Machine machine, Context context, String command) {
         Optional<String> variable = context.options().instructionsEnv();
         if (variable.isEmpty()) return Result.ok(Optional.empty());
         Optional<String> text = machine.environmentVariable(variable.get());
@@ -231,7 +232,7 @@ final class CommandExecutionUtil {
                                : PiSetupUtil.instructionsProblem(text.get());
         if (wrong.isPresent())
             return Result.err(ProblemCatalogUtil.usage("--instructions-env " + variable.get() + ": " + wrong.get(),
-                    Command.usageOf("at")));
+                    Command.usageOf(command)));
         return Result.ok(text);
     }
 
@@ -247,7 +248,7 @@ final class CommandExecutionUtil {
     ) {
         // Read now, before anything changes on the machine, so that a missing variable stops
         // the session before it starts rather than leave the agent without its instructions.
-        Result<Optional<String>> instructions = instructions(machine, context);
+        Result<Optional<String>> instructions = instructions(machine, context, "at");
         if (instructions instanceof Result.Err<Optional<String>> wrong) {
             context.sinkAcceptProblems(wrong.problems());
             return LampExitStatus.USAGE;
@@ -1314,6 +1315,21 @@ final class CommandExecutionUtil {
         return askTheSession(machine, context, lampPath, "model", Control.Request.of("model").with("model", model),
                 reply -> context.sink().accept(new LampEvent.Ok("run",
                         "the agent answers with " + model + " from its next run on")));
+    }
+
+    /// `oillamp instructions <dir> --instructions-env <name>`: the running session's agent follows
+    /// the instructions in that variable from its next run on, in place of the ones it had.
+    private static LampExitStatus instructions(Machine machine, Context context, Path lampPath) {
+        Result<Optional<String>> instructions = instructions(machine, context, "instructions");
+        if (instructions instanceof Result.Err<Optional<String>> wrong) {
+            context.sinkAcceptProblems(wrong.problems());
+            return LampExitStatus.USAGE;
+        }
+        String text = ((Result.Ok<Optional<String>>) instructions).value().orElseThrow();
+        return askTheSession(machine, context, lampPath, "instructions",
+                Control.Request.of("instructions").with("text", text),
+                reply -> context.sink().accept(new LampEvent.Ok("run",
+                        "the agent follows the new instructions from its next run on")));
     }
 
     /// `oillamp host-access <dir> [on|off] [--requirements-env <name>] [--commands <who>]

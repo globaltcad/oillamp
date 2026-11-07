@@ -172,9 +172,7 @@ public final class LampDirectory {
     /// @throws IllegalArgumentException when `text` is blank, or longer than 64 KiB, far more
     ///                                  than any useful instructions
     public LampDirectory instructions(String text) {
-        if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
-        if (text.getBytes(StandardCharsets.UTF_8).length > Lamp.LONGEST_INSTRUCTIONS)
-            throw new IllegalArgumentException("instructions cannot be longer than " + Lamp.LONGEST_INSTRUCTIONS / 1024 + " KiB");
+        Lamp.checkInstructions(text);
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security, wallpaper, background);
     }
 

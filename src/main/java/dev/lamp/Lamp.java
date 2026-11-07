@@ -576,6 +576,30 @@ public final class Lamp implements AutoCloseable {
         runToEnd(launcher, listeners, "model", directory.toString(), id).orThrow();
     }
 
+    /// Has the agent follow `text` from its next run on, in place of the instructions the session
+    /// had, as [LampDirectory#instructions(String)] would have had it from the start: in new
+    /// conversations and in old ones, for questions and scheduled jobs alike. A run in progress
+    /// finishes with the instructions it started with. For instructions that depend on what the
+    /// user may change while the agent is awake, such as the language it is to answer in.
+    ///
+    /// The text goes to the engine in its environment, as at the start.
+    ///
+    /// @throws IllegalArgumentException when `text` is blank, or longer than 64 KiB
+    /// @throws LampFailedException when the session is not running
+    public void useInstructions(String text) throws IOException, InterruptedException, LampFailedException {
+        checkInstructions(text);
+        InternalLampUtil.runToEnd(launcher, listeners, Map.of(INSTRUCTIONS_VARIABLE, text),
+                "instructions", directory.toString(), "--instructions-env", INSTRUCTIONS_VARIABLE).orThrow();
+    }
+
+    /// Throws [IllegalArgumentException] for instructions the engine would refuse: blank, or
+    /// longer than [#LONGEST_INSTRUCTIONS].
+    static void checkInstructions(String text) {
+        if (text.isBlank()) throw new IllegalArgumentException("instructions cannot be blank");
+        if (text.getBytes(StandardCharsets.UTF_8).length > LONGEST_INSTRUCTIONS)
+            throw new IllegalArgumentException("instructions cannot be longer than " + LONGEST_INSTRUCTIONS / 1024 + " KiB");
+    }
+
     /// Stops the run the agent is working on. What it did until then is saved, as for any run,
     /// and its [LampEvent.RunFinished] says it was [cancelled][LampRunOutcome#CANCELLED].
     ///

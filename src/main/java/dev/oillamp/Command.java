@@ -101,6 +101,8 @@ sealed interface Command {
     /// `model` is the model the running session's agent answers with from its next run on, as
     /// the service names it.
     record Model(Path lamp, String model, Context.Options options) implements Command {}
+    /// The new instructions are in the variable that [Context.Options#instructionsEnv] names.
+    record Instructions(Path lamp, Context.Options options) implements Command {}
     /// `enabled` is `on` or `off`, `requirementsEnv` the variable that holds the new
     /// requirements, `commands` who approves a command on the host and `askTheUser` whether a
     /// request past the roots goes to the person; with none, the command only says what the
@@ -491,6 +493,13 @@ sealed interface Command {
                             "`oillamp model` \"" + rest.get(1) + "\": " + wrong.get(), usageOf("model")));
                 yield Result.ok(new Model(Path.of(rest.first()), rest.get(1), options));
             }
+            case "instructions" -> {
+                if (options.instructionsEnv().isEmpty())
+                    yield Result.err(ProblemCatalogUtil.usage(
+                            "`oillamp instructions` needs the variable that holds them, such as --instructions-env MY_INSTRUCTIONS",
+                            usageOf("instructions")));
+                yield Result.ok(new Instructions(Path.of(rest.first()), options));
+            }
             case "cancel" -> Result.ok(new Cancel(Path.of(rest.first()),
                     rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty(), options));
             case "host-access" -> {
@@ -593,6 +602,7 @@ sealed interface Command {
                 .put("ask",        ValueSet.of("--in", "--after", "--instead-of", "--no-wait", "--embedded"))
                 .put("cancel",     ValueSet.of("--embedded"))
                 .put("model",      ValueSet.of("--embedded"))
+                .put("instructions", ValueSet.of("--instructions-env", "--embedded"))
                 .put("host-access", ValueSet.of("--requirements-env", "--commands", "--ask-the-user", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
@@ -628,7 +638,7 @@ sealed interface Command {
     /// The commands that take a lamp directory and cannot do without it.
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
-            "history", "schedule", "ask", "conversations", "cancel", "model", "update",
+            "history", "schedule", "ask", "conversations", "cancel", "model", "instructions", "update",
             "host-access", "answer");
 
     /// The commands that work on one lamp. `remove` takes several.
@@ -639,7 +649,7 @@ sealed interface Command {
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("schedule", 3).put("ask", 2)
-                .put("conversations", 2).put("cancel", 2).put("model", 2).put("host-access", 2).put("answer", 3)
+                .put("conversations", 2).put("cancel", 2).put("model", 2).put("instructions", 1).put("host-access", 2).put("answer", 3)
                 // The lamp, `autosave`, and each moment and chat-quiet-minutes with its value.
                 .put("history", 2 + 2 * (AUTOSAVE_MOMENTS.size() + 1))
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
@@ -824,6 +834,10 @@ sealed interface Command {
                     Have a running session's agent answer with this model from its next run
                     on, as `at --model` would have: in new conversations and in old ones, and
                     as pi's default. A run in progress finishes on the model it started with.
+              instructions <dir> --instructions-env <name>
+                    Have a running session's agent follow the instructions this variable
+                    holds from its next run on, in place of the ones it had, as `at
+                    --instructions-env` would have: in new conversations and in old ones.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
               host-access <dir> [on | off] [--requirements-env <name>] [--commands <who>] [--ask-the-user on | off]

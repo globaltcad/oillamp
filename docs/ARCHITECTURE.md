@@ -987,6 +987,7 @@ the container, and the next start cleans up the rest.
 | `{"op":"ask","prompt":…}` | answered once the run has ended: `{"ok":true,"run":"run-3","outcome":"FINISHED","answer":…,"seconds":…,"snapshot":…,"conversation":…}`; `oillamp ask` waits up to a day for it. With `"conversation"` and `"file"` it continues that conversation, and with `"move_to"` it goes after that entry first. With `"no_wait":"true"` it is answered at once with the run's id |
 | `{"op":"cancel","run":…}` | `{"ok":true,"run":…}`: the run is being stopped, or was taken off the queue; without `run`, the one in progress |
 | `{"op":"model","model":…}` | `{"ok":true,"model":…}`: every run from the next one on is answered by that model, as with `--model`; the run in progress keeps its own. `oillamp model` and `Lamp.useModel` send it |
+| `{"op":"instructions","text":…}` | `{"ok":true}`: the text replaces the session's instructions in `APPEND_SYSTEM.md`, as with `--instructions-env`, and pi holds it from the next run on; the run in progress keeps its own. `oillamp instructions` and `Lamp.useInstructions` send it |
 | `{"op":"schedule-changed"}` | `{"ok":true}`, and the session looks at the schedule now rather than at its next half minute |
 | `{"op":"follow"}` | `{"ok":true}`, then every event of the session as a line of JSON, until the session ends and closes the connection. The first lines catch up: `SessionOpened`, the last `SessionStateChanged`, the run in progress from its `RunStarted` (with its text pieces joined), a `RunQueued` for each run waiting, and an `AgentStatus`, which ends the catch-up. `oillamp follow` prints them |
 
@@ -1068,7 +1069,8 @@ lines (`OIL-SCHEDULE-005`), and the next run starts it again.
 | instructions (`--instructions-env`, `LampDirectory.instructions`) | `~/.pi/agent/APPEND_SYSTEM.md` | the text, replacing what was there |
 
 A session without a model, or without instructions, leaves that file as it is. `oillamp model`
-and `Lamp.useModel` write the new model into `settings.json` at once, too. pi reads both files
+and `Lamp.useModel` write the new model into `settings.json` at once, too, and `oillamp
+instructions` and `Lamp.useInstructions` the new instructions into `APPEND_SYSTEM.md`. pi reads both files
 each time it starts or opens a conversation (`new_session`, `switch_session`), also in a pi
 process that has been running for a while, so a changed default applies to the next new
 conversation. The files are written once the sandbox is up and not before, because the

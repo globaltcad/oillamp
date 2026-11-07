@@ -154,6 +154,10 @@ final class AgentRunner {
     /// makes it pi's default for new conversations.
     void useModel(String model) { harness.useModel(model, context.sink()); }
 
+    /// Has pi add `text` to its system prompt from the next run on, in place of the session's
+    /// instructions so far.
+    void useInstructions(String text) { harness.useInstructions(text, context.sink()); }
+
     /// The model the next run is answered by, as [#useModel] or `--model` last said; empty when
     /// the session leaves it to pi.
     Optional<String> model() { return harness.model(); }

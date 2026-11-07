@@ -58,6 +58,10 @@ pi's own directory. An application should not need to know that the agent is pi,
 keeps its files; it gives the text to the lamp. pi reads the file each time it starts or opens a
 conversation, so the instructions apply to old conversations as well as new ones.
 
+**While the session runs.** `Lamp.useInstructions`, or `oillamp instructions <dir>
+--instructions-env <name>` by hand, gives the running session new instructions, which the engine
+writes into the same file. pi holds them from the next question on.
+
 **Without instructions, the file stays as it is.** It is in the agent's home, where the agent or
 the user may have written it, so a session that was given none does not touch it, whatever an
 earlier session wrote there.
@@ -76,6 +80,13 @@ class Giving_The_Agent_Instructions_Spec extends Specification {
 
         - Save files for the user in ~/outbox.
         - Keep answers short.
+        '''.stripIndent()
+
+    /** Instructions an application gives a running session in place of [INSTRUCTIONS]. */
+    static final String IN_GERMAN = '''\
+        You are Ada, an assistant with a Linux desktop of your own.
+
+        - Always answer in German.
         '''.stripIndent()
 
     /** What the variable ADA holds, by what the scenario says of it: empty when it is not set. */
@@ -136,6 +147,84 @@ class Giving_The_Agent_Instructions_Spec extends Specification {
         and: 'pi\'s instructions file held the text when pi was given the first question'
             answer.outcome() == LampRunOutcome.FINISHED
             instructionsWhenAsked == [INSTRUCTIONS]
+    }
+
+    def '`Lamp.useInstructions` replaces a running session\'s instructions, and pi\'s instructions file holds the new text when the next question continues an earlier conversation'() {
+        reportInfo """
+            Let's consider an application whose instructions depend on a setting the user can
+            change while the agent is awake, such as the language the agent is to answer in.
+            Restarting the session to pass the new text would end whatever runs on the agent's
+            desktop. `Lamp.useInstructions` gives the running session the new text instead. As at
+            the start, the `Lamp` passes the text in the engine's environment, and the engine
+            writes it into pi's `APPEND_SYSTEM.md`, replacing the old text.
+
+            pi reads that file whenever it starts or opens a conversation, and before every
+            question the session has pi start a conversation or open one. So what matters is what the file holds
+            when a question reaches pi, and that is what this scenario checks, for a question in
+            the conversation the agent answered under the old instructions.
+        """
+        given: 'a session started with instructions, and a conversation the agent answered under them'
+            var running = Lamp.at(lamp).instructions(INSTRUCTIONS).launchedBy(host.launcher).start()
+            assert running.awaitRunning(Duration.ofSeconds(30))
+            var first = running.ask(LampPrompt.fresh('Who are you?'))
+
+        when: 'the application gives the session new instructions with `Lamp.useInstructions`'
+            running.useInstructions(IN_GERMAN)
+
+        then: 'the `Lamp` started an engine with `oillamp instructions`, naming a variable on its command line and putting the new text in it'
+            host.engines.last().arguments == ['instructions', lamp.toString(), '--instructions-env', 'OILLAMP_INSTRUCTIONS', '--embedded']
+            host.engines.last().environment == [OILLAMP_INSTRUCTIONS: IN_GERMAN]
+
+        when: 'the application asks a second question in that conversation'
+            running.ask(LampPrompt.in(first.conversation().orElseThrow(), 'And what can you do?'))
+            running.close()
+
+        then: 'pi\'s instructions file held the first instructions when pi got the first question, and the new ones when it got the second'
+            instructionsWhenAsked == [INSTRUCTIONS, IN_GERMAN]
+    }
+
+    def '`oillamp instructions` needs the variable that holds the new instructions, and a running session to give them to'() {
+        reportInfo """
+            `oillamp instructions <lamp> --instructions-env <name>` is how `Lamp.useInstructions`
+            reaches the running session, and someone can run it by hand. Without
+            `--instructions-env` there is no text to give, so oillamp refuses the command line with
+            `OIL-USAGE-001`. For a lamp with no session running there is no agent to tell, so
+            oillamp reports `OIL-SESSION-001` rather than keep the text for a later session.
+        """
+        given: 'a lamp with no session running, and instructions in the variable `ADA`'
+            aLampThatHasHadASession()
+            host.machine { it.environmentVariable('ADA', INSTRUCTIONS) }
+
+        when: '`oillamp instructions` is run without `--instructions-env`'
+            var noVariable = host.oillamp.run('instructions', lamp.toString())
+
+        then: 'oillamp refuses the command line, and names the option it needs'
+            noVariable.reported('OIL-USAGE-001')
+            noVariable.errors().first().whatHappened().contains('--instructions-env')
+
+        when: '`oillamp instructions` is run with `--instructions-env ADA`'
+            var noSession = host.oillamp.run('instructions', lamp.toString(), '--instructions-env', 'ADA')
+
+        then: 'oillamp says no session is running'
+            noSession.reported('OIL-SESSION-001')
+    }
+
+    @Rollup
+    def '`Lamp.useInstructions` refuses instructions that are blank or longer than 64 KiB before it asks the session'() {
+        reportInfo """
+            `Lamp.useInstructions` checks the text as `LampDirectory.instructions` does, and throws
+            `IllegalArgumentException`, so the application learns of the mistake where it gives
+            the text.
+        """
+        when: 'the application gives a lamp the instructions the row describes'
+            Lamp.at(lamp).launchedBy(host.launcher).join().withCloseable { it.useInstructions(TEXTS[text]) }
+
+        then: 'the `Lamp` throws `IllegalArgumentException`, and started no engine with `oillamp instructions`'
+            thrown(IllegalArgumentException)
+            !host.engines.any { it.arguments.first() == 'instructions' }
+
+        where:
+            text << TEXTS.keySet()
     }
 
     def '`oillamp at --instructions-env` takes the instructions from the variable it names, and replaces what pi\'s file held'() {

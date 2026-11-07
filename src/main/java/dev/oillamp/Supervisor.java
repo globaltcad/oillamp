@@ -1420,6 +1420,16 @@ final class Supervisor {
                 context.sink().accept(new LampEvent.Ok("run", "the agent answers with " + model.get() + " from its next run on"));
                 yield Control.Reply.ok().with("model", model.get());
             }
+            // Like the model: from the next run on.
+            case "instructions" -> {
+                Optional<String> text = request.arguments().get("text");
+                Optional<String> wrong = text.isEmpty() ? Optional.of("no instructions were given")
+                                       : PiSetupUtil.instructionsProblem(text.get());
+                if (wrong.isPresent()) yield Control.Reply.failed(wrong.get());
+                runs.useInstructions(text.get());
+                context.sink().accept(new LampEvent.Ok("run", "the agent follows the new instructions from its next run on"));
+                yield Control.Reply.ok();
+            }
             case "cancel" -> {
                 Result<String> cancelled = runs.cancel(request.arguments().get("run").filter(run -> !run.isBlank()));
                 yield cancelled instanceof Result.Ok<String>(String run, var _)

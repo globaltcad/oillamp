@@ -39,7 +39,9 @@ import dev.lamp.LampAgentProgress;
 ///   the model that gave them; only the next answer comes from the session's model.
 ///
 /// A session given instructions has [#prepare] write them where pi adds them to its system
-/// prompt. Both files are pi's own, in `~/.pi/agent`; [PiSetupUtil] decides what goes into them.
+/// prompt, and [#useInstructions] writes them again when `oillamp instructions` gives it new
+/// ones. pi reads that file whenever it starts or opens a conversation, which every run does
+/// first, so new instructions hold from the next run on, in old conversations too. Both files are pi's own, in `~/.pi/agent`; [PiSetupUtil] decides what goes into them.
 ///
 /// pi reads and writes one JSON object per line: commands on its input, and replies and events on
 /// its output. Its documentation is in the sandbox, at
@@ -64,7 +66,7 @@ final class Harness implements AutoCloseable {
     /// Read once at the start of each run, so a change applies from the next run on.
     private volatile Optional<String> model;
     /// What pi is to add to its system prompt in this session; empty to leave pi's file alone.
-    private final Optional<String> instructions;
+    private volatile Optional<String> instructions;
     private Optional<Machine.Conversation> pi = Optional.empty();
     private int commands;
     private volatile boolean stopping;
@@ -91,13 +93,32 @@ final class Harness implements AutoCloseable {
     /// @param report told what was written, and, as a warning, what was not and why. The session
     ///               goes on either way
     void prepare(Consumer<LampEvent> report) {
-        instructions.ifPresent(text -> changeInAgentHome(layout.piInstructions(),
+        writeInstructions(report);
+        writeDefaultModel(report);
+    }
+
+    /// Has pi add `text` to its system prompt from the next run on, in place of the session's
+    /// instructions so far. The run in progress, if any, keeps the instructions it started with.
+    ///
+    /// @param report as for [#prepare]
+    void useInstructions(String text, Consumer<LampEvent> report) {
+        this.instructions = Optional.of(text);
+        writeInstructions(report);
+    }
+
+    /// Writes the session's instructions, as they are now, into pi's instructions file; without
+    /// instructions, leaves it alone. One at a time, and with what [#instructions] holds when
+    /// its turn comes, for the reason [#writeDefaultModel] gives.
+    private synchronized void writeInstructions(Consumer<LampEvent> report) {
+        Optional<String> now = instructions;
+        if (now.isEmpty()) return;
+        String text = now.get();
+        changeInAgentHome(layout.piInstructions(),
                 "pi works without the instructions this session was given",
                 "pi adds the session's instructions to its system prompt", report, (home, relative) -> {
                     FilesystemUtil.writeInAgentHome(home, relative, text, PosixMode.PUBLIC_FILE);
                     return Optional.empty();
-                }));
-        writeDefaultModel(report);
+                });
     }
 
     /// How a run ended, the agent's last message, and the conversation it happened in.
