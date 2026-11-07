@@ -153,6 +153,8 @@ public final class LampLighterImpl implements LampLighter {
                     throws IOException, InterruptedException, LampFailedException { lamp.cancel(run); }
             @Override public void useModel(String model)
                     throws IOException, InterruptedException, LampFailedException { lamp.useModel(model); }
+            @Override public void useInstructions(String text)
+                    throws IOException, InterruptedException, LampFailedException { lamp.useInstructions(text); }
             @Override public void decidePermission(String request, boolean allowed)
                     throws IOException, InterruptedException, LampFailedException { lamp.decidePermission(request, allowed); }
             @Override public void close() {

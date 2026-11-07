@@ -133,6 +133,9 @@ public interface LampLighter {
         /// See [Lamp#useModel]: the genie answers with `model` from its next run on.
         void useModel(String model) throws IOException, InterruptedException, LampFailedException;
 
+        /// See [Lamp#useInstructions]: the genie follows `text` from its next run on.
+        void useInstructions(String text) throws IOException, InterruptedException, LampFailedException;
+
         /// See [Lamp#decidePermission]: the user allows or refuses a request the lamp asked them about.
         void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, LampFailedException;
 

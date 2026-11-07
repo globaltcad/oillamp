@@ -130,9 +130,12 @@ public final class GeniesBackend implements Genies {
         // The palette is kept as soon as the user picks another.
         this.palette = state.viewAs(Palette.class, GeniesState::palette);
         Viewable.cast(palette).onChange(From.ALL, _ -> keepPalette());
-        // So is the language.
+        // So is the language, and the awake genies are told to answer in it.
         this.lang = state.viewAs(Lang.class, GeniesState::lang);
-        Viewable.cast(lang).onChange(From.ALL, _ -> keepLang());
+        Viewable.cast(lang).onChange(From.ALL, _ -> {
+            keepLang();
+            tellTheGeniesTheLanguage();
+        });
         // The settings are kept however the user leaves them: with Done, or by clicking a genie.
         this.page = state.viewAs(GeniesState.Page.class, GeniesState::page);
         // Shown, they look again whether Ollama is there, and what it has.
@@ -801,6 +804,13 @@ public final class GeniesBackend implements Genies {
         GeniesState now = state.get();
         String key = now.settings().keyFrom(now.environmentKey()).orElse("");
         for (GenieRunner runner : runners.values()) runner.useModel(now.settings(), key);
+    }
+
+    /// Every awake genie answers in the language Genies is shown in from its next message on,
+    /// without its lamp going out. A sleeping genie is told when it next wakes.
+    private void tellTheGeniesTheLanguage() {
+        GeniesState now = state.get();
+        runners.forEach((id, runner) -> now.find(id).ifPresent(genie -> runner.useLanguage(genie.name(), now.lang())));
     }
 
     /// The file of the conversation the genie was last in, or empty for its most recent one.
