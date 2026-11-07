@@ -15,6 +15,7 @@ import dev.gui.model.Notice
 import dev.gui.model.Transcript
 import dev.gui.pi.PiEvent
 import dev.gui.model.Settings
+import dev.lamp.Lamp
 import dev.gui.view.GeniesView
 import oillamp.ScenarioHost
 import spock.lang.Narrative
@@ -28,6 +29,7 @@ import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.SwingUtilities
 import java.awt.Container
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
@@ -41,6 +43,9 @@ starts on, if it is one of these, and English otherwise. The desktop's language 
 locale its programs are started with, which `LC_ALL`, `LC_MESSAGES` and `LANG` name, the first set
 deciding, after GNU's `LANGUAGE` list, as for any other program; where none is set, as on Windows
 and macOS, it is the language the computer was set up in.
+
+The genies answer in the language Genies speaks: their instructions say so. A genie that is awake
+when the user picks another is given new instructions at once.
 ''')
 @Timeout(value = 90, unit = TimeUnit.SECONDS)
 class SpeakingTheUsersLanguageSpec extends Specification {
@@ -172,6 +177,46 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             var done = new CountDownLatch(1)
             SwingUtilities.invokeAndWait { app?.quit(false, Optional.empty(), { done.countDown() }) }
             done.await(60, TimeUnit.SECONDS)
+    }
+
+    def 'A genie that is awake when the user picks another language is told to answer in it, without its lamp being lit again'() {
+        reportInfo """
+            Let's consider a user who wakes Juniper while Genies speaks English, and then picks
+            German on the settings page. A genie is told the language to answer in by its
+            instructions, which its lamp is given when it wakes. So Genies gives Juniper's lamp
+            new instructions with the Lamp API's `Lamp.useInstructions`, and the lamp's engine
+            writes them into pi's `~/.pi/agent/APPEND_SYSTEM.md`, which pi reads before each
+            message. Lighting the lamp again instead would end whatever runs on Juniper's desktop.
+            (That pi holds the new file from the next message on is shown in oillamp's own
+            scenarios, under "Giving the agent instructions".)
+        """
+        given: 'Genies speaking English, with Juniper awake and told to answer in English'
+            var sandbox = new ScenarioHost(tmp)
+            sandbox.machine { it.reallyRuns('ssh-keygen').windowsStayOpenFor(Duration.ofSeconds(80)).agent { String prompt -> 'Fine.' } }
+            var juniper = Genie.named('Juniper')
+            Genies app = Genies.open(sandbox.home.resolve('genies'), Tuple.of(Genie, juniper), Settings.defaults(), sandbox.launcher,
+                    { name -> name == Settings.KEY_VARIABLE ? Optional.of('sk-key') : Optional.<String>empty() })
+            SwingUtilities.invokeAndWait { app.state().update { it.withLang(Lang.ENGLISH) } }
+            SwingUtilities.invokeAndWait { app.wake(juniper.id()) }
+            waitUntil { app.state().get().find(juniper.id()).orElseThrow().phase() == Genie.Phase.READY }
+            var instructions = Lamp.agentHome(app.lampOf(juniper.id())).orElseThrow().resolve('.pi/agent/APPEND_SYSTEM.md')
+            assert Files.readString(instructions).contains('Always answer in English')
+
+        when: 'the user picks German'
+            SwingUtilities.invokeAndWait { app.state().update { it.withLang(Lang.GERMAN) } }
+
+        then: 'pi\'s instructions file in Juniper\'s home says to answer in Deutsch, as German calls itself'
+            waitUntil { Files.readString(instructions).contains('Always answer in Deutsch') }
+
+        and: 'Genies ran `oillamp instructions` for the lamp lit when Juniper woke, ran no second `oillamp at`, and Juniper is still ready'
+            sandbox.engines.count { it.arguments.first() == 'at' } == 1
+            sandbox.engines.any { it.arguments.first() == 'instructions' }
+            app.state().get().find(juniper.id()).orElseThrow().phase() == Genie.Phase.READY
+
+        cleanup:
+            var done = new CountDownLatch(1)
+            SwingUtilities.invokeAndWait { app?.quit(false, Optional.empty(), { done.countDown() }) }
+            done.await(3, TimeUnit.MINUTES)
     }
 
     def 'What the history page is busy with is said in the language Genies speaks, even after it began'() {
@@ -415,5 +460,15 @@ class SpeakingTheUsersLanguageSpec extends Specification {
 
     private static List descendants(Container parent) {
         parent.components.collectMany { it instanceof Container ? [it] + descendants(it) : [it] }
+    }
+
+    /** Waits up to 40 seconds for {@code condition}, and says so if it never holds. */
+    private static boolean waitUntil(Closure<Boolean> condition) {
+        var deadline = System.currentTimeMillis() + 40_000
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return true
+            Thread.sleep(20)
+        }
+        throw new AssertionError('never happened' as Object)
     }
 }
