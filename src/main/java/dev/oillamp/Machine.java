@@ -569,6 +569,10 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
         public SimulationBuilder sudoNeedsPassword() { builder.sudo(SimulatedMachine.Sudo.NEEDS_PASSWORD); return this; }
         public SimulationBuilder withoutSudo()       { builder.sudo(SimulatedMachine.Sudo.UNAVAILABLE); return this; }
 
+        /// pkexec, which asks for a password in a window of the desktop session.
+        public SimulationBuilder withPkexec()    { builder.executables(Tuple.of(String.class, "pkexec")); return this; }
+        public SimulationBuilder withoutPkexec() { builder.removeExecutable("pkexec"); return this; }
+
         /// Whether a person is at a terminal. Decides whether sudo may ask for a password and whether output is coloured.
         public SimulationBuilder interactive(boolean interactive) {
             builder.interactive(interactive);
@@ -671,6 +675,7 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
                     .subordinateIds(100_000, 65_536)
                     .terminals("ptyxis")
                     .passwordlessSudo()
+                    .withPkexec()
                     .interactive(true);
         }
 

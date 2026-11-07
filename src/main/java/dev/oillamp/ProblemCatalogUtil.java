@@ -34,6 +34,7 @@ final class ProblemCatalogUtil {
     public static final Code PKG_MISSING           = new Code("OIL-PKG-001");
     public static final Code PKG_NO_SUDO           = new Code("OIL-PKG-002");
     public static final Code PKG_INSTALL_FAILED    = new Code("OIL-PKG-003");
+    public static final Code PKG_PKEXEC_REFUSED    = new Code("OIL-PKG-004");
     public static final Code PODMAN_TOO_OLD        = new Code("OIL-PODMAN-001");
     public static final Code PODMAN_NOT_ROOTLESS   = new Code("OIL-PODMAN-002");
     public static final Code PODMAN_USERNS_BROKEN  = new Code("OIL-PODMAN-003");
@@ -252,6 +253,23 @@ final class ProblemCatalogUtil {
             .withEvidence(command)
             .withFix(Fix.run("update the package lists and try again", "sudo apt-get update"))
             .withFix(Fix.of("apt-get's output above shows the underlying error"));
+    }
+
+    /// pkexec ran nothing: it exits with 126 when the person closed its password window, and
+    /// with 127 when it could not get permission at all, because no desktop component is
+    /// running that shows the window, or the password was refused.
+    public static LampProblem pkexecRefused(Evidence.Command command) {
+        String whatHappened = command.exitCode() == 126
+                ? "the password window was closed without the password being entered"
+                : "pkexec could not get permission: no password window could be shown in this "
+                + "desktop session, or the password was not accepted";
+        return error(PKG_PKEXEC_REFUSED, "No permission to change the machine",
+                whatHappened,
+                "host packages and the subordinate id range can only be set up with root rights, "
+              + "which pkexec grants after the password is entered in its window")
+            .withEvidence(command)
+            .withFix(Fix.of("start again and enter your password when the window asks for it"))
+            .withFix(Fix.of("or run `oillamp at <dir>` in a terminal, where sudo asks for the password"));
     }
 
     // ─── podman ────────────────────────────────────────────────────────────────────────────

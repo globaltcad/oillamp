@@ -31,12 +31,13 @@ final class HostProbeUtil {
         OsRelease os = probeOsRelease(machine);
         UserInfo user = probeUser(machine);
         Optional<PodmanFacts> podman = probePodman(machine);
+        GraphicalSession session = probeSession(machine);
 
         return new HostFacts(
                 os,
                 user,
                 runtimeDirectory(machine, user.uid()),
-                probeSession(machine),
+                session,
                 probeInstalledPackages(machine, requirements),
                 probeSubIds(machine, user),
                 podman,
@@ -46,7 +47,7 @@ final class HostProbeUtil {
                 machine.locateExecutable("vncviewer"),
                 probeGpu(machine),
                 probeProcessors(machine),
-                probeRootAccess(machine),
+                probeRootAccess(machine, session),
                 probeFilesystemType(machine, lampPathHint));
     }
 
@@ -236,9 +237,11 @@ final class HostProbeUtil {
         return Math.max(1, firstInteger(machine, 1, "nproc"));
     }
 
-    /// `sudo -n true` tells whether sudo works without a password. If it needs one, sudo can
-    /// only ask for it at a terminal.
-    private static RootAccess probeRootAccess(Machine machine) {
+    /// `sudo -n true` tells whether sudo works without a password. If it needs one, sudo asks
+    /// for it at the terminal oillamp was started from. Only where there is no terminal, as when
+    /// a desktop application started oillamp, does pkexec ask for it in a window instead, so a
+    /// machine without a desktop session works as it always did.
+    private static RootAccess probeRootAccess(Machine machine, GraphicalSession session) {
         if (machine.locateExecutable("sudo").isEmpty())
             return new RootAccess.Unavailable("sudo is not installed");
         Machine.Outcome outcome = machine.run(Machine.Command.of("sudo", "-n", "true").withTimeout(QUICK));
@@ -246,8 +249,13 @@ final class HostProbeUtil {
         if (outcome instanceof Machine.Outcome.NotFound)
             return new RootAccess.Unavailable("sudo is not installed");
         if (machine.isInteractive()) return new RootAccess.Sudo();
-        return new RootAccess.Unavailable(
-                "sudo needs a password, but oillamp was not started from an interactive terminal");
+        if (session instanceof GraphicalSession.None)
+            return new RootAccess.Unavailable("sudo needs a password, but oillamp was started "
+                    + "neither from an interactive terminal nor in a desktop session, where pkexec could ask for it");
+        if (machine.locateExecutable("pkexec").isEmpty())
+            return new RootAccess.Unavailable("sudo needs a password, but oillamp was not started "
+                    + "from an interactive terminal, and pkexec, which would ask for it in a window, is not installed");
+        return new RootAccess.Pkexec();
     }
 
     private static String probeFilesystemType(Machine machine, Path path) {

@@ -83,20 +83,21 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             outcome.console().contains('dry run')
     }
 
-    def '`oillamp at --dry-run` prints the plan even where sudo cannot be used; only the real `oillamp at` stops with `OIL-PKG-002`'() {
+    def '`oillamp at --dry-run` prints the plan even where oillamp cannot become root; only the real `oillamp at` stops with `OIL-PKG-002`'() {
         reportInfo """
             Let's consider a machine without podman. Setting up a lamp there includes installing
-            podman, which needs sudo, but sudo wants a password and there is no terminal to type
-            one into, for example because oillamp was started from a script. A real `oillamp at`
-            cannot go on, and reports `OIL-PKG-002`.
+            podman, which needs root rights. sudo wants a password, but there is no terminal to
+            type it into, for example because oillamp was started from a script, and `pkexec`,
+            which would ask for the password in a window of the desktop session, is not
+            installed. A real `oillamp at` cannot go on, and reports `OIL-PKG-002`.
 
             `oillamp at --dry-run` must not report it. A dry run carries out no step, so whether
-            sudo works makes no difference to it. And on exactly such a machine, a dry run is
-            what someone wants: to read the plan before deciding whether to give oillamp their
-            password at all.
+            oillamp can become root makes no difference to it. And on exactly such a machine, a
+            dry run is what someone wants: to read the plan before deciding whether to give
+            oillamp their password at all.
         """
-        given: 'a machine without podman, where sudo needs a password and there is no terminal to ask for one'
-            host.machine { it.withoutPodman().sudoNeedsPassword().interactive(false) }
+        given: 'a machine without podman and without pkexec, where sudo needs a password and there is no terminal to ask for one'
+            host.machine { it.withoutPodman().withoutPkexec().sudoNeedsPassword().interactive(false) }
 
         when: '`oillamp at <dir> --dry-run` runs'
             var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
@@ -114,7 +115,7 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         when: '`oillamp at <dir>` runs without `--dry-run`'
             var real = host.oillamp.run('at', host.lampPath().toString())
 
-        then: 'it reports `OIL-PKG-002`, because now it would really need sudo'
+        then: 'it reports `OIL-PKG-002`, because now it would really need root rights'
             real.reported('OIL-PKG-002')
     }
 

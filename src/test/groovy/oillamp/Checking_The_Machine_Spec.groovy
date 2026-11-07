@@ -409,6 +409,97 @@ class Checking_The_Machine_Spec extends Specification {
             outcome.errors().first().whatHappened().contains('Mac OS X')
     }
 
+    def 'Where sudo needs a password and there is no terminal, oillamp plans to become root through `pkexec`, which asks for the password in a window'() {
+        reportInfo """
+            Let's consider a desktop application such as Genies, which starts oillamp to set up a
+            lamp. Oillamp then runs without a terminal, so where sudo needs a password, sudo has
+            nowhere to ask for it. A desktop session offers another way to become root: `pkexec`
+            asks for the password in a window, as GNOME and KDE do when one of their settings
+            pages needs root rights.
+
+            On a machine without podman and without a block of subordinate ids, oillamp therefore
+            plans both of its root commands, `apt-get install` and `usermod`, through `pkexec`.
+            The scenario runs `oillamp at <dir> --dry-run` without a terminal and reads the plan,
+            of which a dry run carries out nothing.
+        """
+        given: 'a desktop session without podman and without subordinate ids, where sudo needs a password, there is no terminal, and pkexec is installed'
+            host.machine { it.withoutPodman().withoutSubordinateIds().sudoNeedsPassword().interactive(false) }
+
+        when: '`oillamp at <dir> --dry-run` is run'
+            var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
+
+        then: 'the step that installs podman would run `apt-get install` through pkexec'
+            outcome.stepDetails().any { it.startsWith('pkexec apt-get install -y --no-install-recommends podman') }
+
+        and: 'the step that adds the block of ids would run `usermod` through pkexec'
+            outcome.stepDetails().any { it.startsWith('pkexec usermod --add-subuids 100000-165535') }
+
+        and: 'no step\'s command line starts with sudo'
+            outcome.stepDetails().every { !it.startsWith('sudo ') }
+    }
+
+    def 'Oillamp started from a terminal plans to become root through sudo, which asks for the password there, even in a desktop session where `pkexec` is installed'() {
+        reportInfo """
+            Let's consider someone who types `oillamp at` into a terminal, in a desktop session
+            where `pkexec` is installed, on a machine without podman, where sudo needs a password.
+            sudo asks for it in that terminal, as it always has with oillamp, and as it must on a
+            machine without a desktop environment such as GNOME or KDE. So oillamp turns to
+            `pkexec` only where there is no terminal; here it plans to install podman with
+            `sudo apt-get install`. The scenario reads the plan of `oillamp at --dry-run`.
+        """
+        given: 'a desktop session without podman, where sudo needs a password, pkexec is installed, and oillamp runs in a terminal'
+            host.machine { it.withoutPodman().sudoNeedsPassword().interactive(true) }
+
+        when: '`oillamp at <dir> --dry-run` is run'
+            var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
+
+        then: 'the step that installs podman would run `apt-get install` through sudo'
+            outcome.stepDetails().any { it.startsWith('sudo apt-get install -y --no-install-recommends podman') }
+
+        and: 'no step\'s command line starts with pkexec'
+            outcome.stepDetails().every { !it.startsWith('pkexec ') }
+    }
+
+    def 'When `pkexec` exits with #exitCode because #situation, `oillamp at` reports `OIL-PKG-004` instead of a failed `apt-get`'() {
+        reportInfo """
+            Let's consider oillamp started without a terminal in a desktop session, on a machine
+            without podman, where sudo needs a password. Oillamp runs
+            `pkexec apt-get install -y --no-install-recommends podman`, and pkexec shows a
+            password window. pkexec runs nothing and exits with 126 when the person closes that
+            window, and with 127 when it gets no permission: the password was wrong, or no polkit
+            authentication agent, the program of the desktop session that shows such windows,
+            is running.
+
+            Either way `apt-get` never started. `OIL-PKG-003`, which points at apt-get's output
+            and suggests updating the package lists, would send the user looking in the wrong
+            place. So oillamp reports `OIL-PKG-004`, whose text says that pkexec stopped, and
+            why.
+        """
+        given: 'a desktop session without podman, where sudo needs a password, there is no terminal, and pkexec exits with #exitCode'
+            host.machine {
+                it.withoutPodman().sudoNeedsPassword().interactive(false)
+                  .commandFailing('pkexec', exitCode, pkexecError)
+            }
+
+        when: '`oillamp at <dir>` is run'
+            var outcome = host.oillamp.run('at', host.lampPath().toString())
+
+        then: 'oillamp reports `OIL-PKG-004`, and not `OIL-PKG-003`'
+            outcome.reported('OIL-PKG-004')
+            !outcome.reported('OIL-PKG-003')
+
+        and: 'the text of `OIL-PKG-004` says what happened'
+            outcome.errors().find { it.code().value() == 'OIL-PKG-004' }.whatHappened().contains(explanation)
+
+        and: 'oillamp exits with `PREREQUISITES_MISSING`'
+            outcome.status() == LampExitStatus.PREREQUISITES_MISSING
+
+        where:
+            exitCode | situation                               | pkexecError                                                   | explanation
+            126      | 'the person closed its password window' | 'Error executing command as another user: Request dismissed' | 'the password window was closed'
+            127      | 'it got no permission'                  | 'Error executing command as another user: Not authorized'    | 'pkexec could not get permission'
+    }
+
     def 'On a Linux without apt, `oillamp doctor` lists the packages to install by hand'() {
         reportInfo """
             Oillamp can only install packages with apt, the package manager of Debian and Ubuntu,

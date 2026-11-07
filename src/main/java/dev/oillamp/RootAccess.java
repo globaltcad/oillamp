@@ -11,6 +11,11 @@ sealed interface RootAccess {
     /// `sudo` works: `sudo -n true` succeeded, or a person at the terminal can type the password.
     record Sudo() implements RootAccess {}
 
+    /// `pkexec` asks for the password in a window of the desktop session. Used only where sudo
+    /// needs a password and there is no terminal to type it into, as when a desktop application
+    /// such as Genies started oillamp. Exits with 126 when the person closes that window.
+    record Pkexec() implements RootAccess {}
+
     /// oillamp has no way to become root here, for the given reason.
     record Unavailable(String reason) implements RootAccess {}
 
@@ -19,6 +24,7 @@ sealed interface RootAccess {
     default Tuple<String> asRoot(Tuple<String> command) {
         return switch (this) {
             case Sudo _, Unavailable _ -> Tuple.of(String.class, "sudo").addAll(command);
+            case Pkexec _              -> Tuple.of(String.class, "pkexec").addAll(command);
         };
     }
 }

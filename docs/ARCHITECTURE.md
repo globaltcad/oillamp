@@ -80,7 +80,7 @@ table lists every part that runs, what it is written in, where it runs and as wh
 | `oillamp` launcher (`src/packaging/launcher.sh`) | POSIX shell | host, you | Unpacks the bundled Java runtime once, then `exec`s it. |
 | oillamp (`dev.oillamp`) | Java 25 | host, you | Checks the host, prepares the lamp, builds the image, starts the container, supervises the session, **is** the network proxy. |
 | `podman`, `crun` | third-party | host, you | Build the image, run the container, `podman unshare` for infra-owned files. |
-| `apt-get`, `usermod` via `sudo` | third-party | host, root | Install missing host packages and add subordinate ids. Only with your consent. |
+| `apt-get`, `usermod` via `sudo` (or `pkexec` without a terminal) | third-party | host, root | Install missing host packages and add subordinate ids. Only with your consent. |
 | `ssh-keygen` | third-party | host, you | Makes the lamp's client and host keys. |
 | your terminal emulator + `ssh` + `socat` | third-party | host, you | The shell window. `ssh` reaches the sandbox through `socat` and a Unix socket. |
 | `vncviewer` (TigerVNC) | third-party | host, you | The desktop viewer window. |
@@ -627,7 +627,7 @@ The same, step by step:
    - `HostProbeUtil.probe` collects `HostFacts`: the distribution, your user and groups, the graphical
      session, which required packages are installed, your subordinate id ranges, podman's version
      and runtime, whether `podman unshare true` works, terminal emulators on `PATH`, GPU render
-     nodes, CPU count, sudo, and the filesystem type of the lamp path.
+     nodes, CPU count, how to run a command as root (`RootAccess`), and the filesystem type of the lamp path.
    - `HostPlanUtil.plan` turns the facts into steps (install packages, add a subordinate id range,
      `podman system migrate`) or problems.
    - After running the steps, the host is **probed again** and planned again in strict mode. The
@@ -2052,8 +2052,9 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-HOST-003` | No graphical session (`WAYLAND_DISPLAY` and `DISPLAY` unset). |
 | `OIL-HOST-010` | No subordinate uid/gid range of at least 65536 ids. |
 | `OIL-PKG-001` | Required host packages are missing. |
-| `OIL-PKG-002` | sudo cannot be used (needs a password and there is no terminal, or not installed). |
+| `OIL-PKG-002` | oillamp cannot become root: sudo needs a password and there is neither a terminal nor pkexec in a desktop session, or sudo is not installed. |
 | `OIL-PKG-003` | `apt-get install` failed. |
+| `OIL-PKG-004` | pkexec ran nothing: its password window was closed, or it got no permission. |
 | `OIL-PODMAN-001` | podman too old. |
 | `OIL-PODMAN-002` | podman is not rootless. |
 | `OIL-PODMAN-003` | `podman unshare true` fails. |

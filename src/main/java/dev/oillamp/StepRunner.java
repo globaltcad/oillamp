@@ -302,14 +302,25 @@ final class StepRunner {
     private Result<Step> installPackages(Step.InstallPackages step) {
         Machine.Outcome outcome = run("apt-get", Duration.ofMinutes(10), step.command());
         if (outcome.succeeded()) return Result.ok(step);
+        if (pkexecRefused(step.command(), outcome))
+            return Result.err(ProblemCatalogUtil.pkexecRefused(evidenceOf(outcome, step.command())));
         return Result.err(ProblemCatalogUtil.installFailed(evidenceOf(outcome, step.command())));
     }
 
     private Result<Step> addSubIds(Step.AddSubIds step) {
         Machine.Outcome outcome = run("usermod", Duration.ofSeconds(60), step.command());
         if (outcome.succeeded()) return Result.ok(step);
+        if (pkexecRefused(step.command(), outcome))
+            return Result.err(ProblemCatalogUtil.pkexecRefused(evidenceOf(outcome, step.command())));
         return Result.err(ProblemCatalogUtil.hostNoSubIds(step.user())
                 .withEvidence(evidenceOf(outcome, step.command())));
+    }
+
+    /// pkexec's own exit codes: 126 when the password window was closed, 127 when it got no
+    /// permission. The command it was to run never started, so its own error does not apply.
+    private static boolean pkexecRefused(Tuple<String> command, Machine.Outcome outcome) {
+        return command.first().equals("pkexec")
+            && (outcome.exitCode() == 126 || outcome.exitCode() == 127);
     }
 
     /// Gives a directory to a container user. `podman unshare` runs the command inside
