@@ -298,6 +298,37 @@ class ChoosingTheGeniesModelSpec extends Specification {
                     'The model service refused the request (400): OpenAIException - Invalid request.'
     }
 
+    def 'A message whose run fails before pi is given it, as on a model the service does not offer, is marked as not delivered in the chat'() {
+        reportInfo """
+            Let's consider a user whose settings name a model the model service does not offer,
+            here because of a typo. They write to the genie, and the run fails when pi cannot
+            switch to that model, before pi is given the message, so the message never enters the
+            genie's conversation. The chat still shows the message, and after it a notice that it
+            did not reach the genie: otherwise the user would take the genie's next answer as one
+            that knows of it. Genies tells by looking for the message in the conversation pi
+            saved. Then the user fixes the model and writes again; that message reaches the genie,
+            and gets no such notice.
+        """
+        given: 'a model service that offers GPT only, and a genie woken with settings that misspell GPT'
+            host.machine { it.modelsOffered(GPT) }
+            runner.wake('Jafar', Settings.defaults().withModel(GPT + '-typo'), 'sk-key', LampWallpaper.WAVES_DARK)
+            waitUntil { genie.phase() == Genie.Phase.READY }
+
+        when: 'the user writes to the genie'
+            say('hello')
+
+        then: 'the chat shows the message, followed by the notice that it was not delivered'
+            waitUntil { genie.phase() == Genie.Phase.READY && whatTheChatSays() == ['you: hello', 'not delivered'] }
+
+        when: 'the user changes the settings to GPT, and writes again'
+            runner.useModel(Settings.defaults().withModel(GPT), 'sk-key')
+            say(':)')
+            waitUntil { genie.phase() == Genie.Phase.READY && answers().size() == 1 }
+
+        then: 'the genie answered the new message, and the chat holds no second not-delivered notice'
+            whatTheChatSays() == ['you: hello', 'not delivered', 'you: :)', 'genie: You said: :)']
+    }
+
     def 'While genies are awake, the settings say calmly what reaches them now and what later'() {
         reportInfo """
             A new model reaches awake genies at once. A new place, address or key needs the
@@ -339,6 +370,16 @@ class ChoosingTheGeniesModelSpec extends Specification {
     private void say(String text) {
         synchronized (this) { genie = genie.withDraft(text).send() }
         runner.sendMessage(text)
+    }
+
+    /** The user's messages, the genie's answers, and each notice that a message was not delivered, in the chat's order. */
+    private List<String> whatTheChatSays() {
+        genie.transcript().entries().collect { Entry entry ->
+            entry.kind() == Entry.Kind.YOU ? "you: ${entry.text()}".toString()
+          : entry.kind() == Entry.Kind.GENIE && !entry.isWriting() ? "genie: ${entry.text()}".toString()
+          : entry.notice().filter { it instanceof dev.gui.model.Notice.NotDelivered }.isPresent() ? 'not delivered'
+          : null
+        }.findAll { it != null }
     }
 
     private List<Entry> answers() {
