@@ -30,10 +30,16 @@ sealed interface Step {
         IF_ABSENT
     }
 
-    record InstallPackages(DistroFamily family, ValueSet<String> packages,
+    /// Installs host packages with the command the planner chose for this machine.
+    ///
+    /// @param command the whole command line, run as root
+    record InstallPackages(Tuple<String> command, ValueSet<String> packages,
                            Association<String, String> reasons) implements Step {}
 
-    record AddSubIds(String user, IdRange range) implements Step {}
+    /// Gives the user a block of subordinate ids, so rootless podman can map the container's users.
+    ///
+    /// @param command the whole `usermod` command line, run as root
+    record AddSubIds(String user, IdRange range, Tuple<String> command) implements Step {}
 
     /// Runs `podman system migrate` after the id range changed; otherwise podman keeps using the old one.
     record PodmanMigrate() implements Step {}
@@ -162,13 +168,12 @@ sealed interface Step {
     default String detail() {
         return switch (this) {
             case InstallPackages s -> {
-                StringBuilder out = new StringBuilder("install missing host packages via " + s.family() + ":");
+                StringBuilder out = new StringBuilder(String.join(" ", s.command()) + "\n  installs the missing host packages:");
                 for (String pkg : s.packages())
                     out.append("\n  ").append(pkg).append(" — ").append(s.reasons().get(pkg).orElse("required"));
                 yield out.toString();
             }
-            case AddSubIds s -> "sudo usermod --add-subuids " + s.range().asUsermodArgument()
-                              + " --add-subgids " + s.range().asUsermodArgument() + " " + s.user()
+            case AddSubIds s -> String.join(" ", s.command())
                               + "\n  rootless podman maps the container's users onto these host ids";
             case BuildImage s -> {
                 StringBuilder out = new StringBuilder("podman build --tag " + s.tag()

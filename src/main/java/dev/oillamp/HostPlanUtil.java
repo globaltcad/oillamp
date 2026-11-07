@@ -62,12 +62,12 @@ final class HostPlanUtil {
             if (!options.mayInstall() || options.afterFixes()) {
                 problems = problems.add(ProblemCatalogUtil.packagesMissing(
                         missing, requirements.installCommand(missing), options.installing()));
-            } else if (options.willExecute() && !facts.sudo().canInstall()) {
-                problems = problems.add(ProblemCatalogUtil.noSudo(sudoReason(facts.sudo())));
+            } else if (options.willExecute() && facts.rootAccess() instanceof RootAccess.Unavailable none) {
+                problems = problems.add(ProblemCatalogUtil.noSudo(none.reason()));
                 problems = problems.add(ProblemCatalogUtil.packagesMissing(
                         missing, requirements.installCommand(missing), options.installing()));
             } else {
-                steps = steps.add(installStep(requirements, missing));
+                steps = steps.add(installStep(requirements, missing, facts.rootAccess()));
             }
         }
 
@@ -75,14 +75,17 @@ final class HostPlanUtil {
         if (facts.subIds() instanceof SubIdFacts.Missing gap) {
             if (!options.mayInstall() || options.afterFixes()) {
                 problems = problems.add(ProblemCatalogUtil.hostNoSubIds(facts.user().name()));
-            } else if (options.willExecute() && !facts.sudo().canInstall()) {
+            } else if (options.willExecute() && facts.rootAccess() instanceof RootAccess.Unavailable none) {
                 if (problems.none(p -> p.code().equals(ProblemCatalogUtil.PKG_NO_SUDO)))
-                    problems = problems.add(ProblemCatalogUtil.noSudo(sudoReason(facts.sudo())));
+                    problems = problems.add(ProblemCatalogUtil.noSudo(none.reason()));
                 problems = problems.add(ProblemCatalogUtil.hostNoSubIds(facts.user().name()));
             } else {
-                IdRange range = SubIdRangeUtil.allocate(
+                IdRange block = SubIdRangeUtil.allocate(
                         gap.allocatedUidRanges().addAll(gap.allocatedGidRanges()), SubIdFacts.REQUIRED_SIZE);
-                steps = steps.add(new Step.AddSubIds(facts.user().name(), range));
+                String range = block.asUsermodArgument();
+                steps = steps.add(new Step.AddSubIds(facts.user().name(), block,
+                        facts.rootAccess().asRoot(Tuple.of(String.class, "usermod",
+                                "--add-subuids", range, "--add-subgids", range, facts.user().name()))));
                 // podman caches the id map, so it has to be told the map changed.
                 steps = steps.add(new Step.PodmanMigrate());
             }
@@ -124,20 +127,14 @@ final class HostPlanUtil {
         return problems;
     }
 
-    private static Step.InstallPackages installStep(HostRequirements requirements, Tuple<String> missing) {
+    private static Step.InstallPackages installStep(HostRequirements requirements, Tuple<String> missing,
+                                                    RootAccess root) {
         ValueSet<String> packages = ValueSet.of(String.class, missing);
         Association<String, String> reasons = Association.betweenSorted(String.class, String.class);
         for (String pkg : missing)
             reasons = reasons.put(pkg, requirements.reasons().get(pkg).orElse("required by oillamp"));
-        return new Step.InstallPackages(requirements.family(), packages, reasons);
-    }
-
-    private static String sudoReason(SudoFacts sudo) {
-        return switch (sudo) {
-            case SudoFacts.Passwordless ignored -> "sudo works";
-            case SudoFacts.NeedsPassword ignored ->
-                    "sudo needs a password, but oillamp was not started from an interactive terminal";
-            case SudoFacts.Unavailable u -> u.reason();
-        };
+        Tuple<String> command = Tuple.of(String.class, "apt-get", "install", "-y", "--no-install-recommends")
+                .addAll(missing);
+        return new Step.InstallPackages(root.asRoot(command), packages, reasons);
     }
 }

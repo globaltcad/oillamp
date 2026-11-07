@@ -27,7 +27,7 @@ record HostFacts(
     Optional<Path> vncViewer,
     GpuFacts gpu,
     int cpuCount,
-    SudoFacts sudo,
+    RootAccess rootAccess,
     String fileSystemTypeOfLamp
 ) {
     public HostFacts {

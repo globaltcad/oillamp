@@ -300,22 +300,16 @@ final class StepRunner {
     }
 
     private Result<Step> installPackages(Step.InstallPackages step) {
-        Tuple<String> argv = Tuple.of(String.class, "sudo", "apt-get", "install", "-y",
-                                      "--no-install-recommends");
-        for (String pkg : step.packages()) argv = argv.add(pkg);
-        Machine.Outcome outcome = run("apt-get", Duration.ofMinutes(10), argv);
+        Machine.Outcome outcome = run("apt-get", Duration.ofMinutes(10), step.command());
         if (outcome.succeeded()) return Result.ok(step);
-        return Result.err(ProblemCatalogUtil.installFailed(evidenceOf(outcome, argv)));
+        return Result.err(ProblemCatalogUtil.installFailed(evidenceOf(outcome, step.command())));
     }
 
     private Result<Step> addSubIds(Step.AddSubIds step) {
-        String range = step.range().asUsermodArgument();
-        Tuple<String> argv = Tuple.of(String.class, "sudo", "usermod",
-                "--add-subuids", range, "--add-subgids", range, step.user());
-        Machine.Outcome outcome = run("usermod", Duration.ofSeconds(60), argv);
+        Machine.Outcome outcome = run("usermod", Duration.ofSeconds(60), step.command());
         if (outcome.succeeded()) return Result.ok(step);
         return Result.err(ProblemCatalogUtil.hostNoSubIds(step.user())
-                .withEvidence(evidenceOf(outcome, argv)));
+                .withEvidence(evidenceOf(outcome, step.command())));
     }
 
     /// Gives a directory to a container user. `podman unshare` runs the command inside

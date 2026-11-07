@@ -46,7 +46,7 @@ final class HostProbeUtil {
                 machine.locateExecutable("vncviewer"),
                 probeGpu(machine),
                 probeProcessors(machine),
-                probeSudo(machine),
+                probeRootAccess(machine),
                 probeFilesystemType(machine, lampPathHint));
     }
 
@@ -236,14 +236,18 @@ final class HostProbeUtil {
         return Math.max(1, firstInteger(machine, 1, "nproc"));
     }
 
-    private static SudoFacts probeSudo(Machine machine) {
+    /// `sudo -n true` tells whether sudo works without a password. If it needs one, sudo can
+    /// only ask for it at a terminal.
+    private static RootAccess probeRootAccess(Machine machine) {
         if (machine.locateExecutable("sudo").isEmpty())
-            return new SudoFacts.Unavailable("sudo is not installed");
+            return new RootAccess.Unavailable("sudo is not installed");
         Machine.Outcome outcome = machine.run(Machine.Command.of("sudo", "-n", "true").withTimeout(QUICK));
-        if (outcome.succeeded()) return new SudoFacts.Passwordless();
+        if (outcome.succeeded()) return new RootAccess.Sudo();
         if (outcome instanceof Machine.Outcome.NotFound)
-            return new SudoFacts.Unavailable("sudo is not installed");
-        return new SudoFacts.NeedsPassword(machine.isInteractive());
+            return new RootAccess.Unavailable("sudo is not installed");
+        if (machine.isInteractive()) return new RootAccess.Sudo();
+        return new RootAccess.Unavailable(
+                "sudo needs a password, but oillamp was not started from an interactive terminal");
     }
 
     private static String probeFilesystemType(Machine machine, Path path) {
