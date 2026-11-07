@@ -1645,6 +1645,16 @@ public enum Lang {
             };
         }
 
+        public String THIS_MESSAGE_DID_NOT_REACH_THE_GENIE_SEND_IT_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "This message did not reach the genie. Send it again once the problem is solved.";
+                case GERMAN -> "Diese Nachricht hat den Dschinn nicht erreicht. Schick sie noch einmal, sobald das Problem behoben ist.";
+                case SPANISH -> "Este mensaje no llegó al genio. Envíalo de nuevo cuando el problema esté resuelto.";
+                case JAPANESE -> "このメッセージはジーニーに届きませんでした。問題が解決したら、もう一度送ってください。";
+                case CHINESE -> "这条消息没有送达精灵。问题解决后，请再发送一次。";
+            };
+        }
+
         public String TRYING_AGAIN(int attempt, int attempts) {
             return switch (lang) {
                 case ENGLISH -> "Trying again, " + attempt + " of " + attempts + ".";

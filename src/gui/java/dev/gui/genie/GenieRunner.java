@@ -555,10 +555,13 @@ public final class GenieRunner {
         String run = finished.run().id();
         runInProgress = Optional.empty();
         runsOfThisChat.remove(run);
-        if (!runsThatAnswered.remove(run) && finished.outcome() != LampRunOutcome.FINISHED && !finished.answer().isBlank())
+        boolean answered = runsThatAnswered.remove(run);
+        if (!answered && finished.outcome() != LampRunOutcome.FINISHED && !finished.answer().isBlank())
             showProblem(new Notice.Said(finished.answer()));
-        changes.accept(genie -> genie.hear(new PiEvent.Settled()));
         Optional<LampConversation> conversation = finished.conversation().flatMap(id -> Lamp.conversation(directory, id));
+        if (!answered && finished.outcome() != LampRunOutcome.FINISHED && !holdsAsLastQuestion(conversation, finished.run().prompt()))
+            showProblem(new Notice.NotDelivered());
+        changes.accept(genie -> genie.hear(new PiEvent.Settled()));
         if (conversation.isPresent()) {
             String file = conversation.get().file();
             String leaf = conversation.get().leaf().orElse("");
@@ -571,6 +574,17 @@ public final class GenieRunner {
         }
         checkOutbox();
         reloadConversations();
+    }
+
+    /// Whether `prompt` is the last message to the agent in `conversation`, as it is once pi was
+    /// given it. A run that failed before then, such as on a model pi does not know, leaves no
+    /// trace of it, and without a conversation pi saved nothing at all.
+    private static boolean holdsAsLastQuestion(Optional<LampConversation> conversation, String prompt) {
+        return conversation.flatMap(it -> it.line().stream()
+                        .filter(entry -> entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT)
+                        .reduce((_, later) -> later))
+                .filter(last -> last.text().strip().equals(prompt.strip()))
+                .isPresent();
     }
 
     /// What a lamp was lit with: the model service, the key and the model. The key stays in
