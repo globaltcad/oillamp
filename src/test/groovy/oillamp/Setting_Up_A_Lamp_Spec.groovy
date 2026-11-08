@@ -985,4 +985,42 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             outcome.errors().first().whatHappened().contains('colon')
             !Files.exists(lamp)
     }
+
+    def 'When the image build fails, what happened in `OIL-IMAGE-001` ends with the error podman gave'() {
+        reportInfo """
+            Let's consider a first `oillamp at` on a laptop where rootless podman 5 cannot give
+            the image build a network, because `pasta` is not installed. `podman build` exits
+            with code 125 and ends its output with one line that states its error:
+
+                Error: building at STEP "RUN apt-get update …": setup network: could not find pasta, …
+
+            Oillamp reports `OIL-IMAGE-001` and keeps the end of podman's output as its evidence.
+            A program that starts oillamp, such as Genies, often shows a problem in one line: its
+            title and what happened. An earlier oillamp said there only that `podman build`
+            exited with code 125, and the reason was in the evidence, which Genies does not show.
+            Now what happened ends with podman's error. The `RUN` command that podman's error line
+            names is left out: it is often longer than the rest of the line, and podman's output
+            names it again in the line `STEP 7/22: RUN …` above.
+        """
+        given: 'a machine on which `podman build` fails the way it does without `pasta`'
+            host.machine {
+                it.commandFailing('podman build', 125,
+                        'STEP 7/22: RUN apt-get update && apt-get install -y curl\n'
+                      + 'Error: building at STEP "RUN apt-get update && apt-get install -y curl": '
+                      + 'setup network: could not find pasta, the network namespace can\'t be configured: '
+                      + 'exec: "pasta": executable file not found in $PATH\n')
+            }
+
+        when: '`oillamp at` sets up a new lamp'
+            var outcome = host.oillamp.run('at', host.lampPath().toString())
+
+        then: 'it reports `OIL-IMAGE-001`'
+            outcome.reported('OIL-IMAGE-001')
+
+        and: 'what happened gives the exit code, then podman\'s error from `setup network:` on, without the `RUN` command'
+            var problem = outcome.errors().find { it.code().value() == 'OIL-IMAGE-001' }
+            problem.whatHappened() ==
+                    'podman build exited with code 125: setup network: could not find pasta, ' +
+                    'the network namespace can\'t be configured: exec: "pasta": executable file not found in $PATH'
+    }
 }

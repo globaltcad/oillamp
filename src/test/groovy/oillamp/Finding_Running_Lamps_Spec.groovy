@@ -139,9 +139,9 @@ class Finding_Running_Lamps_Spec extends Specification {
     def 'When podman cannot be asked, `Lamp.running` throws with podman\'s own words'() {
         reportInfo """
             When `podman ps` fails, it is not known whether any lamp runs, and an empty list would
-            say that none does. So `Lamp.running` throws a `LampFailedException`, whose problem names
-            the command that failed and its exit code, and quotes what podman said as its evidence,
-            for the application to show.
+            say that none does. So `Lamp.running` throws a `LampFailedException`. Its problem says
+            which command failed, with its exit code and podman's own error line, and quotes what
+            podman said as its evidence, for the application to show.
         """
         given: '`podman ps` fails with exit code 125: it cannot reach the Podman socket'
             host.machine { it.commandFailing('podman ps', 125, 'Error: cannot connect to Podman socket') }
@@ -149,9 +149,9 @@ class Finding_Running_Lamps_Spec extends Specification {
         when: '`Lamp.running` is called'
             Lamp.running(host.launcher)
 
-        then: 'it throws a `LampFailedException` naming `podman ps` and its exit code, with podman\'s message as evidence'
+        then: 'it throws a `LampFailedException` naming `podman ps`, its exit code and podman\'s error, with podman\'s message as evidence'
             var failed = thrown(LampFailedException)
-            failed.problem().whatHappened() == 'podman ps exited with code 125'
+            failed.problem().whatHappened() == 'podman ps exited with code 125: cannot connect to Podman socket'
             failed.problem().evidence().any { it.toString().contains('Error: cannot connect to Podman socket') }
     }
 

@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import dev.lamp.LampProblem;
 import dev.lamp.LampSave;
@@ -943,13 +945,39 @@ final class ProblemCatalogUtil {
         Code code = what.contains("build") ? IMAGE_BUILD_FAILED : SANDBOX_START_FAILED;
         return error(code,
                 what.contains("build") ? "Could not build the sandbox image" : "Could not start the sandbox",
-                what + " exited with code " + exitCode,
+                what + " exited with code " + exitCode
+                    + podmansOwnError(output).map(error -> ": " + error).orElse(""),
                 what.contains("build")
                     ? "the sandbox runs from an image oillamp builds; without it there is nothing to start"
                     : "the sandbox is the container; if it will not start there is no session")
             .withEvidence(new Evidence.Value("last lines of its output", output))
             .withFix(Fix.of("the output above is podman's own — it usually names the cause exactly"))
             .withFix(Fix.run("check the machine is still able to run containers", "oillamp doctor"));
+    }
+
+    /// The last line in which podman states its own error, such as `could not find pasta, the
+    /// network namespace can't be configured`, so that the one line a program that starts oillamp
+    /// shows of a problem says why. A build names the step it failed at first, as
+    /// `building at STEP "RUN …": `, with the whole `RUN` command in it; that is left out, as the
+    /// output shows the step above, in its last `STEP 7/22: RUN …` line.
+    static Optional<String> podmansOwnError(String output) {
+        Optional<String> step = lastLineAfter(output, Pattern.compile("^STEP \\d+/\\d+: "));
+        return lastLineAfter(output, Pattern.compile("^Error: "))
+                .map(error -> step.map(s -> "building at STEP \"" + s + "\": ")
+                        .filter(error::startsWith)
+                        .map(named -> error.substring(named.length()))
+                        .orElse(error))
+                .map(String::strip)
+                .filter(error -> !error.isEmpty());
+    }
+
+    /// What follows `start` in the last line of `text` that begins with it.
+    private static Optional<String> lastLineAfter(String text, Pattern start) {
+        return text.lines()
+                .map(start::matcher)
+                .filter(Matcher::lookingAt)
+                .reduce((earlier, later) -> later)
+                .map(matcher -> matcher.replaceFirst(""));
     }
 
     /// The image a session starts from was built long ago. A warning: the image still works,
