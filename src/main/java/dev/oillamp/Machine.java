@@ -677,7 +677,7 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
         public SimulationBuilder ubuntuWithEverything() {
             return ubuntu("24.04")
                     .waylandSession("GNOME")
-                    .withPackages("podman", "crun", "slirp4netns", "uidmap", "catatonit", "socat",
+                    .withPackages("podman", "crun", "slirp4netns", "passt", "uidmap", "catatonit", "socat",
                                   "openssh-client", "tigervnc-viewer")
                     .podman("5.4.2", "crun")
                     .subordinateIds(100_000, 65_536)

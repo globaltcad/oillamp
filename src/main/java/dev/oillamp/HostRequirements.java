@@ -32,7 +32,10 @@ record HostRequirements(DistroFamily family, Tuple<String> packages,
                  "the OCI runtime podman uses to start the container; Ubuntu "
                + "defaults to runc, which cannot pass the GPU render group in"),
         new Need("slirp4netns", "slirp4netns", "slirp4netns", "slirp4netns",
-                 "gives rootless podman a network while the image is built; "
+                 "gives rootless podman 4 a network while the image is built; "
+               + "the sandbox itself then runs with --network=none"),
+        new Need("passt", "passt", "passt", "passt",
+                 "pasta, which gives rootless podman 5 a network while the image is built; "
                + "the sandbox itself then runs with --network=none"),
         new Need("uidmap", "shadow-utils", "shadow", "shadow",
                  "newuidmap/newgidmap, which rootless podman needs to map container users"),

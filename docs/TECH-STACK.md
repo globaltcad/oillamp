@@ -38,7 +38,7 @@ flowchart TB
 | Layer | Tools | What they do for oillamp |
 |---|---|---|
 | Isolation | Linux namespaces, user namespaces, capabilities | Make the sandbox a separate world that shares your kernel. |
-| Container engine | podman (rootless), crun, slirp4netns | Build the image and start the container without any root service. |
+| Container engine | podman (rootless), crun, slirp4netns, passt | Build the image and start the container without any root service. |
 | The image | Debian 13, a Containerfile | The sandbox's frozen filesystem, with every tool the agent needs. |
 | Connections | Unix domain sockets, socat | Every connection between your machine and the sandbox. |
 | Shell | OpenSSH | Your terminal window and the agent's login. |
@@ -169,7 +169,7 @@ file, so there is no way to switch users from inside.
 
 ---
 
-## podman, rootless, crun and slirp4netns
+## podman, rootless, crun, slirp4netns and passt
 
 ### What they are
 
@@ -182,8 +182,9 @@ podman has no service at all. It runs as you, as an ordinary program, and the co
 starts are your processes. If something escapes, it lands in your account, not root's.
 
 podman hands the low-level work of creating a container to an **OCI runtime**. There are two
-common ones, `runc` and **crun**. **slirp4netns** gives rootless containers network access; it
-is used while building the image, not by the running sandbox.
+common ones, `runc` and **crun**. **slirp4netns** (podman 4) and **pasta**, from the package
+**passt** (podman 5), give rootless containers network access; it is used while building the
+image, not by the running sandbox.
 
 `podman unshare <command>` runs a command inside your user namespace, where your account can act
 as its subordinate ids.
@@ -193,16 +194,17 @@ as its subordinate ids.
 - oillamp requires rootless podman and refuses to run any other way.
 - It requires **crun**, because passing your graphics card into the container needs
   `--group-add keep-groups`, which only crun supports. Ubuntu 24.04 installs runc by default.
-- It requires **slirp4netns**, because the image build downloads packages and rootless podman on
-  Ubuntu 24.04 has no network backend without it.
+- It requires **slirp4netns** and **passt**, because the image build downloads packages, and
+  rootless podman has no network without them: podman 4, as on Ubuntu 24.04, uses slirp4netns,
+  and podman 5 uses pasta. Ubuntu's podman package only recommends them.
 - It uses `podman unshare chown` to hand directories to the infrastructure user, and
   `podman unshare rm` to delete them again.
 - It asks podman for its facts (`podman info`, `podman container inspect`) rather than keeping
   its own records. Containers carry **labels** (`oillamp.agent-id`, `oillamp.lamp`) so oillamp
   can find them again.
 
-oillamp installs missing packages (podman, crun, slirp4netns and a few others) with `apt-get` on
-Debian and Ubuntu, after showing the list. `oillamp doctor` shows what is missing without
+oillamp installs missing packages (podman, crun, slirp4netns, passt and a few others) with the
+distribution's package manager, `apt-get`, `dnf`, `zypper` or `pacman`, after showing the list. `oillamp doctor` shows what is missing without
 installing anything.
 
 ---

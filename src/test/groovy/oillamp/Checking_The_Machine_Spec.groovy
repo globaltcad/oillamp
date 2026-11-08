@@ -264,6 +264,35 @@ class Checking_The_Machine_Spec extends Specification {
             outcome.stepDetails().any { it.contains('--network=none') }
     }
 
+    def 'Oillamp plans to install `passt`, whose `pasta` gives rootless podman 5 a network to build the image with'() {
+        reportInfo """
+            Since version 5, rootless podman gives a container a network with `pasta`, a program
+            in the package `passt`, and no longer with slirp4netns. Ubuntu's podman package only
+            recommends `passt`, and oillamp installs packages without their recommendations. So
+            on a laptop where oillamp had just installed podman 5, the image build stopped at its
+            first `apt-get`, and `podman build` exited with code 125:
+
+                could not find pasta, the network namespace can't be configured
+
+            Oillamp installs both `slirp4netns` and `passt`, whichever podman version the machine
+            has, as the next system update may change the version. The scenario reads the plan of
+            `oillamp at --dry-run` on a machine with podman 5 and everything else oillamp needs,
+            except `passt`.
+        """
+        given: 'a machine with podman 5 and slirp4netns, but without the package `passt`'
+            host.machine { it.podman('5.4.2', 'crun').withoutPackages('passt') }
+
+        when: '`oillamp at --dry-run` is run'
+            var outcome = host.oillamp.run('at', host.lampPath().toString(), '--dry-run')
+
+        then: 'the plan installs `passt`, before an image build needs it'
+            outcome.stepKinds().contains('InstallPackages')
+            outcome.steps().any { it.contains('passt') }
+
+        and: 'the plan says why: `pasta` gives podman 5 a network while the image is built'
+            outcome.stepDetails().any { it.contains('pasta') && it.contains('podman 5') }
+    }
+
     def 'When AppArmor blocks rootless podman, `oillamp doctor` names AppArmor and its remedies'() {
         reportInfo """
             Ubuntu 23.10 and newer refuse unprivileged user namespaces to programs without a
@@ -526,10 +555,10 @@ class Checking_The_Machine_Spec extends Specification {
             !outcome.reported('OIL-HOST-002')
 
         where:
-            distribution         | manager  | os                       | installed                                                                   | command
-            'Fedora 42'          | 'dnf'    | { it.fedora('42') }      | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo dnf install -y podman shadow-utils'
-            'openSUSE Leap 16.0' | 'zypper' | { it.opensuse('16.0') }  | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo zypper --non-interactive install --no-recommends podman shadow'
-            'Arch Linux'         | 'pacman' | { it.arch() }            | ['crun', 'slirp4netns', 'catatonit', 'socat', 'openssh', 'tigervnc']         | 'sudo pacman -S --needed --noconfirm podman shadow'
+            distribution         | manager  | os                       | installed                                                                            | command
+            'Fedora 42'          | 'dnf'    | { it.fedora('42') }      | ['crun', 'slirp4netns', 'passt', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo dnf install -y podman shadow-utils'
+            'openSUSE Leap 16.0' | 'zypper' | { it.opensuse('16.0') }  | ['crun', 'slirp4netns', 'passt', 'catatonit', 'socat', 'openssh-clients', 'tigervnc'] | 'sudo zypper --non-interactive install --no-recommends podman shadow'
+            'Arch Linux'         | 'pacman' | { it.arch() }            | ['crun', 'slirp4netns', 'passt', 'catatonit', 'socat', 'openssh', 'tigervnc']         | 'sudo pacman -S --needed --noconfirm podman shadow'
     }
 
     def 'On a Linux whose package manager oillamp does not know, `oillamp doctor` lists the packages to install by hand'() {
