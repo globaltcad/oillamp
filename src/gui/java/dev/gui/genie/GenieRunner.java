@@ -3,6 +3,7 @@ package dev.gui.genie;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -781,9 +782,14 @@ public final class GenieRunner {
         transfer(Optional.of(new Notice.SavedFile(name, target.toString())), lit -> GenieFileTransferUtil.fetch(lit, name, target));
     }
 
-    /// Puts `file` into the genie's inbox, and tells the genie.
+    /// Puts `file` into the genie's inbox, and tells the genie. A folder is not given: the chat
+    /// says that only files are.
     public void giveFile(Path file) {
         String name = file.getFileName().toString();
+        if (Files.isDirectory(file)) {
+            showProblem(new Notice.NotAFile(name));
+            return;
+        }
         transfer(Optional.empty(), lit -> {
             GenieFileTransferUtil.give(lit, file);
             changes.accept(genie -> genie.gave(name));

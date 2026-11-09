@@ -1444,6 +1444,16 @@ public enum Lang {
             };
         }
 
+        public String ONLY_FILES_CAN_BE_GIVEN_AND_IS_A_FOLDER(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Only files can be given to the genie, and " + name + " is a folder.";
+                case GERMAN -> "Dem Dschinn lassen sich nur Dateien geben, und " + name + " ist ein Ordner.";
+                case SPANISH -> "Al genio solo se le pueden dar archivos, y " + name + " es una carpeta.";
+                case JAPANESE -> "ジーニーに渡せるのはファイルだけです。" + name + " はフォルダーです。";
+                case CHINESE -> "只能把文件交给精灵，而 " + name + " 是一个文件夹。";
+            };
+        }
+
         public String OILLAMP_COULD_NOT_REACH_THE_MODEL_SERVICE_AT(String host, String why) {
             return switch (lang) {
                 case ENGLISH -> "oillamp could not reach the model service at " + host + " (" + why + "), so the genie got no answer. "
