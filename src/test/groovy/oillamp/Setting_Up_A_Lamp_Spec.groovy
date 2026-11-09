@@ -180,6 +180,110 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.readString(lamp.resolve('.oillamp/known_hosts')).startsWith('lamp-')
     }
 
+    def '`oillamp at` gives the agent `~/.genie` with `knowledge`, `skills` and `worktrees`, also in a lamp made before `~/.genie` existed'() {
+        reportInfo """
+            `~/workspace` is for the work the agent shares with the user: its repositories and
+            what it made. What an agent keeps only for itself, such as notes, a knowledge base,
+            skills it wrote and git worktrees for work in progress, would clutter that directory.
+            So `oillamp at` gives the agent a hidden directory of its own in its home, `~/.genie`,
+            with the directories `knowledge`, `skills` and `worktrees`.
+
+            Let's consider a lamp that an older oillamp set up, whose agent home has no `~/.genie`
+            yet. The next `oillamp at` creates `~/.genie` in it, and on every later run it leaves
+            alone what the agent wrote there.
+        """
+        given: 'a lamp that has been set up once, from whose agent home `~/.genie` was deleted, as in a lamp an older oillamp set up'
+            var lamp = host.lampPath()
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            agentHome.resolve('.genie').toFile().deleteDir()
+
+        when: '`oillamp at` runs on that lamp again'
+            var outcome = host.oillamp.run('at', lamp.toString())
+
+        then: 'it succeeds'
+            outcome.status() == LampExitStatus.SUCCESS
+
+        and: 'the agent home has `.genie/knowledge`, `.genie/skills` and `.genie/worktrees`, each with mode `rwxr-xr-x`'
+            ['knowledge', 'skills', 'worktrees'].every { name ->
+                PosixFilePermissions.toString(Files.getPosixFilePermissions(agentHome.resolve(".genie/$name"))) == 'rwxr-xr-x'
+            }
+
+        when: 'the agent writes `.genie/knowledge/build.md`, and `oillamp at` runs a third time'
+            Files.writeString(agentHome.resolve('.genie/knowledge/build.md'), 'Run ./gradlew check.\n')
+            host.oillamp.run('at', lamp.toString())
+
+        then: '`.genie/knowledge/build.md` still holds what the agent wrote'
+            Files.readString(agentHome.resolve('.genie/knowledge/build.md')) == 'Run ./gradlew check.\n'
+    }
+
+    def '`oillamp at` does not follow a link the agent put in place of `~/.genie`, and warns with `OIL-LAMP-012` instead'() {
+        reportInfo """
+            The agent can change anything in its home, and it runs as the user who started
+            oillamp. Had the agent replaced `~/.genie` with a symbolic link to a directory of the
+            user's on the host, an `oillamp at` that followed the link would create `knowledge`,
+            `skills` and `worktrees` in that directory of the user's. So `oillamp at` creates
+            nothing behind the link. For each of the three directories, it warns with
+            `OIL-LAMP-012`, naming the link, and sets up the lamp all the same.
+        """
+        given: 'a lamp that has been set up once, whose agent replaced `~/.genie` with a link to an empty directory of the user\'s'
+            var lamp = host.lampPath()
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var usersDirectory = Files.createDirectories(tmp.resolve('users-directory'))
+            agentHome.resolve('.genie').toFile().deleteDir()
+            Files.createSymbolicLink(agentHome.resolve('.genie'), usersDirectory)
+
+        when: '`oillamp at` runs on that lamp again'
+            var outcome = host.oillamp.run('at', lamp.toString())
+
+        then: 'it succeeds'
+            outcome.status() == LampExitStatus.SUCCESS
+
+        and: 'it warns with `OIL-LAMP-012` three times, once for each of `knowledge`, `skills` and `worktrees`, each naming `~/.genie` as the link'
+            var refused = outcome.warnings().findAll { it.code().value() == 'OIL-LAMP-012' }
+            refused.size() == 3
+            refused*.whatHappened().every { it.contains("${agentHome.resolve('.genie')} is a symbolic link") }
+            ['knowledge', 'skills', 'worktrees'].every { name -> refused.any { it.whatHappened().contains(".genie/$name") } }
+
+        and: 'the user\'s directory is still empty'
+            Files.list(usersDirectory).count() == 0
+    }
+
+    def '`oillamp at` sets up a lamp whose agent has a file named `~/.genie`, and warns with `OIL-LAMP-013` instead of creating `~/.genie`\'s directories'() {
+        reportInfo """
+            Let's consider a lamp that an older oillamp set up, before `~/.genie` existed, whose
+            agent wrote a file of its own named `~/.genie`. The next `oillamp at` cannot create
+            the directories `knowledge`, `skills` and `worktrees` in `~/.genie`, since a file has
+            the name. A missing directory costs the agent only a place to keep things, not the
+            user their session. So `oillamp at` leaves the file as it is, warns with
+            `OIL-LAMP-013` for each of the three directories, and sets up the lamp all the same.
+        """
+        given: 'a lamp that has been set up once, whose agent replaced `~/.genie` with a file of its own'
+            var lamp = host.lampPath()
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            agentHome.resolve('.genie').toFile().deleteDir()
+            Files.writeString(agentHome.resolve('.genie'), 'the agent\'s own file\n')
+
+        when: '`oillamp at` runs on that lamp again'
+            var outcome = host.oillamp.run('at', lamp.toString())
+
+        then: 'it succeeds'
+            outcome.status() == LampExitStatus.SUCCESS
+
+        and: 'it warns with `OIL-LAMP-013` three times, once for each of `knowledge`, `skills` and `worktrees`'
+            var refused = outcome.warnings().findAll { it.code().value() == 'OIL-LAMP-013' }
+            refused.size() == 3
+            ['knowledge', 'skills', 'worktrees'].every { name -> refused.any { it.whatHappened().contains(".genie/$name") } }
+
+        and: 'the file `~/.genie` still holds what the agent wrote'
+            Files.readString(agentHome.resolve('.genie')) == 'the agent\'s own file\n'
+    }
+
     def 'oillamp gives the agent a `~/.bashrc` once, so that commands sent over ssh get the same environment as a login shell'() {
         reportInfo """
             The agent's environment, such as the proxy variables, `DISPLAY` and SDKMAN's `sdk`

@@ -241,6 +241,11 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     │       │                              schedule is on
     │       └── oillamp-host-access.js     the host tools; written each session while host
     │                                      access is on
+    ├── .genie/                  the agent's own place, for what it keeps for itself; made
+    │   │                        each session where missing, never through a link
+    │   ├── knowledge/           its knowledge base, Markdown files it writes and maintains
+    │   ├── skills/              skills it writes for itself
+    │   └── worktrees/           git worktrees of the repositories in workspace/
     ├── workspace/
     │   └── NOTES.md             the agent's notes between runs, written by the agent
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path

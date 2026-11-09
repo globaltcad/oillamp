@@ -180,6 +180,28 @@ final class FilesystemUtil {
         });
     }
 
+    /// Creates the directory `relative` in the agent's `home`, and each missing directory on the
+    /// way, with mode [PosixMode#PUBLIC_DIR]; one that is there already is left as it is. Never
+    /// follows a symbolic link, with the same one exception as [#writeInAgentHome]: should the
+    /// agent swap a directory on the way for a link at the very moment it is made, an empty
+    /// directory could appear where the link points.
+    ///
+    /// @throws LinkInAgentHome when the directory or one on the way is a link
+    /// @throws IOException     when it could not be created, or a file has its name
+    static void createDirectoryInAgentHome(Path home, Path relative) throws IOException {
+        inDirectoryOf(home, relative, true, (directory, name, where) -> {
+            Optional<BasicFileAttributes> found = attributesOf(directory, name);
+            if (found.isPresent() && found.get().isSymbolicLink()) throw new LinkInAgentHome(where);
+            if (found.isPresent() && !found.get().isDirectory()) throw new IOException(where + " is not a directory");
+            if (found.isPresent()) return true;
+            Files.createDirectory(where, PosixFilePermissions.asFileAttribute(PosixMode.PUBLIC_DIR.permissions()));
+            // The creation applies the user's umask, which can take bits away from the mode.
+            directory.getFileAttributeView(name, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS)
+                     .setPermissions(PosixMode.PUBLIC_DIR.permissions());
+            return true;
+        });
+    }
+
     /// Deletes the file `relative` in the agent's `home`, if it is there, without following a
     /// symbolic link to a directory on the way. A link at the file itself is deleted, not what it
     /// points to.

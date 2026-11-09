@@ -158,6 +158,14 @@ final class LampPlanUtil {
         steps = steps.add(new Step.CreateDirectory(layout.workspace(), PosixMode.PUBLIC_DIR));
         steps = steps.add(new Step.CreateDirectory(layout.libs(), PosixMode.PUBLIC_DIR));
         steps = steps.add(new Step.CreateDirectory(layout.screenshots(), PosixMode.PUBLIC_DIR));
+        // The agent's own place, `~/.genie`, made in a lamp from before it existed too, on its next
+        // start. The agent has had its home to itself by then, so never through a link.
+        steps = steps.add(new Step.CreateDirectoryInAgentHome(layout.agentDir(), layout.genieKnowledge(),
+                "the agent has no ~/.genie/knowledge for its knowledge base until it makes one"));
+        steps = steps.add(new Step.CreateDirectoryInAgentHome(layout.agentDir(), layout.genieSkills(),
+                "the agent has no ~/.genie/skills for its skills until it makes one"));
+        steps = steps.add(new Step.CreateDirectoryInAgentHome(layout.agentDir(), layout.genieWorktrees(),
+                "the agent has no ~/.genie/worktrees for its worktrees until it makes one"));
         // Written once and then left to the agent. Without it, `ssh <lamp> 'some command'` runs in
         // a shell that has read no profile, so it has no proxy settings, display or `sdk`.
         steps = steps.add(new Step.WriteFile(layout.agentBashrc(), GeneratedFileTextUtil.agentBashrc(),

@@ -63,6 +63,19 @@ sealed interface Step {
         }
     }
 
+    /// Creates a directory in the agent's home where there is none yet, along with any directory on
+    /// the way, and never through a symbolic link, for the same reason as [WriteIntoAgentHome]. A
+    /// link is reported as a warning, and nothing is created behind it; so is a file in the way,
+    /// or anything else that keeps the directory from being made.
+    ///
+    /// @param withoutIt what the agent lacks when the directory could not be created
+    record CreateDirectoryInAgentHome(Path home, Path directory, String withoutIt) implements Step {
+        public CreateDirectoryInAgentHome {
+            if (!directory.startsWith(home) || directory.equals(home))
+                throw new IllegalArgumentException(directory + " is not in the agent's home " + home);
+        }
+    }
+
     /// Removes a file oillamp wrote in the agent's home, never through a symbolic link to a
     /// directory, for the same reason as [WriteIntoAgentHome].
     record RemoveFromAgentHome(Path home, Path file, String reason) implements Step {
@@ -142,6 +155,8 @@ sealed interface Step {
                                       + s.path() + " (mode " + s.mode() + ")";
             case WriteIntoAgentHome s -> "write " + s.file() + " (in the agent's home, never through a link)";
             case RemoveFromAgentHome s -> "remove " + s.file() + " (" + s.reason() + ")";
+            case CreateDirectoryInAgentHome s -> "create directory " + s.directory()
+                                      + " (in the agent's home, mode " + PosixMode.PUBLIC_DIR + ", never through a link)";
             case CopyFile s        -> "copy " + s.from() + " to " + s.to() + " (mode " + s.mode() + ")";
             case CreateSymlink s   -> "link " + s.link() + " -> " + s.target();
             case ChownForContainer s -> "give " + s.path() + " to container uid " + s.containerUid()
@@ -187,6 +202,7 @@ sealed interface Step {
             case WriteIntoAgentHome s -> s.file() + " (mode " + PosixMode.PUBLIC_FILE + ", always, never through a link)\n"
                               + indent(s.content());
             case RemoveFromAgentHome ignored -> describe();
+            case CreateDirectoryInAgentHome ignored -> describe();
             case DeleteContainerOwnedFiles s -> {
                 StringBuilder out = new StringBuilder(s.reason() + ":");
                 for (Path file : s.files()) out.append("\n  ").append(file);

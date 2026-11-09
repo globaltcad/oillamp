@@ -126,6 +126,18 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path libs()       { return agentDir().resolve("libs"); }
     public Path screenshots(){ return agentDir().resolve("screenshots"); }
     public Path agentsMd()   { return agentDir().resolve("AGENTS.md"); }
+    /// The agent's own place, `~/.genie`, for what it keeps for itself rather than for the user:
+    /// its handover notes, its knowledge base, its skills and its git worktrees. It keeps
+    /// `~/workspace` for the work it shares with the user.
+    public Path genieDir()   { return agentDir().resolve(".genie"); }
+    /// The agent's notes for its next run, and the root index of its knowledge base.
+    public Path handover()   { return genieDir().resolve("HANDOVER.md"); }
+    /// The agent's knowledge base: directories of Markdown files it writes and maintains.
+    public Path genieKnowledge() { return genieDir().resolve("knowledge"); }
+    /// The skills the agent writes for itself, which pi loads.
+    public Path genieSkills()    { return genieDir().resolve("skills"); }
+    /// Where the agent puts git worktrees of the repositories in `~/workspace` while it works.
+    public Path genieWorktrees() { return genieDir().resolve("worktrees"); }
     /// pi's agent directory, where it keeps its settings, its packages and its conversations.
     public Path piDir()      { return agentDir().resolve(".pi").resolve("agent"); }
     /// pi's settings. The session writes its model here as pi's default, keeping the rest.

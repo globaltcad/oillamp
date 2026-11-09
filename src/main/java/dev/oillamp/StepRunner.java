@@ -117,6 +117,17 @@ final class StepRunner {
                 case Step.WriteIntoAgentHome s -> intoAgentHome(step, s.file(), s.withoutIt(),
                         () -> FilesystemUtil.writeInAgentHome(s.home(), s.home().relativize(s.file()), s.content(),
                                                               PosixMode.PUBLIC_FILE));
+                case Step.CreateDirectoryInAgentHome s -> {
+                    // A file the agent left where the directory goes is no reason to refuse the
+                    // user their session either.
+                    try {
+                        yield intoAgentHome(step, s.directory(), s.withoutIt(),
+                                () -> FilesystemUtil.createDirectoryInAgentHome(s.home(), s.home().relativize(s.directory())));
+                    } catch (IOException failed) {
+                        yield Result.ok(step, Tuple.of(LampProblem.class, ProblemCatalogUtil.agentFileNotWritten(
+                                s.directory(), ProblemCatalogUtil.reason(failed), s.withoutIt())));
+                    }
+                }
                 case Step.RemoveFromAgentHome s -> intoAgentHome(step, s.file(), "it stays where it is",
                         () -> FilesystemUtil.deleteInAgentHome(s.home(), s.home().relativize(s.file())));
                 case Step.CopyFile s -> {
