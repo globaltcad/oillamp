@@ -64,6 +64,10 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path lampMeta()      { return stateDir().resolve("lamp.json"); }
     public Path lockFile()      { return stateDir().resolve("lock"); }
     public Path sessionMeta()   { return stateDir().resolve("session.json"); }
+    /// When each run of the agent's own jobs began, over the last day, for
+    /// `schedule.max_agent_runs_per_day`. Not in the snapshots: a run costs model tokens whatever
+    /// the lamp is brought back to, and whether a snapshot was saved after it or not.
+    public Path agentRuns()     { return stateDir().resolve("agent-runs"); }
 
     public Path keysDir()       { return stateDir().resolve("keys"); }
     public Path clientKey()     { return keysDir().resolve("client_ed25519"); }

@@ -1318,6 +1318,58 @@ class Waking_The_Agent_Spec extends Specification {
             !reported.any { it instanceof LampEvent.RunStarted }
     }
 
+    def 'Oillamp counts a run of the agent\'s job against `schedule.max_agent_runs_per_day` also when no snapshot was saved after it'() {
+        reportInfo """
+            `schedule.max_agent_runs_per_day` limits how many runs of the agent's own jobs may start
+            in 24 hours, because every run costs model tokens. With `[autosave] after_run = false`,
+            oillamp saves no snapshot of the lamp when a run ends, and the snapshot saved at the end
+            of a run is the one the lamp's history records it as a run with. The count of runs must
+            not depend on that setting: a user who turns off the save after each run has not raised
+            the agent's limit.
+
+            Let's consider a lamp with the limit set to 1 and `after_run = false`. In a first
+            session, the agent adds a job for five minutes later. Ten minutes later a second
+            session starts, and the job runs. In that session, the agent adds another job for five
+            minutes later. When a third session starts ten minutes after that, the same day, the
+            second job is due, and it must be skipped: the first job's run counts.
+
+            The simulated clock does not move during a session, so the scenario ends each session
+            and moves the clock before it starts the next.
+        """
+        given: 'a lamp whose agent may run one job of its own a day, and which saves no snapshot after a run'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\nmax_agent_runs_per_day = 1\n[autosave]\nafter_run = false\n')
+            anAgent { prompt -> 'Done.' }
+
+        and: 'the agent added a job for five minutes later, during a session'
+            startASession(lamp)
+            assert agentAsks(op: 'add', at: 'in 5m', prompt: 'Check the build').ok
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+
+        and: 'ten minutes later, the job ran, and the agent added a second job for five minutes later'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            waitFor(LampEvent.RunFinished)
+            assert agentAsks(op: 'add', at: 'in 5m', prompt: 'Check the build again').ok
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            session.join(30_000)
+
+        when: 'the next session starts ten minutes after that, with the second job due'
+            reported.clear()
+            prompts.clear()
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(20))) }
+            startASession(lamp)
+            var skipped = waitFor(LampEvent.Info) { it.text().contains('was skipped') }
+
+        then: 'the session reports that `job-2` was skipped, and names `schedule.max_agent_runs_per_day`'
+            skipped.text().contains('job-2 was due')
+            skipped.text().contains('schedule.max_agent_runs_per_day')
+
+        and: 'the agent was not woken'
+            prompts.isEmpty()
+            !reported.any { it instanceof LampEvent.RunStarted }
+    }
+
     def 'The agent reads an earlier run from the history on the host with its `run_history` tool'() {
         reportInfo """
             A job's prompt describes only the last few runs. To look further back, the agent's

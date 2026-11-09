@@ -71,6 +71,7 @@ final class ProblemCatalogUtil {
     public static final Code NO_SUCH_JOB           = new Code("OIL-SCHEDULE-003");
     public static final Code SCHEDULE_OFF          = new Code("OIL-SCHEDULE-004");
     public static final Code RUN_FAILED            = new Code("OIL-SCHEDULE-005");
+    public static final Code AGENT_RUNS_NOT_LISTED = new Code("OIL-SCHEDULE-006");
     public static final Code NO_SUCH_CONVERSATION  = new Code("OIL-CONVERSATION-001");
     public static final Code LOCK_BUSY             = new Code("OIL-LOCK-001");
     public static final Code LOCK_RECOVERED        = new Code("OIL-LOCK-002");
@@ -736,6 +737,17 @@ final class ProblemCatalogUtil {
                 reason,
                 "the run ended without the agent finishing it; the next run starts the agent again")
             .withFix(Fix.of("check that pi works in the sandbox: run `pi` in the lamp's shell"));
+    }
+
+    /// The file that lists the runs of the agent's own jobs could not be written, so a run that
+    /// leaves no snapshot does not count against `schedule.max_agent_runs_per_day`.
+    public static LampProblem agentRunsNotListed(Path file, String why) {
+        return warning(AGENT_RUNS_NOT_LISTED, "The agent's runs cannot be counted",
+                "oillamp could not write to " + file + ": " + why,
+                "a run of the agent's own jobs counts against `schedule.max_agent_runs_per_day` only "
+              + "where a snapshot of the lamp was saved after it")
+            .withEvidence(new Evidence.Value("reason", why))
+            .withFix(Fix.of("make room on the disk, or make " + file.getParent() + " writable for you"));
     }
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────

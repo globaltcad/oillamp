@@ -5,10 +5,15 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.Semaphore;
@@ -329,13 +334,53 @@ final class AgentRunner {
             || queue.stream().anyMatch(pending -> pending.run().job().filter(job::equals).isPresent());
     }
 
-    /// How many runs of the agent's own jobs began in the last 24 hours: those the history
-    /// records on any branch, since every run costs tokens whichever branch it was on, and those in
-    /// progress or waiting now.
+    /// How many runs of the agent's own jobs began in the last 24 hours: those in progress or
+    /// waiting now, and those [LampLayout#agentRuns()] lists, which holds every run that began
+    /// whether a snapshot was saved after it or not. Also those the history records on any branch,
+    /// since every run costs tokens whichever branch it was on, for the runs of a lamp from before
+    /// that file was kept. Each run counts once, by its name.
     private int agentRunsInADay(Instant now) {
-        int counted = (int) queue.stream().filter(pending -> pending.job().filter(job -> job.author() == LampJobAuthor.AGENT).isPresent()).count()
-                + (current.flatMap(Pending::job).filter(job -> job.author() == LampJobAuthor.AGENT).isPresent() ? 1 : 0);
-        return counted + new History(layout).agentRunsInADay(now).orElseGet(_ -> 0);
+        Set<String> runs = new HashSet<>(agentRunsListed(now).keySet());
+        for (Pending pending : queue) if (isAgents(pending)) runs.add(pending.run().id());
+        current.filter(AgentRunner::isAgents).ifPresent(pending -> runs.add(pending.run().id()));
+        runs.addAll(new History(layout).agentRunsInADay(now).orElseGet(_ -> Set.of()));
+        return runs.size();
+    }
+
+    private static boolean isAgents(Pending pending) {
+        return pending.job().filter(job -> job.author() == LampJobAuthor.AGENT).isPresent();
+    }
+
+    /// The runs [LampLayout#agentRuns()] lists as begun in the last day, with when each began. A
+    /// file that cannot be read lists none: the history still counts the runs it records.
+    private synchronized Map<String, Instant> agentRunsListed(Instant now) {
+        Map<String, Instant> runs = new LinkedHashMap<>();
+        for (String line : FilesystemUtil.readString(layout.agentRuns()).orElse("").lines().toList()) {
+            String[] parts = line.split(" ", -1);
+            if (parts.length != 2) continue;
+            try {
+                Instant began = Instant.ofEpochSecond(Long.parseLong(parts[1]));
+                if (began.isAfter(now.minus(Duration.ofDays(1)))) runs.put(parts[0], began);
+            } catch (NumberFormatException | java.time.DateTimeException unreadable) {
+                // A line oillamp did not write; it counts no run.
+            }
+        }
+        return runs;
+    }
+
+    /// Adds a run of the agent's own jobs to [LampLayout#agentRuns()], as `<run> <epoch second>`,
+    /// and drops the runs that began more than a day ago, so the file stays as small as the limit.
+    private synchronized void listAgentRun(String run, Instant began) {
+        Map<String, Instant> runs = agentRunsListed(began);
+        runs.put(run, began);
+        StringBuilder text = new StringBuilder();
+        runs.forEach((name, at) -> text.append(name).append(' ').append(at.getEpochSecond()).append('\n'));
+        try {
+            FilesystemUtil.writeBytes(layout.agentRuns(), text.toString().getBytes(StandardCharsets.UTF_8), PosixMode.PRIVATE_FILE);
+        } catch (IOException unwritable) {
+            context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.agentRunsNotListed(layout.agentRuns(),
+                    ProblemCatalogUtil.reason(unwritable))));
+        }
     }
 
     private void enqueue(Pending pending) {
@@ -399,6 +444,7 @@ final class AgentRunner {
         Instant started = machine.now();
         ZoneId zone = machine.zone();
         pending.job().ifPresent(job -> startedJob(job, started, zone));
+        if (isAgents(pending)) listAgentRun(run.id(), started);
         context.sink().accept(new LampEvent.RunStarted(run));
         post.accept(new SessionEvent.RunBegan(run.id(), run.prompt()));
 

@@ -299,9 +299,10 @@ worth going back to; a person saves by hand before the moments that matter. The 
 are different: no person is watching a job run, and they are what the next run's prompt is made
 of. An application can still turn them off.
 
-*Given up:* with `after_run` off the agent is told nothing of its earlier runs but its notes, and
-`schedule.max_agent_runs_per_day` counts only the runs of the session in progress, because the
-history is where earlier ones are counted. *(added on 2026-10-20)*
+*Given up:* with `after_run` off the agent is told nothing of its earlier runs but its notes.
+`schedule.max_agent_runs_per_day` still counts every run, from `.oillamp/agent-runs`, which lists
+each run of the agent's jobs as it begins, whether a snapshot follows or not. *(added on
+2026-10-20; the count changed on 2026-11-09)*
 
 ### A chat is saved once it is quiet, not around every question
 
@@ -447,7 +448,8 @@ branch before a reset keeps them. The same holds for a deleted branch. *(added o
 ### Runs are numbered and limited across all branches, and remembered per branch
 
 A new run's number is one above the highest `Oillamp-Run` on any branch and the highest the
-session gave out. `schedule.max_agent_runs_per_day` counts the agent's runs on every branch. The
+session gave out. `schedule.max_agent_runs_per_day` counts the agent's runs on every branch, and
+those no branch holds any more, from `.oillamp/agent-runs`, which is outside the snapshots. The
 wake prompt's recent runs and the agent's `run_history` tool look only at the current branch.
 
 *Why:* a run's name must name one run of the lamp, whichever branch it was on, so that the history

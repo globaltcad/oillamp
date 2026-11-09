@@ -401,8 +401,6 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   get the same name (`run-1 (job-2)`) in two sessions. After a reset or a deleted branch took the
   newest runs off every branch, their numbers are handed out again, and so are the names of pi's
   conversations for them, which stay in the homes of other branches only if those hold them.
-- `schedule.max_agent_runs_per_day` counts the agent's runs on every branch, but not those a reset
-  or a deleted branch left on no branch: after either, the agent may run more that day.
 
 ### Host access, still missing
 

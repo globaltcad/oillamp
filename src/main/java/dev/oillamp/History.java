@@ -1601,14 +1601,15 @@ final class History {
         return reading(() -> Result.ok(Math.max(prunedHigh(), GitObjectUtil.highestRun(allCommits()))));
     }
 
-    Result<Integer> agentRunsInADay(Instant now) {
+    /// The runs of the agent's own jobs in the last day that the history records, such as `run-4`.
+    Result<Set<String>> agentRunsInADay(Instant now) {
         return reading(() -> {
             Set<String> runs = new HashSet<>(prunedAgentRuns(now).keySet());
             for (GitObjectUtil.Commit commit : allCommits())
                 if (!commit.snapshot().at().isBefore(now.minus(Duration.ofDays(1)))
                         && commit.trailers().get(GitObjectUtil.AUTHOR_TRAILER).filter("agent"::equals).isPresent()
                         && commit.snapshot().kind() == LampSaveKind.RUN) commit.snapshot().run().ifPresent(runs::add);
-            return Result.ok(runs.size());
+            return Result.ok(runs);
         });
     }
 

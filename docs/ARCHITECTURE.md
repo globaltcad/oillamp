@@ -171,6 +171,7 @@ known lifetime:
 | `<lamp>/.oillamp/logs/network-<session>.jsonl` | the egress proxy | you | until you delete them |
 | `<lamp>/.oillamp/history/` | `History`: saves, branch operations and retention | history commands, the session and git by hand | bounded by the first snapshot's size plus `[history].max_growth_gb`; branch tips and active bases survive |
 | `<lamp>/.oillamp/schedule.json` | `ScheduleBook`, for `oillamp schedule`, for the session as runs start or are missed, for the agent's requests, and for `oillamp history <dir>` `restore`, `switch` and `reset` | `oillamp schedule`, the session every 30 s, every save | until `oillamp remove`; every snapshot holds a copy |
+| `<lamp>/.oillamp/agent-runs` | `AgentRunner`, as a run of the agent's own jobs begins | the session, when one of the agent's jobs comes due | until `oillamp remove`; holds the last 24 hours only; in no snapshot |
 | `<lamp>/.oillamp/schedule.lock` | `ScheduleBook`; held for the moment one change takes | every other change | the lock ends with the process |
 | `<lamp>/.oillamp/history.lock` | `History`; the kernel holds the lock while one save, restore, switch, reset, or start or deletion of a branch runs | every other one of them, which waits for it | the lock ends with the process |
 | `<lamp>/.oillamp/history-read.lock` | `History`; shared by every read of the history, held alone only while a prune deletes | a prune's sweep, which waits for reads in progress | the lock ends with the process |
@@ -225,6 +226,7 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
 │   ├── history.lock             locked while the history is written
 │   ├── history-read.lock        shared while the history is read; alone while a prune deletes
 │   ├── schedule.json            the jobs that wake the agent; never attached; in every snapshot
+│   ├── agent-runs               when the agent's own jobs ran, over the last day; in no snapshot
 │   └── schedule.lock            locked while the schedule is changed
 └── agent-lamp-<agent id>/       attached read-write at /home/agent
     ├── AGENTS.md                rewritten each session
@@ -439,8 +441,8 @@ usage error, before the lamp is looked at.
 the current branch from its newest commit, parent by parent. `list --all` and `branches` follow every
 branch. `list --all` lists each commit once, with the branches it is on, newest first; of two saved
 in the same second, the one with more commits before it comes first, since a commit always comes
-after its parent. `branch <name> <snapshot>` accepts any snapshot on any branch. Run numbers and
-`schedule.max_agent_runs_per_day` count every branch's commits.
+after its parent. `branch <name> <snapshot>` accepts any snapshot on any branch. Run numbers count
+every branch's commits; `schedule.max_agent_runs_per_day` counts them too, and `.oillamp/agent-runs`.
 
 **Unreachable objects.** Reset and branch deletion leave commits no branch reaches. Enabled
 retention reclaims them on the next save or explicit cleanup. A snapshot can be named through
@@ -1167,8 +1169,11 @@ started after a few days: it runs at its next full hour, not at once. A job swit
 `oillamp schedule resume` does the same for every repeating job, so a pause never makes one miss a
 run. A job that runs once keeps its time through a pause, because it has no later time to wait
 for: found more than `schedule.max_delay_minutes` after it, it is missed. A job of the agent's is skipped when the agent's jobs
-already ran `schedule.max_agent_runs_per_day` times in the last 24 hours, counted from the history
-on every branch, since every run costs tokens.
+already ran `schedule.max_agent_runs_per_day` times in the last 24 hours, since every run costs
+tokens. The runs are counted from `.oillamp/agent-runs`, to which each run of the agent's jobs is
+added as it begins, as `<run> <epoch second>`, whether a snapshot is saved after it or not, and
+which keeps only the last 24 hours. The history on every branch counts as well, for runs from
+before that file was kept.
 Nothing runs while the schedule is paused. Cron expressions (`CronExpression`) have the usual five
 fields, names for months and days, steps and ranges, and `@hourly`, `@daily`, `@weekly`; they and
 `--at` times are read in the host's time zone (`Machine.zone`).
@@ -2103,6 +2108,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-SCHEDULE-004` | Warning: the schedule is changed, but `schedule.enabled` is off, so no job runs. |
 | `OIL-CONVERSATION-001` | No conversation, or no entry in one, has that name. |
 | `OIL-SCHEDULE-005` | Warning: the agent could not be woken for a run, or pi stopped in the middle of one. |
+| `OIL-SCHEDULE-006` | Warning: the file listing the agent's runs, `.oillamp/agent-runs`, could not be written, so a run without a snapshot after it does not count against `schedule.max_agent_runs_per_day`. |
 | `OIL-LOCK-001` | Lamp already running. |
 | `OIL-LOCK-002` | Warning: cleaned up after a previous session that crashed. |
 | `OIL-CONFIG-001` | TOML syntax error. |
