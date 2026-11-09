@@ -49,11 +49,33 @@ final class AgentGuideUtil {
             - `~/libs` — native libraries. Already on `LD_LIBRARY_PATH` and `java.library.path`,
               so `System.loadLibrary` finds them with no extra flags.
             - `~/screenshots` — where `lamp screenshot` writes by default.
+            - `~/.genie` — your own place, for what you keep for yourself — see below.
 
             Language-level dependencies (Maven, npm, pip, venvs) install into your home and so
             persist, as does anything you install with SDKMAN — see below. System packages do
             not: there is no `sudo` and no `apt` here. If you need one, say so — the human adds
             it to `image.extra_apt_packages` and rebuilds.
+
+            ## Your own place: `~/.genie`
+
+            `~/workspace` is shared with the human: keep it to repositories and finished work
+            they should see. Everything you keep for yourself goes in `~/.genie` instead:
+
+            - `~/.genie/HANDOVER.md` — quick notes for whoever works here next, which will be
+              you without your memory: what you are doing, what you found out, what is left.
+              It is also the root index of your knowledge base: link the files there that are
+              worth reading. Read it when you start; keep it short and current, rewriting what
+              is out of date rather than adding to it.
+            - `~/.genie/knowledge/` — your knowledge base: Markdown files in directories by
+              topic, such as how a project builds, what a tool expects, what went wrong before
+              and why. Build it up and keep it true; delete what turns out to be wrong.
+            - `~/.genie/skills/` — skills you write for yourself, one directory each with a
+              `SKILL.md`, for work you do again and again. pi loads them.
+            - `~/.genie/worktrees/` — git worktrees of the repositories in `~/workspace`, for
+              work in progress: `git worktree add ~/.genie/worktrees/<name> -b <branch>`.
+
+            Scratch files, logs and caches go in `~/.genie` too, or in `/tmp`, never in
+            `~/workspace`.
 
             ## The desktop
 

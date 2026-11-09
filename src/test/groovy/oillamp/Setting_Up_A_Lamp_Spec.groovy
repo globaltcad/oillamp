@@ -218,6 +218,36 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             Files.readString(agentHome.resolve('.genie/knowledge/build.md')) == 'Run ./gradlew check.\n'
     }
 
+    def '`~/AGENTS.md` tells the agent to keep `~/workspace` for work it shares with the user, and everything it keeps for itself in `~/.genie`'() {
+        reportInfo """
+            `~/AGENTS.md` is the guide the agent reads about the machine it is on, and
+            `oillamp at` writes it into the agent's home. An agent that is not told where to
+            keep its notes, its knowledge, its skills and its git worktrees puts them wherever it
+            is working, most often in `~/workspace`, which the user sees. So the guide has a
+            section, `## Your own place: ~/.genie`, which says that `~/workspace` is for
+            repositories and finished work, and names each file and directory in `~/.genie`:
+            `HANDOVER.md` for the agent's notes, which are also the root index of its knowledge
+            base, `knowledge/`, `skills/` and `worktrees/`.
+        """
+        given: 'a lamp path where no directory exists yet'
+            var lamp = host.lampPath()
+
+        when: '`oillamp at <dir>` sets up a new lamp'
+            host.oillamp.run('at', lamp.toString())
+
+        then: '`~/AGENTS.md` has the section `## Your own place: ~/.genie`, which says `~/workspace` is shared with the user'
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+            var section = guide.substring(guide.indexOf('## Your own place: `~/.genie`'))
+            section.contains('`~/workspace` is shared with the human')
+
+        and: 'the section names `~/.genie/HANDOVER.md` as the root index of the knowledge base, and `knowledge/`, `skills/` and `worktrees/` in `~/.genie`'
+            section.contains('`~/.genie/HANDOVER.md`')
+            section.contains('root index of your knowledge base')
+            ['knowledge', 'skills', 'worktrees'].every { section.contains("`~/.genie/$it/`") }
+    }
+
     def '`oillamp at` does not follow a link the agent put in place of `~/.genie`, and warns with `OIL-LAMP-012` instead'() {
         reportInfo """
             The agent can change anything in its home, and it runs as the user who started
