@@ -48,6 +48,7 @@ final class SimulatedMachine implements Machine {
     private final String operatingSystemName;
     private final Map<String, String> systemFiles;
     private final Map<String, String> environment;
+    private final Tuple<String> localAddresses;
     private final Map<String, Outcome> scriptedCommands;
     private final Map<String, Path> executables;
     private final Map<String, List<Path>> systemDirectories;
@@ -98,6 +99,7 @@ final class SimulatedMachine implements Machine {
         this.operatingSystemName = builder.operatingSystemName;
         this.systemFiles = Map.copyOf(builder.systemFiles);
         this.environment = Map.copyOf(builder.environment);
+        this.localAddresses = Tuple.of(String.class, builder.localAddresses);
         this.scriptedCommands = new LinkedHashMap<>(builder.scriptedCommands);
         this.executables = Map.copyOf(builder.executables);
         this.systemDirectories = Map.copyOf(builder.systemDirectories);
@@ -129,6 +131,8 @@ final class SimulatedMachine implements Machine {
     @Override public Optional<String> environmentVariable(String name) {
         return Optional.ofNullable(environment.get(name)).filter(value -> !value.isEmpty());
     }
+
+    @Override public Tuple<String> localAddresses() { return localAddresses; }
 
     @Override public String randomToken(int length) {
         String value = randomToken;
@@ -1014,6 +1018,7 @@ final class SimulatedMachine implements Machine {
         private final Map<String, Map<String, String>> containers = new ConcurrentHashMap<>();
         private final Map<String, String> systemFiles = new TreeMap<>();
         private final Map<String, String> environment = new TreeMap<>();
+        private final List<String> localAddresses = new ArrayList<>();
         private final Map<String, Outcome> scriptedCommands = new LinkedHashMap<>();
         private final Map<String, Path> executables = new TreeMap<>();
         private final Map<String, List<Path>> systemDirectories = new TreeMap<>();
@@ -1085,6 +1090,7 @@ final class SimulatedMachine implements Machine {
         public void groups(Tuple<String> groups) { this.groups = groups; }
         public void runtimeDirectory(Path path) { environment.put("XDG_RUNTIME_DIR", path.toString()); }
         public void environmentVariable(String name, String value) { environment.put(name, value); }
+        public void localAddress(String addressAndPrefix) { localAddresses.add(addressAndPrefix); }
         public void processors(int count) { this.processors = count; }
         public void session(String waylandDisplay, String x11Display, String desktop) {
             environment.put("WAYLAND_DISPLAY", waylandDisplay);

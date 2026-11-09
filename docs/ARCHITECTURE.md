@@ -1289,7 +1289,11 @@ The shipped default is `default = "allow"` with two deny rules:
 - *"Eden AI only through its EU endpoint"* denies the host `api.edenai.run`.
 - *"block private, internal and loopback ranges"* denies `10.0.0.0/8`, `172.16.0.0/12`,
   `192.168.0.0/16`, `100.64.0.0/10` (carrier-grade NAT, often used by VPNs), `127.0.0.0/8`,
-  `169.254.0.0/16`, `0.0.0.0/8`, `::1/128`, `::/128`, `fc00::/7` and `fe80::/10`.
+  `169.254.0.0/16`, `0.0.0.0/8`, `::1/128`, `::/128`, `fc00::/7` and `fe80::/10`. The proxy adds
+  the networks this machine is on, read from its network interfaces at most every 30 seconds, such
+  as `2001:db8:5:1::/64`: a network at home or in an office often has public IPv6 addresses, and a
+  server may have a public IPv4 one, which no fixed range covers. A prefix shorter than `/8` for
+  IPv4 or `/48` for IPv6 adds only the machine's own address.
 
 To allow an internal service, add an `allow` rule above them.
 

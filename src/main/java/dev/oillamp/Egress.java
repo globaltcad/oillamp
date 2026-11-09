@@ -31,6 +31,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import dev.lamp.LampProblem;
@@ -113,6 +114,10 @@ final class Egress implements AutoCloseable {
     }
 
     private final NetworkPolicy policy;
+    /// This machine's addresses, as [Machine#localAddresses()] reads them.
+    private final Supplier<Tuple<String>> localAddresses;
+    /// The policy with the networks this machine is on, and when they were last read.
+    private volatile Deciding decidingNow;
     private final boolean logAllowed;
     private final Listener listener;
     private final Journal journal;
@@ -121,8 +126,11 @@ final class Egress implements AutoCloseable {
     private final AtomicLong open = new AtomicLong();
     private volatile boolean closing;
 
-    private Egress(NetworkPolicy policy, boolean logAllowed, Listener listener, Journal journal) {
+    private Egress(NetworkPolicy policy, Supplier<Tuple<String>> localAddresses, boolean logAllowed,
+                   Listener listener, Journal journal) {
         this.policy = policy;
+        this.localAddresses = localAddresses;
+        this.decidingNow = new Deciding(policy.withLocalNetworks(localAddresses.get()), System.nanoTime());
         this.logAllowed = logAllowed;
         this.listener = listener;
         this.journal = journal;
@@ -133,10 +141,14 @@ final class Egress implements AutoCloseable {
     /// The sockets are mode 0666 rather than 0600, because the socat relay inside the container
     /// runs as the infra user, a different uid. They are still private to this user on the host,
     /// because the enclosing `.oillamp` directory is 0700.
+    ///
+    /// @param localAddresses this machine's addresses with the prefix lengths of their networks, read
+    ///                       again at most every [#NETWORKS_READ_AGAIN], because a machine changes
+    ///                       networks while a session runs
     static Result<Egress> open(LampLayout layout, LampConfig config, SessionId session,
-                               Model model, Listener listener) {
+                               Model model, Supplier<Tuple<String>> localAddresses, Listener listener) {
         Journal journal = new Journal(layout.networkLog(session), listener);
-        Egress egress = new Egress(config.network(), config.network().logAllowed(),
+        Egress egress = new Egress(config.network(), localAddresses, config.network().logAllowed(),
                                    listener, journal);
         Result<ServerSocketChannel> proxy = bindShared(layout.proxySocket());
         if (proxy instanceof Result.Err<ServerSocketChannel> failure) {
@@ -248,7 +260,7 @@ final class Egress implements AutoCloseable {
                     Duration.between(started, Instant.now())));
             return;
         }
-        NetworkPolicyUtil.Verdict verdict = NetworkPolicyUtil.decide(policy, head.host(), head.port(), resolution.addresses());
+        NetworkPolicyUtil.Verdict verdict = NetworkPolicyUtil.decide(policyNow(), head.host(), head.port(), resolution.addresses());
         if (!verdict.allowed()) {
             respond(out, 403, verdict.explain(head.host(), head.port()));
             record(new Journey(Instant.now(), "proxy", "CONNECT", head.host(), head.port(),
@@ -298,7 +310,7 @@ final class Egress implements AutoCloseable {
                     Duration.between(started, Instant.now())));
             return;
         }
-        NetworkPolicyUtil.Verdict verdict = NetworkPolicyUtil.decide(policy, head.host(), head.port(), resolution.addresses());
+        NetworkPolicyUtil.Verdict verdict = NetworkPolicyUtil.decide(policyNow(), head.host(), head.port(), resolution.addresses());
         if (!verdict.allowed()) {
             respond(out, 403, verdict.explain(head.host(), head.port()));
             record(new Journey(Instant.now(), "proxy", head.method(), head.host(), head.port(),
@@ -562,6 +574,24 @@ final class Egress implements AutoCloseable {
     }
 
     // ─── plumbing ──────────────────────────────────────────────────────────────────────────
+
+    /// How long the networks this machine is on are taken as they were last read.
+    private static final Duration NETWORKS_READ_AGAIN = Duration.ofSeconds(30);
+
+    /// The lamp's policy, with the networks this machine is on now added to its rule that refuses
+    /// private ranges. See [NetworkPolicy#withLocalNetworks].
+    private NetworkPolicy policyNow() {
+        long now = System.nanoTime();
+        Deciding known = decidingNow;
+        if (now - known.readAt() < NETWORKS_READ_AGAIN.toNanos()) return known.policy();
+        NetworkPolicy fresh = policy.withLocalNetworks(localAddresses.get());
+        decidingNow = new Deciding(fresh, now);
+        return fresh;
+    }
+
+    /// The policy with the networks this machine is on, and the [System#nanoTime()] they were read
+    /// at, replaced together.
+    private record Deciding(NetworkPolicy policy, long readAt) {}
 
     /// Resolved addresses in resolver order, or a failure. Resolution happens on the host.
     private record Resolution(Tuple<IpAddress> addresses, boolean failed) {

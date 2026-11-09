@@ -501,7 +501,8 @@ it can send requests to your other local web servers and to other lamps' publish
 `publish = "off"` if you do not want that.
 
 The shipped rules block your local network and this machine's loopback, and send Eden AI traffic
-only to its EU endpoint. When the agent hits a blocked address, it gets a clear refusal naming the
+only to its EU endpoint. Your local network is blocked also where its addresses are public, as IPv6
+addresses at home usually are: oillamp adds the networks this machine is on to the rule. When the agent hits a blocked address, it gets a clear refusal naming the
 rule, and you see the refusal in your terminal.
 
 Edit, check with `oillamp config <dir> check`, and restart the session to apply. An optional
@@ -547,8 +548,6 @@ from talking to the internet.
 - **It is a container, not a virtual machine.** Your kernel is shared with the sandbox.
 - **The internet is open by default.** Data the agent can read, it can send. That is why the model
   key is not in the sandbox: oillamp adds it to model requests on their way out.
-- **Your machine's own public addresses are not blocked.** If a service on your machine listens
-  on every address (`0.0.0.0`), add a deny rule for your addresses, or bind it to `127.0.0.1`.
 - **Disk space has no limit.** An agent that downloads without end can fill your disk. The
   history keeps every version of every file that was ever saved, and nothing removes old
   snapshots yet.

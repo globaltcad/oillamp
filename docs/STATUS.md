@@ -462,13 +462,6 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 - The output of a failed image build is only shown in the error (its last 40 lines). It is not
   saved to `.oillamp/logs/`.
 
-### The network
-
-- The default rules block loopback and the private ranges, but not the host's own public IPv4 or
-  global IPv6 addresses. A service on the host that listens on every address can be reached at
-  them. The proxy could add the host's addresses to the denied ones when a session starts; that is
-  undecided. Until then, the README tells users to add a deny rule themselves.
-
 ### Inconsistencies
 
 - `oillamp list` and `remove` recognise containers by the label `oillamp.lamp`; the archived

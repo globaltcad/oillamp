@@ -50,7 +50,7 @@ nftables.
 ### The network policy is checked against resolved addresses, and allows the web by default
 
 The shipped policy allows everything except private, loopback, link-local, carrier-grade NAT and
-IPv6 local ranges. Each host name is resolved on the host and every resulting address is checked.
+IPv6 local ranges, and the networks the host is on. Each host name is resolved on the host and every resulting address is checked.
 
 *Why:* checking addresses means a public name that points at `127.0.0.1` or at the intranet is
 refused by where it points, not trusted by what it is called. That is what makes "allow the web"

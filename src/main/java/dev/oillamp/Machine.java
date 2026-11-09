@@ -51,6 +51,15 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
 
     Optional<String> environmentVariable(String name);
 
+    /// This machine's own addresses, each with the prefix length of the network it is on, in CIDR
+    /// notation, such as `2001:db8:5:1::7/64`: those of every network interface that is up, its
+    /// loopback interface left out. Read anew on every call, because a machine changes networks.
+    ///
+    /// Many of these networks are not in any private range. An IPv6 network at home is usually
+    /// public, and so is the network of a server with a public IPv4 address. The egress proxy
+    /// refuses them all the same, because they hold the machine and the devices next to it.
+    Tuple<String> localAddresses();
+
     /// Cryptographically strong randomness for the `agentId` that names a lamp forever.
     ///
     /// @param length how many characters, from the RFC 4648 lowercase base32 alphabet
@@ -377,6 +386,13 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
         /// Where `$XDG_RUNTIME_DIR` points. The short socket paths are under it.
         public SimulationBuilder runtimeDirectory(Path path) {
             builder.runtimeDirectory(path);
+            return this;
+        }
+
+        /// An address of this machine, with the prefix length of the network it is on, such as
+        /// `2001:db8:5:1::7/64`. Each call adds one.
+        public SimulationBuilder localAddress(String addressAndPrefix) {
+            builder.localAddress(addressAndPrefix);
             return this;
         }
 

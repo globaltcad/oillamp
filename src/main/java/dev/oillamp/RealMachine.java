@@ -13,6 +13,9 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +25,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -58,6 +62,25 @@ final class RealMachine implements Machine {
 
     @Override public Optional<String> environmentVariable(String name) {
         return Optional.ofNullable(System.getenv(name)).filter(value -> !value.isEmpty());
+    }
+
+    @Override public Tuple<String> localAddresses() {
+        Tuple<String> found = Tuple.of(String.class);
+        try {
+            for (NetworkInterface card : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!card.isUp() || card.isLoopback()) continue;
+                for (InterfaceAddress address : card.getInterfaceAddresses()) {
+                    String text = address.getAddress().getHostAddress();
+                    int zone = text.indexOf('%');            // fe80::1%eth0 — the zone is not an address
+                    if (zone >= 0) text = text.substring(0, zone);
+                    found = found.add(text + "/" + address.getNetworkPrefixLength());
+                }
+            }
+        } catch (SocketException unreadable) {
+            // Without the list, the shipped policy still refuses the private ranges it names.
+            LOG.warn("Could not list this machine's network interfaces", unreadable);
+        }
+        return found;
     }
 
     @Override public String randomToken(int length) {

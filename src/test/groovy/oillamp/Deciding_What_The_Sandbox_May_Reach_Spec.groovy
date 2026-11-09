@@ -750,6 +750,43 @@ class Deciding_What_The_Sandbox_May_Reach_Spec extends Specification {
             'an IPv6 link-local address (fe80::/10)'     | '[fe80::1]'
     }
 
+    def 'Under the shipped policy, the egress proxy refuses the networks this machine is on, also where their addresses are public: #target'() {
+        reportInfo """
+            Let's consider oillamp running on a machine in a home or office network that has IPv6.
+            Such a network usually hands out public IPv6 addresses, not private ones: the router
+            announces a prefix such as `2001:db8:5:1::/64`, and the machine, the router, the
+            printers and the file servers each take an address in it. The same holds for a server
+            whose network card has a public IPv4 address. None of these addresses is in the ranges
+            that the shipped deny rule "block private, internal and loopback ranges" lists, so that
+            list alone does not keep the agent off the network the machine is on, nor off a service
+            on the machine itself that listens on every address.
+
+            So the egress proxy also refuses, under that same rule, every network the machine has
+            an address on, as the machine reports it: the address with the prefix length of its
+            network. The machine in this scenario has the address `2001:db8:5:1::7` in the network
+            `2001:db8:5:1::/64`, and the address `203.0.113.7` in the network `203.0.113.0/24`. The
+            scenario asks the proxy for a CONNECT to an address in one of these networks, and
+            expects a 403 that names the deny rule.
+        """
+        given: 'a machine with a public IPv6 and a public IPv4 address, and a lamp with the shipped policy'
+            host.machine { it.localAddress('2001:db8:5:1::7/64').localAddress('203.0.113.7/24') }
+            startASession()
+
+        when: 'the sandbox asks for a tunnel to the address'
+            var answer = tunnelThrough(443, '', address)
+
+        then: 'the proxy refuses with 403, naming the rule that keeps private networks out'
+            answer.contains('403')
+            answer.contains(PRIVATE_RANGES)
+            !answer.contains('200 Connection Established')
+
+        where:
+            target                                     | address
+            'the machine\'s own IPv6 address'          | '[2001:db8:5:1::7]'
+            'a printer in the machine\'s IPv6 network' | '[2001:db8:5:1::99]'
+            'a server in the machine\'s IPv4 network'  | '203.0.113.20'
+    }
+
     def 'A `hosts` pattern `*.name` allows only names that end in `.name`: #pattern'() {
         reportInfo """
             A rule's `hosts` list can hold an exact name such as `docs.example.com`, a pattern such as

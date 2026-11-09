@@ -645,7 +645,7 @@ final class Supervisor {
             Egress.Model model = new Egress.Model(configured.service(), configured.keyEnv(),
                     machine.environmentVariable(configured.keyEnv()));
             Result<Egress> proxy = Egress.open(layout, prepared.config(), prepared.session(),
-                    model, new EgressListener());
+                    model, machine::localAddresses, new EgressListener());
             if (proxy instanceof Result.Err<Egress>(Tuple<LampProblem> problems)) return abandon(problems, opened);
             Egress egress = ((Result.Ok<Egress>) proxy).value();
             opened = opened.add(egress::close);
