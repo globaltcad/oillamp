@@ -436,6 +436,25 @@ class The_Sandbox_Image_Spec extends Specification {
             installer.contains('could not configure opencode')
     }
 
+    def 'opencode\'s configuration has opencode load the skills the agent writes in `~/.genie/skills`'() {
+        reportInfo """
+            The agent keeps the skills it writes for itself in `~/.genie/skills`, one directory
+            with a `SKILL.md` each. opencode looks for skills in directories of its own, such as
+            `~/.config/opencode/skills`, and in the directories its configuration lists under
+            `skills.paths`, where it expands a leading `~/` to the home directory. The build writes
+            opencode's configuration into the image with `write-opencode-config.mjs`, and the
+            profile names that file in `OPENCODE_CONFIG`. So that file lists `~/.genie/skills`.
+            The file is in the image, not in the agent's home, so every lamp has it from its next
+            start on, and the agent cannot change it.
+        """
+        when: 'the opencode configuration writer is read'
+            var writer = Files.readString(IMAGE.resolve('build/write-opencode-config.mjs'))
+
+        then: 'the configuration it writes lists `~/.genie/skills` under `skills.paths`'
+            writer.contains('const GENIE_SKILLS = "~/.genie/skills";')
+            writer.contains('skills: { paths: [GENIE_SKILLS] },')
+    }
+
     def 'The image installs SDKMAN where it can be written to, which is not where it is built'() {
         reportInfo """
             SDKMAN is how a JVM project gets the JDK, Groovy or Gradle it asks for, and it is the

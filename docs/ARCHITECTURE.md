@@ -248,7 +248,8 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     │   │                        written by the agent. A lamp from before .genie may still
     │   │                        have them in workspace/NOTES.md, read while this is missing
     │   ├── knowledge/           its knowledge base, Markdown files it writes and maintains
-    │   ├── skills/              skills it writes for itself, which pi's settings list
+    │   ├── skills/              skills it writes for itself, which pi's settings and the
+    │   │                        image's opencode.json list
     │   └── worktrees/           git worktrees of the repositories in workspace/
     ├── workspace/
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path

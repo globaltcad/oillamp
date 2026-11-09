@@ -5,7 +5,8 @@
 // endpoint becomes the relay inside the sandbox, which oillamp forwards with the key to Eden's EU
 // endpoint, and the model list becomes what the EU endpoint actually offers, fetched from it while
 // the image is built (the catalog needs no key). All permissions are allowed by default, so a
-// freshly started sandbox does not pause for opencode approval prompts.
+// freshly started sandbox does not pause for opencode approval prompts. And opencode loads the
+// skills the agent writes for itself in ~/.genie/skills, as pi does; opencode expands the ~.
 //
 // If the catalog cannot be fetched, the endpoint is still changed and opencode keeps its own
 // model list. Models in that list that the EU endpoint does not serve fail with an error from Eden
@@ -20,6 +21,8 @@ const EU_BASE_URL = "https://api.eu.edenai.run/v3";
 // The model relay inside the sandbox. The same in every sandbox: where it leads is decided on the
 // host, and so is the key.
 const RELAY_BASE_URL = "http://127.0.0.1:3129/v3";
+// Where the agent keeps the skills it writes for itself, in its home.
+const GENIE_SKILLS = "~/.genie/skills";
 // Eden's catalog does not say how long an answer may be, so this matches the default of pi's
 // Eden AI extension, EDENAI_MAX_TOKENS.
 const MAX_OUTPUT_TOKENS = 8192;
@@ -83,4 +86,5 @@ writeFileSync(output, JSON.stringify({
     $schema: "https://opencode.ai/config.json",
     provider: { edenai: provider },
     permission: "allow",
+    skills: { paths: [GENIE_SKILLS] },
 }, null, 2) + "\n");

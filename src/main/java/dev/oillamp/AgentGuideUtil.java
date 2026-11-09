@@ -70,7 +70,7 @@ final class AgentGuideUtil {
               topic, such as how a project builds, what a tool expects, what went wrong before
               and why. Build it up and keep it true; delete what turns out to be wrong.
             - `~/.genie/skills/` — skills you write for yourself, one directory each with a
-              `SKILL.md`, for work you do again and again. pi loads them.
+              `SKILL.md`, for work you do again and again. pi and opencode load them.
             - `~/.genie/worktrees/` — git worktrees of the repositories in `~/workspace`, for
               work in progress: `git worktree add ~/.genie/worktrees/<name> -b <branch>`.
 
