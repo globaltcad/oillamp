@@ -1825,6 +1825,26 @@ public enum Lang {
             };
         }
 
+        public String DROP_HERE_FOR(String name) {
+            return switch (lang) {
+                case ENGLISH -> "Drop here for " + name;
+                case GERMAN -> "Hier ablegen für " + name;
+                case SPANISH -> "Suelta aquí para " + name;
+                case JAPANESE -> "ここにドロップして " + name + " に渡す";
+                case CHINESE -> "拖放到这里，交给 " + name;
+            };
+        }
+
+        public String EACH_FILE_LANDS_IN_INBOX() {
+            return switch (lang) {
+                case ENGLISH -> "Each file lands in ~/inbox";
+                case GERMAN -> "Jede Datei landet in ~/inbox";
+                case SPANISH -> "Cada archivo llega a ~/inbox";
+                case JAPANESE -> "ファイルはそれぞれ ~/inbox に届きます";
+                case CHINESE -> "每个文件都会放进 ~/inbox";
+            };
+        }
+
         public String RETURN_SENDS_SHIFT_AND_RETURN_STARTS_A_NEW_LINE() {
             return switch (lang) {
                 case ENGLISH -> "Return sends; Shift and Return starts a new line";

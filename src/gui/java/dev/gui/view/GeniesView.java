@@ -14,6 +14,7 @@ import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
 import swingtree.components.JBox;
 import swingtree.api.Layout;
+import swingtree.api.Painter;
 import swingtree.dialogs.ConfirmAnswer;
 import swingtree.input.Keyboard;
 import swingtree.layout.LayoutConstraint;
@@ -22,13 +23,16 @@ import swingtree.layout.Size;
 import swingtree.style.SvgIcon;
 
 import javax.swing.*;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
@@ -52,12 +56,15 @@ import static swingtree.UI.*;
 /// Everything shown is a function of one [GeniesState], reached through lenses. Typing, picking
 /// and toggling change that state directly; anything that starts, stops or moves something goes
 /// through [Genies]. The view keeps no state of its own, except the connection of the
-/// [DesktopScreen].
+/// [DesktopScreen], and whether files are dragged over the conversation ([FileDrop]).
 public final class GeniesView extends JPanel {
 
     /// How long one wave of the flame's light is, in units, as it runs through the status of a
     /// genie that wakes or falls asleep. It runs its length in one loop of the pulse.
     private static final int WAVE_LENGTH = 160;
+    /// How long the conversation takes to show that it would take the files dragged over it,
+    /// and to stop showing it.
+    private static final LifeTime CATCHING = LifeTime.of(0.28, TimeUnit.SECONDS);
 
     private final Var<GeniesState> state;
     private final Genies app;
@@ -88,6 +95,10 @@ public final class GeniesView extends JPanel {
     private final Var<Tuple<Entry>> entries;
     private final Val<Tuple<Handout>> handouts;
     private final Val<Genie.Phase> phase;
+    /// Whether the user can write to the genie, and give it files: it is awake, and a
+    /// conversation is open rather than the lamp's overview.
+    private final Val<Boolean> composing;
+    private final FileDrop fileDrop;
     private final Val<UUID> selected;
     private final Val<UUID> watched;
     private final Var<DesktopZoom> zoom;
@@ -151,6 +162,8 @@ public final class GeniesView extends JPanel {
         entries      = genie.zoomTo(it -> it.transcript().entries(), (it, changed) -> it.withTranscript(new Transcript(changed)));
         handouts     = genie.viewAs(Tuple.classTyped(Handout.class), Genie::handouts);
         phase        = genie.viewAs(Genie.Phase.class, Genie::phase);
+        composing    = genie.viewAs(Boolean.class, it -> it.phase().isAwake() && !it.conversations().overview());
+        fileDrop     = new FileDrop(composing, file -> app.giveFile(genie.get().id(), file));
         selected     = state.viewAs(UUID.class, GeniesState::selected);
         // The genie whose desktop is on screen: the selected one, while it is awake and asked
         // for; nobody otherwise.
@@ -175,7 +188,8 @@ public final class GeniesView extends JPanel {
             pulse,
             this::askInstead,
             phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY),
-            this::showLeaf
+            this::showLeaf,
+            fileDrop
         );
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
@@ -1320,6 +1334,14 @@ public final class GeniesView extends JPanel {
                     panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][][]")
                     .withMinSize(0, 0)
                     .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+                    // Files dragged from a file manager are given to the genie where they are
+                    // let go of, anywhere in the chat; while they are over it, it says so.
+                    .withDropSite(fileDrop::on)
+                    .withTransitionalStyle(fileDrop.catching(), CATCHING, (status, it) -> it
+                        .painter(UI.Layer.FOREGROUND, "catching",
+                            catching(theme.get(), chatWords.get(), genie.get().name(), it.componentWidth(), it.componentHeight(), status.progress())
+                        )
+                    )
                     .add("grow, push, wmin 0", transcript())
                     .add("growx, wmin 0", outbox())
                     .add("growx, wmin 0", bottomBar())
@@ -1327,6 +1349,42 @@ public final class GeniesView extends JPanel {
                 .add(splitGrip(shown))
                 .add(desktopPane(shown))
             );
+    }
+
+    /// What the chat shows while files are dragged over it, `progress` of the way in: the
+    /// conversation steps back into the night, and a dashed frame in the flame's colour settles
+    /// around it, with where the files go in the middle.
+    private static Painter catching(Theme theme, Lang.Chat words, String name, int width, int height, double progress) {
+        return g -> {
+            if (progress <= 0) return;
+            // Eased at both ends, so the frame neither jumps in nor stops short.
+            double shown = progress * progress * (3 - 2 * progress);
+            Palette p = theme.palette();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g.setColor(ViewPartsUtil.withAlpha(p.NIGHT(), (int) Math.round(180 * shown)));
+            g.fillRect(0, 0, width, height);
+            // The frame draws in from a little further inside, onto the edge it rests on.
+            double inset = 10 + 10 * (1 - shown);
+            var frame = new RoundRectangle2D.Double(inset, inset, width - 2 * inset, height - 2 * inset, 24, 24);
+            g.setColor(ViewPartsUtil.withAlpha(p.FLAME(), (int) Math.round(28 * shown)));
+            g.fill(frame);
+            g.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[] { 9f, 8f }, 0f));
+            g.setColor(ViewPartsUtil.withAlpha(p.FLAME(), (int) Math.round(230 * shown)));
+            g.draw(frame);
+            // The words rise a little into place as they appear.
+            int middle = height / 2 + (int) Math.round(8 * (1 - shown));
+            centred(g, "⤓", new Font(theme.fonts().FONT(), Font.PLAIN, 44), ViewPartsUtil.withAlpha(p.FLAME(), (int) Math.round(255 * shown)), width, middle - 30);
+            centred(g, words.DROP_HERE_FOR(name), new Font(theme.fonts().FONT(), Font.BOLD, 20), ViewPartsUtil.withAlpha(p.TEXT(), (int) Math.round(255 * shown)), width, middle + 14);
+            centred(g, words.EACH_FILE_LANDS_IN_INBOX(), new Font(theme.fonts().FONT(), Font.PLAIN, 14), ViewPartsUtil.withAlpha(p.SUBTEXT(), (int) Math.round(255 * shown)), width, middle + 40);
+        };
+    }
+
+    /// Draws `text` across the middle of `width`, its baseline at `baseline`.
+    private static void centred(Graphics2D g, String text, Font font, Color colour, int width, int baseline) {
+        g.setFont(font);
+        g.setColor(colour);
+        g.drawString(text, (width - g.getFontMetrics().stringWidth(text)) / 2f, baseline);
     }
 
     /// The grip between the chat and the desktop, a line along it like the grips under the
@@ -1586,7 +1644,6 @@ public final class GeniesView extends JPanel {
     private UIForAnySwing<?, ?> bottomBar() {
         Val<Boolean> awake = phase.viewAs(Boolean.class, Genie.Phase::isAwake);
         Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
-        Val<Boolean> composing = Viewable.of(Boolean.class, awake, overview, (on, home) -> on && !home);
         Val<Boolean> canWake = phase.viewAs(Boolean.class, it -> it == Genie.Phase.ASLEEP || it == Genie.Phase.BROKEN);
         Val<Boolean> canSend = genie.viewAs(Boolean.class, Genie::canSend);
         Val<Boolean> answeringElsewhere = genie.viewAs(Boolean.class, it -> it.conversations().aside().isPresent());
@@ -1617,6 +1674,8 @@ public final class GeniesView extends JPanel {
                         // after sending are not drawn. Here, Swing's listeners stay; only the
                         // writing back into the draft is held off while the draft sets the text.
                         textArea(draft.get()).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
+                        // Its own drop site, for text, would refuse files dropped on it.
+                        .withDropSite(fileDrop::on)
                         .peek(area -> Viewable.cast(draft).onChange(From.ALL, it -> {
                             String text = it.currentValue().orElse("");
                             if (area.getText().equals(text)) return;
