@@ -1,5 +1,7 @@
 package dev.oillamp;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -544,12 +546,31 @@ final class AgentRunner {
     }
 
     private String wakePrompt(Pending pending, History history, Instant now, ZoneId zone) {
-        Optional<String> notes = FilesystemUtil.readString(layout.workspace().resolve("NOTES.md"));
+        Optional<WakePromptUtil.HandoverNotes> notes = notes(layout.agentDir(), layout.handover(), false)
+                .or(() -> notes(layout.agentDir(), layout.workspace().resolve("NOTES.md"), true));
         Tuple<WakePromptUtil.Described> recent = recentRuns(history, WakePromptUtil.RECENT_RUNS);
         WakePromptUtil.Reason reason = pending.job().<WakePromptUtil.Reason>map(WakePromptUtil.Reason.ByJob::new)
                 .orElseGet(WakePromptUtil.Reason.Asked::new);
         return WakePromptUtil.render(reason, pending.run().prompt(), notes, config.notesMaxKb() * 1024, recent,
                                      autosave.afterRun(), now, zone);
+    }
+
+    /// The agent's notes in `file`, unless there are none. A link is not followed: the agent could
+    /// have it point at any file of the user's, which the prompt would then carry into the
+    /// sandbox. Such notes count as none, so the agent is asked to write them anew. Notes that
+    /// are there but cannot be read, such as a file over [FilesystemUtil#LARGEST_AGENT_FILE],
+    /// say why, so the agent mends them rather than start over.
+    private static Optional<WakePromptUtil.HandoverNotes> notes(Path home, Path file, boolean inOldPlace) {
+        try {
+            return FilesystemUtil.readInAgentHome(home, home.relativize(file)).filter(text -> !text.isBlank())
+                    .map(text -> new WakePromptUtil.HandoverNotes(text, inOldPlace));
+        } catch (FilesystemUtil.LinkInAgentHome link) {
+            return Optional.empty();
+        } catch (IOException failed) {
+            // The reason names the file on the host; the agent knows its home as `~`.
+            String why = ProblemCatalogUtil.reason(failed).replace(home.toString(), "~");
+            return Optional.of(new WakePromptUtil.HandoverNotes("", inOldPlace, Optional.of(why)));
+        }
     }
 
     /// The last `count` runs on the current branch, newest first, with what each changed. Another

@@ -381,7 +381,7 @@ final class AgentGuideUtil {
             ### Your notes
 
             You remember nothing from one run to the next except what you write down. Keep your
-            notes in `~/workspace/NOTES.md`:
+            notes in `~/.genie/HANDOVER.md`:
 
             - When oillamp wakes you, the prompt contains your notes, what the last runs changed,
               and what you said at the end of the last one. Read them before you start.

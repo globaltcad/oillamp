@@ -238,7 +238,7 @@ oillamp ask ~/lamps/first "What are you working on?" # wake it now, and print it
 
 The agent is pi, which the session starts and keeps. It works on one thing at a time; anything that
 comes while it is busy waits its turn. Each run starts a fresh pi conversation, so the agent
-keeps notes for itself in `~/workspace/NOTES.md`, and oillamp puts those notes, what the last few
+keeps notes for itself in `~/.genie/HANDOVER.md`, and oillamp puts those notes, what the last few
 runs changed, and the last run's final message into the prompt.
 
 pi answers with the default model in its settings in the sandbox, and in an old conversation with

@@ -531,7 +531,7 @@ that matters whatever the delay needs `max_delay_minutes = 0`, or an application
 ### Every run starts a fresh conversation, and the agent remembers through its notes
 
 Each run is a new pi conversation. Its prompt carries what the agent needs from before: its own
-notes in `~/workspace/NOTES.md`, which files the last three runs changed, and what the last run
+notes in `~/.genie/HANDOVER.md` (in `~/workspace/NOTES.md` until 2026-11-09), which files the last three runs changed, and what the last run
 said at its end. `AGENTS.md` tells the agent to keep the notes short and current. The lamp is saved
 just before and just after every job's run, the run's snapshot always, with the agent's last message
 in its commit message, unless `autosave.before_run` or `autosave.after_run` is off. Questions are

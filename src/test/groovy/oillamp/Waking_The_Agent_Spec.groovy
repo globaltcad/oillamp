@@ -40,7 +40,7 @@ it:
 
 Each time the agent is woken is a *run*, named `run-1`, `run-2` and so on, and each run begins a
 new pi conversation. So that the agent can carry on where it left off, a job's prompt carries the
-agent's notes, `~/workspace/NOTES.md`, the files the recent runs changed, and what the last run
+agent's notes, `~/.genie/HANDOVER.md`, the files the recent runs changed, and what the last run
 said. Oillamp saves the lamp just before and just after each job's run, and the questions of a
 chat together once the chat has been quiet, so `oillamp history` shows what each run did, and any
 run can be undone.
@@ -536,7 +536,7 @@ class Waking_The_Agent_Spec extends Specification {
         reportInfo """
             Each job wakes the agent in a new pi conversation, so on its own the agent would
             remember nothing of the runs before. The prompt therefore carries what it needs: the
-            notes the agent left itself in `~/workspace/NOTES.md`, which files the recent runs
+            notes the agent left itself in `~/.genie/HANDOVER.md`, which files the recent runs
             changed, and what the last run said at its end. The notes are in `<notes>`, marked as
             the agent's own, not as the user's instructions.
 
@@ -549,7 +549,7 @@ class Waking_The_Agent_Spec extends Specification {
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2m', 'Do the second task')
             anAgent { prompt ->
                 if (prompt.contains('Do the first task')) {
-                    Files.writeString(home(lamp).resolve('workspace/NOTES.md'), 'Next: add the chart.\n')
+                    Files.writeString(home(lamp).resolve('.genie/HANDOVER.md'), 'Next: add the chart.\n')
                     Files.writeString(home(lamp).resolve('workspace/data.csv'), 'a,b\n')
                     return 'Collected the data.'
                 }
@@ -570,7 +570,7 @@ class Waking_The_Agent_Spec extends Specification {
             prompts[1].contains('<notes>\nNext: add the chart.\n</notes>')
             prompts[1].contains('run-1')
             prompts[1].contains('~/workspace/data.csv (added)')
-            prompts[1].contains('~/workspace/NOTES.md (added)')
+            prompts[1].contains('~/.genie/HANDOVER.md (added)')
             prompts[1].contains('<last-message>\nCollected the data.\n</last-message>')
     }
 
@@ -588,7 +588,7 @@ class Waking_The_Agent_Spec extends Specification {
             host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 2m', 'Do the second task')
             anAgent { prompt ->
                 if (prompt.contains('Do the first task')) {
-                    Files.writeString(home(lamp).resolve('workspace/NOTES.md'), 'Next: add the chart.\n')
+                    Files.writeString(home(lamp).resolve('.genie/HANDOVER.md'), 'Next: add the chart.\n')
                     return 'Collected the data.'
                 }
                 'Added the chart.'
@@ -613,6 +613,91 @@ class Waking_The_Agent_Spec extends Specification {
             prompts[1].contains('<notes>\nNext: add the chart.\n</notes>')
             !prompts[1].contains('Collected the data.')
             prompts[1].contains('The user has switched off the saves after runs')
+    }
+
+    def 'In a lamp whose agent kept its notes in `~/workspace/NOTES.md`, a job\'s prompt carries those notes and asks the agent to move them to `~/.genie/HANDOVER.md`'() {
+        reportInfo """
+            Before oillamp gave the agent `~/.genie`, the agent kept its notes between runs in
+            `~/workspace/NOTES.md`. Let's consider a lamp from that time, whose agent home has
+            notes in `~/workspace/NOTES.md` and none in `~/.genie/HANDOVER.md`. A prompt that only
+            looked at `~/.genie/HANDOVER.md` would tell the agent it has no notes, and the agent
+            would start over. So while `~/.genie/HANDOVER.md` is missing or empty, a job's prompt
+            carries the notes from `~/workspace/NOTES.md`, and asks the agent to write them to
+            `~/.genie/HANDOVER.md` and then delete `~/workspace/NOTES.md`.
+        """
+        given: 'a lamp whose agent home has notes in `~/workspace/NOTES.md` and none in `~/.genie/HANDOVER.md`, and a one-time job'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            Files.writeString(home(lamp).resolve('workspace/NOTES.md'), 'Next: add the chart.\n')
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Do the task')
+            anAgent { prompt -> 'Done.' }
+
+        when: 'a session starts once the job is due, and the job runs'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            waitFor(LampEvent.RunFinished) { it.run().id() == 'run-1' }
+
+        then: 'the prompt carries the notes from `~/workspace/NOTES.md` in `<notes>`, and says they belong in `~/.genie/HANDOVER.md` from now on'
+            prompts.size() == 1
+            prompts[0].contains('These are the notes you left for yourself in ~/workspace/NOTES.md.')
+            prompts[0].contains('<notes>\nNext: add the chart.\n</notes>')
+            prompts[0].contains('from now on they belong in ~/.genie/HANDOVER.md')
+
+        and: 'it asks the agent to rewrite `~/.genie/HANDOVER.md`, and then to delete `~/workspace/NOTES.md`'
+            prompts[0].contains('1. Rewrite ~/.genie/HANDOVER.md for your next run')
+            prompts[0].contains('Then delete ~/workspace/NOTES.md.')
+    }
+
+    def 'A job\'s prompt does not carry a file of the user\'s that the agent linked to `~/.genie/HANDOVER.md`'() {
+        reportInfo """
+            The agent can change anything in its home, and oillamp reads its notes on the host,
+            as the user who started it. Had the agent replaced `~/.genie/HANDOVER.md` with a
+            symbolic link to a file of the user's outside the sandbox, a prompt that followed
+            the link would carry that file's text into the sandbox. So oillamp does not follow
+            the link, and the prompt says the agent has no notes yet.
+        """
+        given: 'a lamp whose agent replaced `~/.genie/HANDOVER.md` with a link to a file of the user\'s, and a one-time job'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            var usersFile = Files.writeString(tmp.resolve('users-secret.txt'), 'the user\'s secret\n')
+            Files.createSymbolicLink(home(lamp).resolve('.genie/HANDOVER.md'), usersFile)
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Do the task')
+            anAgent { prompt -> 'Done.' }
+
+        when: 'a session starts once the job is due, and the job runs'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            waitFor(LampEvent.RunFinished) { it.run().id() == 'run-1' }
+
+        then: 'the prompt does not contain the text of the user\'s file, and says the agent has no notes yet'
+            prompts.size() == 1
+            !prompts[0].contains('the user\'s secret')
+            prompts[0].contains('You have no notes yet: ~/.genie/HANDOVER.md does not exist or is empty.')
+    }
+
+    def 'A job\'s prompt says why oillamp could not read a `~/.genie/HANDOVER.md` larger than 1 MiB, rather than tell the agent it has no notes'() {
+        reportInfo """
+            oillamp reads at most 1 MiB of a file in the agent's home. Let's consider an agent
+            whose notes, `~/.genie/HANDOVER.md`, have grown beyond that. A prompt that said the
+            agent has no notes would have it write new ones, and lose everything in the old. So
+            the prompt says that oillamp could not read the notes in `~/.genie/HANDOVER.md`, and
+            why, and asks the agent to read them itself and fix the file. The reason names the
+            file as the agent knows it, under `~`, not by its path on the host.
+        """
+        given: 'a lamp whose `~/.genie/HANDOVER.md` is 1 MiB and one byte long, and a one-time job'
+            var lamp = aLampThatHasRun('[schedule]\nenabled = true\n')
+            Files.writeString(home(lamp).resolve('.genie/HANDOVER.md'), 'x' * (1024 * 1024 + 1))
+            host.oillamp.run('schedule', lamp.toString(), 'add', '--at', 'in 1m', 'Do the task')
+            anAgent { prompt -> 'Done.' }
+
+        when: 'a session starts once the job is due, and the job runs'
+            host.machine { it.clockAt(NOW.plus(Duration.ofMinutes(10))) }
+            startASession(lamp)
+            waitFor(LampEvent.RunFinished) { it.run().id() == 'run-1' }
+
+        then: 'the prompt says oillamp could not read the notes, because `~/.genie/HANDOVER.md` is larger than 1024 KiB, and does not say the agent has none'
+            prompts.size() == 1
+            prompts[0].contains('oillamp could not read your notes in ~/.genie/HANDOVER.md: ~/.genie/HANDOVER.md is larger than 1024 KiB.')
+            !prompts[0].contains('You have no notes yet')
+            !prompts[0].contains(home(lamp).toString())
     }
 
     def '`oillamp ask` sends the question to the agent exactly as it was written'() {
@@ -1267,7 +1352,7 @@ class Waking_The_Agent_Spec extends Specification {
             `AGENTS.md`, in the agent's home, is what the agent reads about the machine it is on.
             With the schedule on, oillamp adds a section on working on a schedule: what the
             scheduling tools do, which limits apply, and that the agent's notes,
-            `~/workspace/NOTES.md`, are its only memory between runs. The tools themselves are a pi
+            `~/.genie/HANDOVER.md`, are its only memory between runs. The tools themselves are a pi
             extension, which oillamp puts into pi's directory as each session starts, and removes
             when the schedule is off.
         """
@@ -1279,7 +1364,7 @@ class Waking_The_Agent_Spec extends Specification {
         expect: '`AGENTS.md` has the section `## Working on a schedule`, names the limit of 3 jobs and the notes, and the extension talks to the schedule socket'
             guide.contains('## Working on a schedule')
             guide.contains('at most 3 jobs at once')
-            guide.contains('~/workspace/NOTES.md')
+            guide.contains('~/.genie/HANDOVER.md')
             Files.readString(tools).contains('/oillamp/sockets/host/schedule.sock')
 
         when: 'the schedule is switched off in `oillamp.toml`, and `oillamp at` runs a session'

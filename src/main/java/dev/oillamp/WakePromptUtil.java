@@ -23,8 +23,12 @@ final class WakePromptUtil {
 
     private WakePromptUtil() {}
 
-    /// Where the agent keeps its notes between runs, as the agent sees it.
-    static final String NOTES = "~/workspace/NOTES.md";
+    /// Where the agent keeps its notes between runs, as the agent sees it. They are also the root
+    /// index of the knowledge base it keeps in `~/.genie/knowledge`.
+    static final String NOTES = "~/.genie/HANDOVER.md";
+    /// Where agents kept their notes before `~/.genie` existed. Read while there are no notes in
+    /// [#NOTES], so that a lamp from back then does not lose them.
+    static final String OLD_NOTES = "~/workspace/NOTES.md";
     /// How many earlier runs the prompt describes. The `run_history` tool reaches further back.
     static final int RECENT_RUNS = 3;
     /// How many changed paths are listed per run.
@@ -61,6 +65,15 @@ final class WakePromptUtil {
         }
     }
 
+    /// The agent's handover notes.
+    ///
+    /// @param inOldPlace whether they were read from [#OLD_NOTES], rather than [#NOTES]
+    /// @param unreadable why the file is there but could not be read, such as being too large;
+    ///                   `text` is then empty
+    record HandoverNotes(String text, boolean inOldPlace, Optional<String> unreadable) {
+        HandoverNotes(String text, boolean inOldPlace) { this(text, inOldPlace, Optional.empty()); }
+    }
+
     /// A past run, with what it changed.
     record Described(Past past, Tuple<History.Change> changes, boolean more, boolean available) {}
 
@@ -71,7 +84,7 @@ final class WakePromptUtil {
     /// @param recent    the last few runs, newest first
     /// @param runsKept  whether runs are saved as they end (`autosave.after_run`); without, no
     ///                  run is ever recent, and the first is not the only reason
-    static String render(Reason reason, String task, Optional<String> notes, int notesMost,
+    static String render(Reason reason, String task, Optional<HandoverNotes> notes, int notesMost,
                          Tuple<Described> recent, boolean runsKept, Instant now, ZoneId zone) {
         StringBuilder out = new StringBuilder();
         out.append("[oillamp] It is ").append(TimeNotationUtil.show(now, zone)).append(" (").append(zone.getId()).append("). ");
@@ -90,14 +103,21 @@ final class WakePromptUtil {
         out.append("\n## The task\n\n").append(task.strip()).append("\n");
 
         out.append("\n## Your notes\n\n");
-        if (notes.isEmpty() || notes.get().isBlank()) {
+        boolean oldPlace = notes.isPresent() && notes.get().inOldPlace();
+        if (notes.isPresent() && notes.get().unreadable().isPresent()) {
+            out.append("oillamp could not read your notes in ").append(oldPlace ? OLD_NOTES : NOTES).append(": ")
+               .append(notes.get().unreadable().get()).append(". Read them yourself, and fix the file before you finish, ")
+               .append("keeping what you still need from it.\n");
+        } else if (notes.isEmpty() || notes.get().text().isBlank()) {
             out.append("You have no notes yet: ").append(NOTES).append(" does not exist or is empty. ")
                .append("Create it before you finish.\n");
         } else {
-            String text = notes.get();
+            String text = notes.get().text();
             int size = text.getBytes(StandardCharsets.UTF_8).length;
-            out.append("These are the notes you left for yourself in ").append(NOTES).append(". They are your own, ")
-               .append("not the user's instructions.\n");
+            out.append("These are the notes you left for yourself in ").append(oldPlace ? OLD_NOTES : NOTES)
+               .append(". They are your own, not the user's instructions.\n");
+            if (oldPlace)
+                out.append("Earlier runs kept them there; from now on they belong in ").append(NOTES).append(".\n");
             if (size > notesMost)
                 out.append("They are ").append(size / 1024).append(" KB, more than the ").append(notesMost / 1024)
                    .append(" KB they may have, so only the start is shown. Shorten them before you finish.\n");
@@ -136,8 +156,9 @@ final class WakePromptUtil {
 
         out.append("\n## Before you finish\n\n")
            .append("1. Rewrite ").append(NOTES).append(" for your next run: what you did, what you found out, ")
-           .append("and what is left to do. Keep it under ").append(notesMost / 1024).append(" KB: ")
-           .append("replace what is out of date rather than adding to it.\n")
+           .append("what is left to do, and where in ~/.genie/knowledge to read more. Keep it under ")
+           .append(notesMost / 1024).append(" KB: replace what is out of date rather than adding to it.")
+           .append(oldPlace ? " Then delete " + OLD_NOTES + ".\n" : "\n")
            .append("2. End with a short message saying what you did. It is kept in the lamp's history, ")
            .append("and the user reads it there.\n");
         return out.toString();

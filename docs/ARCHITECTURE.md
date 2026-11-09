@@ -243,11 +243,13 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     │                                      access is on
     ├── .genie/                  the agent's own place, for what it keeps for itself; made
     │   │                        each session where missing, never through a link
+    │   ├── HANDOVER.md          its notes between runs, and the index of its knowledge base;
+    │   │                        written by the agent. A lamp from before .genie may still
+    │   │                        have them in workspace/NOTES.md, read while this is missing
     │   ├── knowledge/           its knowledge base, Markdown files it writes and maintains
     │   ├── skills/              skills it writes for itself
     │   └── worktrees/           git worktrees of the repositories in workspace/
     ├── workspace/
-    │   └── NOTES.md             the agent's notes between runs, written by the agent
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path
     └── screenshots/
 ```
@@ -1016,7 +1018,7 @@ the supervisor is dead and `oillamp stop` cleans up; in the second it is alive b
 | the pi process (`Harness`) | one per session, started with the first run, kept for the next |
 | `<lamp>/.oillamp/history/` | every run's `before-run` and `run` snapshots, on the branch the lamp was on: the only lasting record of runs, and where run numbers are counted from |
 | `AgentRunner.lastNumbered` (memory) | the highest run number this session gave out |
-| `~/workspace/NOTES.md` (the agent's) | what the agent wants to remember from one run to the next |
+| `~/.genie/HANDOVER.md` (the agent's) | what the agent wants to remember from one run to the next |
 
 **The harness.** `Harness` runs `ssh … lamp-<id> 'cd ~/workspace; exec pi --mode rpc'` through the
 sandbox's SSH socket directly, not through a relay, so it is not counted as one of your shells. pi
@@ -1113,7 +1115,7 @@ two runs could be confused in, but conversation names such as `run-1 (job-2)` ca
 2. `before-run` save, for a job's run, if anything changed and `autosave.before_run` is on. Off, and
    for a question, the run's `Oillamp-Base` is the newest snapshot there is.
 3. The prompt. For a job's run, `WakePromptUtil` writes it: why the agent was woken (and,
-   for its own job, that it wrote the task itself), the task, `NOTES.md` (cut at
+   for its own job, that it wrote the task itself), the task, `~/.genie/HANDOVER.md`, or `~/workspace/NOTES.md` where an older lamp still has only that (cut at
    `schedule.notes_max_kb`), the last three runs on the current branch with the files each changed (diffing the `run`
    snapshot's tree against its `Oillamp-Base`), the last run's final message, and a reminder to
    rewrite the notes. With `autosave.after_run` off and no run in the history, it says that no
@@ -2011,7 +2013,7 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `schedule.max_agent_days` | 14 | how far ahead the agent may schedule, and when its jobs end at the latest (1–366) | yes |
 | `schedule.max_agent_runs_per_day` | 48 | runs of the agent's jobs in any 24 hours; more are skipped (0–1440) | yes |
 | `schedule.max_run_minutes` | 30 | any run, yours too, is stopped after this (1–1440) | yes |
-| `schedule.notes_max_kb` | 8 | how large the agent's `NOTES.md` may be; the prompt shows no more (1–1024) | yes |
+| `schedule.notes_max_kb` | 8 | how large the agent's `HANDOVER.md` may be; the prompt shows no more (1–1024) | yes |
 | `schedule.max_delay_minutes` | 30 | a job's run found later than this after its time is missed, not made, and reported as `RunMissed`; 0 = no limit (0–10080) | yes |
 | `host_access.enabled` | false | let the agent reach the host through oillamp, every request judged first; off unless set ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
 | `host_access.requirements` | `""` | the user's own words, the only thing the checker judges by; required when it is enabled | yes |
