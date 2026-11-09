@@ -7,6 +7,7 @@ import dev.gui.model.Conversations
 import dev.gui.model.Lang
 import dev.gui.model.Entry
 import dev.gui.model.Genie
+import dev.gui.model.Notice
 import dev.gui.model.Settings
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
@@ -413,6 +414,30 @@ class KeepingAGenieAliveSpec extends Specification {
             Files.readString(tmp.resolve('saved-poem.txt')) == 'roses are red'
             Files.readString(home().resolve('inbox/recipe.md')) == '# soup'
             waitUntil { genie.transcript().entries().any { it.kind() == Entry.Kind.FILE && it.title() == 'recipe.md' } }
+    }
+
+    def 'A folder given to the genie stays on the host, and the chat says only files can be given'() {
+        reportInfo """
+            Let's consider `GenieRunner.giveFile` is handed a folder rather than a file. A genie
+            is given files one by one, each copied through the lamp's ssh command, so the runner
+            copies nothing and adds a failed entry to the chat that names the folder. Without
+            it, the user would read the error of a copy that failed.
+        """
+        given:
+            awake()
+            var folder = Files.createDirectory(tmp.resolve('recipes'))
+
+        when:
+            runner.giveFile(folder)
+
+        then: 'the chat has a failed entry that names the folder'
+            waitUntil { genie.transcript().entries().any { it.notice().filter { it instanceof Notice.NotAFile }.isPresent() } }
+            var entry = genie.transcript().entries().find { it.notice().filter { it instanceof Notice.NotAFile }.isPresent() }
+            entry.state() == Entry.State.FAILED
+            entry.words(Lang.ENGLISH) == 'Only files can be given to the genie, and recipes is a folder.'
+
+        and: 'nothing called recipes is in the genie\'s ~/inbox'
+            !Files.exists(home().resolve('inbox/recipes'))
     }
 
     def 'A lamp that cannot be lit leaves a broken genie that says why'() {
