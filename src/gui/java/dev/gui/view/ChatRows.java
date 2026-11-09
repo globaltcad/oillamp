@@ -80,6 +80,7 @@ final class ChatRows {
     private final Consumer<Entry> askInstead;
     private final Val<Boolean> waits;
     private final Consumer<String> showLeaf;
+    private final FileDrop fileDrop;
 
     /// @param theme       the colours and the fonts of the state
     /// @param lang        the words of the state
@@ -90,6 +91,7 @@ final class ChatRows {
     /// @param waits       whether the genie waits for the user, the only time a question can be
     ///                    asked differently
     /// @param showLeaf    shows the conversation in the chat up to the entry of that id
+    /// @param fileDrop    gives the genie the files dropped on the conversation
     ChatRows(
         final Look look,
         final Val<Theme> theme,
@@ -99,7 +101,8 @@ final class ChatRows {
         final Val<Double> pulse,
         final Consumer<Entry> askInstead,
         final Val<Boolean> waits,
-        final Consumer<String> showLeaf
+        final Consumer<String> showLeaf,
+        final FileDrop fileDrop
     ) {
         this.look = look;
         this.theme = theme;
@@ -112,6 +115,7 @@ final class ChatRows {
         this.askInstead = askInstead;
         this.waits = waits;
         this.showLeaf = showLeaf;
+        this.fileDrop = fileDrop;
     }
 
     /// Built later than the window, whenever the conversation changes, so it enters the style
@@ -266,6 +270,9 @@ final class ChatRows {
                     })
                     // The user drags across the answer to select part of it, and copies it with Ctrl+C.
                     .withTextSelection()
+                    // Selectable text gets a transfer handler for copying, and with it Swing's
+                    // drop site, which would refuse the files dropped on the answer.
+                    .withDropSite(fileDrop::on)
                     .withTooltip(writtenBy)
                 )
                 .add("left",
