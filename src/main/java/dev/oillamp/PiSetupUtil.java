@@ -52,6 +52,28 @@ final class PiSetupUtil {
         return Optional.of(JsonUtil.readable(merged));
     }
 
+    /// Where the agent keeps the skills it writes for itself, as pi's settings name it. pi does not
+    /// look there by itself, only in its own directories, so its settings list it.
+    static final String GENIE_SKILLS = "~/.genie/skills";
+
+    /// pi's settings, `settings`, with [#GENIE_SKILLS] among the `skills` pi loads, after those
+    /// listed already. Every other setting stays as it was.
+    ///
+    /// @return the new file's text; empty when the settings list it already, or are something
+    ///         other than a JSON object, or hold a `skills` that is not a list, all of which are
+    ///         left as they are
+    static Optional<String> withGenieSkills(String settings) {
+        Optional<JsonNode> read = JsonUtil.parse(settings);
+        if (read.isEmpty() || !(read.get() instanceof ObjectNode object)) return Optional.empty();
+        JsonNode skills = object.path("skills");
+        if (!skills.isMissingNode() && !skills.isArray()) return Optional.empty();
+        for (JsonNode skill : skills) if (skill.asText().equals(GENIE_SKILLS)) return Optional.empty();
+        ObjectNode merged = object.deepCopy();
+        if (skills.isMissingNode()) merged.putArray("skills");
+        merged.withArray("skills").add(GENIE_SKILLS);
+        return Optional.of(JsonUtil.readable(merged));
+    }
+
     /// Why `instructions` cannot be a session's instructions, or empty if they can.
     static Optional<String> instructionsProblem(String instructions) {
         if (instructions.isBlank()) return Optional.of("the instructions are empty");

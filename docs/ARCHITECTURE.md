@@ -232,7 +232,8 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     ├── .pi/agent/               pi's own directory; the sandbox's first start copies pi's
     │   │                        settings and packages in from the image, where missing
     │   ├── settings.json        pi's settings; with --model, the session writes its model as
-    │   │                        defaultProvider and defaultModel, keeping the rest
+    │   │                        defaultProvider and defaultModel, keeping the rest; each
+    │   │                        session adds ~/.genie/skills to skills, if it is missing
     │   ├── APPEND_SYSTEM.md     added to pi's system prompt; with instructions, the session
     │   │                        writes them, replacing what was there
     │   └── extensions/
@@ -247,7 +248,7 @@ session log**: what it reports exists only in the terminal it runs in, apart fro
     │   │                        written by the agent. A lamp from before .genie may still
     │   │                        have them in workspace/NOTES.md, read while this is missing
     │   ├── knowledge/           its knowledge base, Markdown files it writes and maintains
-    │   ├── skills/              skills it writes for itself
+    │   ├── skills/              skills it writes for itself, which pi's settings list
     │   └── worktrees/           git worktrees of the repositories in workspace/
     ├── workspace/
     ├── libs/                    on LD_LIBRARY_PATH, and so on java.library.path

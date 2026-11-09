@@ -301,6 +301,39 @@ class Giving_The_Agent_Instructions_Spec extends Specification {
             session.alive
     }
 
+    def 'The session has pi load the skills the agent writes in `~/.genie/skills`, and leaves pi\'s other settings as they were'() {
+        reportInfo """
+            The agent keeps the skills it writes for itself in `~/.genie/skills`. pi looks for
+            skills only in its own directories, and in the directories its settings file,
+            `~/.pi/agent/settings.json`, lists under `skills`. So once the sandbox is up, the
+            session adds `~/.genie/skills` to that list, after the entries already in it, and
+            changes nothing else in the file. A session that finds `~/.genie/skills` listed already
+            leaves the file as it is.
+
+            Let's consider a lamp whose pi settings list the packages pi loads and one skills
+            directory of the user's, `~/my-skills`.
+        """
+        given: 'a lamp whose pi settings list the package `git:github.com/edenai/pi-edenai` and the skills directory `~/my-skills`'
+            aLampThatHasHadASession()
+            Files.writeString(piFile('settings.json'),
+                    '{"packages": ["git:github.com/edenai/pi-edenai"], "skills": ["~/my-skills"]}')
+
+        when: 'a session starts'
+            startASession()
+
+        then: 'pi\'s settings list `~/my-skills` and then `~/.genie/skills` under `skills`, and the same package as before'
+            var settings = new groovy.json.JsonSlurper().parseText(Files.readString(piFile('settings.json')))
+            settings == [packages: ['git:github.com/edenai/pi-edenai'], skills: ['~/my-skills', '~/.genie/skills']]
+
+        when: 'that session ends, and a second session starts'
+            var written = Files.readString(piFile('settings.json'))
+            stopTheSession()
+            startASession()
+
+        then: 'the second session left pi\'s settings exactly as the first one wrote them'
+            Files.readString(piFile('settings.json')) == written
+    }
+
     @Rollup
     def 'Oillamp refuses to start a session whose instructions variable is unset, empty or over 64 KiB'() {
         reportInfo """

@@ -367,16 +367,16 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             the model once the sandbox is up: a file written before would keep the image's from
             being copied, packages and all.
         """
-        given: 'pi\'s settings with its packages, a theme, a thinking level and an old default'
+        given: 'pi\'s settings with its packages, its skills, a theme, a thinking level and an old default'
             aLampWhosePiDefaultsTo(DEEPSEEK)
-            writePiSettings(packages: ['git:github.com/edenai/pi-edenai'], theme: 'light',
+            writePiSettings(packages: ['git:github.com/edenai/pi-edenai'], skills: ['~/.genie/skills'], theme: 'light',
                             defaultThinkingLevel: 'high', defaultProvider: 'edenai', defaultModel: DEEPSEEK)
 
         when: 'a session given GPT starts'
             startASession('--model', GPT)
 
         then: 'the default model is GPT, and everything else is as it was'
-            piSettings() == [packages: ['git:github.com/edenai/pi-edenai'], theme: 'light',
+            piSettings() == [packages: ['git:github.com/edenai/pi-edenai'], skills: ['~/.genie/skills'], theme: 'light',
                              defaultThinkingLevel: 'high', defaultProvider: 'edenai', defaultModel: GPT]
     }
 
@@ -443,12 +443,12 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             Files.readString(usersOwnFile) == 'export EDITOR=vim\n'
     }
 
-    def 'Without `--model`, pi decides as before, and its settings are left alone'() {
+    def 'Without `--model`, pi decides as before, and the session never writes a default model into pi\'s settings'() {
         reportInfo """
             A session started without `--model` leaves the model to pi, as before there was such
             an option: pi's default for a new conversation, the conversation's own model for an
-            old one. It does not touch pi's settings either, so someone who sets pi's default with
-            pi's own `/model` command keeps it.
+            old one. It does not write pi's settings while it runs either, so someone who sets
+            pi's default with pi's own `/model` command keeps it.
         """
         given: 'a conversation DeepSeek answered, in a session given no model'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -469,7 +469,7 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             answeredBy(fresh) == [GPT]
             modelsRecorded(fresh) == [GPT]
 
-        and: 'pi\'s settings are exactly as they were written'
+        and: 'pi\'s settings are exactly as they were after the session started'
             Files.readString(piSettingsFile()) == settingsBefore
     }
 

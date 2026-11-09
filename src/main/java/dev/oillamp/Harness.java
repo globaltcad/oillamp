@@ -95,6 +95,33 @@ final class Harness implements AutoCloseable {
     void prepare(Consumer<LampEvent> report) {
         writeInstructions(report);
         writeDefaultModel(report);
+        writeGenieSkills(report);
+    }
+
+    /// Adds the agent's own skills directory, `~/.genie/skills`, to the skills pi loads, in its
+    /// settings, keeping everything else in them. Settings that list it already are left alone,
+    /// and so are settings that are not there: written now, a file with only this in it would
+    /// keep the sandbox's next start from copying pi's settings in from the image, with the
+    /// packages pi needs.
+    ///
+    /// One at a time with [#writeDefaultModel], which reads and writes the same file.
+    private synchronized void writeGenieSkills(Consumer<LampEvent> report) {
+        Path home = layout.agentDir();
+        Path file = layout.piSettings();
+        String withoutIt = "pi does not load the skills the agent writes in ~/.genie/skills";
+        try {
+            Optional<String> merged = FilesystemUtil.readInAgentHome(home, home.relativize(file))
+                    .flatMap(PiSetupUtil::withGenieSkills);
+            if (merged.isEmpty()) return;
+            FilesystemUtil.writeInAgentHome(home, home.relativize(file), merged.get(), PosixMode.PUBLIC_FILE);
+            report.accept(new LampEvent.Info("agent", "pi loads the agent's skills from "
+                    + PiSetupUtil.GENIE_SKILLS + " (" + file + ")"));
+        } catch (FilesystemUtil.LinkInAgentHome link) {
+            report.accept(new LampEvent.Warning(ProblemCatalogUtil.agentFileBehindALink(file, link.link(), withoutIt)));
+        } catch (IOException failed) {
+            report.accept(new LampEvent.Warning(
+                    ProblemCatalogUtil.agentFileNotWritten(file, ProblemCatalogUtil.reason(failed), withoutIt)));
+        }
     }
 
     /// Has pi add `text` to its system prompt from the next run on, in place of the session's
