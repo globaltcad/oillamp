@@ -293,9 +293,8 @@ class Working_On_The_Host_Spec extends Specification {
 
     def 'The checker is shown the whole command, and oillamp refuses a command too long to show whole without asking it'() {
         reportInfo """
-            A command is judged as a whole, so the checker must see all of it. The other
-            arguments the checker is shown, such as the text of a file being written, are cut
-            after 2000 characters; a command never is. A command longer than 16 KiB is refused
+            A command is judged as a whole, so the checker must see all of it. A command longer
+            than 16 KiB is refused
             before the checker is asked, rather than shown in part: a command whose end the
             checker never read is not a command it judged. For the same reason the session's log
             of host requests, `.oillamp/logs/host-access-<session>.jsonl`, keeps a command whole,
@@ -331,6 +330,49 @@ class Working_On_The_Host_Spec extends Specification {
         and: 'the second was refused, saying why'
             tooLong.isError
             McpClient.text(tooLong).contains('longer than 16 KiB')
+    }
+
+    def 'The checker is shown the whole text a file is written or edited with, and oillamp refuses a text too long to show whole without asking it'() {
+        reportInfo """
+            Let's consider an agent that writes a file in the user's project with `host_write_file`,
+            and then changes it with `host_edit_file`. Writing a file can run a program as surely
+            as a command can: a line added to the end of `~/.bashrc` runs in the user's next shell,
+            although nothing written through these tools is ever made executable. So the checker
+            judges a write by all of its text, just as it judges a command by all of it. A text
+            that began harmlessly and turned harmful past what the checker was shown would be
+            allowed without having been judged.
+
+            The checker is therefore shown the `text` of `host_write_file`, and the `old_text` and
+            `new_text` of `host_edit_file`, to their last character. A write or an edit whose text
+            is longer than 64 KiB, `old_text` and `new_text` counted together, is refused before
+            the checker is asked, rather than shown in part, and the file is not touched.
+        """
+        given: 'a lamp that lets the agent change files in the project'
+            givenHostAccess(commands: 'off')
+            checker.verdict = ALLOW_ADDITIVE
+            start()
+
+        when: 'the agent writes a file of 3000 characters, and then edits its end into 3000 other characters'
+            var written = 'a' * 2990 + ' the end'
+            useTool('host_write_file', [path: '~/project/notes.md', text: written])
+            var edited = 'b' * 2990 + ' the new end'
+            useTool('host_edit_file', [path: '~/project/notes.md', old_text: ' the end', new_text: edited])
+
+        then: 'the checker saw the text of the write whole, and the new text of the edit whole'
+            checker.checked.size() == 2
+            StandInChecker.judged(checker.checked[0]).request.arguments.text == written
+            StandInChecker.judged(checker.checked[1]).request.arguments.new_text == edited
+
+        when: 'the agent writes a file of more than 64 KiB, and edits the file with more than 64 KiB'
+            var largeWrite = useTool('host_write_file', [path: '~/project/large.md', text: 'c' * (64 * 1024 + 1)])
+            var largeEdit = useTool('host_edit_file', [path: '~/project/notes.md', old_text: ' the new end', new_text: 'd' * (64 * 1024)])
+
+        then: 'both are refused, saying why, without asking the checker, and neither file changed'
+            largeWrite.isError && McpClient.text(largeWrite).contains('longer than 64 KiB')
+            largeEdit.isError && McpClient.text(largeEdit).contains('longer than 64 KiB')
+            checker.checked.size() == 2
+            !Files.exists(project.resolve('large.md'))
+            Files.readString(project.resolve('notes.md')) == 'a' * 2990 + edited
     }
 
     def 'A command that runs past its time is stopped, with everything it started'() {

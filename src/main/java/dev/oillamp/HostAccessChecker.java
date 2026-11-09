@@ -194,10 +194,12 @@ final class HostAccessChecker {
         request.put("tier", HostTool.tierOf(tool).name().toLowerCase(java.util.Locale.ROOT));
         request.put("does", HostTool.describe(tool));
         ObjectNode args = request.putObject("arguments");
-        // A file's new text is shown in part: what it is for shows in its first lines, and a large
-        // file would push the rest out of the window. A command is shown whole, because what runs
-        // is exactly what is judged; HostAccess refuses one too long for that before this.
-        boolean whole = tool instanceof HostTool.Bash;
+        // A command and a file's text are shown whole, because what runs or is written is exactly
+        // what is judged: a harmful end past a cut would be allowed unseen. HostAccess refuses
+        // one too long for that before this. A notification's text only reaches the person, so it
+        // is shown in part.
+        boolean whole = tool instanceof HostTool.Bash || tool instanceof HostTool.WriteFile
+                     || tool instanceof HostTool.EditFile;
         for (var argument : HostTool.argumentsOf(tool))
             args.put(argument.first(), whole ? argument.second() : shorten(argument.second()));
         ArrayNode paths = request.putArray("resolved_paths");

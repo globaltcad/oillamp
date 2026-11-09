@@ -354,10 +354,19 @@ final class HostAccess implements AutoCloseable {
                     ? Optional.of("the command is longer than " + HostTool.LONGEST_COMMAND_TEXT / 1024 + " KiB, more than "
                                 + "the checker is shown whole; write it to a script in small steps, or split it up")
                     : Optional.empty();
+            case HostTool.WriteFile write -> tooLongToShow(write.text());
+            case HostTool.EditFile edit -> tooLongToShow(edit.oldText() + edit.newText());
             case HostTool.ListDir _, HostTool.Stat _, HostTool.ReadFile _, HostTool.ClipboardRead _,
-                 HostTool.OpenUrl _, HostTool.WriteFile _, HostTool.EditFile _, HostTool.ClipboardWrite _,
-                 HostTool.Notify _ -> Optional.empty();
+                 HostTool.OpenUrl _, HostTool.ClipboardWrite _, HostTool.Notify _ -> Optional.empty();
         };
+    }
+
+    /// Why a file's text is too long for the checker to be shown whole, or empty when it is not.
+    private static Optional<String> tooLongToShow(String text) {
+        return text.getBytes(StandardCharsets.UTF_8).length > HostTool.LONGEST_FILE_TEXT
+                ? Optional.of("the text is longer than " + HostTool.LONGEST_FILE_TEXT / 1024 + " KiB, more than the "
+                            + "checker is shown whole; write the file in smaller parts")
+                : Optional.empty();
     }
 
     /// Whether a path is somewhere no host request may reach: the lamp itself, its state, its

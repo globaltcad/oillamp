@@ -156,8 +156,8 @@ shows the model each tool as `mcp__oillamp__<name>`.
 
 | Tool | Arguments | Does |
 |---|---|---|
-| `host_write_file` | `path`, `text` | Writes a new file, or replaces one, as `rw-r--r--`; a link at the path is replaced, not written through. |
-| `host_edit_file` | `path`, `old_text`, `new_text` | Replaces the one place `old_text` occurs in a text file with `new_text`, and writes the file as `host_write_file` does, as `rw-r--r--`: an executable file, such as a script, is no longer executable afterwards, so the additive tier never makes something runnable (with `host_bash`, `chmod +x` restores it). No match, or more than one, changes nothing. |
+| `host_write_file` | `path`, `text` | Writes a new file, or replaces one, as `rw-r--r--`; a link at the path is replaced, not written through. The checker is shown the whole text; a text longer than 64 KiB is refused rather than shown in part. |
+| `host_edit_file` | `path`, `old_text`, `new_text` | Replaces the one place `old_text` occurs in a text file with `new_text`, and writes the file as `host_write_file` does, as `rw-r--r--`: an executable file, such as a script, is no longer executable afterwards, so the additive tier never makes something runnable (with `host_bash`, `chmod +x` restores it). No match, or more than one, changes nothing. The checker is shown both texts whole; together they may be at most 64 KiB. |
 | `host_copy_out` | `from`, `path` | Copies a file from the agent's home (`~/…` or `/home/agent/…`, read without following links) to a host path, as `rw-r--r--`; never executed. At most 64 MiB. |
 | `host_open_url` | `url` | Opens an http or https page in the user's browser. Additive because the address goes to its server, which makes it a way out for anything the agent read. |
 | `host_clipboard_write` | `text` | Replaces the clipboard. *Not built; not offered.* |
@@ -213,8 +213,8 @@ and the tools do not exist. A model that tries to call one gets pi's own "no suc
    - no request names a path inside the lamp or its state, compared with links followed on both
      sides, so a lamp opened through a link is no way in;
    - `host_show` is not of a file the desktop would run, `host_copy_out` reads from the
-     sandbox's home, `host_copy_in` writes to it, and a command is no longer than the checker
-     is shown whole.
+     sandbox's home, `host_copy_in` writes to it, and a command, or the text a file is written or
+     edited with, is no longer than the checker is shown whole.
 4. **The checker call.** One model request, built entirely on the host, with the user's
    requirements as its system prompt and the request plus the run's activity as its message. The
    agent's conversation text never enters it.

@@ -70,6 +70,11 @@ sealed interface HostTool {
     /// so a longer one is refused instead of cut: a command whose end the checker never saw is not
     /// a command it judged.
     int LONGEST_COMMAND_TEXT = 16 * 1024;
+    /// The most text `host_write_file` writes, or `host_edit_file` exchanges with `old_text` and
+    /// `new_text` together, in bytes. A file's text can run a program as surely as a command
+    /// can, such as a line at the end of `~/.bashrc`, so the checker is shown it whole too, and a
+    /// longer one is refused instead of cut.
+    int LONGEST_FILE_TEXT = 64 * 1024;
 
     /// The tool a request is a call of.
     static HostToolKind kindOf(HostTool tool) {
