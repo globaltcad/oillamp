@@ -5350,11 +5350,11 @@ public enum Lang {
                 case ENGLISH ->
                     "Brief it as you would a colleague: what to do, where things are, and "
                     + "what done looks like. Each run starts a fresh conversation; between runs, the genie "
-                    + "keeps notes in ~/workspace/NOTES.md.";
-                case GERMAN -> "Erklär es so, wie du es jemandem im Team erklären würdest: was zu tun ist, wo die Dinge liegen und woran man erkennt, dass es fertig ist. Jeder Lauf beginnt ein neues Gespräch; zwischen den Läufen führt der Dschinn Notizen in ~/workspace/NOTES.md.";
-                case SPANISH -> "Explícaselo como a alguien de tu equipo: qué hay que hacer, dónde están las cosas y cómo sabrá que ha terminado. Cada ejecución empieza una conversación nueva; entre una y otra, el genio toma notas en ~/workspace/NOTES.md.";
-                case JAPANESE -> "同僚に頼むときのように説明してください。何をするのか、どこに何があるのか、どうなれば完了なのか。実行のたびに新しい会話が始まり、実行と実行の間、ジーニーは ~/workspace/NOTES.md にメモを残します。";
-                case CHINESE -> "像向同事交代工作一样说明：要做什么、东西在哪里、做到什么程度算完成。每次运行都会开始新的对话；两次运行之间，精灵会在 ~/workspace/NOTES.md 中记笔记。";
+                    + "keeps notes in ~/.genie/HANDOVER.md.";
+                case GERMAN -> "Erklär es so, wie du es jemandem im Team erklären würdest: was zu tun ist, wo die Dinge liegen und woran man erkennt, dass es fertig ist. Jeder Lauf beginnt ein neues Gespräch; zwischen den Läufen führt der Dschinn Notizen in ~/.genie/HANDOVER.md.";
+                case SPANISH -> "Explícaselo como a alguien de tu equipo: qué hay que hacer, dónde están las cosas y cómo sabrá que ha terminado. Cada ejecución empieza una conversación nueva; entre una y otra, el genio toma notas en ~/.genie/HANDOVER.md.";
+                case JAPANESE -> "同僚に頼むときのように説明してください。何をするのか、どこに何があるのか、どうなれば完了なのか。実行のたびに新しい会話が始まり、実行と実行の間、ジーニーは ~/.genie/HANDOVER.md にメモを残します。";
+                case CHINESE -> "像向同事交代工作一样说明：要做什么、东西在哪里、做到什么程度算完成。每次运行都会开始新的对话；两次运行之间，精灵会在 ~/.genie/HANDOVER.md 中记笔记。";
             };
         }
 
