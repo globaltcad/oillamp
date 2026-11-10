@@ -219,7 +219,7 @@ final class HomeFolders {
     /// For a grid in a layout that asks it how tall it is at the width it has, which it gives
     /// the grid after. At a new width, the grid's parts may stand side by side or one under the
     /// other, so the layout asks again.
-    private static ComponentAdapter relayoutAtNewWidth() {
+    static ComponentAdapter relayoutAtNewWidth() {
         return new ComponentAdapter() {
             private int width = -1;
             @Override public void componentResized(ComponentEvent event) {

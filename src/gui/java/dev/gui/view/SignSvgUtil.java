@@ -24,6 +24,8 @@ final class SignSvgUtil {
     static final String HISTORY = "<path d='M2.5 8a5.5 5.5 0 1 0 1.6-3.9'/><path d='M3.8 1.8v2.6h2.6'/><path d='M8 5v3.2l2.2 1.4'/>";
     /// A house: the user's own computer, as the genie's host access reaches it.
     static final String HOST_ACCESS = "<path d='M2.5 7.5L8 2.8l5.5 4.7'/><path d='M4 6.3V13.5h8V6.3'/><path d='M6.6 13.5v-3.6h2.8v3.6'/>";
+    /// A terminal's prompt: what is reached at a terminal, with `oillamp`'s own commands.
+    static final String TERMINAL = "<rect x='1.5' y='2.5' width='13' height='11' rx='1.5'/><path d='M4.5 6l2.5 2-2.5 2M8.5 10.5h3'/>";
     static final String DESKTOP = "<rect x='1.5' y='2.5' width='13' height='8.5' rx='1.5'/><path d='M8 11v3M5.5 14h5'/>";
     static final String KEYS =
         "<rect x='1.5' y='3.5' width='13' height='9' rx='1.5'/>"
