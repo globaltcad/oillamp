@@ -24,6 +24,7 @@ import dev.gui.desktop.Desktop;
 import dev.gui.model.Conversation;
 import dev.gui.model.Conversations;
 import dev.gui.model.Genie;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
 import dev.gui.model.Handout;
 import dev.gui.model.History;
@@ -230,6 +231,22 @@ public final class GenieRunner {
                 lit.get().decidePermission(request, allowed);
             } catch (IOException | LampFailedException failed) {
                 showProblem(new Notice.DecisionDidNotReachTheLamp(reasonOf(failed)));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    /// Has the genie's lamp open `window` onto its sandbox, on the user's desktop. Where it did
+    /// not, `whenNot` hears why, as oillamp said it, from a thread of this runner's.
+    public void open(LampWindow window, Consumer<String> whenNot) {
+        Optional<LampLighter.Lit> lit = lamp;
+        if (lit.isEmpty()) return;
+        Thread.ofVirtual().name("open " + window).start(() -> {
+            try {
+                lit.get().open(window);
+            } catch (IOException | LampFailedException failed) {
+                whenNot.accept(reasonOf(failed));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }

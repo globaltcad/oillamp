@@ -2795,6 +2795,106 @@ public enum Lang {
                 case CHINESE -> "删除 " + genie + "…";
             };
         }
+
+        public String BEHIND_THE_SCENES() {
+            return switch (lang) {
+                case ENGLISH -> "Behind the scenes";
+                case GERMAN -> "Hinter den Kulissen";
+                case SPANISH -> "Entre bastidores";
+                case JAPANESE -> "舞台裏";
+                case CHINESE -> "幕后";
+            };
+        }
+
+        public String LOOK_INTO_ITS_SANDBOX_YOURSELF_EACH_IN_A_WINDOW_OF_ITS_OWN(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Look into " + genie + "'s sandbox yourself, each in a window of its own, as oillamp's commands do at a terminal.";
+                case GERMAN -> "Schau selbst in die Sandbox von " + genie + ", jeweils in einem eigenen Fenster, wie es die oillamp-Befehle im Terminal tun.";
+                case SPANISH -> "Mira tú mismo dentro del sandbox de " + genie + ", cada cosa en su propia ventana, como hacen los comandos de oillamp en una terminal.";
+                case JAPANESE -> genie + " のサンドボックスを自分でのぞけます。それぞれ独立したウィンドウで開き、ターミナルの oillamp コマンドと同じ働きをします。";
+                case CHINESE -> "亲自看看 " + genie + " 的沙箱，每项都在各自的窗口中打开，与终端里的 oillamp 命令相同。";
+            };
+        }
+
+        public String IS_IN_THE_LAMP_WAKE_IT_TO_LOOK_INTO_ITS_SANDBOX(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " is in the lamp, and its sandbox is not running. Wake it to look into it.";
+                case GERMAN -> genie + " ist in der Lampe, und seine Sandbox läuft nicht. Wecke ihn, um hineinzuschauen.";
+                case SPANISH -> genie + " está en la lámpara y su sandbox no está en marcha. Despiértalo para mirar dentro.";
+                case JAPANESE -> genie + " はランプの中にいて、サンドボックスは動いていません。のぞくには起こしてください。";
+                case CHINESE -> genie + " 在神灯里，它的沙箱没有运行。唤醒它才能查看。";
+            };
+        }
+
+        public String SHELL() {
+            return switch (lang) {
+                case ENGLISH -> "Shell";
+                case GERMAN -> "Shell";
+                case SPANISH -> "Shell";
+                case JAPANESE -> "シェル";
+                case CHINESE -> "Shell";
+            };
+        }
+
+        public String DESKTOP() {
+            return switch (lang) {
+                case ENGLISH -> "Desktop";
+                case GERMAN -> "Desktop";
+                case SPANISH -> "Escritorio";
+                case JAPANESE -> "デスクトップ";
+                case CHINESE -> "桌面";
+            };
+        }
+
+        public String FOLLOW() {
+            return switch (lang) {
+                case ENGLISH -> "Follow";
+                case GERMAN -> "Mitlesen";
+                case SPANISH -> "Seguir";
+                case JAPANESE -> "フォロー";
+                case CHINESE -> "跟随";
+            };
+        }
+
+        public String A_TERMINAL_WITH_A_SHELL_IN_ITS_SANDBOX(String command) {
+            return switch (lang) {
+                case ENGLISH -> "A terminal with a shell in its sandbox. At a terminal: " + command;
+                case GERMAN -> "Ein Terminal mit einer Shell in seiner Sandbox. Im Terminal: " + command;
+                case SPANISH -> "Una terminal con un shell en su sandbox. En una terminal: " + command;
+                case JAPANESE -> "サンドボックス内のシェルをターミナルで開きます。ターミナルでは: " + command;
+                case CHINESE -> "打开一个终端，其中是它沙箱里的 shell。在终端中：" + command;
+            };
+        }
+
+        public String ITS_DESKTOP_IN_A_VIEWER_WINDOW(String command) {
+            return switch (lang) {
+                case ENGLISH -> "Its desktop in a viewer window of its own. At a terminal: " + command;
+                case GERMAN -> "Sein Desktop in einem eigenen Viewer-Fenster. Im Terminal: " + command;
+                case SPANISH -> "Su escritorio en una ventana de visor propia. En una terminal: " + command;
+                case JAPANESE -> "デスクトップを専用のビューアーウィンドウで開きます。ターミナルでは: " + command;
+                case CHINESE -> "在单独的查看器窗口中打开它的桌面。在终端中：" + command;
+            };
+        }
+
+        public String A_TERMINAL_THAT_SAYS_WHAT_ITS_LAMP_REPORTS(String command) {
+            return switch (lang) {
+                case ENGLISH -> "A terminal that says what its lamp reports, as it happens. At a terminal: " + command;
+                case GERMAN -> "Ein Terminal, das mitschreibt, was seine Lampe meldet. Im Terminal: " + command;
+                case SPANISH -> "Una terminal que va diciendo lo que informa su lámpara. En una terminal: " + command;
+                case JAPANESE -> "ランプの報告をその場で表示するターミナルを開きます。ターミナルでは: " + command;
+                case CHINESE -> "打开一个终端，实时显示它的神灯报告的内容。在终端中：" + command;
+            };
+        }
+
+        public String NO_WINDOW_OPENED(String reason) {
+            return switch (lang) {
+                case ENGLISH -> "No window opened: " + reason;
+                case GERMAN -> "Es hat sich kein Fenster geöffnet: " + reason;
+                case SPANISH -> "No se abrió ninguna ventana: " + reason;
+                case JAPANESE -> "ウィンドウを開けませんでした: " + reason;
+                case CHINESE -> "未能打开窗口：" + reason;
+            };
+        }
     }
 
     /// The words of a genie's home on its Actions page, and of linking its folders into the

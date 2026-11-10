@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.model.Genie;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
@@ -157,6 +158,13 @@ public final class LampLighterImpl implements LampLighter {
                     throws IOException, InterruptedException, LampFailedException { lamp.useInstructions(text); }
             @Override public void decidePermission(String request, boolean allowed)
                     throws IOException, InterruptedException, LampFailedException { lamp.decidePermission(request, allowed); }
+            @Override public void open(LampWindow window) throws IOException, InterruptedException, LampFailedException {
+                switch (window) {
+                    case SHELL -> lamp.openShell();
+                    case DESKTOP -> lamp.openViewer();
+                    case FOLLOWING -> lamp.openFollower();
+                }
+            }
             @Override public void close() {
                 if (lamp.holds()) {
                     lamp.close();
