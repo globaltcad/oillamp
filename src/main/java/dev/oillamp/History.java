@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.io.InputStream;
@@ -11,12 +12,15 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SecureDirectoryStream;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
@@ -620,9 +624,16 @@ final class History {
         Path agent = layout.agentDir();
         String agentName = fileName(agent);
         tally.stats = readFileStats(tally.write);
-        if (Files.isDirectory(agent, LinkOption.NOFOLLOW_LINKS))
-            top = top.add(new GitObjectUtil.Entry(agentName, GitObjectUtil.EntryMode.DIRECTORY,
-                    storeDirectory(agent, agentName, tally)));
+        if (Files.isDirectory(agent, LinkOption.NOFOLLOW_LINKS)) {
+            // The agent directory itself is not the agent's to replace: its parent, the lamp, is
+            // not in the sandbox. Everything below it is.
+            try (DirectoryStream<Path> opened = Files.newDirectoryStream(agent)) {
+                if (!(opened instanceof SecureDirectoryStream<Path> secure))
+                    throw new IOException("this system cannot open " + agent + " without following links");
+                top = top.add(new GitObjectUtil.Entry(agentName, GitObjectUtil.EntryMode.DIRECTORY,
+                        storeDirectory(secure, agent, agentName, tally)));
+            }
+        }
         // Only a save keeps them: without one, the blobs they name may not be stored.
         if (tally.write) {
             try {
@@ -648,18 +659,27 @@ final class History {
     ///
     /// Links are stored as links and never followed. Sockets, pipes and devices are not files
     /// anyone restores, so they are passed over without a word.
-    private String storeDirectory(Path directory, String relative, Tally tally) throws IOException {
+    ///
+    /// A save runs on the host while the agent works in this directory, and the agent could put
+    /// a link where a file or a directory was a moment ago, between the look at it and its
+    /// opening. Followed, such a link would store a file of the user's, from anywhere on the
+    /// host, in the snapshot, and a restore would hand it to the agent. So nothing here is opened
+    /// by its path: each directory and file is opened by its name in the directory it was found
+    /// in, which is already open, and refused by the operating system when it is a link.
+    ///
+    /// @param directory the directory, opened
+    /// @param where     its path, to describe what is in it
+    private String storeDirectory(SecureDirectoryStream<Path> directory, Path where, String relative, Tally tally)
+            throws IOException {
         Tuple<GitObjectUtil.Entry> entries = Tuple.of(GitObjectUtil.Entry.class);
-        List<Path> children = new ArrayList<>();
-        try (DirectoryStream<Path> listing = Files.newDirectoryStream(directory)) {
-            for (Path child : listing) children.add(child);
-        }
-        for (Path child : children) {
-            String name = fileName(child);
+        List<Path> names = new ArrayList<>();
+        for (Path child : directory) names.add(child.getFileName());
+        for (Path name : names) {
+            Path child = where.resolve(name);
             String path = relative + "/" + name;
             PosixFileAttributes attributes;
             try {
-                attributes = Files.readAttributes(child, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                attributes = attributesOf(directory, name);
             } catch (NoSuchFileException gone) {
                 continue;   // deleted while the save ran
             }
@@ -667,24 +687,26 @@ final class History {
             try {
                 if (attributes.isSymbolicLink()) {
                     byte[] target = Files.readSymbolicLink(child).toString().getBytes(StandardCharsets.UTF_8);
-                    entries = entries.add(new GitObjectUtil.Entry(name, GitObjectUtil.EntryMode.SYMLINK,
+                    entries = entries.add(new GitObjectUtil.Entry(name.toString(), GitObjectUtil.EntryMode.SYMLINK,
                             storeSmall("blob", target, tally.write)));
                 } else if (attributes.isDirectory()) {
                     if (!Files.isReadable(child) || !Files.isExecutable(child)) {
                         tally.skipped = tally.skipped.add(path + "/ (cannot be read)");
                         continue;
                     }
-                    entries = entries.add(new GitObjectUtil.Entry(name, GitObjectUtil.EntryMode.DIRECTORY,
-                            storeDirectory(child, path, tally)));
+                    try (SecureDirectoryStream<Path> inner = directory.newDirectoryStream(name, LinkOption.NOFOLLOW_LINKS)) {
+                        entries = entries.add(new GitObjectUtil.Entry(name.toString(), GitObjectUtil.EntryMode.DIRECTORY,
+                                storeDirectory(inner, child, path, tally)));
+                    }
                     if (permissions != 0755) tally.modes.append(octal(permissions)).append(' ').append(path).append('\0');
                 } else if (attributes.isRegularFile()) {
-                    Optional<String> blob = storeFile(child, path, attributes, tally);
+                    Optional<String> blob = storeFile(directory, child, path, attributes, tally);
                     if (blob.isEmpty()) {
                         tally.skipped = tally.skipped.add(path + " (kept changing while it was read)");
                         continue;
                     }
                     boolean executable = (permissions & 0100) != 0;
-                    entries = entries.add(new GitObjectUtil.Entry(name,
+                    entries = entries.add(new GitObjectUtil.Entry(name.toString(),
                             executable ? GitObjectUtil.EntryMode.EXECUTABLE : GitObjectUtil.EntryMode.FILE, blob.get()));
                     tally.files++;
                     if (permissions != (executable ? 0755 : 0644))
@@ -694,18 +716,46 @@ final class History {
                 tally.skipped = tally.skipped.add(path + " (cannot be read)");
             } catch (NoSuchFileException gone) {
                 // deleted while the save ran
+            } catch (FileSystemException refused) {
+                // What was a file or a directory when it was looked at is a link now, and was not
+                // opened. Anything else that went wrong is not passed over.
+                if (!becameALink(directory, name)) throw refused;
+                tally.skipped = tally.skipped.add(path + " (became a link while it was saved)");
             }
         }
         return storeSmall("tree", GitObjectUtil.tree(entries), tally.write);
     }
 
-    /// Stores the file at `path`, and returns the name of its blob, without reading it when its
-    /// stat is as the last save found it. Empty when the file kept changing while it was read,
-    /// three times in a row.
-    private Optional<String> storeFile(Path file, String path, PosixFileAttributes attributes, Tally tally) throws IOException {
+    /// The attributes of the entry `name` of an opened directory, those of a link itself when it
+    /// is one.
+    private static PosixFileAttributes attributesOf(SecureDirectoryStream<Path> directory, Path name) throws IOException {
+        return directory.getFileAttributeView(name, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).readAttributes();
+    }
+
+    private static boolean becameALink(SecureDirectoryStream<Path> directory, Path name) {
+        try {
+            return attributesOf(directory, name).isSymbolicLink();
+        } catch (IOException gone) {
+            return false;
+        }
+    }
+
+    /// Opens the file `name` of an opened directory to read it, unless it is a link.
+    private static InputStream open(SecureDirectoryStream<Path> directory, Path name) throws IOException {
+        return Channels.newInputStream(directory.newByteChannel(name, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)));
+    }
+
+    /// Stores `file`, which is in the opened `directory`, and returns the name of its blob,
+    /// without reading it when its stat is as the last save found it. Empty when the file kept
+    /// changing while it was read, three times in a row.
+    ///
+    /// @param path where the file is in the lamp, such as `agent-lamp-x/workspace/app.py`
+    private Optional<String> storeFile(SecureDirectoryStream<Path> directory, Path file, String path,
+                                       PosixFileAttributes attributes, Tally tally) throws IOException {
         Optional<FileStats.Stat> stat = statOf(file, attributes);
         Optional<String> known = stat.flatMap(it -> tally.stats.blob(path, it));
-        Optional<String> blob = known.isPresent() ? known : storeContent(file, attributes.size(), tally.write);
+        Optional<String> blob = known.isPresent() ? known
+                : storeContent(directory, file.getFileName(), attributes.size(), tally.write);
         if (blob.isPresent() && stat.isPresent()) tally.stats.stored(path, stat.get(), blob.get());
         return blob;
     }
@@ -739,7 +789,8 @@ final class History {
     }
 
     /// The stat of `file`, whose `attributes` were just read. Empty when the filesystem does not
-    /// say when its inode changed, or which one it is.
+    /// say when its inode changed, or which one it is. Read by the file's path, which is safe
+    /// where opening it is not: a stat that is not the file's only has the file read again.
     private static Optional<FileStats.Stat> statOf(Path file, PosixFileAttributes attributes) throws IOException {
         Map<String, Object> unix;
         try {
@@ -757,29 +808,35 @@ final class History {
     /// Stores one file's content, and returns the name of its blob. Empty when the file kept
     /// changing while it was read, three times in a row.
     ///
-    /// @param write whether to store it; without, it is only named
-    private Optional<String> storeContent(Path file, long size, boolean write) throws IOException {
+    /// @param directory the opened directory the file is in
+    /// @param name      the file's name in it
+    /// @param write     whether to store it; without, it is only named
+    private Optional<String> storeContent(SecureDirectoryStream<Path> directory, Path name, long size, boolean write)
+            throws IOException {
         if (size <= SMALL_FILE) {
-            byte[] content = Files.readAllBytes(file);
+            byte[] content;
+            try (InputStream in = open(directory, name)) {
+                content = in.readAllBytes();
+            }
             return Optional.of(storeSmall("blob", content, write));
         }
         for (int attempt = 0; attempt < 3; attempt++) {
-            long expected = Files.size(file);
-            Optional<String> id = hashFile(file, expected);
+            long expected = attributesOf(directory, name).size();
+            Optional<String> id = hashFile(directory, name, expected);
             if (id.isEmpty()) continue;
             if (!write || Files.exists(objectPath(id.get()))) return id;
-            if (writeLarge(file, expected, id.get())) return id;
+            if (writeLarge(directory, name, expected, id.get())) return id;
         }
         return Optional.empty();
     }
 
     /// The name a file of `size` bytes would have as a blob. Empty when it is no longer that size.
-    private static Optional<String> hashFile(Path file, long size) throws IOException {
+    private static Optional<String> hashFile(SecureDirectoryStream<Path> directory, Path name, long size) throws IOException {
         MessageDigest sha = GitObjectUtil.sha1();
         sha.update(GitObjectUtil.header("blob", size));
         long read = 0;
         byte[] buffer = new byte[1 << 16];
-        try (InputStream in = Files.newInputStream(file)) {
+        try (InputStream in = open(directory, name)) {
             for (int n; (n = in.read(buffer)) > 0; read += n) sha.update(buffer, 0, n);
         }
         return read == size ? Optional.of(HexFormat.of().formatHex(sha.digest())) : Optional.empty();
@@ -787,13 +844,13 @@ final class History {
 
     /// Writes a large file as the object `id`, naming it again while it is written. False when
     /// what was written is not what was named, because the file changed in between.
-    private boolean writeLarge(Path file, long size, String id) throws IOException {
+    private boolean writeLarge(SecureDirectoryStream<Path> directory, Path name, long size, String id) throws IOException {
         Path temporary = Files.createTempFile(repository.resolve("objects"), "incoming-", ".tmp");
         try {
             MessageDigest sha = GitObjectUtil.sha1();
             long read = 0;
             Deflater deflater = new Deflater(Deflater.BEST_SPEED);
-            try (InputStream in = Files.newInputStream(file);
+            try (InputStream in = open(directory, name);
                  OutputStream out = new DeflaterOutputStream(Files.newOutputStream(temporary), deflater, 1 << 16)) {
                 byte[] header = GitObjectUtil.header("blob", size);
                 sha.update(header);
