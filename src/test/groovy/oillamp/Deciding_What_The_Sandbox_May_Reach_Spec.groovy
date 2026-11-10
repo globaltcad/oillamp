@@ -91,6 +91,38 @@ class Deciding_What_The_Sandbox_May_Reach_Spec extends Specification {
             requestsSeen.any { it.startsWith('GET /packages ') }
     }
 
+    def 'The egress proxy ends the answer for the sandbox as soon as the server closes the connection'() {
+        reportInfo """
+            A web server may end its answer by closing the connection, and for an answer without a
+            `Content-Length` header that is the only end there is. A client such as `curl` then
+            reads until the connection ends, and keeps its own side of the connection open while
+            it reads. So when the server closes, the proxy has to end the client's connection too,
+            without waiting for the client to close first. A proxy that waited would leave the
+            client and itself waiting for each other, and every such download would last as long
+            as the proxy's patience, seconds longer than the server took.
+
+            The client in this scenario sends one request and then only reads, to the end of the
+            connection. The test server answers and closes at once, so the time that the client
+            waits is the time the proxy takes to pass that end on.
+        """
+        given: 'a test server that closes the connection after its answer, and a lamp whose policy allows its port'
+            var port = givenAnOriginServer()
+            givenALampAllowing(port)
+            startASession()
+
+        when: 'the sandbox sends a request and reads to the end of the connection, without closing its own side'
+            var asked = System.nanoTime()
+            var answer = askTheProxy("GET http://localhost:${port}/packages HTTP/1.1\r\n\r\n")
+            var waited = Duration.ofNanos(System.nanoTime() - asked)
+
+        then: 'the server\'s answer came back whole'
+            answer.status == 200
+            answer.body.contains('hello from the internet')
+
+        and: 'the connection ended within 2 seconds, although the client never closed its side'
+            waited < Duration.ofSeconds(2)
+    }
+
     def 'The egress proxy refuses a name that resolves to loopback, because it judges the address and not the name'() {
         reportInfo """
             The shipped policy allows the internet, but refuses private and loopback addresses. To

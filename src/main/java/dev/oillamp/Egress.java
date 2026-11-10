@@ -239,8 +239,8 @@ final class Egress implements AutoCloseable {
                 respond(out, 400, head.badRequest().get());
                 return;
             }
-            if (head.method().equals("CONNECT")) tunnel(in, out, head, started);
-            else forwardHttp(in, out, head, started);
+            if (head.method().equals("CONNECT")) tunnel(client, in, out, head, started);
+            else forwardHttp(client, in, out, head, started);
         } catch (IOException e) {
             // Either end going away mid-connection is ordinary; the agent sees the failure.
             noteTrouble(e);
@@ -250,7 +250,7 @@ final class Egress implements AutoCloseable {
     /// `CONNECT host:port`, used for HTTPS and therefore most real traffic: resolve, check the
     /// policy, connect, answer `200`, then copy bytes both ways until one side closes. Nothing
     /// in the tunnel is read.
-    private void tunnel(InputStream in, OutputStream out,
+    private void tunnel(SocketChannel client, InputStream in, OutputStream out,
                         Head head, Instant started) throws IOException {
         Resolution resolution = resolve(head.host());
         if (resolution.failed()) {
@@ -285,7 +285,7 @@ final class Egress implements AutoCloseable {
         try {
             out.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
             out.flush();
-            pipeBothWays(in, out, upstream, up, down);
+            pipeBothWays(client, in, out, upstream, up, down);
         } finally {
             live.remove(upstream);
             closeQuietly(upstream);
@@ -300,7 +300,7 @@ final class Egress implements AutoCloseable {
     /// Plain HTTP, which in practice means apt and some redirects. One request per connection:
     /// `Connection: close` is sent and the response is streamed back, so there is no
     /// keep-alive to manage.
-    private void forwardHttp(InputStream in, OutputStream out, Head head, Instant started)
+    private void forwardHttp(SocketChannel client, InputStream in, OutputStream out, Head head, Instant started)
             throws IOException {
         Resolution resolution = resolve(head.host());
         if (resolution.failed()) {
@@ -336,7 +336,7 @@ final class Egress implements AutoCloseable {
             upstream.getOutputStream().write(request);
             upstream.getOutputStream().flush();
             up.addAndGet(request.length);
-            pipeBothWays(in, out, upstream, up, down);
+            pipeBothWays(client, in, out, upstream, up, down);
         } finally {
             live.remove(upstream);
             closeQuietly(upstream);
@@ -405,7 +405,7 @@ final class Egress implements AutoCloseable {
                         .getBytes(StandardCharsets.ISO_8859_1);
                 upstream.getOutputStream().write(head);
                 upstream.getOutputStream().flush();
-                pipeBothWays(in, out, upstream, up, down);
+                pipeBothWays(client, in, out, upstream, up, down);
             } finally {
                 live.remove(upstream);
                 closeQuietly(upstream);
@@ -557,7 +557,7 @@ final class Egress implements AutoCloseable {
             upstream.connect(new InetSocketAddress(forward.target().host(), forward.target().port()),
                              (int) CONNECT_TIMEOUT.toMillis());
             live.add(upstream);
-            pipeBothWays(Channels.newInputStream(client), Channels.newOutputStream(client),
+            pipeBothWays(client, Channels.newInputStream(client), Channels.newOutputStream(client),
                          upstream, up, down);
         } catch (IOException e) {
             listener.trouble(ProblemCatalogUtil.forwardUnreachable(forward, ProblemCatalogUtil.reason(e)));
@@ -641,7 +641,11 @@ final class Egress implements AutoCloseable {
     }
 
     /// Copies both directions concurrently and returns when both have finished.
-    private static void pipeBothWays(InputStream clientIn, OutputStream clientOut,
+    ///
+    /// When the far side has sent everything, the client is told so at once, by ending this side
+    /// of its connection: an answer that ends where the connection does is only then complete
+    /// for the client, which may keep its own side open until it has read that end.
+    private static void pipeBothWays(SocketChannel client, InputStream clientIn, OutputStream clientOut,
                                      Socket upstream, AtomicLong up, AtomicLong down)
             throws IOException {
         Thread outbound = Thread.ofVirtual().start(() -> {
@@ -655,6 +659,11 @@ final class Egress implements AutoCloseable {
             }
         });
         copy(inputOf(upstream), clientOut, down);
+        try {
+            client.shutdownOutput();
+        } catch (IOException ignored) {
+            // The client is gone already; there is nobody left to tell.
+        }
         try {
             outbound.join(Duration.ofSeconds(5));
         } catch (InterruptedException e) {
