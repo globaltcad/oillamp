@@ -69,6 +69,19 @@ configurations {
     testImplementation.extendsFrom(guiImplementation)
 }
 tasks.named('processResources') { dependsOn(imageManifest) }
+
+// The promo: Genies' introduction video, drawn by the app's own window from a storyboard (package
+// dev.promo; see src/promo/README.md). A source set of its own, so that nothing of it is shipped.
+sourceSets {
+    promo {
+        compileClasspath += sourceSets.main.output + sourceSets.gui.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.gui.output
+    }
+}
+configurations {
+    promoImplementation.extendsFrom(guiImplementation)
+    promoRuntimeOnly.extendsFrom(guiRuntimeOnly)
+}
 // `./gradlew run --args=genies` opens Genies, as `oillamp genies` does from the single file.
 tasks.named('run', JavaExec) { classpath = sourceSets.gui.runtimeClasspath }
 
@@ -148,6 +161,25 @@ tasks.register('genies', JavaExec) {
     description = 'Starts Genies, the chat app whose agents each live in a lamp.'
     classpath = sourceSets.gui.runtimeClasspath
     mainClass = 'dev.gui.Main'
+}
+
+// `./gradlew promo` films the introduction video into build/promo; `--args=...` picks scenes,
+// a size or a still, as src/promo/README.md says. The film has a clock of its own, which the
+// window's animations go by: dev.promo.FilmClock, which the JVM is started with as its agent.
+def promoClock = tasks.register('promoClock', Jar) {
+    description = 'The agent that has the window go by the film\'s clock.'
+    archiveBaseName = 'promo-clock'
+    from(sourceSets.promo.output) { include 'dev/promo/FilmClock*.class' }
+    manifest { attributes('Premain-Class': 'dev.promo.FilmClock') }
+}
+tasks.register('promo', JavaExec) {
+    group = 'application'
+    description = 'Films the introduction video of Genies into build/promo, from the storyboard in src/promo.'
+    dependsOn(promoClock)
+    classpath = sourceSets.promo.runtimeClasspath
+    mainClass = 'dev.promo.Promo'
+    def agent = promoClock.flatMap { it.archiveFile }
+    jvmArgumentProviders.add({ ['-Xmx8g', '-Dsun.java2d.uiScale=1', "-javaagent:${agent.get().asFile}".toString()] } as CommandLineArgumentProvider)
 }
 
 // The default `test` task must stay fast, offline and deterministic: it runs entirely against

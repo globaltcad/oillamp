@@ -223,9 +223,11 @@ final class WelcomeScene {
     private static final Map<Shine, BufferedImage> SHINES = new ConcurrentHashMap<>();
     /// A round glow of `colour`, as strong as `peak` in its middle, `middle` at 0.3 of the way
     /// out, and nothing at its edge, `GLOW` pixels wide, and stretched to whatever size it is drawn.
+    /// Fine enough to be stretched over a large welcome, and dithered: a light this faint has few
+    /// steps between nothing and its most, and without that they would show as rings.
     private record Glow(Color colour, double peak, double middle) {}
     private static final Map<Glow, BufferedImage> GLOWS = new ConcurrentHashMap<>();
-    private static final int GLOW = 128;
+    private static final int GLOW = 512;
     private static final int COLOURS_KEPT = 32;
 
     /// Paints `play` as it is at `clock`, in seconds of the page, onto `g`, `width` by `height`
@@ -291,6 +293,9 @@ final class WelcomeScene {
         double y = source.getY() - cut;
         double down = 2.4 * size;
         double across = 1.12 * down;
+        // No farther down than `g` reaches: it would be cut off there, along a straight line.
+        java.awt.Rectangle reach = g.getClipBounds();
+        if (reach != null) down = Math.min(down, Math.max(0, reach.getMaxY() - y));
         if (down <= 0) return;
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         double near = 0.9 * size;
@@ -320,14 +325,21 @@ final class WelcomeScene {
         if (GLOWS.size() > COLOURS_KEPT) GLOWS.clear();
         return GLOWS.computeIfAbsent(new Glow(colour, peak, middle), _ -> {
             BufferedImage glow = new BufferedImage(GLOW, GLOW, BufferedImage.TYPE_INT_ARGB_PRE);
-            Graphics2D on = glow.createGraphics();
-            on.setPaint(new RadialGradientPaint(
-                GLOW / 2f, GLOW / 2f, GLOW / 2f,
-                new float[] { 0f, 0.3f, 1f },
-                new Color[] { alpha(colour, peak), alpha(colour, middle), alpha(colour, 0) }
-            ));
-            on.fillRect(0, 0, GLOW, GLOW);
-            on.dispose();
+            // From its middle, `peak` to `middle` at 0.3 of the way out, then to nothing; each
+            // pixel rounded up or down at random, as much as it is between two steps.
+            Random dither = new Random(colour.getRGB() * 31L + Double.hashCode(peak));
+            int[] pixels = new int[GLOW * GLOW];
+            for (int py = 0; py < GLOW; py++) {
+                for (int px = 0; px < GLOW; px++) {
+                    double out = Math.hypot(px + 0.5 - GLOW / 2.0, py + 0.5 - GLOW / 2.0) / (GLOW / 2.0);
+                    double a = out >= 1 ? 0 : out < 0.3 ? peak + (middle - peak) * out / 0.3 : middle * (1 - (out - 0.3) / 0.7);
+                    a *= colour.getAlpha() / 255.0;
+                    int a8 = Math.min(255, (int) Math.floor(a * 255 + dither.nextDouble()));
+                    if (a8 <= 0) continue;
+                    pixels[py * GLOW + px] = (a8 << 24) | (colour.getRGB() & 0xffffff);
+                }
+            }
+            glow.setRGB(0, 0, GLOW, GLOW, pixels, 0, GLOW);
             return glow;
         });
     }

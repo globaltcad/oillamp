@@ -41,3 +41,6 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+### The promo film: its score is not ours to give away (see src/promo/README.md)
+/src/promo/music/*
+!/src/promo/music/README.md
