@@ -13,12 +13,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystemException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SecureDirectoryStream;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributes;
@@ -1480,20 +1483,42 @@ final class History {
     /// @param warnings about what it could not finish
     private record Pruning(Optional<LampEvent.HistoryPruned> event, Tuple<LampEvent> warnings) {}
 
-    /// Prunes after a save, a restore or a switch added a snapshot. The snapshot is already
-    /// saved, so a prune that fails is a warning, not a failed save.
+    /// Prunes after a save, a restore or a switch added a snapshot, when the history has grown
+    /// past its limit. The snapshot is already saved, so a prune that fails is a warning, not a
+    /// failed save.
     ///
     /// @param keep the snapshots the operation still uses, which are kept with every snapshot
     ///             from them to their branch's newest
     /// @return the events that tell what the prune did, to report once the lock is released
     private Tuple<LampEvent> maintain(Instant now, ValueSet<String> keep) {
         try {
+            if (withinTheLimit()) return Tuple.of(LampEvent.class);
             Pruning pruning = pruneUnlocked(true, now, keep);
             return pruning.event().<Tuple<LampEvent>>map(pruning.warnings()::add).orElse(pruning.warnings());
         } catch (IOException | RuntimeException e) {
             return Tuple.of(LampEvent.class, new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
                     "the snapshot was saved, but history pruning failed: " + ProblemCatalogUtil.reason(e))));
         }
+    }
+
+    /// Whether the files in `objects/` are together within the history's limit. Then no snapshot
+    /// has to be deleted, and none has to be read to find that out, which takes longer than a
+    /// save for a large home: the files hold every snapshot, so the snapshots are no larger.
+    ///
+    /// False while the size of the first snapshot, which the limit is counted from, is not
+    /// written down yet; the prune that follows writes it.
+    private boolean withinTheLimit() throws IOException {
+        Path initial = repository.resolve("initial-bytes");
+        if (policy.maxGrowthGb() == 0 || !Files.exists(initial)) return false;
+        long limit = Long.parseLong(Files.readString(initial).strip()) + policy.allowanceBytes();
+        long[] stored = {0};
+        Files.walkFileTree(repository.resolve("objects"), new SimpleFileVisitor<>() {
+            @Override public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                stored[0] += attributes.size();
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return stored[0] <= limit;
     }
 
     private Pruning pruneUnlocked(boolean confirmed, Instant now, ValueSet<String> keep) throws IOException {

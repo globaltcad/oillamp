@@ -588,6 +588,41 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             !result.events().any { it instanceof LampEvent.Warning || it instanceof LampEvent.HistoryPruned }
     }
 
+    def 'While the history is within `history.max_growth_gb`, a save does not read the history to decide what to delete'() {
+        reportInfo '''
+            Let's consider a lamp whose history may grow 2 GB beyond its first snapshot, and holds a few
+            hundred KB. To decide which snapshots to delete, oillamp reads every snapshot in the history
+            and every directory each of them holds, which for a large agent home takes longer than the
+            save itself. There is nothing to decide while the history is within its limit. So after a
+            save, oillamp first adds up the sizes of the files in the history's `objects/` directory, and
+            reads the snapshots only when that sum is past the limit.
+
+            The scenario shows this with a git tag, `refs/tags/keep`, that points at the first snapshot.
+            oillamp knows only branches, so when it reads the history to decide what to delete and finds a
+            tag, it deletes nothing and the save warns that pruning failed. Here the history is far within
+            its limit, so the save of a second version gives no warning.
+        '''
+        given: 'a lamp with `max_growth_gb = 2`, one snapshot of a 64 KB file, and a git tag that points at the snapshot'
+            def lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n[history]\nmax_growth_gb = 2\n')
+            assert host.oillamp.run('at', lamp.toString()).succeeded()
+            def directory = Lamp.at(lamp).launchedBy(host.launcher)
+            def file = Lamp.agentHome(lamp).orElseThrow().resolve('workspace/data.bin')
+            writeFileVersion(file, 1)
+            def first = directory.save('').orElseThrow()
+            Files.writeString(lamp.resolve('.oillamp/history/refs/tags/keep'), first.id() + '\n')
+
+        when: '`oillamp history save` saves a second version of the file'
+            writeFileVersion(file, 2)
+            def result = host.oillamp.run('history', lamp.toString(), 'save')
+
+        then: 'the save makes a snapshot, with no warning and no deleted snapshots'
+            result.succeeded()
+            result.events().any { it instanceof LampEvent.Saved }
+            !result.events().any { it instanceof LampEvent.Warning || it instanceof LampEvent.HistoryPruned }
+            directory.history().size() == 2
+    }
+
     def 'When oillamp cannot delete some files, it still lists the snapshots it deleted, and counts only the bytes it freed'() {
         reportInfo '''
             Let's consider a lamp of two snapshots whose limit requires deleting the first, and a user who

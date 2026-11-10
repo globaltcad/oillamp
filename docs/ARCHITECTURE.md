@@ -314,6 +314,11 @@ incoming-edge counts in the object graph determine what can go, without storing 
 full descendant set. Unreferenced loose objects and abandoned `incoming-*.tmp` writes are swept.
 Additional git refs, reflogs and packed objects refuse pruning rather than risk their contents.
 
+After a save, all of this happens only once the files in `history/objects` are together larger than
+the limit. Until then the save adds up their sizes and reads no snapshot, since reading them all
+takes longer than the save itself for a large home; what no snapshot holds is swept by the first
+prune after that, or by `oillamp history <dir> prune --yes`.
+
 Readers do not wait for the history lock, which a save of a large home holds for minutes: a save
 only adds files and moves a branch last. They hold a share of `history-read.lock` instead, and
 only a prune's sweep takes it alone, cutting ancestry and deleting objects once reads in progress

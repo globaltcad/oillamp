@@ -441,8 +441,9 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   descendant sets with incoming-edge counts. Power-loss durability barriers are implemented;
   physical power loss has not been tested.
 
-- History now prunes after every new snapshot, using the fixed initial snapshot size plus
-  `[history].max_growth_gb` (default 2). Branch tips and active run bases survive; retained ids stay
+- History now prunes after every new snapshot that takes the files in `history/objects` past the
+  fixed initial snapshot size plus `[history].max_growth_gb` (default 2); within that, a save only
+  adds up their sizes and reads no snapshot. Branch tips and active run bases survive; retained ids stay
   stable, even with disconnected branches. Scenarios cover real loose-object reclamation, Git
   integrity, previews, restore safety, saves during runs, run numbering and daily-limit accounting.
   `HistoryPruned` reports cleanup through the event API. Packed objects, additional refs and
