@@ -13,6 +13,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -248,18 +249,31 @@ final class HostAccessTools {
         // A file that is a link is replaced, not written through: the target was never part of
         // what the checker was shown, so there is no verdict about it. What is written is never
         // executable, whatever was there before.
+        Set<PosixFilePermission> permissions = permissionsToWriteWith(file);
         Path parent = file.getParent();
         if (parent != null) Files.createDirectories(parent);
         Path temporary = Files.createTempFile(parent, ".oillamp-write-", ".tmp",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         try {
             Files.write(temporary, content);
-            Files.setPosixFilePermissions(temporary, PosixFilePermissions.fromString("rw-r--r--"));
+            Files.setPosixFilePermissions(temporary, permissions);
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } finally {
             Files.deleteIfExists(temporary);
         }
         return Result.ok("wrote " + content.length + " bytes to " + file);
+    }
+
+    /// The permissions a file is written with: those of the file it replaces, without the ones to
+    /// execute it, or `rw-r--r--` where there is no file yet. A write replaces the file by a new
+    /// one, which must not be readable by anyone the old one was not: a file of secrets that only
+    /// its owner could read stays that.
+    private static Set<PosixFilePermission> permissionsToWriteWith(Path file) throws IOException {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return PosixFilePermissions.fromString("rw-r--r--");
+        Set<PosixFilePermission> kept = EnumSet.copyOf(Files.getPosixFilePermissions(file, LinkOption.NOFOLLOW_LINKS));
+        kept.removeAll(Set.of(PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE,
+                              PosixFilePermission.OTHERS_EXECUTE));
+        return kept;
     }
 
     /// The largest file `host_edit_file` edits. The whole file is held in memory while it is.

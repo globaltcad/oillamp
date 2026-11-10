@@ -156,9 +156,9 @@ shows the model each tool as `mcp__oillamp__<name>`.
 
 | Tool | Arguments | Does |
 |---|---|---|
-| `host_write_file` | `path`, `text` | Writes a new file, or replaces one, as `rw-r--r--`; a link at the path is replaced, not written through. The checker is shown the whole text; a text longer than 64 KiB is refused rather than shown in part. |
-| `host_edit_file` | `path`, `old_text`, `new_text` | Replaces the one place `old_text` occurs in a text file with `new_text`, and writes the file as `host_write_file` does, as `rw-r--r--`: an executable file, such as a script, is no longer executable afterwards, so the additive tier never makes something runnable (with `host_bash`, `chmod +x` restores it). No match, or more than one, changes nothing. The checker is shown both texts whole; together they may be at most 64 KiB. |
-| `host_copy_out` | `from`, `path` | Copies a file from the agent's home (`~/…` or `/home/agent/…`, read without following links) to a host path, as `rw-r--r--`; never executed. At most 64 MiB. |
+| `host_write_file` | `path`, `text` | Writes a new file as `rw-r--r--`, or replaces one, which keeps who may read and write it (a `rw-------` file stays that) and is never left executable; a link at the path is replaced, not written through. The checker is shown the whole text; a text longer than 64 KiB is refused rather than shown in part. |
+| `host_edit_file` | `path`, `old_text`, `new_text` | Replaces the one place `old_text` occurs in a text file with `new_text`, and writes the file as `host_write_file` does, with the read and write permissions it had: an executable file, such as a script, is no longer executable afterwards, so the additive tier never makes something runnable (with `host_bash`, `chmod +x` restores it). No match, or more than one, changes nothing. The checker is shown both texts whole; together they may be at most 64 KiB. |
+| `host_copy_out` | `from`, `path` | Copies a file from the agent's home (`~/…` or `/home/agent/…`, read without following links) to a host path, as `host_write_file` writes it; never executed. At most 64 MiB. |
 | `host_open_url` | `url` | Opens an http or https page in the user's browser. Additive because the address goes to its server, which makes it a way out for anything the agent read. |
 | `host_clipboard_write` | `text` | Replaces the clipboard. *Not built; not offered.* |
 | `host_notify` | `title`, `text` | A desktop notification. |

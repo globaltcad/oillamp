@@ -11,6 +11,7 @@ import spock.lang.Title
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
@@ -116,6 +117,46 @@ class Working_On_The_Host_Spec extends Specification {
             missing.isError && McpClient.text(missing).contains('does not occur')
             twice.isError && McpClient.text(twice).contains('occurs more than once')
             Files.readString(readme) == 'The build.\nSee below.\nSee below.\n'
+    }
+
+    def 'A file that only its owner may read is still readable by its owner alone after the agent edits it or writes over it'() {
+        reportInfo """
+            Let's consider a project on the host with a file of secrets, `.env`, whose permissions
+            are `rw-------`: the user may read and write it, and no other user of the machine may
+            even read it. The agent is asked to change one value in it, and calls `host_edit_file`.
+
+            oillamp does not change a file in place. It writes the new content to a new file and
+            renames that over the old one, so that an interruption never leaves half a file. The
+            new file takes the place of the old one with permissions of its own, and those must
+            not let anyone read the file who could not read it before. A file that oillamp makes
+            where none was gets `rw-r--r--`; given to this one, an edit of a single line would
+            show the user's secrets to every user of the machine.
+
+            So a file the agent edits with `host_edit_file`, or writes over with
+            `host_write_file`, keeps the read and write permissions it had.
+        """
+        given: 'a file `.env` in the project that only the user may read and write'
+            var secrets = Files.writeString(project.resolve('.env'), 'TOKEN=old\nMODE=test\n')
+            Files.setPosixFilePermissions(secrets, PosixFilePermissions.fromString('rw-------'))
+            givenHostAccess(commands: 'off')
+            checker.verdict = ALLOW_ADDITIVE
+            start()
+
+        when: 'the agent replaces one value in it with `host_edit_file`'
+            var edited = useTool('host_edit_file', [path: '~/project/.env', old_text: 'MODE=test', new_text: 'MODE=live'])
+
+        then: 'the file has the new value, and its permissions are still `rw-------`'
+            !edited.isError
+            Files.readString(secrets) == 'TOKEN=old\nMODE=live\n'
+            PosixFilePermissions.toString(Files.getPosixFilePermissions(secrets)) == 'rw-------'
+
+        when: 'the agent writes the whole file anew with `host_write_file`'
+            var written = useTool('host_write_file', [path: '~/project/.env', text: 'TOKEN=new\n'])
+
+        then: 'the file has the new text, and its permissions are still `rw-------`'
+            !written.isError
+            Files.readString(secrets) == 'TOKEN=new\n'
+            PosixFilePermissions.toString(Files.getPosixFilePermissions(secrets)) == 'rw-------'
     }
 
     def 'With `commands = "checker"`, the agent runs a command in a project on the host and gets its exit status and output'() {
