@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -840,18 +841,59 @@ final class History {
     }
 
     /// Moves a finished object into place. git keeps objects read-only, and so does this.
+    ///
+    /// The object is not forced to disk here, but with all the others its snapshot adds, by
+    /// [#forceWhatIsNew], before a branch names the snapshot. Forcing each as it is stored makes
+    /// the disk wait for every single file, which takes minutes for a home with thousands of new
+    /// ones.
     private void place(Path temporary, String id) throws IOException {
         Path target = objectPath(id);
         Files.createDirectories(target.getParent());
         FilesystemUtil.setMode(temporary, PosixMode.of(0444));
-        force(temporary);
         Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        force(java.util.Objects.requireNonNull(target.getParent()));
+    }
+
+    /// Forces to disk what a new commit adds to the history: the commit, and every tree and blob
+    /// its tree holds that the tree of the commit before it does not. Each file first, then each
+    /// directory one of them is in. Until then a power cut may lose them, which is harmless as
+    /// long as no branch names the commit.
+    ///
+    /// What the commit adds is read from the two trees, not remembered while it is stored. So an
+    /// object that an earlier save stored and, interrupted, never forced is forced here as well,
+    /// when this commit is the first to hold it.
+    ///
+    /// @param parent the commit before it, if there is one
+    private void forceWhatIsNew(String commit, String tree, Optional<String> parent) throws IOException {
+        Set<Path> added = new LinkedHashSet<>();
+        addWhatDiffers(parent.isEmpty() ? Optional.empty() : Optional.of(commitAt(parent.get()).tree()), tree, added);
+        added.add(objectPath(commit));
+        Set<Path> directories = new LinkedHashSet<>();
+        for (Path object : added) {
+            force(object);
+            directories.add(java.util.Objects.requireNonNull(object.getParent()));
+        }
+        for (Path directory : directories) force(directory);
         force(repository.resolve("objects"));
+    }
+
+    /// Adds to `added` the tree `now`, and every tree and blob in it, that the tree `before` does
+    /// not hold in the same place. A directory that is the same in both is skipped whole.
+    private void addWhatDiffers(Optional<String> before, String now, Set<Path> added) throws IOException {
+        if (before.equals(Optional.of(now))) return;
+        added.add(objectPath(now));
+        Association<String, GitObjectUtil.Entry> old = entriesOf(before);
+        for (GitObjectUtil.Entry entry : entriesOf(Optional.of(now)).values()) {
+            Optional<GitObjectUtil.Entry> was = old.get(entry.name());
+            if (was.equals(Optional.of(entry))) continue;
+            if (entry.isDirectory())
+                addWhatDiffers(was.filter(GitObjectUtil.Entry::isDirectory).map(GitObjectUtil.Entry::id), entry.id(), added);
+            else added.add(objectPath(entry.id()));
+        }
     }
 
     private LampSave commit(String tree, Optional<String> parent, Instant now, String message) throws IOException {
         String id = storeSmall("commit", GitObjectUtil.commit(tree, parent, now, message));
+        forceWhatIsNew(id, tree, parent);
         moveBranch(parent, id);
         LampSave snapshot = GitObjectUtil.parseCommit(id, readObject(id, "commit")).snapshot();
         if (snapshot.kind() == LampSaveKind.BEFORE_RUN) pinBaseUnlocked(id);
