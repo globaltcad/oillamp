@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import javax.swing.SwingUtilities;
@@ -32,6 +33,7 @@ import dev.gui.model.GeniesState;
 import dev.gui.model.Notice;
 import dev.gui.model.History;
 import dev.gui.model.Home;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
@@ -527,6 +529,10 @@ public final class GeniesBackend implements Genies {
                 report(new IOException("could not open " + link + " in the browser", failed));
             }
         });
+    }
+
+    @Override public void open(UUID id, LampWindow window, Consumer<String> whenNot) {
+        runner(id).open(window, why -> SwingUtilities.invokeLater(() -> whenNot.accept(why)));
     }
 
     @Override public Path documents() { return documents; }

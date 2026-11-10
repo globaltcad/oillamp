@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import dev.gui.desktop.Desktop;
@@ -15,6 +16,7 @@ import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
 import dev.gui.model.History;
 import dev.gui.model.Home;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Settings;
 import dev.lamp.LampLauncher;
 import sprouts.Tuple;
@@ -198,6 +200,12 @@ public interface Genies {
 
     /// Opens `link`, such as one a genie's lamp published, in this computer's browser.
     void openInBrowser(URI link);
+
+    /// Has the genie's lamp open `window` onto its sandbox, in a window of its own on the user's
+    /// desktop, as the `oillamp` command of the same name does. Only while the genie is awake.
+    ///
+    /// @param whenNot hears why no window opened, as oillamp said it, on Swing's event thread
+    void open(UUID genie, LampWindow window, Consumer<String> whenNot);
 
     /// The user's documents folder, such as `~/Documents`, where a genie's folders are linked
     /// unless the user picks another.

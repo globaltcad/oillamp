@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 
 import dev.gui.desktop.Desktop;
 import dev.gui.model.Genie;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
 import dev.gui.model.Settings;
 import dev.lamp.Lamp;
@@ -138,6 +139,12 @@ public interface LampLighter {
 
         /// See [Lamp#decidePermission]: the user allows or refuses a request the lamp asked them about.
         void decidePermission(String request, boolean allowed) throws IOException, InterruptedException, LampFailedException;
+
+        /// Opens `window` onto the sandbox on the user's desktop. See [Lamp#openShell],
+        /// [Lamp#openViewer] and [Lamp#openFollower]. A lamp that opens none says so.
+        default void open(LampWindow window) throws IOException, InterruptedException, LampFailedException {
+            throw new IOException("this lamp opens no windows");
+        }
 
         /// Ends the sandbox, and returns once it is gone.
         @Override void close();

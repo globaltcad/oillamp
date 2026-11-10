@@ -13,6 +13,7 @@ import javax.swing.SwingUtilities;
 import dev.gui.Genies;
 import dev.gui.model.Genie;
 import dev.gui.model.GeniesState;
+import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
 import dev.gui.model.Palette;
 
@@ -25,12 +26,13 @@ import swingtree.UIForAnySwing;
 import swingtree.UIForButton;
 import swingtree.input.Keyboard;
 import swingtree.layout.FlowCell;
+import swingtree.layout.Size;
 
 import static swingtree.UI.*;
 
 /// What can be done with a genie as a whole: renaming it, starting a new conversation with it,
-/// saving its home, sending it to sleep or waking it, linking its folders into the user's, and
-/// deleting it. Each is a tile with its
+/// saving its home, sending it to sleep or waking it, linking its folders into the user's, looking
+/// into its sandbox in windows of their own, and deleting it. Each is a tile with its
 /// sign, a sentence on what it does, and a button large enough for a finger.
 ///
 /// A right-click on the genie's card offers the same as a menu, for those with a mouse. This page
@@ -40,7 +42,8 @@ import static swingtree.UI.*;
 /// Like the rest of the window, a function of the [GeniesState], but for one thing of its own: a
 /// name the user is typing, which is no genie's until they keep it. The genie's name stands in a
 /// field that becomes editable on Rename; Enter or Save keeps what was typed, Escape or Cancel the
-/// name it had. Saving and deleting ask the user first, in the same dialogs as everywhere else,
+/// name it had. And for why a window onto the sandbox did not open, which the tile that was asked
+/// for it says. Saving and deleting ask the user first, in the same dialogs as everywhere else,
 /// so the window lends them.
 final class ActionsPage {
 
@@ -48,16 +51,29 @@ final class ActionsPage {
      *  A responsive grid of tiles: all four in one row once the page is wider than its
      *  reference, as in a full-screen window, two by two from MEDIUM up, and one under the other
      *  below. The genie's folders follow, the whole width, as a tree needs it, with a grid of its
-     *  own inside (see HomeFolders). Deleting the genie comes last, away from the rest: the whole
-     *  width, but beside the folders, as wide as a tile, when the tiles are in one row.
+     *  own inside (see HomeFolders). Last come the two tiles away from the rest, in a grid of their
+     *  own: looking behind the scenes, and deleting the genie, which is always the last. That grid
+     *  takes the whole width, but stands beside the folders, as wide as a tile, when the tiles are
+     *  in one row.
      *
      *                 very small  small  medium  large  very large  oversize
      *      on top          12       12     12     12       12          12
      *      a tile          12       12      6      6        6           3
      *      the folders     12       12     12     12       12           9
-     *      deleting        12       12     12     12       12           3
+     *      the last two    12       12     12     12       12           3
+     *
+     *  Within it, the two stand side by side wherever the tiles above stand two by two, and one
+     *  under the other otherwise: in a narrow page, and in the column beside the folders. The
+     *  grid cannot tell the two apart by its own width, as that column of a very wide page is
+     *  wider than a narrow page. So it is told by its reference, which follows the page's width:
+     *  the page's own reference, or, for the column, one so wide that the grid is always very
+     *  small against it.
+     *
+     *                 very small  small  medium  large  very large  oversize
+     *      one of two      12       12      6      6        6           6
      */
     private static final int REFERENCE = 1300;
+    private static final int NEVER_REACHED = 100 * REFERENCE;
     private static final FlowCell WHOLE = AUTO_SPAN(it ->
         it.verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12)
     );
@@ -65,9 +81,13 @@ final class ActionsPage {
         it.align(UI.VerticalAlignment.TOP).fill(true)
         .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(9)
     );
-    private static final FlowCell DELETING = AUTO_SPAN(it ->
+    private static final FlowCell LAST_TWO = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP).fill(true)
         .verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(3)
+    );
+    private static final FlowCell ONE_OF_TWO = AUTO_SPAN(it ->
+        it.align(UI.VerticalAlignment.TOP).fill(true)
+        .verySmall(12).small(12).medium(6).large(6).veryLarge(6).oversize(6)
     );
     private static final FlowCell TILE = AUTO_SPAN(it ->
         it.align(UI.VerticalAlignment.TOP).fill(true)
@@ -95,6 +115,11 @@ final class ActionsPage {
     /// Set once the field with the name exists, which takes the keyboard on Rename.
     private Optional<JTextField> nameField = Optional.empty();
     private final HomeFolders folders;
+    /// What the grid of the last two tiles measures itself against: see the table above.
+    private final Val<Size> referenceOfTheLastTwo;
+    /// Why the window the user last asked for did not open, as oillamp said it; empty when it
+    /// did, and until one is asked for.
+    private final Var<String> noWindow = Var.of("");
 
     /// @param saveNow asks the user what to remember the selected genie's home by, and saves it
     /// @param delete  asks the user whether to delete a genie for good, and does so
@@ -112,10 +137,16 @@ final class ActionsPage {
         selected = state.viewAs(UUID.class, GeniesState::selected);
         newName = Var.of(name.get());
         folders = new HomeFolders(state, app);
+        referenceOfTheLastTwo = state.viewAs(Size.class, it ->
+            Size.of(it.area().width() >= REFERENCE ? NEVER_REACHED : REFERENCE, 0)
+        );
         // Renamed elsewhere, the field follows, unless the user is typing in it.
         Viewable.cast(name).onChange(From.ALL, it -> { if (!renaming.get()) newName.set(name.get()); });
         // Another genie chosen: what was typed was meant for the one before.
-        Viewable.cast(selected).onChange(From.ALL, _ -> stopRenaming());
+        Viewable.cast(selected).onChange(From.ALL, _ -> {
+            stopRenaming();
+            noWindow.set("");
+        });
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
@@ -138,8 +169,20 @@ final class ActionsPage {
                 .add(TILE, saving())
                 .add(TILE, sleepingOrWaking())
                 .add(FOLDERS, folders())
-                .add(DELETING, deleting())
+                .add(LAST_TWO, lastTwo())
             );
+    }
+
+    /// Looking behind the scenes and deleting, in a grid of their own.
+    private UIForAnySwing<?, ?> lastTwo() {
+        return
+            panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
+            .withMinSize(0, 0).withPrefSize(referenceOfTheLastTwo)
+            .peek(it -> it.addComponentListener(HomeFolders.relayoutAtNewWidth()))
+            // The grid's gaps are at its edges too; outside, its tiles line up with the others.
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-18))
+            .add(ONE_OF_TWO, behindTheScenes())
+            .add(ONE_OF_TWO, deleting());
     }
 
     private UIForAnySwing<?, ?> top() {
@@ -291,6 +334,75 @@ final class ActionsPage {
 
     private UIForAnySwing<?, ?> folders() {
         return tile(SignSvgUtil.FOLDER, Palette::TEXT, words.viewAsString(Lang.ActionsPage::FOLDERS), folders.says(), folders.view());
+    }
+
+    /// What `oillamp shell`, `oillamp view` and `oillamp follow` do at a terminal, each a button:
+    /// small things, for those who want to see for themselves, so they share one tile. Only an
+    /// awake genie has a sandbox to look into.
+    private UIForAnySwing<?, ?> behindTheScenes() {
+        Val<Boolean> awake = phase.viewAs(Boolean.class, Genie.Phase::isAwake);
+        return tile(
+            SignSvgUtil.TERMINAL,
+            Palette::TEXT,
+            words.viewAsString(Lang.ActionsPage::BEHIND_THE_SCENES),
+            Viewable.of(String.class, genie, words, (it, page) ->
+                it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN
+                    ? page.IS_IN_THE_LAMP_WAKE_IT_TO_LOOK_INTO_ITS_SANDBOX(it.name())
+                    : page.LOOK_INTO_ITS_SANDBOX_YOURSELF_EACH_IN_A_WINDOW_OF_ITS_OWN(it.name())
+            ),
+            box("fillx, wrap 1, ins 0, gap 6, hidemode 3", "[0:0, grow]")
+            .add("growx, wmin 0",
+                // Side by side while there is room, and one under the other in a narrow tile.
+                panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 8, 8)
+                .withMinSize(0, 0)
+                .peek(it -> it.addComponentListener(HomeFolders.relayoutAtNewWidth()))
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).margin(-8, -8, -8, -8))
+                .add(
+                    opening(LampWindow.SHELL, words.viewAsString(Lang.ActionsPage::SHELL), awake)
+                    .withTooltip(Viewable.of(String.class, selected, words, (_, page) ->
+                        page.A_TERMINAL_WITH_A_SHELL_IN_ITS_SANDBOX(commandOf(LampWindow.SHELL))
+                    ))
+                )
+                .add(
+                    opening(LampWindow.DESKTOP, words.viewAsString(Lang.ActionsPage::DESKTOP), awake)
+                    .withTooltip(Viewable.of(String.class, selected, words, (_, page) ->
+                        page.ITS_DESKTOP_IN_A_VIEWER_WINDOW(commandOf(LampWindow.DESKTOP))
+                    ))
+                )
+                .add(
+                    opening(LampWindow.FOLLOWING, words.viewAsString(Lang.ActionsPage::FOLLOW), awake)
+                    .withTooltip(Viewable.of(String.class, selected, words, (_, page) ->
+                        page.A_TERMINAL_THAT_SAYS_WHAT_ITS_LAMP_REPORTS(commandOf(LampWindow.FOLLOWING))
+                    ))
+                )
+            )
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(
+                    theme,
+                    Viewable.of(String.class, noWindow, words, (why, page) -> page.NO_WINDOW_OPENED(why)),
+                    Palette::TROUBLE,
+                    noWindow.viewAs(Boolean.class, why -> !why.isEmpty())
+                )
+            )
+        );
+    }
+
+    /// The button that has the selected genie's lamp open `window`.
+    private UIForButton<JButton> opening(LampWindow window, Val<String> called, Val<Boolean> awake) {
+        return
+            big(button(called).group(Skin.QUIET_BUTTON))
+            .isEnabledIf(awake)
+            .onClick(_ -> {
+                UUID asked = selected();
+                noWindow.set("");
+                // Another genie chosen meanwhile: the reason is not for its tile.
+                app.open(asked, window, why -> { if (asked.equals(selected())) noWindow.set(why); });
+            });
+    }
+
+    /// The command that opens `window` onto the selected genie's sandbox at a terminal.
+    private String commandOf(LampWindow window) {
+        return window.command(app.lampOf(selected()).toString());
     }
 
     /// A lamp from elsewhere is not Genies' to delete, so it is only removed from Genies.
