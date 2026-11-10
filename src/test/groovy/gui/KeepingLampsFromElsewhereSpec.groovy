@@ -4,6 +4,7 @@ import dev.gui.Genies
 import dev.gui.genie.Shelf
 import dev.gui.model.Genie
 import dev.gui.model.GeniesState
+import dev.gui.model.Lang
 import dev.gui.model.Settings
 import dev.lamp.Lamp
 import dev.lamp.LampEvent
@@ -175,6 +176,51 @@ class KeepingLampsFromElsewhereSpec extends Specification {
             app.state().get().genies()*.name() == ['Juniper', 'north']
             person.alive
             Lamp.running(sandbox.launcher)*.lamp() == [north]
+    }
+
+    def 'A lamp from elsewhere whose directory is gone says so, cannot be woken, and sleeps again once the directory is back'() {
+        reportInfo '''
+            Let's consider a lamp from elsewhere that Genies lists, asleep, whose directory the
+            person then moves away, or whose drive is not plugged in today. Its entry in Genies
+            still names the directory, in which there is no lamp any more. Waking it would have
+            oillamp make a new, empty lamp in that place. So `Genies.lookForLamps`, which Genies
+            also calls by itself every minute, looks whether the directory of each listed lamp
+            from elsewhere is there. The genie of a lamp whose directory is gone says
+            "its folder is gone" instead of "asleep", and `Genies.wake` leaves it as it is.
+            Once the directory is back, the next look has the genie say "asleep" again.
+        '''
+        given: 'the user added the lamp "north" while it slept'
+            sandbox.givenConfig(north, 'schema_version = 1\n')
+            SwingUtilities.invokeAndWait { app.addLamp(north) }
+            UUID fromElsewhere = app.state().get().selected()
+            var genie = { app.state().get().find(fromElsewhere).orElseThrow() }
+            assert genie().status(Lang.ENGLISH) == 'asleep'
+
+        when: 'the directory "north" is moved away, and Genies looks for lamps'
+            var away = Files.move(north, north.resolveSibling('north-moved-away'))
+            SwingUtilities.invokeAndWait { app.lookForLamps() }
+
+        then: 'the genie says "its folder is gone", and still counts as asleep'
+            waitUntil { genie().lampGone() }
+            genie().status(Lang.ENGLISH) == 'its folder is gone'
+            genie().phase() == Genie.Phase.ASLEEP
+
+        when: 'the user wakes it'
+            SwingUtilities.invokeAndWait { app.wake(fromElsewhere) }
+            SwingUtilities.invokeAndWait { }
+
+        then: 'the genie is as it was, and oillamp made no directory "north"'
+            genie().lampGone()
+            genie().phase() == Genie.Phase.ASLEEP
+            !Files.exists(north)
+
+        when: 'the directory is moved back, and Genies looks for lamps'
+            Files.move(away, north)
+            SwingUtilities.invokeAndWait { app.lookForLamps() }
+
+        then: 'the genie says "asleep" again'
+            waitUntil { !genie().lampGone() }
+            genie().status(Lang.ENGLISH) == 'asleep'
     }
 
     def 'Genies lights a lamp from elsewhere as it is, without a genie\'s instructions'() {

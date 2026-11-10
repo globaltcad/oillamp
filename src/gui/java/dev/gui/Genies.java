@@ -62,6 +62,8 @@ public interface Genies {
 
     void newGenie();
 
+    /// Wakes the genie. One whose lamp is from elsewhere, and no longer where it was, stays as
+    /// it is, and says that its lamp is gone.
     void wake(UUID genie);
 
     void sleep(UUID genie);
@@ -95,6 +97,7 @@ public interface Genies {
 
     /// Looks for lamps someone lit elsewhere, with `oillamp at`, and takes in each Genies does
     /// not know yet, after its own genies, joining its session. The user's selection stays.
+    /// A listed lamp from elsewhere whose directory is gone says so, until it is back.
     /// Genies does this by itself, now and then; this looks now. Off Swing's event thread.
     void lookForLamps();
 

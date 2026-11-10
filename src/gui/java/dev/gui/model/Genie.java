@@ -82,6 +82,9 @@ public record Genie(
         record PuttingOutTheLamp() implements Activity {}
         /// Its lamp is not running.
         record Asleep() implements Activity {}
+        /// Its lamp, which Genies did not make, is not where it was: its directory is gone, so
+        /// there is nothing to wake until it is back.
+        record LampGone() implements Activity {}
         /// It thinks.
         record Thinking() implements Activity {}
         /// It uses the tool `tool`.
@@ -107,6 +110,7 @@ public record Genie(
                 case Ready _ -> words.READY();
                 case PuttingOutTheLamp _ -> words.PUTTING_OUT_THE_LAMP();
                 case Asleep _ -> words.ASLEEP();
+                case LampGone _ -> words.ITS_FOLDER_IS_GONE();
                 case Thinking _ -> words.THINKING();
                 case Using it -> words.USING(it.tool());
                 case Writing _ -> words.WRITING();
@@ -222,6 +226,17 @@ public record Genie(
 
     /// Whether Genies did not make its lamp, but found it, or was given it.
     public boolean fromElsewhere() { return elsewhere.isPresent(); }
+
+    /// Whether its lamp's directory was found gone, so that it cannot be woken.
+    public boolean lampGone() { return activity instanceof Activity.LampGone; }
+
+    /// The genie once Genies has looked for its lamp's directory, and found it `gone` or there.
+    /// Only a sleeping genie whose lamp is from elsewhere says that it is gone, and is asleep as
+    /// before once it is back; any other is as it was.
+    public Genie withLampGone(boolean gone) {
+        if (phase != Phase.ASLEEP || !fromElsewhere() || gone == lampGone()) return this;
+        return withActivity(gone ? new Activity.LampGone() : new Activity.Asleep());
+    }
 
     // ─── its lamp ──────────────────────────────────────────────────────────────────────────
 

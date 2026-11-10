@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -247,7 +248,11 @@ public final class GeniesBackend implements Genies {
         wake(genie.id());
     }
 
+    /// A lamp from elsewhere whose directory is gone is not woken: lighting it would make a new,
+    /// empty lamp where the user's own was. The genie says that it is gone instead.
     @Override public void wake(UUID id) {
+        lookForTheLampOf(id);
+        if (state.get().find(id).map(Genie::lampGone).orElse(false)) return;
         GeniesState now = state.get();
         Optional<String> problem = now.settingsProblem();
         Optional<String> key = now.settings().keyFrom(now.environmentKey());
@@ -398,13 +403,22 @@ public final class GeniesBackend implements Genies {
 
     // ─── lamps from elsewhere ──────────────────────────────────────────────────────────────
 
+    /// A listed lamp from elsewhere whose directory is gone says so, instead of seeming asleep,
+    /// and is asleep again once its directory is back.
+    ///
     /// Each lamp found lit that Genies does not know yet joins the list, after Genies' own, and
     /// Genies joins its session. Only the lamps the user removed are left out, and Genies' own
     /// lamps on the shelf. A genie asleep in the list whose lamp someone lit since, with
     /// `oillamp at`, is joined. Off Swing's event thread. When it cannot be found out, as without
     /// podman, nothing changes: Genies says so when a genie wakes, and this is asked again.
     @Override public void lookForLamps() {
+        Map<UUID, Path> elsewhere = new HashMap<>();
+        for (Genie genie : state.get().genies()) genie.elsewhere().ifPresent(lamp -> elsewhere.put(genie.id(), lamp));
         Thread.ofVirtual().name("look for lamps").start(() -> {
+            // Whether each listed lamp from elsewhere is still where it was, or back there.
+            Map<UUID, Boolean> gone = new HashMap<>();
+            elsewhere.forEach((id, lamp) -> gone.put(id, !Files.isDirectory(lamp)));
+            SwingUtilities.invokeLater(() -> gone.forEach(this::lampFound));
             try {
                 List<Path> lit = lighter.running();
                 SwingUtilities.invokeLater(() -> {
@@ -423,6 +437,19 @@ public final class GeniesBackend implements Genies {
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    /// Looks whether the directory of the genie's lamp from elsewhere is there, now, and has the
+    /// genie say so. A lamp of Genies' own is on its shelf, and made when the genie first wakes.
+    private void lookForTheLampOf(UUID id) {
+        state.get().find(id).flatMap(Genie::elsewhere).ifPresent(lamp -> lampFound(id, !Files.isDirectory(lamp)));
+    }
+
+    /// The genie's lamp was looked for, and found `gone` or there. Nothing changes for a genie
+    /// that says so already.
+    private void lampFound(UUID id, boolean gone) {
+        if (state.get().find(id).filter(genie -> genie.withLampGone(gone) != genie).isPresent())
+            state.update(From.VIEW, it -> it.update(id, genie -> genie.withLampGone(gone)));
     }
 
     /// A lamp the user picked joins the list, and is shown; Genies joins its session if it is lit.

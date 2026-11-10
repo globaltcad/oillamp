@@ -229,6 +229,7 @@ final class SchedulePage {
                 .add(
                     button(words.viewAsString(it -> "✦  " + it.WAKE())).group(Skin.QUIET_BUTTON).isVisibleIf(asleep)
                     .withTooltip(words.viewAsString(Lang.SchedulePage::JOBS_RUN_ONLY_WHILE_THE_GENIE_IS_AWAKE))
+                    .isEnabledIf(genie.viewAs(Boolean.class, it -> !it.lampGone()))
                     .onClick(_ -> app.wake(selected()))
                 )
                 .add(

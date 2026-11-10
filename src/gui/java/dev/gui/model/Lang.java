@@ -342,6 +342,16 @@ public enum Lang {
             };
         }
 
+        public String ITS_FOLDER_IS_GONE() {
+            return switch (lang) {
+                case ENGLISH -> "its folder is gone";
+                case GERMAN -> "Ordner ist weg";
+                case SPANISH -> "su carpeta ya no está";
+                case JAPANESE -> "フォルダーがありません";
+                case CHINESE -> "文件夹不见了";
+            };
+        }
+
         public String ASLEEP() {
             return switch (lang) {
                 case ENGLISH -> "asleep";
@@ -1905,6 +1915,16 @@ public enum Lang {
             };
         }
 
+        public String THE_FOLDER_OF_ITS_LAMP_IS_GONE(String genie, String folder) {
+            return switch (lang) {
+                case ENGLISH -> "The folder of " + genie + "'s lamp is gone: " + folder + ". Once it is back, " + genie + " can be woken again.";
+                case GERMAN -> "Der Ordner der Lampe von " + genie + " ist weg: " + folder + ". Sobald er wieder da ist, kann " + genie + " wieder geweckt werden.";
+                case SPANISH -> "La carpeta de la lámpara de " + genie + " ya no está: " + folder + ". En cuanto vuelva, se podrá despertar a " + genie + " de nuevo.";
+                case JAPANESE -> genie + " のランプのフォルダーが見つかりません: " + folder + "。フォルダーが戻れば、" + genie + " をまた起こせます。";
+                case CHINESE -> genie + " 的神灯所在的文件夹不见了：" + folder + "。文件夹恢复后，就可以再次唤醒 " + genie + "。";
+            };
+        }
+
         public String IS_ASLEEP_ITS_SANDBOX_IS_OFF(String name) {
             return switch (lang) {
                 case ENGLISH -> name + " is asleep. Its sandbox is off, its home and conversation are kept.";
@@ -2793,6 +2813,16 @@ public enum Lang {
                 case SPANISH -> "Eliminar a " + genie + "…";
                 case JAPANESE -> genie + " を削除…";
                 case CHINESE -> "删除 " + genie + "…";
+            };
+        }
+
+        public String THE_FOLDER_OF_ITS_LAMP_IS_GONE(String genie, String folder) {
+            return switch (lang) {
+                case ENGLISH -> "The folder of " + genie + "'s lamp is gone: " + folder + ". Once it is back, " + genie + " can be woken again.";
+                case GERMAN -> "Der Ordner der Lampe von " + genie + " ist weg: " + folder + ". Sobald er wieder da ist, kann " + genie + " wieder geweckt werden.";
+                case SPANISH -> "La carpeta de la lámpara de " + genie + " ya no está: " + folder + ". En cuanto vuelva, se podrá despertar a " + genie + " de nuevo.";
+                case JAPANESE -> genie + " のランプのフォルダーが見つかりません: " + folder + "。フォルダーが戻れば、" + genie + " をまた起こせます。";
+                case CHINESE -> genie + " 的神灯所在的文件夹不见了：" + folder + "。文件夹恢复后，就可以再次唤醒 " + genie + "。";
             };
         }
 
