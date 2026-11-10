@@ -944,9 +944,11 @@ Exit codes by shutdown reason (`ShutdownReason.exitStatus`): `oillamp stop` → 
   `SessionMachine.step`, stores the new state, performs the actions. With no event for a second it
   creates a `Tick`, which is how timeouts are noticed. Only this thread writes the state; the field
   is `volatile` because others read it.
-- **Sandbox watcher.** Every 2 s runs `podman container inspect` and connects to the VNC, SSH and
-  proxy sockets. Reports a change at once and a health line every 30 s. With `web.publish` `any`
-  or `ask`, it also reads what the agent listens on and offers new ports.
+- **Sandbox watcher.** Every 2 s connects to the VNC, SSH and proxy sockets. Reports a change at
+  once and a health line every 30 s. With `web.publish` `any` or `ask`, it also reads what the
+  agent listens on and offers new ports.
+- **Sandbox end.** Runs one `podman wait`, which answers when the container ends, and reports its
+  exit code. A podman that fails is warned about once and asked again every 2 s.
 - **Relay threads.** One accept loop per relay, and two virtual threads per connection (one
   per direction).
 - **Control socket threads.** One accept loop, one thread per connection. A connection that sends

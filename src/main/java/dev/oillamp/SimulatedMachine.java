@@ -178,6 +178,7 @@ final class SimulatedMachine implements Machine {
         }
         if (commandLine.startsWith("podman ps")) return listSimulatedSandboxes(command);
         if (commandLine.startsWith("podman container inspect")) return inspectSimulatedSandbox(command);
+        if (commandLine.startsWith("podman wait ")) return awaitSimulatedSandbox(command);
         // Absence is a non-zero exit. The simulated container exists from `podman run` until
         // `podman stop` or `podman rm`, so a scenario can tell whether one was left behind.
         if (commandLine.startsWith("podman container exists"))
@@ -381,6 +382,24 @@ final class SimulatedMachine implements Machine {
                     "Error: no such container\n", Duration.ofMillis(5));
         String answer = format.contains("ExitCode") ? "0" : "true";
         return new Outcome.Finished(0, answer + "\n", "", Duration.ofMillis(5));
+    }
+
+    /// Answers as `podman wait` does: with the container's exit code, once the container has ended,
+    /// and not before. A container that was stopped and removed is none podman knows.
+    private Outcome awaitSimulatedSandbox(Command command) {
+        long deadline = System.nanoTime() + command.timeout().toNanos();
+        while (containerRunning) {
+            if (System.nanoTime() > deadline) return new Outcome.TimedOut(command.timeout(), "");
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return new Outcome.TimedOut(command.timeout(), "");
+            }
+        }
+        return containerExitedWith
+                .<Outcome>map(code -> new Outcome.Finished(0, code + "\n", "", Duration.ofMillis(5)))
+                .orElseGet(() -> new Outcome.Finished(125, "", "Error: no such container\n", Duration.ofMillis(5)));
     }
 
     /// Deletes for real, because the scenarios that matter here are about files that outlive a

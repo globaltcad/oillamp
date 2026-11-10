@@ -166,9 +166,6 @@ final class Supervisor {
         }
     }
 
-    /// Whether the last question to podman about the container went unanswered, so that a podman
-    /// that stops answering is reported once, not every two seconds.
-    private boolean podmanSilent;
     private final List<Machine.Window> viewers = new CopyOnWriteArrayList<>();
 
     /// An event and when it happened. [SessionMachine] gets the time from here rather than asking the clock.
@@ -224,6 +221,7 @@ final class Supervisor {
         Thread hook = new Thread(this::onSignal, "oillamp-shutdown-hook");
         Runtime.getRuntime().addShutdownHook(hook);
         watchTheSandbox();
+        awaitTheSandboxsEnd();
         if (context.options().embedded()) watchTheApplication();
         post(new SessionEvent.ContainerReady(ReadyInfo.parse(sandbox.readyJson())));
 
@@ -920,11 +918,9 @@ final class Supervisor {
     /// What an application writes on oillamp's standard input to leave its session running.
     static final String LEAVE_RUNNING = "leave-running";
 
-    /// Checks every two seconds that the container is still running and that its sockets answer,
-    /// and prints a health line every 30 seconds.
-    ///
-    /// Without this, a container that died during a session would leave the user typing into a
-    /// terminal connected to nothing, with no explanation.
+    /// Checks every two seconds that the sandbox's sockets answer, and prints a health line every
+    /// 30 seconds. Whether the container still runs is not asked here: [#awaitTheSandboxsEnd]
+    /// hears of its end.
     private void watchTheSandbox() {
         Thread.ofVirtual().name("oillamp-sandbox-watch").start(() -> {
             // The first health line comes straight away, then one every 30 seconds.
@@ -932,11 +928,6 @@ final class Supervisor {
             while (!shuttingDown.get() && !state.isFinal()) {
                 sleep(CONTAINER_POLL);
                 if (shuttingDown.get() || state.isFinal()) return;
-                Optional<Boolean> running = containerIsRunning();
-                if (running.isPresent() && !running.get()) {
-                    post(new SessionEvent.ContainerExited(exitCodeOfContainer()));
-                    return;
-                }
                 boolean due = !Instant.now().isBefore(nextHeartbeat);
                 checkTheEndpoints(due);
                 lookForNewWebServers();
@@ -1195,47 +1186,65 @@ final class Supervisor {
              + "session runs; `oillamp schedule " + lamp + "` lists them";
     }
 
-    /// Whether the container is running, or empty when podman could not say.
+    /// How long one `podman wait` is left waiting before it is started again.
+    private static final Duration LONGEST_WAIT = Duration.ofHours(1);
+
+    /// Tells the event loop when the container has ended, and with which exit code.
     ///
-    /// Only a clear answer ends the session: podman saying the container is not running, or that
-    /// it no longer exists. A podman that is slow or failing, for example while another lamp's
-    /// image is being built, is reported as a warning, and the session carries on. Ending a
-    /// working session because podman was busy for 15 seconds would lose the user's shell for
-    /// nothing.
-    private Optional<Boolean> containerIsRunning() {
-        Machine.Outcome outcome = machine.run(Machine.Command
-                .of("podman", "container", "inspect", "--format", "{{.State.Running}}",
-                    sandbox.container().value())
-                .withTimeout(Duration.ofSeconds(15)).labelled("podman inspect"));
-        Optional<Boolean> answer = switch (outcome) {
-            case Machine.Outcome.Finished finished when finished.exitCode() == 0 ->
-                    Optional.of(finished.standardOutput().strip().equals("true"));
-            case Machine.Outcome.Finished finished
-                    when finished.standardError().toLowerCase(Locale.ROOT).contains("no such container") ->
-                    Optional.of(false);
-            case Machine.Outcome ignored -> Optional.empty();
-        };
-        if (answer.isEmpty() && !podmanSilent)
-            context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.sandboxStateUnknown(
-                    sandbox.container().value(), describeFailure(outcome))));
-        podmanSilent = answer.isEmpty();
-        return answer;
+    /// Without this, a container that died during a session would leave the user typing into a
+    /// terminal connected to nothing, with no explanation.
+    ///
+    /// One `podman wait` answers when the container ends, so podman is started once for a
+    /// session, not every two seconds to be asked the same question. It is shielded from Ctrl-C,
+    /// which would otherwise end it through the terminal's process group and look like a podman
+    /// that failed.
+    ///
+    /// Only a clear answer ends the session: the container's exit code, or podman saying that
+    /// the container no longer exists. A podman that fails, for example while another lamp's
+    /// image is being built, is reported as a warning, once, and asked again two seconds later.
+    /// Ending a working session because podman was busy would lose the user's shell for nothing.
+    private void awaitTheSandboxsEnd() {
+        Thread.ofVirtual().name("oillamp-sandbox-end").start(() -> {
+            boolean podmanSilent = false;
+            while (!shuttingDown.get() && !state.isFinal()) {
+                Machine.Outcome outcome = machine.run(Machine.Command
+                        .of("podman", "wait", sandbox.container().value())
+                        .withTimeout(LONGEST_WAIT).labelled("podman wait").shieldedFromSignals());
+                // The session's own `podman stop` ends the wait too.
+                if (shuttingDown.get() || state.isFinal()) return;
+                switch (outcome) {
+                    case Machine.Outcome.Finished finished when finished.exitCode() == 0 -> {
+                        post(new SessionEvent.ContainerExited(exitCodeIn(finished.standardOutput())));
+                        return;
+                    }
+                    case Machine.Outcome.Finished finished
+                            when finished.standardError().toLowerCase(Locale.ROOT).contains("no such container") -> {
+                        post(new SessionEvent.ContainerExited(-1));
+                        return;
+                    }
+                    // The container outlasted the wait, which says that podman answers.
+                    case Machine.Outcome.TimedOut ignored -> podmanSilent = false;
+                    case Machine.Outcome ignored -> {
+                        if (!podmanSilent)
+                            context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.sandboxStateUnknown(
+                                    sandbox.container().value(), describeFailure(outcome))));
+                        podmanSilent = true;
+                        sleep(CONTAINER_POLL);
+                    }
+                }
+            }
+        });
     }
 
-    private int exitCodeOfContainer() {
-        Machine.Outcome outcome = machine.run(Machine.Command
-                .of("podman", "container", "inspect", "--format", "{{.State.ExitCode}}",
-                    sandbox.container().value())
-                .withTimeout(Duration.ofSeconds(15)).labelled("podman inspect"));
+    /// The exit code `podman wait` printed, or -1 when it printed something else.
+    private static int exitCodeIn(String printed) {
         try {
-            return Integer.parseInt(outcome.output().strip());
+            return Integer.parseInt(printed.strip());
         } catch (NumberFormatException unknown) {
             return -1;
         }
     }
 
-    /// The shell window oillamp opened. Its connecting is what makes the session count as up;
-    /// its closing is reported and ends nothing.
     private final class PrimaryListener implements Relay.Listener {
         @Override public void connected()    { post(new SessionEvent.PrimaryConnected()); }
         @Override public void disconnected() { post(new SessionEvent.PrimaryDisconnected()); }

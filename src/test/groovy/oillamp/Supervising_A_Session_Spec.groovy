@@ -788,18 +788,20 @@ class Supervising_A_Session_Spec extends Specification {
 
     def 'A podman that is too busy to answer does not end a working session'() {
         reportInfo """
-            Every two seconds, the session asks podman whether the sandbox still runs. Podman can
-            be slow, or fail to answer, for example while another lamp's image is being built and
-            podman's database is locked. An earlier session took any failed answer to mean "the
-            sandbox has died", and shut down, taking the user's shell with it.
+            The session learns that the sandbox has ended from `podman wait`, which it starts once
+            and which answers when the container ends. Podman can fail instead of answering, for
+            example while another lamp's image is being built and podman's database is locked.
+            An earlier session took any failed answer to mean "the sandbox has died", and shut
+            down, taking the user's shell with it.
 
-            Now only a clear answer ends the session: podman saying that the container stopped,
-            or that it no longer exists. When podman does not answer, the user is warned once,
-            with `OIL-SANDBOX-006`, and the session goes on.
+            Now only a clear answer ends the session: the container's exit code, or podman saying
+            that the container no longer exists. When `podman wait` fails, the session starts it
+            again every two seconds, the user is warned once, with `OIL-SANDBOX-006`, and the
+            session goes on.
         """
-        given: 'a podman that fails every question about the container while the session runs'
+        given: 'a podman whose `podman wait` fails every time while the session runs'
             host.machine {
-                it.commandFailing('podman container inspect', 125,
+                it.commandFailing('podman wait', 125,
                                   'Error: timed out waiting for the database lock')
                   .windowsStayOpenFor(Duration.ofSeconds(6))
             }

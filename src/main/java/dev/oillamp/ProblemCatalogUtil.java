@@ -933,12 +933,12 @@ final class ProblemCatalogUtil {
     }
 
     /// podman did not answer whether the sandbox is running. A warning: the session goes on, and
-    /// the user is told once, not at every check.
+    /// the user is told once, not at every try.
     public static LampProblem sandboxStateUnknown(String container, String reason) {
         return warning(SANDBOX_STATE_UNKNOWN, "podman did not say whether the sandbox is running",
-                "`podman container inspect " + container + "` failed: " + reason,
-                "oillamp checks every two seconds that the sandbox is still there; until podman "
-              + "answers again, a sandbox that stops would not be noticed. The session carries on")
+                "`podman wait " + container + "` failed: " + reason,
+                "oillamp waits with it for the sandbox to end, and tries again every two seconds; "
+              + "until podman answers again, a sandbox that stops would not be noticed. The session carries on")
             .withFix(Fix.of("this is usually a busy podman, for example during an image build, and "
                           + "passes; if it does not, check `podman ps` in another terminal"));
     }
