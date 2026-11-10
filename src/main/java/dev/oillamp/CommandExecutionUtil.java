@@ -119,10 +119,14 @@ final class CommandExecutionUtil {
             // These five talk to a running session through its control socket. None of them
             // sets anything up.
             case Command.View view     -> view(machine, context, view.lamp(), view.viewOnly());
-            case Command.Shell shell   -> shell(machine, context, shell.lamp());
+            case Command.Shell shell   -> shell.window()
+                    ? inAWindow(machine, context, shell.lamp(), "shell", "an extra shell is opening in a new terminal window")
+                    : shell(machine, context, shell.lamp());
             case Command.Stop stop     -> stop(machine, context, stop.lamp());
             case Command.Status status -> status(machine, context, status.lamp());
-            case Command.Follow follow -> follow(machine, context, follow.lamp());
+            case Command.Follow follow -> follow.window()
+                    ? inAWindow(machine, context, follow.lamp(), "follow", "a new terminal window is opening, which follows the session")
+                    : follow(machine, context, follow.lamp());
             case Command.List _        -> list(machine, context);
             // Talks to no session, and refuses if one answers.
             case Command.Remove remove -> {
@@ -577,6 +581,17 @@ final class CommandExecutionUtil {
         int code = machine.launch(Machine.Command.of(argv).labelled("shell"),
                                   Machine.Window.Stdio.TERMINAL).waitFor();
         return code == 0 ? LampExitStatus.SUCCESS : LampExitStatus.ERROR;
+    }
+
+    /// `oillamp shell <dir> --window` and `oillamp follow <dir> --window`: the same, in a new
+    /// terminal window.
+    ///
+    /// The session opens the window, as it opened its own terminal, so the window outlives this
+    /// process and is the terminal the lamp's `terminal` setting names.
+    private static LampExitStatus inAWindow(Machine machine, Context context, Path lampPath, String command, String opening) {
+        return askTheSession(machine, context, lampPath, command,
+                Control.Request.of(command).with("window", "true"),
+                reply -> context.sink().accept(new LampEvent.Ok(command, opening)));
     }
 
     /// `oillamp stop <dir>`: ask the running session to end.

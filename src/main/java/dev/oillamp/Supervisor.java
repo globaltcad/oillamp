@@ -486,9 +486,41 @@ final class Supervisor {
                 ProblemCatalogUtil.terminalNotStarted(argv, "it exited with code " + exitCode, window.output())));
     }
 
-    /// The terminal emulator's command line, with the ssh command inside it.
+    /// Opens one more terminal window, which runs `command`: an extra shell, or `oillamp follow`.
+    ///
+    /// Asked for with `oillamp shell --window` or `oillamp follow --window`, while the session
+    /// runs, so a window that does not open ends nothing: whoever asked is told why. The window
+    /// closes by itself when the session ends, as what runs in it ends then.
+    private Control.Reply openExtraWindow(String what, Tuple<String> command) {
+        Result<Tuple<String>> rendered = terminalCommand(command);
+        if (rendered instanceof Result.Err<Tuple<String>>(Tuple<LampProblem> problems))
+            return Control.Reply.failed(problems.first().whatHappened());
+        Tuple<String> argv = ((Result.Ok<Tuple<String>>) rendered).value();
+        Machine.Window window = machine.launch(Machine.Command.of(argv).labelled("terminal"),
+                                               Machine.Window.Stdio.DETACHED);
+        if (window.failure().isPresent())
+            return Control.Reply.failed("starting " + argv.first() + " failed: " + window.failure().get());
+        context.sink().accept(new LampEvent.WindowOpened(what, argv));
+        return Control.Reply.ok();
+    }
+
+    /// `oillamp follow <lamp>`, run by the Java runtime and from the classpath this session runs
+    /// on, so that it is this version of oillamp wherever `oillamp` is, or is not, on the PATH.
+    private Tuple<String> followCommand() {
+        return Tuple.of(String.class,
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-cp", System.getProperty("java.class.path"), OilLamp.class.getName(),
+                "follow", prepared.layout().root().toString());
+    }
+
+    /// The terminal emulator's command line, with the ssh command of the session's own shell
+    /// inside it.
     private Result<Tuple<String>> terminalCommand() {
-        Tuple<String> shell = SandboxSshUtil.clientArgv(prepared.layout(), SandboxSshUtil.SocketRole.PRIMARY);
+        return terminalCommand(SandboxSshUtil.clientArgv(prepared.layout(), SandboxSshUtil.SocketRole.PRIMARY));
+    }
+
+    /// The terminal emulator's command line, with `shell` inside it.
+    private Result<Tuple<String>> terminalCommand(Tuple<String> shell) {
         String title = TerminalEmulatorUtil.titleFor(prepared.layout().name());
         return switch (prepared.config().terminal()) {
             case LampConfig.Terminal.Custom custom ->
@@ -1353,7 +1385,7 @@ final class Supervisor {
     /// is volatile) and posts events: `stop` posts [SessionEvent.StopRequested] and replies at once,
     /// and the event loop shuts the session down as it would for Ctrl-C. `view` opens a viewer
     /// directly. `shell` opens nothing: it returns the ssh command, and the asking process runs it
-    /// in its own terminal.
+    /// in its own terminal. Asked for a window, `shell` and `follow` open a terminal directly.
     private Control.Reply answer(Control.Request request) {
         return switch (request.op()) {
             case "status" -> Control.Reply.ok()
@@ -1382,10 +1414,14 @@ final class Supervisor {
             }
             // The extra shell runs in the terminal where the user typed `oillamp shell`, so the
             // supervisor returns the ssh command instead of running it.
-            case "shell" -> state.isLive()
-                    ? Control.Reply.ok().withArgv(
-                            SandboxSshUtil.clientArgv(prepared.layout(), SandboxSshUtil.SocketRole.EXTRA))
-                    : Control.Reply.failed("this session is already ending");
+            // Asked for a window, it opens a terminal for it, as for the session's own shell.
+            case "shell" -> {
+                if (!state.isLive()) yield Control.Reply.failed("this session is already ending");
+                Tuple<String> shell = SandboxSshUtil.clientArgv(prepared.layout(), SandboxSshUtil.SocketRole.EXTRA);
+                yield request.flag("window")
+                        ? openExtraWindow("an extra shell, in a new terminal window", shell)
+                        : Control.Reply.ok().withArgv(shell);
+            }
             // Answered once the run has ended, which is what `oillamp ask` waits for.
             case "ask" -> {
                 if (!state.isLive()) yield Control.Reply.failed("this session is already ending");
@@ -1446,7 +1482,12 @@ final class Supervisor {
                         : Control.Reply.failed(cancelled.problems().first().whatHappened());
             }
             // Answered with every event from now on, after what a newcomer needs to catch up.
-            case "follow" -> Control.Reply.ok().withStream(out -> {
+            // Asked for a window, it opens a terminal in which `oillamp follow` asks again.
+            case "follow" -> request.flag("window")
+                    ? state.isLive()
+                        ? openExtraWindow("what the session reports, in a new terminal window", followCommand())
+                        : Control.Reply.failed("this session is already ending")
+                    : Control.Reply.ok().withStream(out -> {
                 try (Followers.Feed feed = followers.follow()) {
                     for (Optional<LampEvent> event = feed.next(); event.isPresent(); event = feed.next())
                         out.write(event.get().toJson());

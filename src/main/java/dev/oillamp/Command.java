@@ -42,10 +42,16 @@ sealed interface Command {
     /// agent tools.
     record Update(Path lamp, boolean system, Context.Options options) implements Command {}
     record View(Path lamp, boolean viewOnly, Context.Options options) implements Command {}
-    record Shell(Path lamp, Context.Options options) implements Command {}
+    /// `oillamp shell <dir>`.
+    ///
+    /// @param window in a new terminal window, which the session opens, instead of this terminal
+    record Shell(Path lamp, boolean window, Context.Options options) implements Command {}
     record Stop(Path lamp, Context.Options options) implements Command {}
     record Status(Path lamp, Context.Options options) implements Command {}
-    record Follow(Path lamp, Context.Options options) implements Command {}
+    /// `oillamp follow <dir>`.
+    ///
+    /// @param window in a new terminal window, which the session opens, instead of this terminal
+    record Follow(Path lamp, boolean window, Context.Options options) implements Command {}
     record List(Context.Options options) implements Command {}
     /// `confirmed` is `--yes`: the answer to the one question `remove` asks before it deletes
     /// the agent's home, not a general "assume yes".
@@ -124,6 +130,7 @@ sealed interface Command {
         Context.Options options = Context.Options.defaults();
         // The options only one command reads.
         boolean viewOnly = false;
+        boolean window = false;
         boolean confirmed = false;
         boolean prune = false;
         boolean wait = true;
@@ -175,6 +182,7 @@ sealed interface Command {
                 case "--embedded"      -> options = options.withEmbedded(true);
                 case "--enable-scheduling" -> options = options.withScheduling(true);
                 case "--view-only"     -> viewOnly = true;
+                case "--window"        -> window = true;
                 case "--yes"           -> confirmed = true;
                 case "--prune"         -> prune = true;
                 case "--no-wait"       -> wait = false;
@@ -345,10 +353,10 @@ sealed interface Command {
             case "at"     -> Result.ok(new At(Path.of(rest.first()), options));
             case "update" -> Result.ok(new Update(Path.of(rest.first()), system, options));
             case "view"   -> Result.ok(new View(Path.of(rest.first()), viewOnly, options));
-            case "shell"  -> Result.ok(new Shell(Path.of(rest.first()), options));
+            case "shell"  -> Result.ok(new Shell(Path.of(rest.first()), window, options));
             case "stop"   -> Result.ok(new Stop(Path.of(rest.first()), options));
             case "status" -> Result.ok(new Status(Path.of(rest.first()), options));
-            case "follow" -> Result.ok(new Follow(Path.of(rest.first()), options));
+            case "follow" -> Result.ok(new Follow(Path.of(rest.first()), window, options));
             case "list"   -> Result.ok(new List(options));
             // The one command that takes several lamps, since a pattern like `test*` is the
             // natural way to clean up after experiments.
@@ -591,7 +599,7 @@ sealed interface Command {
                                                "--embedded", "--model-service", "--model-key-env",
                                                "--model", "--instructions-env", "--enable-scheduling",
                                                "--security-requirements-env", "--wallpaper", "--background"))
-                .put("view",       ValueSet.of("--view-only"))
+                .put("view",       ValueSet.of("--view-only", "--embedded"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
                 .put("recordings", ValueSet.of("--open", "--prune", "--dry-run"))
@@ -606,10 +614,10 @@ sealed interface Command {
                 .put("host-access", ValueSet.of("--requirements-env", "--commands", "--ask-the-user", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
-                .put("shell",      ValueSet.of(String.class))
+                .put("shell",      ValueSet.of("--window", "--embedded"))
                 .put("stop",       ValueSet.of("--embedded"))
                 .put("status",     ValueSet.of("--embedded"))
-                .put("follow",     ValueSet.of("--embedded"))
+                .put("follow",     ValueSet.of("--embedded", "--window"))
                 .put("list",       ValueSet.of("--embedded"))
                 .put("completion", ValueSet.of(String.class))
                 .put("version",    ValueSet.of(String.class))
@@ -742,17 +750,19 @@ sealed interface Command {
                     Versions come from agent_tools.versions (latest by default).
                       --system  build the whole image again, from the newest Debian, with
                                 every package's updates. Takes as long as a first build.
-              shell <dir>
+              shell <dir> [--window]
                     Open an extra shell in this terminal. Needs no display. Closing it does
                     not end the session.
+                    --window opens it in a new terminal window instead, which needs one.
               stop <dir>
                     Ask a running session to shut down, or clean up after one that crashed.
               status <dir>
                     What a running session is doing.
-              follow <dir> [--embedded]
+              follow <dir> [--embedded] [--window]
                     Report what a running session reports, as it happens, until it ends:
                     first what it is doing now, then everything after. Ctrl-C stops
                     following, not the session.
+                    --window follows in a new terminal window instead of this one.
               list
                     Every oillamp sandbox running on this host.
               remove <dir>... --yes

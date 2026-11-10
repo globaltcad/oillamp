@@ -127,7 +127,7 @@ class Using_The_Command_Line_Spec extends Specification {
             'history LAMP -m note'             | '--message only goes with `oillamp history <dir> save`' | 'oillamp history <dir> save'
             'history LAMP restore a1 -m note'  | '--message only goes with `oillamp history <dir> save`' | 'oillamp history <dir> save'
             'stop LAMP --message=note'         | "`oillamp stop` does not take --message" | 'oillamp stop <dir>'
-            'shell LAMP --embedded'            | "`oillamp shell` does not take --embedded" | 'oillamp shell <dir>'
+            'shell LAMP --view-only'           | "`oillamp shell` does not take --view-only" | 'oillamp shell <dir> [--window]'
             'list --yes'                       | "`oillamp list` does not take --yes"       | 'oillamp list'
             'stop LAMP --init'                 | "`oillamp stop` does not take --init"    | 'oillamp stop <dir>'
             'status LAMP --no-viewer'          | "`oillamp status` does not take --no-viewer" | 'oillamp status <dir>'
@@ -180,7 +180,7 @@ class Using_The_Command_Line_Spec extends Specification {
                      'at LAMP --dry-run --model-service https://api.eu.edenai.run --model-key-env EDENAI_API_KEY',
                      'at LAMP --dry-run --model azure/gpt-6.1-sol', 'at LAMP --dry-run --model=llama3.2:3b',
                      'at LAMP --dry-run --enable-scheduling', 'doctor --no-install',
-                     'config LAMP check --dry-run --no-install', 'view LAMP --view-only',
+                     'config LAMP check --dry-run --no-install', 'view LAMP --view-only', 'shell LAMP --window', 'follow LAMP --window',
                      'recordings LAMP --open 20260101-120000', 'remove LAMP --yes --embedded',
                      'history LAMP save --message note --embedded', 'history LAMP --embedded',
                      'history LAMP restore a1b2c3d4 --embedded', 'history LAMP autosave --embedded', 'stop LAMP --embedded', 'status LAMP --embedded',
@@ -444,6 +444,8 @@ class Using_The_Command_Line_Spec extends Specification {
         and: 'it offers each command only the options that the command takes'
             complete(script, 'oillamp', 'stop', '/x', '--d') == ['--debug']
             complete(script, 'oillamp', 'view', '/x', '--v').containsAll(['--view-only', '--verbose'])
+            complete(script, 'oillamp', 'shell', '/x', '--w') == ['--window']
+            complete(script, 'oillamp', 'follow', '/x', '--w') == ['--window']
             complete(script, 'oillamp', 'update', '/x', '--s') == ['--system']
             !complete(script, 'oillamp', 'at', '/x', '--').contains('--yes')
             complete(script, 'oillamp', 'completion', '') == ['bash']

@@ -305,6 +305,7 @@ final class GeneratedFileTextUtil {
                         case "$command" in
                             at)            options="$options --init --dry-run --no-install --no-viewer --no-windows --model-service --model-key-env --model --instructions-env --enable-scheduling --wallpaper --background" ;;
                             view)          options="$options --view-only" ;;
+                            shell|follow)  options="$options --window" ;;
                             remove)        options="$options --yes --dry-run" ;;
                             history)       options="$options --message --all --delete --yes" ;;
                             schedule)      options="$options --cron --at --expires" ;;

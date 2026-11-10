@@ -41,10 +41,10 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp doctor [<dir>]` | Works. Checks the host (and the lamp's configuration if given) and changes nothing. Exits 0 or 3. |
 | `oillamp view <dir> [--view-only]` | Works. |
 | `oillamp at <dir> --instructions-env <name>` | Works in the scenarios, and once in a real sandbox with Eden AI (see "Runs and the schedule"). Also `LampDirectory.instructions`. |
-| `oillamp shell <dir>` | Works. An extra shell in the current terminal. |
+| `oillamp shell <dir> [--window]` | Works. An extra shell in the current terminal. With `--window`, in a new terminal window the session opens: in the simulated scenarios only. |
 | `oillamp stop <dir>` | Works. Also cleans up after a supervisor that was killed. |
 | `oillamp status <dir>` | Works. |
-| `oillamp follow <dir> [--embedded]` | Works in the simulated scenarios: catches up on the run in progress and the runs waiting, then reports every event until the session ends. Embedded, it stops when standard input closes, and the session goes on. |
+| `oillamp follow <dir> [--embedded] [--window]` | Works in the simulated scenarios: catches up on the run in progress and the runs waiting, then reports every event until the session ends. Embedded, it stops when standard input closes, and the session goes on. With `--window`, the session opens a new terminal window that follows. |
 | `oillamp list` | Works. |
 | `oillamp genies` | Works. Opens Genies from the single file, and waits until its window is closed. |
 | `oillamp update <dir> [--system]` | Works in the simulated scenarios. Not yet run against real npm, Eden AI and Debian mirrors. |

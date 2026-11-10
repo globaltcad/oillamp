@@ -626,6 +626,37 @@ public final class Lamp implements AutoCloseable {
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no status of the agent"));
     }
 
+    /// Opens a shell into the sandbox, as the agent user, in a new terminal window on the user's
+    /// desktop: the terminal the lamp's `terminal` setting names, or the desktop's own. Closing
+    /// the window does not end the session; the session ending closes the shell.
+    ///
+    /// Runs `oillamp shell <dir> --window` as a short-lived engine process.
+    ///
+    /// @throws LampFailedException when the session is not running, or no terminal could be opened
+    public void openShell() throws IOException, InterruptedException, LampFailedException {
+        runToEnd(launcher, listeners, "shell", directory.toString(), "--window").orThrow();
+    }
+
+    /// Opens the sandbox's desktop in a viewer window of its own on the user's desktop, as
+    /// `oillamp view <dir>` does. Closing the window does not end the session. A viewer that
+    /// could not be started is reported by the session, as a [LampEvent.Warning].
+    ///
+    /// @throws LampFailedException when the session is not running
+    public void openViewer() throws IOException, InterruptedException, LampFailedException {
+        runToEnd(launcher, listeners, "view", directory.toString()).orThrow();
+    }
+
+    /// Opens a new terminal window on the user's desktop that reports what the session reports,
+    /// as it happens, as `oillamp follow <dir>` does in a terminal. Closing the window does not
+    /// end the session; the session ending ends the following.
+    ///
+    /// Runs `oillamp follow <dir> --window` as a short-lived engine process.
+    ///
+    /// @throws LampFailedException when the session is not running, or no terminal could be opened
+    public void openFollower() throws IOException, InterruptedException, LampFailedException {
+        runToEnd(launcher, listeners, "follow", directory.toString(), "--window").orThrow();
+    }
+
     /// Waits until the session is running, the engine has ended, or `limit` has passed.
     ///
     /// @return true once the session is running. False if it ended without getting there, in

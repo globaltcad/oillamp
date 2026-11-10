@@ -1,5 +1,6 @@
 package oillamp
 
+import dev.lamp.Lamp
 import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
 import dev.oillamp.OilLamp
@@ -163,6 +164,121 @@ class The_Session_Commands_Spec extends Specification {
         and: 'the session is still running after the extra shell has closed, and has printed no end-of-session summary'
             session.alive
             reported.every { !(it instanceof LampEvent.Summary && it.title().startsWith('session ')) }
+    }
+
+    def '`oillamp shell --window` has the session open the extra shell in a new terminal window'() {
+        reportInfo """
+            Let's consider an application that shows a running session, and has no terminal of its
+            own to put a shell in. With `--window`, `oillamp shell <lamp>` does not run the ssh
+            command line itself: the session's supervisor opens a new terminal window with that
+            command line in it, as it opened the session's own shell window, and
+            `oillamp shell` returns at once. The shell in that window is an *extra shell* like
+            any other.
+        """
+        given: 'a session runs for the lamp, with the two windows `oillamp at` opened'
+            var lamp = host.lampPath()
+            startASession(lamp)
+            var before = windowsOpened()
+
+        when: '`oillamp shell <lamp> --window` is run'
+            var outcome = host.oillamp.run('shell', lamp.toString(), '--window')
+
+        then:
+            outcome.status() == LampExitStatus.SUCCESS
+
+        and: 'the supervisor opened one more window, "an extra shell, in a new terminal window", which runs ssh'
+            waitUntil { windowsOpened() == before + 1 }
+            var window = reported.findAll { it instanceof LampEvent.WindowOpened }.last()
+            window.what() == 'an extra shell, in a new terminal window'
+            window.argv().contains('ssh')
+
+        and: 'the session reports "1 extra shell attached"'
+            waitUntil { reported.any { it instanceof LampEvent.Info && it.text() == '1 extra shell attached' } }
+    }
+
+    def '`oillamp follow --window` has the session open a terminal window that runs `oillamp follow`'() {
+        reportInfo """
+            Let's consider the same application, whose user wants to read what the session
+            reports as a terminal shows it. With `--window`, `oillamp follow <lamp>` reports
+            nothing itself: the session's supervisor opens a new terminal window whose command
+            line is `oillamp follow <lamp>`, started with the Java runtime the session itself
+            runs on, and `oillamp follow --window` returns at once.
+        """
+        given: 'a session runs for the lamp, with the two windows `oillamp at` opened'
+            var lamp = host.lampPath()
+            startASession(lamp)
+            var before = windowsOpened()
+
+        when: '`oillamp follow <lamp> --window` is run'
+            var outcome = host.oillamp.run('follow', lamp.toString(), '--window')
+
+        then: 'it succeeded, without waiting for the session to end'
+            outcome.status() == LampExitStatus.SUCCESS
+            session.alive
+
+        and: 'the supervisor opened one more window, whose command line ends with `follow <lamp>`'
+            waitUntil { windowsOpened() == before + 1 }
+            var window = reported.findAll { it instanceof LampEvent.WindowOpened }.last()
+            window.what() == 'what the session reports, in a new terminal window'
+            window.argv().toList().takeRight(3) == [OilLamp.name, 'follow', lamp.toString()]
+    }
+
+    def '`oillamp shell --window` fails on a machine with no terminal emulator, and the session keeps running'() {
+        reportInfo """
+            Let's consider a session started with `oillamp at <lamp> --no-windows` on a machine
+            where none of the terminal emulators oillamp knows is installed. Such a session
+            needed no terminal to start. `oillamp shell <lamp> --window` needs one: the session's
+            supervisor refuses, `oillamp shell` reports why, and the session is not affected.
+        """
+        given: 'a machine with no terminal emulator, and a session started with `--no-windows`'
+            var lamp = host.lampPath()
+            host.machine { it.withoutTerminals() }
+            var oillamp = host.oillamp.observedBy { reported.add(it) }
+            session = Thread.start { sessionOutcome = oillamp.run('at', lamp.toString(), '--no-windows') }
+            waitUntil { reported.any { it instanceof LampEvent.Summary && it.title() == 'your session is up' } }
+
+        when: '`oillamp shell <lamp> --window` is run'
+            var outcome = host.oillamp.run('shell', lamp.toString(), '--window')
+
+        then: 'it fails, and says that no terminal emulator is on the PATH'
+            outcome.status() != LampExitStatus.SUCCESS
+            outcome.console().contains('none of the known terminal emulators is on PATH')
+
+        and: 'the session opened no window, and still runs'
+            windowsOpened() == 0
+            session.alive
+    }
+
+    def 'An application opens a shell, a viewer and a follower in windows of their own through `Lamp`'() {
+        reportInfo """
+            Let's consider an application that joined a running session with
+            `Lamp.at(dir).join()`, and offers its user three buttons. `Lamp.openShell()` runs
+            `oillamp shell <dir> --window`, `Lamp.openViewer()` runs `oillamp view <dir>`, and
+            `Lamp.openFollower()` runs `oillamp follow <dir> --window`. Each returns once the
+            session's supervisor has started the window, and the joined `Lamp` hears the
+            `WindowOpened` event of each.
+        """
+        given: 'a session runs for the lamp, and an application has joined it'
+            var lamp = host.lampPath()
+            startASession(lamp)
+            var heard = new java.util.concurrent.CopyOnWriteArrayList<LampEvent>()
+            var joined = Lamp.at(lamp).launchedBy(host.launcher).onEvent { heard.add(it) }.join()
+            assert joined.awaitRunning(Duration.ofSeconds(30))
+
+        when: 'the application calls `openShell()`, `openViewer()` and `openFollower()`'
+            joined.openShell()
+            joined.openViewer()
+            joined.openFollower()
+
+        then: 'the joined `Lamp` heard a `WindowOpened` event for each, in that order'
+            waitUntil { heard.count { it instanceof LampEvent.WindowOpened } == 3 }
+            heard.findAll { it instanceof LampEvent.WindowOpened }*.what() == [
+                    'an extra shell, in a new terminal window',
+                    'the desktop viewer',
+                    'what the session reports, in a new terminal window']
+
+        cleanup:
+            joined?.close()
     }
 
     def '`oillamp at --no-windows` runs a session on a machine with no display, and prints how to get into it'() {
