@@ -1644,7 +1644,8 @@ public final class GeniesView extends JPanel {
     private UIForAnySwing<?, ?> bottomBar() {
         Val<Boolean> awake = phase.viewAs(Boolean.class, Genie.Phase::isAwake);
         Val<Boolean> overview = genie.viewAs(Boolean.class, it -> it.conversations().overview());
-        Val<Boolean> canWake = phase.viewAs(Boolean.class, it -> it == Genie.Phase.ASLEEP || it == Genie.Phase.BROKEN);
+        // A lamp from elsewhere whose folder is gone has nothing to wake.
+        Val<Boolean> canWake = genie.viewAs(Boolean.class, it -> (it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN) && !it.lampGone());
         Val<Boolean> canSend = genie.viewAs(Boolean.class, Genie::canSend);
         Val<Boolean> answeringElsewhere = genie.viewAs(Boolean.class, it -> it.conversations().aside().isPresent());
         return
@@ -1736,7 +1737,9 @@ public final class GeniesView extends JPanel {
                         label(Viewable.of(String.class, genie, chatWords, (it, words) -> switch (it.phase()) {
                             case WAKING -> words.WAKING(it.name(), it.activity().words(words.lang()));
                             case FALLING_ASLEEP -> words.FALLING_ASLEEP(it.name(), it.activity().words(words.lang()));
-                            default -> words.IS_ASLEEP_ITS_SANDBOX_IS_OFF(it.name());
+                            default -> it.lampGone()
+                                ? words.THE_FOLDER_OF_ITS_LAMP_IS_GONE(it.name(), it.elsewhere().map(String::valueOf).orElse(""))
+                                : words.IS_ASLEEP_ITS_SANDBOX_IS_OFF(it.name());
                         }))
                         .group(Skin.SUBTITLE),
                         genie
@@ -1931,7 +1934,7 @@ public final class GeniesView extends JPanel {
                     .add(ViewPartsUtil.item(words.SLEEP(), true, () -> app.sleep(id)))
                 )
                 .applyIf(!now.isAwake(), ui1 -> ui1
-                    .add(ViewPartsUtil.item(wake, !now.isBetween(), () -> app.wake(id)))
+                    .add(ViewPartsUtil.item(wake, !now.isBetween() && !shown.lampGone(), () -> app.wake(id)))
                 )
                 .peek(JPopupMenu::addSeparator)
                 .add(

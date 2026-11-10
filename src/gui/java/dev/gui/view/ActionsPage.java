@@ -308,7 +308,9 @@ final class ActionsPage {
             Palette::TEXT,
             Viewable.of(String.class, phase, words, (it, page) -> it.isAwake() ? page.SLEEP() : page.WAKE()),
             Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
-                case ASLEEP -> page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX(it.name());
+                case ASLEEP -> it.lampGone()
+                    ? page.THE_FOLDER_OF_ITS_LAMP_IS_GONE(it.name(), it.elsewhere().map(String::valueOf).orElse(""))
+                    : page.IS_IN_THE_LAMP_WAKING_IT_STARTS_ITS_SANDBOX(it.name());
                 case WAKING -> page.IS_WAKING(it.name());
                 case FALLING_ASLEEP -> page.IS_GOING_BACK_INTO_THE_LAMP_ITS_SANDBOX_IS_STOPPING(it.name());
                 case BROKEN -> page.DID_NOT_WAKE_ITS_HOME_IS_KEPT(it.name());
@@ -324,7 +326,8 @@ final class ActionsPage {
                 default -> page.SLEEP();
             })))
             .group(Skin.QUIET_BUTTON)
-            .isEnabledIf(phase.viewAs(Boolean.class, it -> !it.isBetween()))
+            // A lamp from elsewhere whose folder is gone has nothing to wake.
+            .isEnabledIf(genie.viewAs(Boolean.class, it -> !it.phase().isBetween() && !it.lampGone()))
             .onClick(_ -> {
                 if (phase.get().isAwake()) app.sleep(selected());
                 else app.wake(selected());
@@ -346,7 +349,9 @@ final class ActionsPage {
             Palette::TEXT,
             words.viewAsString(Lang.ActionsPage::BEHIND_THE_SCENES),
             Viewable.of(String.class, genie, words, (it, page) ->
-                it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN
+                it.lampGone()
+                    ? page.THE_FOLDER_OF_ITS_LAMP_IS_GONE(it.name(), it.elsewhere().map(String::valueOf).orElse(""))
+                : it.phase() == Genie.Phase.ASLEEP || it.phase() == Genie.Phase.BROKEN
                     ? page.IS_IN_THE_LAMP_WAKE_IT_TO_LOOK_INTO_ITS_SANDBOX(it.name())
                     : page.LOOK_INTO_ITS_SANDBOX_YOURSELF_EACH_IN_A_WINDOW_OF_ITS_OWN(it.name())
             ),
