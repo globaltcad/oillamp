@@ -282,7 +282,7 @@ class Keeping_The_Model_Key_On_The_Host_Spec extends Specification {
             guide.contains(local ? 'it is not Eden AI' : 'Only models served in the EU are offered')
 
         and: 'either way, the guide says why a long answer stops, and what the human can do about it'
-            guide.contains('at most 8192 tokens long') && guide.contains('EDENAI_MAX_TOKENS')
+            guide.contains('Each answer of the model is limited in length') && guide.contains('EDENAI_MAX_TOKENS')
 
         where:
             local || euOnly

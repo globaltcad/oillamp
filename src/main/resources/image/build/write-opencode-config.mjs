@@ -23,10 +23,18 @@ const EU_BASE_URL = "https://api.eu.edenai.run/v3";
 const RELAY_BASE_URL = "http://127.0.0.1:3129/v3";
 // Where the agent keeps the skills it writes for itself, in its home.
 const GENIE_SKILLS = "~/.genie/skills";
-// Eden's catalog does not say how long an answer may be, so this matches the default of pi's
-// Eden AI extension, EDENAI_MAX_TOKENS.
-const MAX_OUTPUT_TOKENS = 8192;
+// opencode asks a model for at most `limit.output` tokens per answer, thinking included. Eden's
+// catalog gives most models their own limit in `max_output_tokens`, and that is what this writes.
+// A model whose entry gives none gets this, the default of pi's Eden AI extension: low enough
+// for nearly every model to accept it, where a guessed higher value could have every request
+// to a model refused with 400.
+const FALLBACK_MAX_OUTPUT_TOKENS = 8192;
 const UNKNOWN_CONTEXT = 128000;
+
+function maxOutputTokens(model) {
+    const limit = model.max_output_tokens;
+    return Number.isInteger(limit) && limit > 0 ? limit : FALLBACK_MAX_OUTPUT_TOKENS;
+}
 
 const output = process.argv[2];
 if (!output) {
@@ -52,7 +60,7 @@ try {
         const perMillion = cost => typeof cost === "number" ? Math.round(cost * 1e12) / 1e6 : 0;
         models[model.id] = {
             name: model.id,
-            limit: { context: model.context_length || UNKNOWN_CONTEXT, output: MAX_OUTPUT_TOKENS },
+            limit: { context: model.context_length || UNKNOWN_CONTEXT, output: maxOutputTokens(model) },
             tool_call: Boolean(capabilities.supports_function_calling),
             reasoning: Boolean(capabilities.supports_reasoning),
             attachment: inputs.some(kind => kind !== "text"),

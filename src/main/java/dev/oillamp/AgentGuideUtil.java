@@ -286,14 +286,17 @@ final class AgentGuideUtil {
                .append("  Its list of Eden AI models is the one the EU endpoint offered when this\n")
                .append("  sandbox's image was built.\n");
             out.append('\n')
-               .append("Each answer of the model is at most 8192 tokens long, thinking included: Eden AI\n")
-               .append("does not say how long a model's answers may be, so both harnesses ask for that\n")
-               .append("much. `pi` asks for more when the human set `EDENAI_MAX_TOKENS` on their machine\n")
-               .append("before starting the session (`echo $EDENAI_MAX_TOKENS` here says); `opencode`\n")
-               .append("does not. A longer answer, such as a large file written in one go, is cut off:\n")
-               .append("write large files in parts. If answers keep being cut off, tell the human about\n")
-               .append("`EDENAI_MAX_TOKENS`. Some models refuse a value above their own limit, then every\n")
-               .append("request fails with 400, and the error names that limit; tell them that too.\n\n");
+               .append("Each answer of the model is limited in length, thinking included. `pi` asks for\n")
+               .append("at most 8192 tokens, because its Eden AI extension does not read each model's\n")
+               .append("own limit; it asks for more when the human set `EDENAI_MAX_TOKENS` on their\n")
+               .append("machine before starting the session (`echo $EDENAI_MAX_TOKENS` here says).\n")
+               .append("`opencode` asks each model for the limit Eden AI's catalog gave it when this\n")
+               .append("sandbox's image was built, 8192 where the catalog gave none, and never more than\n")
+               .append("its own cap of 32000. A longer answer, such as a large file written in one go,\n")
+               .append("is cut off: write large files in parts. If answers in `pi` keep being cut off,\n")
+               .append("tell the human about `EDENAI_MAX_TOKENS`. Some models refuse a value above their\n")
+               .append("own limit, then every request fails with 400, and the error names that limit;\n")
+               .append("tell them that too.\n\n");
         }
 
         config.llmForward().ifPresent(forward -> out

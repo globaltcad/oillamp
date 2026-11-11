@@ -1,7 +1,11 @@
 package oillamp
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import spock.lang.Narrative
+import spock.lang.Requires
 import spock.lang.Specification
+import spock.lang.TempDir
 import spock.lang.Title
 
 import java.nio.file.Files
@@ -22,6 +26,9 @@ They cannot check that the image works; the spikes do that.
 class The_Sandbox_Image_Spec extends Specification {
 
     static final Path IMAGE = Path.of('src/main/resources/image')
+
+    @TempDir
+    Path temp
 
     def 'Every shell script in the image parses: #script.fileName'() {
         reportInfo """
@@ -453,6 +460,62 @@ class The_Sandbox_Image_Spec extends Specification {
         then: 'the configuration it writes lists `~/.genie/skills` under `skills.paths`'
             writer.contains('const GENIE_SKILLS = "~/.genie/skills";')
             writer.contains('skills: { paths: [GENIE_SKILLS] },')
+    }
+
+    @Requires({ Spike.run('node', '--version').ok })
+    def 'opencode\'s configuration limits each Eden AI model\'s answers to what the EU catalog gives that model, and to 8192 tokens where it gives nothing'() {
+        reportInfo """
+            Every answer of a model is limited in length, thinking included. opencode reads the
+            limit of each model from `limit.output` in its configuration, and asks the model for
+            at most that many tokens. An answer that reaches the limit stops in the middle, often
+            while the agent writes a large file. (opencode also has a cap of its own, 32000 tokens
+            in opencode 1.19, which it applies whatever `limit.output` says.)
+
+            The build writes opencode's configuration into the image with
+            `write-opencode-config.mjs`. The script takes the models from the catalog of Eden AI's
+            EU endpoint, `https://api.eu.edenai.run/v3/models`, whose entry for a model gives that
+            model's own limit in `max_output_tokens`, and copies it into `limit.output`. Oillamp
+            does not choose these limits itself: Eden publishes them, and they change as Eden adds
+            and updates models. The catalog is read when the image is built, so a lamp gets new
+            limits with `oillamp update`.
+
+            Some entries give no `max_output_tokens`. For those models the script pins
+            `limit.output` to 8192 tokens, the default of pi's Eden AI extension. A higher guess
+            is not safe: a model asked for more tokens than it can give may refuse the request
+            with 400 instead of giving a shorter answer, and then every request to that model
+            fails.
+
+            Here the script runs with Node.js, and `fetch` answers from a stand-in for Eden's
+            catalog with three EU models: one whose entry gives 128000 tokens, one whose entry
+            gives 4096, and one whose entry has no `max_output_tokens`.
+        """
+        given: 'a module that Node.js loads first, and that makes `fetch` answer with a catalog of three EU models'
+            var model = { String id, Integer maxOutputTokens ->
+                [id: id, regions: [[code: 'eu', name: 'Europe']], capabilities: [output_modalities: ['text']]] +
+                        (maxOutputTokens == null ? [:] : [max_output_tokens: maxOutputTokens])
+            }
+            var catalog = JsonOutput.toJson([data: [
+                    model('example/gives-128000', 128000),
+                    model('example/gives-4096', 4096),
+                    model('example/gives-none', null),
+            ]])
+            var standIn = temp.resolve('stand-in-catalog.mjs')
+            Files.writeString(standIn, "globalThis.fetch = async () => new Response(${JsonOutput.toJson(catalog)});\n")
+
+        when: '`write-opencode-config.mjs` writes opencode\'s configuration from that catalog'
+            var configuration = temp.resolve('opencode.json')
+            var run = Spike.run('node', '--import', standIn.toUri().toString(),
+                    IMAGE.resolve('build/write-opencode-config.mjs').toString(), configuration.toString())
+            assert run.ok, run.describe()
+            var models = new JsonSlurper().parse(configuration.toFile()).provider.edenai.models
+
+        then: 'the configuration lists the three models'
+            models.keySet() == ['example/gives-128000', 'example/gives-4096', 'example/gives-none'] as Set
+
+        and: 'each model\'s `limit.output` is the `max_output_tokens` of its catalog entry, and 8192 for the entry without one'
+            models['example/gives-128000'].limit.output == 128000
+            models['example/gives-4096'].limit.output == 4096
+            models['example/gives-none'].limit.output == 8192
     }
 
     def 'The image installs SDKMAN where it can be written to, which is not where it is built'() {
