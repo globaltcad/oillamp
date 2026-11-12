@@ -732,6 +732,7 @@ public final class GeniesView extends JPanel {
                     panel("fill, ins 0").withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                     .peek(it -> it.addComponentListener(relayout))
                     .add("grow, wmin 0",
+                        // A row's tooltip is shown over the row, as its text running on: see RowReveal.
                         UI.trees(rows, conf -> conf
                             .nodesOf(Talk.Chat.class, it -> it
                                 .children(Talk.Chat::branches)
@@ -754,6 +755,7 @@ public final class GeniesView extends JPanel {
                         // A little taller than the text, so the rows breathe. Plain Swing, which
                         // any look-and-feel keeps; the text is centred in the row. SwingTree scales it.
                         .withRowHeight(ROW_HEIGHT)
+                        .peek(it -> RowReveal.on(it, palette))
                         .isEnabledIf(browsable)
                         .withSelection(here)
                         .onSelection(it -> {
@@ -771,12 +773,9 @@ public final class GeniesView extends JPanel {
                         .onMouseMove(it -> {
                             JTree tree = it.getComponent();
                             // In the tree's own pixels, as its rows are: mouseX() and mouseY() are unscaled.
-                            int x = it.getEvent().getX(), y = it.getEvent().getY();
-                            int row = tree.getClosestRowForLocation(x, y);
-                            Rectangle bounds = tree.getRowBounds(row);
-                            boolean onRow = bounds != null && y >= bounds.y && y < bounds.y + bounds.height;
-                            pointed.set(onRow ? row : -1);
-                            boolean clickable = onRow && tree.isEnabled();
+                            int row = RowReveal.rowAt(tree, it.getEvent().getX(), it.getEvent().getY());
+                            pointed.set(row);
+                            boolean clickable = row >= 0 && tree.isEnabled();
                             tree.setCursor(Cursor.getPredefinedCursor(clickable ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
                         })
                         .onMouseExit(_ -> pointed.set(-1))
