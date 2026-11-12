@@ -212,9 +212,10 @@ class Keeping_History_Within_A_Disk_Budget_Spec extends Specification {
             stays, and every other line too.
 
             Writing the size deletes nothing by itself: the next save does, or `LampDirectory.pruneHistory()`,
-            so the program can first show what `LampDirectory.wouldPruneHistory()` would delete. A size
-            outside 0 to 10000 GB is refused before the engine starts, with an `IllegalArgumentException`,
-            and `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
+            so the program can first show the user the snapshots `LampDirectory.wouldPruneHistory()` lists
+            as those it would delete. `LampDirectory.historyMaxGrowthGb(-1)`, a size outside 0 to 10000 GB,
+            throws an `IllegalArgumentException` before the engine starts, and
+            `oillamp history <dir> max-growth lots` is refused as a usage error that says what a size is.
         '''
         given: 'a lamp with the file a new lamp gets, saved twice with two versions of a 64 KB file'
             def lamp = host.lampPath()
