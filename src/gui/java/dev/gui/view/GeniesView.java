@@ -1881,7 +1881,7 @@ public final class GeniesView extends JPanel {
     public JMenuBar titleBar(Val<String> title) {
         JMenuBar bar = new JMenuBar();
         UI.use(look, () ->
-            UI.of(bar).withLayout("ins 0 6 0 0, gap 8, aligny center")
+            UI.of(bar).withLayout("ins 0, gap 8, aligny center")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).border(0, p.TRANSPARENT()))
             .add(
                 button("").group(Skin.ICON_BUTTON)
