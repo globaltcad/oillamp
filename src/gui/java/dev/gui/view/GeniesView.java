@@ -65,6 +65,10 @@ public final class GeniesView extends JPanel {
     /// How long the conversation takes to show that it would take the files dragged over it,
     /// and to stop showing it.
     private static final LifeTime CATCHING = LifeTime.of(0.28, TimeUnit.SECONDS);
+    /// How tall a row of a genie's tree of conversations is, in units: a few more than its text.
+    private static final int ROW_HEIGHT = 23;
+    /// How far the highlight of the row under the pointer stays from the rows above and below it.
+    private static final int ROW_GAP = 1;
 
     private final Var<GeniesState> state;
     private final Genies app;
@@ -585,7 +589,7 @@ public final class GeniesView extends JPanel {
     /// jobs had, and the user's own, with ＋ on its line for a new one. Each opens from a line
     /// saying how many. A conversation is a row, and below it are its branches, one for each
     /// question asked differently. Clicking a row goes there; the row the genie is on is
-    /// selected. Under both trees, since it can be in either, the one it is on can be deleted.
+    /// selected. Left of ＋, while there is one, the conversation it is on can be deleted.
     /// While the genie is not awake, the user can fold all of this away into its card.
     private UIForAnySwing<?, ?> conversationsOf(Var<Genie> shown) {
         UUID id = shown.get().id();
@@ -597,12 +601,15 @@ public final class GeniesView extends JPanel {
         // A new conversation needs the genie awake; while it answers, the new one waits.
         Val<Boolean> awake = shown.viewAs(Boolean.class, it -> it.phase().isAwake());
         Val<Boolean> idle = shown.viewAs(Boolean.class, it -> it.phase() != Genie.Phase.WORKING);
-        Val<Boolean> canForget = shown.viewAs(Boolean.class, it ->
-            it.phase() != Genie.Phase.WORKING &&
-            !it.phase().isBetween() &&
-            it.conversations().current().isPresent()
+        // Delete is there only while a conversation is selected, and steps back while the genie
+        // answers or wakes, rather than coming and going with it. A selection the user cleared
+        // shows the overview, while the genie stays in its conversation: then it goes too.
+        Val<Boolean> selected = shown.viewAs(Boolean.class, it ->
+            !it.conversations().overview() && it.conversations().current().isPresent()
         );
-        Val<Boolean> eitherOpen = Viewable.of(Boolean.class, chats, jobs, (c, j) -> c.shown() || j.shown());
+        Val<Boolean> canForget = shown.viewAs(Boolean.class, it ->
+            it.phase() != Genie.Phase.WORKING && !it.phase().isBetween()
+        );
         return
             box("fill, wrap 1, ins 0, gap 2, hidemode 3", "[grow]")
             .isVisibleIf(shown.viewAs(Boolean.class, Genie::showsConversations))
@@ -628,22 +635,27 @@ public final class GeniesView extends JPanel {
                     Viewable.of(Tuple.classTyped(Talk.class), conversations, lang, Conversations::chats),
                     browsable,
                     Optional.of(
-                        button("").group(Skin.ICON_BUTTON).isVisibleIf(awake).isEnabledIf(idle)
-                        .withStyle(palette, (p, it) -> it
-                            .icon(SignSvgUtil.sign(SignSvgUtil.NEW, p.SUBTEXT()))
-                            .padding(1, 6, 1, 6)
+                        box("ins 0, gap 0, hidemode 3")
+                        .add(
+                            button("").group(Skin.ICON_BUTTON).isVisibleIf(selected).isEnabledIf(canForget)
+                            .withStyle(palette, (p, it) -> it
+                                .icon(SignSvgUtil.sign(SignSvgUtil.DELETE, p.SUBTEXT()))
+                                .padding(1, 6, 1, 6)
+                            )
+                            .withTooltip(windowWords.viewAsString(Lang.Window::DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN))
+                            .onClick(_ -> confirmForget(id))
                         )
-                        .withTooltip(windowWords.viewAsString(Lang.Window::START_A_NEW_CONVERSATION_WITH_THIS_GENIE))
-                        .onClick(_ -> app.startAfresh(id))
+                        .add(
+                            button("").group(Skin.ICON_BUTTON).isVisibleIf(awake).isEnabledIf(idle)
+                            .withStyle(palette, (p, it) -> it
+                                .icon(SignSvgUtil.sign(SignSvgUtil.NEW, p.SUBTEXT()))
+                                .padding(1, 6, 1, 6)
+                            )
+                            .withTooltip(windowWords.viewAsString(Lang.Window::START_A_NEW_CONVERSATION_WITH_THIS_GENIE))
+                            .onClick(_ -> app.startAfresh(id))
+                        )
                     )
                 )
-            )
-            .add("left, gaptop 2",
-                button(windowWords.viewAsString(Lang.Window::DELETE_ELLIPSIS)).group(Skin.QUIET_BUTTON).isEnabledIf(canForget)
-                .isVisibleIf(eitherOpen)
-                .withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.DELETE, p.SUBTEXT())))
-                .withTooltip(windowWords.viewAsString(Lang.Window::DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN))
-                .onClick(_ -> confirmForget(id))
             );
     }
 
@@ -739,6 +751,9 @@ public final class GeniesView extends JPanel {
                             )
                             .leafWhenEmpty(true)
                         )
+                        // A little taller than the text, so the rows breathe. Plain Swing, which
+                        // any look-and-feel keeps; the text is centred in the row. SwingTree scales it.
+                        .withRowHeight(ROW_HEIGHT)
                         .isEnabledIf(browsable)
                         .withSelection(here)
                         .onSelection(it -> {
@@ -779,7 +794,9 @@ public final class GeniesView extends JPanel {
                                     g.scale(1 / UI.scale(), 1 / UI.scale());
                                     g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                                     g.setColor(ViewPartsUtil.withAlpha(p.BORDER(), 170));
-                                    g.fillRoundRect(0, bounds.y, tree.getWidth(), bounds.height, UI.scale(8), UI.scale(8));
+                                    // Inset a little, so neighbouring rows keep a gap between them.
+                                    int gap = UI.scale(ROW_GAP);
+                                    g.fillRoundRect(0, bounds.y + gap, tree.getWidth(), bounds.height - 2 * gap, UI.scale(8), UI.scale(8));
                                 });
                         })
                     )

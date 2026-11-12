@@ -622,16 +622,6 @@ public enum Lang {
             };
         }
 
-        public String DELETE_ELLIPSIS() {
-            return switch (lang) {
-                case ENGLISH -> "Delete…";
-                case GERMAN -> "Löschen…";
-                case SPANISH -> "Eliminar…";
-                case JAPANESE -> "削除…";
-                case CHINESE -> "删除…";
-            };
-        }
-
         public String DELETE_THE_CONVERSATION_THIS_GENIE_IS_IN() {
             return switch (lang) {
                 case ENGLISH -> "Delete the conversation this genie is in, with all its branches";
