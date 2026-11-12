@@ -189,12 +189,19 @@ final class SandboxPhase {
         // Passing the harness list as a build argument also makes it part of the image hash, so
         // changing `agent_tools.install` rebuilds the image with the new list.
         arguments.put("AGENT_TOOLS", config.agentTools().install().mapTo(String.class, tool -> switch (tool) {
-            case "opencode" -> "opencode-ai@" + config.agentTools().versions().get(tool).orElse("latest");
+            case "opencode" -> opencodePackage(config.agentTools().versions().get(tool).orElse("latest"));
             case "pi" -> "@earendil-works/pi-coding-agent@" + config.agentTools().versions().get(tool).orElse("latest");
             default -> tool;
         }).join(" "));
         if (!revision.isEmpty()) arguments.put("AGENT_TOOLS_REVISION", revision);
         return arguments;
+    }
+
+    /// The npm package and version for opencode. opencode 2 is published as `@opencode/cli`, and
+    /// `opencode-ai` has only opencode 1 and older, so a lamp that pins such a release still gets it.
+    static String opencodePackage(String version) {
+        boolean beforeTwo = version.startsWith("0.") || version.startsWith("1.");
+        return (beforeTwo ? "opencode-ai@" : "@opencode/cli@") + version;
     }
 
     static Association<String, String> asAssociation(SortedMap<String, String> map) {

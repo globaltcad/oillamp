@@ -1191,9 +1191,10 @@ class Configuring_A_Lamp_Spec extends Specification {
             opencode's web interface. The agent can only help if it knows which of its ports the
             person can open in their browser through oillamp. So the guide `~/AGENTS.md`, which
             every session writes, lists the published ports. For a port named `opencode` it says
-            that `opencode serve --port 4096` starts the web interface, and that the person starts
-            it, not oillamp. With `web.publish = "off"` it says that nothing is published, and that
-            the person would have to enable `[web]`.
+            that `opencode serve --port 4096` starts the web interface, that the person starts
+            it, not oillamp, and that it prints the password the web interface asks for. With
+            `web.publish = "off"` it says that nothing is published, and that the person would have
+            to enable `[web]`.
         """
         given: 'a lamp whose `oillamp.toml` has no `[web]` section'
             var lamp = host.lampPath()
@@ -1210,6 +1211,7 @@ class Configuring_A_Lamp_Spec extends Specification {
             guide.contains('- `4096` → opencode')
             guide.contains('`opencode serve --port 4096`')
             guide.contains('oillamp never\nstarts it')
+            guide.contains('It prints a password, which the web interface asks for.')
 
         when: 'the lamp sets `web.publish = "off"`, and `oillamp at <dir>` starts the session again'
             host.givenConfig(lamp, 'schema_version = 1\n\n[web]\npublish = "off"\n')
@@ -1220,6 +1222,45 @@ class Configuring_A_Lamp_Spec extends Specification {
             guide.contains('Nothing in this sandbox is published')
             guide.contains('enable `[web]`')
             !guide.contains('`opencode serve')
+    }
+
+    def '`~/AGENTS.md` names the provider under which opencode offers the Eden AI models: `edenai-eu`, or `edenai` for a lamp that pins opencode 1'() {
+        reportInfo """
+            Let's consider an agent that runs opencode without its interface, as
+            `opencode run -m <provider>/<model> ...`. It needs the provider ID under which
+            opencode's configuration lists the Eden AI models, and that ID depends on opencode's
+            major version. opencode 2 adds its own catalog to any provider whose ID it knows, so
+            the image's configuration lists the EU models under `edenai-eu`. opencode 1 has them
+            under its built-in provider `edenai`. opencode 1 also never asks a model for more than
+            32000 tokens, which opencode 2 does not limit.
+
+            A lamp gets opencode 2 unless `agent_tools.versions.opencode` in its `oillamp.toml`
+            pins a release that starts with `0.` or `1.`. The guide `~/AGENTS.md`, which every
+            session writes, names the provider for the lamp's version, and mentions the cap of
+            32000 tokens only for opencode 1.
+        """
+        given: 'a lamp whose `agent_tools.versions.opencode` is #version'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, "schema_version = 1\n\n[agent_tools]\nversions = { opencode = \"$version\" }\n")
+
+        when: '`oillamp at <dir>` starts the session'
+            host.oillamp.run('at', lamp.toString())
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+
+        then: 'the guide names the provider `#provider`, and shows it in an `opencode run -m` command'
+            guide.contains("under the provider `${provider}`")
+            guide.contains("`opencode run -m ${provider}/<model> ...`")
+
+        and: 'it mentions opencode\'s cap of 32000 tokens only for opencode 1'
+            guide.contains('its own cap of 32000') == capMentioned
+
+        where:
+            version  || provider    | capMentioned
+            'latest' || 'edenai-eu' | false
+            '2.2.7'  || 'edenai-eu' | false
+            '1.19.5' || 'edenai'    | true
     }
 
     def 'A lamp with a forward on port 4096 and no `[web]` section still starts, and oillamp leaves the default opencode port out'() {

@@ -430,7 +430,7 @@ command -v opencode pi           # /usr/bin/... is the image's copy
 To go back to the image's copy, remove the one in the home:
 
 ```sh
-npm uninstall -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent   # or opencode-ai
+npm uninstall -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent   # or @opencode/cli
 hash -r                          # make bash forget the old location
 ```
 
@@ -440,7 +440,7 @@ You can also install a newer version into the home, from inside the sandbox, wit
 lamp:
 
 ```sh
-npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@latest   # or opencode-ai@latest
+npm install -g --prefix "$HOME/.local" @earendil-works/pi-coding-agent@latest   # or @opencode/cli@latest
 hash -r
 ```
 
@@ -496,7 +496,7 @@ ports   = { opencode = 4096 } # web servers in the sandbox you can open in your 
 
 When the session starts, it prints a link for each published port, such as
 `http://k3v7x2ab.localhost:41237/`. Run `opencode serve --port 4096` in the sandbox's shell, and
-the `opencode` link opens opencode's web interface. A page you open there runs in your browser, so
+the `opencode` link opens opencode's web interface; sign in with the password it prints. A page you open there runs in your browser, so
 it can send requests to your other local web servers and to other lamps' published ports; set
 `publish = "off"` if you do not want that.
 
@@ -515,8 +515,8 @@ not on the conversation, which may grow as long as the model's context allows. A
 stops in the middle, often while the agent writes a large file.
 
 - **opencode** asks each model for the limit Eden AI's catalog gives it (`max_output_tokens`),
-  read when the image is built, and for **8192 tokens** where the catalog gives none. opencode
-  itself never asks for more than 32000. `oillamp update` brings in new limits.
+  read when the image is built, and for **8192 tokens** where the catalog gives none. (opencode
+  1, if a lamp pins it, never asks for more than 32000.) `oillamp update` brings in new limits.
 - **pi**'s Eden AI extension does not read those limits and asks every model for **8192 tokens**.
 
 For pi, ask for more when you start the session. oillamp passes the variable into the sandbox:

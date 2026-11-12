@@ -30,7 +30,8 @@ specifier_for() {
     case "$1" in
         # Verified against the registry: `pi` is the binary, the package is scoped.
         pi)       echo "@earendil-works/pi-coding-agent" ;;
-        opencode) echo "opencode-ai" ;;
+        # opencode 2 is published as `@opencode/cli`; `opencode-ai` has opencode 1 only.
+        opencode) echo "@opencode/cli" ;;
         *)        echo "$1" ;;
     esac
 }
@@ -66,10 +67,13 @@ install_pi_extensions() {
 }
 
 # Both harnesses use Eden AI only through its EU endpoint. pi's extension is told so by the
-# environment (/etc/profile.d/oillamp.sh); opencode needs a configuration file.
+# environment (/etc/profile.d/oillamp.sh); opencode needs a configuration file, whose shape
+# depends on opencode's major version: 1 when a lamp pins an opencode 1 release, 2 otherwise.
 write_opencode_config() {
     command -v opencode >/dev/null 2>&1 || { echo "opencode is not installed; no configuration to write"; return 0; }
-    if node "$(dirname "$0")/write-opencode-config.mjs" "$OPENCODE_CONFIG_FILE"; then
+    local major
+    major=$(opencode --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 | cut -d. -f1 || true)
+    if node "$(dirname "$0")/write-opencode-config.mjs" "$OPENCODE_CONFIG_FILE" "${major:-2}"; then
         chmod -R a+rX "$(dirname "$OPENCODE_CONFIG_FILE")" 2>/dev/null || true
     else
         echo "WARNING: could not configure opencode for Eden AI's EU endpoint — opencode works without it" >&2
@@ -92,7 +96,7 @@ main() {
 check_versions() {
     for tool in "$@"; do
         case "$tool" in
-            opencode|opencode-ai|opencode-ai@*) binary=opencode ;;
+            opencode|opencode-ai|opencode-ai@*|@opencode/cli|@opencode/cli@*) binary=opencode ;;
             pi|@earendil-works/pi-coding-agent|@earendil-works/pi-coding-agent@*) binary=pi ;;
             *) continue ;;
         esac
@@ -106,7 +110,7 @@ check_versions() {
             failed=1
             continue
         fi
-        # What --version prints is the tool's choice, such as "1.2.0" or "pi 1.2.0", so only
+        # What --version prints is the tool's choice, such as "1.2.0" or "opencode v2.2.7", so only
         # the first version number in it is compared.
         version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*' <<<"$output" | head -n 1 || true)
         echo "$binary version: ${version:-unknown ($output)}"

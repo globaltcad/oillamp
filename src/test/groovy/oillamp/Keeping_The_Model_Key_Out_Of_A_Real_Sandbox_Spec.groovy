@@ -140,7 +140,7 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
             inSandbox('echo "$EDENAI_BASE_URL"').strip() == 'http://127.0.0.1:3129/v3'
             inSandbox('echo "$EDENAI_API_KEY"').strip() == 'held-by-oillamp-on-the-host'
             new JsonSlurper().parseText(inSandbox('cat "$OPENCODE_CONFIG"'))
-                    .provider.edenai.options.baseURL == 'http://127.0.0.1:3129/v3'
+                    .providers['edenai-eu'].settings.baseURL == 'http://127.0.0.1:3129/v3'
     }
 
     def 'An agent that calls Eden AI directly, without the model relay, gets no answer'() {
@@ -201,12 +201,12 @@ class Keeping_The_Model_Key_Out_Of_A_Real_Sandbox_Spec extends Specification {
         reportInfo """
             opencode, the other harness in the image, is run in the sandbox as the agent would run
             it, and asked for one word. It reads the model relay's address from the configuration
-            file the image build wrote, and the placeholder key from the environment; oillamp adds
-            the real key on the host. This needs a real key in this environment; without one, it
+            file the image build wrote, where the EU models are under the provider `edenai-eu`,
+            and the placeholder key from the environment; oillamp adds the real key on the host. This needs a real key in this environment; without one, it
             is skipped.
         """
         when: 'opencode in the sandbox is asked to reply with one word'
-            var answer = inSandbox("opencode run -m 'edenai/${MODEL}' 'Reply with the single word ok.' </dev/null")
+            var answer = inSandbox("opencode run -m 'edenai-eu/${MODEL}' 'Reply with the single word ok.' </dev/null")
 
         then: 'it answers "ok"'
             answer.toLowerCase().contains('ok')

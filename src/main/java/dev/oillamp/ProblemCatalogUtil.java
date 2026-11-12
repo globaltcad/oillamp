@@ -147,7 +147,8 @@ final class ProblemCatalogUtil {
               + port.port() + "; this is reported once until a connection gets through again")
             .withEvidence(new Evidence.Value("port in the sandbox", Integer.toString(port.port())))
             .withFix(Fix.of(port.name().equals("opencode")
-                    ? "start it in the sandbox's shell: `opencode serve --port " + port.port() + "`"
+                    ? "start it in the sandbox's shell: `opencode serve --port " + port.port()
+                      + "`, and sign in with the password it prints"
                     : "start the server in the sandbox, listening on 127.0.0.1:" + port.port()));
     }
 

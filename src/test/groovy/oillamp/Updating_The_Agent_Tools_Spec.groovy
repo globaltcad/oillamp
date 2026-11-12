@@ -41,7 +41,7 @@ build argument, so it is part of the image's hash. Every later start reads the f
 same tag, and finds the updated image.
 
 Podman is simulated here, so no image is really built. The installer scenarios run the real
-installer script, with stand-in `npm`, `node` and `pi` commands.
+installer script, with stand-in `npm`, `node`, `pi` and `opencode` commands.
 ''')
 @Subject(OilLamp)
 class Updating_The_Agent_Tools_Spec extends Specification {
@@ -349,6 +349,73 @@ class Updating_The_Agent_Tools_Spec extends Specification {
 
         and: 'one that asked for 1.3.0 still fails'
             installer(bin, true, '@earendil-works/pi-coding-agent@1.3.0').exit == 1
+    }
+
+    def 'oillamp asks npm for opencode 2 as `@opencode/cli`, and for a pinned opencode 1 release as `opencode-ai`'() {
+        reportInfo """
+            opencode moved to a new npm package with its version 2: `@opencode/cli` publishes
+            opencode 2, and `opencode-ai` publishes only opencode 1 and older. `@opencode/cli`
+            has no 1.x releases, so asking it for one would fail the build.
+
+            A lamp asks for opencode with `agent_tools.versions.opencode` in its `oillamp.toml`:
+            `latest`, or an exact release. Lamps made before opencode 2 may pin an opencode 1
+            release there, and they must keep getting it. So oillamp passes the build
+            `opencode-ai@<version>` for a release that starts with `0.` or `1.`, and
+            `@opencode/cli@<version>` for anything else. `oillamp update --verbose` prints the
+            build arguments, among them the package it asks npm for.
+        """
+        given: 'the lamp asks for opencode #version'
+            var config = lamp.resolve('oillamp.toml')
+            Files.writeString(config, Files.readString(config).replace('opencode = "latest"', "opencode = \"$version\""))
+
+        when: '`oillamp update --verbose` is run'
+            var update = host.oillamp.run('update', lamp.toString(), '--verbose')
+
+        then: 'it succeeds, and asks npm for #requested'
+            update.status() == LampExitStatus.SUCCESS
+            update.console().contains(requested)
+
+        where:
+            version  || requested
+            'latest' || '@opencode/cli@latest'
+            '2.2.7'  || '@opencode/cli@2.2.7'
+            '1.19.5' || 'opencode-ai@1.19.5'
+    }
+
+    def 'The installer writes opencode\'s configuration for the major version of opencode it installed'() {
+        reportInfo """
+            opencode 1 and opencode 2 read different configuration files. The installer writes
+            opencode's configuration with `write-opencode-config.mjs`, after it installed opencode,
+            and passes that script the major version of the opencode it installed: the first number
+            of what `opencode --version` prints. opencode 2 prints `opencode v2.2.7`, opencode 1
+            prints `1.19.5`.
+
+            The script runs for real here. `npm` and `pi` are stand-ins that succeed. The stand-in
+            `opencode` prints #printed, and the stand-in `node` writes its arguments into a file
+            instead of running the configuration writer.
+        """
+        given: 'an `opencode` that prints #printed, and a `node` that writes down its arguments'
+            var bin = tmp.resolve('stand-ins')
+            Files.createDirectories(bin)
+            var arguments = tmp.resolve('node-arguments')
+            standIn(bin, 'npm', 'exit 0')
+            standIn(bin, 'pi', 'echo 1.2.0')
+            standIn(bin, 'opencode', "echo '$printed'")
+            standIn(bin, 'node', "echo \"\$@\" > '$arguments'")
+
+        when: 'an update installs #tool'
+            var run = installer(bin, true, tool)
+
+        then: 'it succeeds, and the configuration writer was given the major version #major'
+            run.exit == 0
+            var given = Files.readString(arguments).trim().split(' ') as List
+            given[0].endsWith('write-opencode-config.mjs')
+            given.last() == major
+
+        where:
+            tool                   | printed            || major
+            '@opencode/cli@2.2.7'  | 'opencode v2.2.7'  || '2'
+            'opencode-ai@1.19.5'   | '1.19.5'           || '1'
     }
 
     def '`oillamp update --system` builds the whole image again, from a freshly pulled Debian'() {

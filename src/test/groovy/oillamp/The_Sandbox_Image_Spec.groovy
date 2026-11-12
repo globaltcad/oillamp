@@ -324,7 +324,7 @@ class The_Sandbox_Image_Spec extends Specification {
 
         then: 'the two harnesses map to the packages that actually publish them'
             script.contains('@earendil-works/pi-coding-agent')
-            script.contains('opencode-ai')
+            script.contains('opencode) echo "@opencode/cli"')
 
         and: 'and the image asks for both by default, so a plain build is usable'
             Files.readString(IMAGE.resolve('Containerfile')).contains('ARG AGENT_TOOLS="opencode pi"')
@@ -437,7 +437,6 @@ class The_Sandbox_Image_Spec extends Specification {
             writer.contains('baseURL: RELAY_BASE_URL')
             writer.contains('fetch(`${EU_BASE_URL}/models`')
             writer.contains('region?.code?.toLowerCase() === "eu"')
-            writer.contains('provider.whitelist')
 
         and: 'and if it cannot be written, the build goes on'
             installer.contains('could not configure opencode')
@@ -447,19 +446,20 @@ class The_Sandbox_Image_Spec extends Specification {
         reportInfo """
             The agent keeps the skills it writes for itself in `~/.genie/skills`, one directory
             with a `SKILL.md` each. opencode looks for skills in directories of its own, such as
-            `~/.config/opencode/skills`, and in the directories its configuration lists under
-            `skills.paths`, where it expands a leading `~/` to the home directory. The build writes
-            opencode's configuration into the image with `write-opencode-config.mjs`, and the
-            profile names that file in `OPENCODE_CONFIG`. So that file lists `~/.genie/skills`.
-            The file is in the image, not in the agent's home, so every lamp has it from its next
-            start on, and the agent cannot change it.
+            `~/.config/opencode/skills`, and in the directories its configuration lists, where it
+            expands a leading `~/` to the home directory: opencode 1 under `skills.paths`, opencode
+            2 in `skills` itself. The build writes opencode's configuration into the image with
+            `write-opencode-config.mjs`, and the profile names that file in `OPENCODE_CONFIG`. So
+            that file lists `~/.genie/skills`. The file is in the image, not in the agent's home,
+            so every lamp has it from its next start on, and the agent cannot change it.
         """
         when: 'the opencode configuration writer is read'
             var writer = Files.readString(IMAGE.resolve('build/write-opencode-config.mjs'))
 
-        then: 'the configuration it writes lists `~/.genie/skills` under `skills.paths`'
+        then: 'the configuration it writes lists `~/.genie/skills`, under `skills.paths` for opencode 1 and in `skills` for opencode 2'
             writer.contains('const GENIE_SKILLS = "~/.genie/skills";')
             writer.contains('skills: { paths: [GENIE_SKILLS] },')
+            writer.contains('config.skills = [GENIE_SKILLS];')
     }
 
     @Requires({ Spike.run('node', '--version').ok })
@@ -468,8 +468,8 @@ class The_Sandbox_Image_Spec extends Specification {
             Every answer of a model is limited in length, thinking included. opencode reads the
             limit of each model from `limit.output` in its configuration, and asks the model for
             at most that many tokens. An answer that reaches the limit stops in the middle, often
-            while the agent writes a large file. (opencode also has a cap of its own, 32000 tokens
-            in opencode 1.19, which it applies whatever `limit.output` says.)
+            while the agent writes a large file. (opencode 1 also had a cap of its own, 32000
+            tokens, which it applied whatever `limit.output` said. opencode 2 has none.)
 
             The build writes opencode's configuration into the image with
             `write-opencode-config.mjs`. The script takes the models from the catalog of Eden AI's
@@ -487,7 +487,8 @@ class The_Sandbox_Image_Spec extends Specification {
 
             Here the script runs with Node.js, and `fetch` answers from a stand-in for Eden's
             catalog with three EU models: one whose entry gives 128000 tokens, one whose entry
-            gives 4096, and one whose entry has no `max_output_tokens`.
+            gives 4096, and one whose entry has no `max_output_tokens`. The script writes the
+            configuration for opencode 2, whose models are under the provider `edenai-eu`.
         """
         given: 'a module that Node.js loads first, and that makes `fetch` answer with a catalog of three EU models'
             var model = { String id, Integer maxOutputTokens ->
@@ -507,7 +508,7 @@ class The_Sandbox_Image_Spec extends Specification {
             var run = Spike.run('node', '--import', standIn.toUri().toString(),
                     IMAGE.resolve('build/write-opencode-config.mjs').toString(), configuration.toString())
             assert run.ok, run.describe()
-            var models = new JsonSlurper().parse(configuration.toFile()).provider.edenai.models
+            var models = new JsonSlurper().parse(configuration.toFile()).providers['edenai-eu'].models
 
         then: 'the configuration lists the three models'
             models.keySet() == ['example/gives-128000', 'example/gives-4096', 'example/gives-none'] as Set
@@ -516,6 +517,98 @@ class The_Sandbox_Image_Spec extends Specification {
             models['example/gives-128000'].limit.output == 128000
             models['example/gives-4096'].limit.output == 4096
             models['example/gives-none'].limit.output == 8192
+    }
+
+    @Requires({ Spike.run('node', '--version').ok })
+    def 'opencode 2 is offered only the EU models, under oillamp\'s own provider `edenai-eu`, and its built-in provider `edenai` is turned off'() {
+        reportInfo """
+            opencode 2 brings a catalog of models of its own, and Eden AI is in it, under the
+            built-in provider ID `edenai`. Most of those models are not served by Eden AI's EU
+            endpoint. opencode 2 adds its catalog's models to any provider whose ID the catalog
+            knows, and it ignores `whitelist`, with which opencode 1 kept them out. A model that
+            only that catalog lists would reach the model relay, and Eden's EU endpoint would
+            refuse it.
+
+            So `write-opencode-config.mjs` puts the models of Eden's EU catalog under a provider
+            ID that opencode's catalog does not know, `edenai-eu`, and adds the policy statement
+            `provider.use` `edenai` `deny`, which removes the built-in provider from opencode's
+            model selection. The provider `edenai-eu` sends its requests to the model relay, with
+            the placeholder key from `EDENAI_API_KEY`, and puts each answer's token limit into
+            `max_tokens`, the field opencode 1 sent.
+
+            Here the script runs with Node.js, for opencode 2, and `fetch` answers from a stand-in
+            for Eden's catalog with two models: `example/served-in-eu`, whose entry lists the
+            region `eu`, and `example/served-in-us`, whose entry lists only `us`.
+        """
+        given: 'a stand-in for Eden\'s catalog with one model served in the EU and one served only in the US'
+            var catalog = [euModel('example/served-in-eu'), usModel('example/served-in-us')]
+
+        when: '`write-opencode-config.mjs` writes the configuration for opencode 2'
+            var configuration = writeOpencodeConfiguration(catalog, '2')
+
+        then: 'the only provider is `edenai-eu`, and it lists only the EU model'
+            configuration.providers.keySet() == ['edenai-eu'] as Set
+            var provider = configuration.providers['edenai-eu']
+            provider.models.keySet() == ['example/served-in-eu'] as Set
+
+        and: 'it sends requests to the relay, with the key from `EDENAI_API_KEY` and the limit in `max_tokens`'
+            provider.settings.baseURL == 'http://127.0.0.1:3129/v3'
+            provider.env == ['EDENAI_API_KEY']
+            provider.compatibility.maxTokensField == 'max_tokens'
+
+        and: 'a policy turns the built-in provider `edenai` off'
+            configuration.policies == [[action: 'provider.use', resource: 'edenai', effect: 'deny']]
+    }
+
+    @Requires({ Spike.run('node', '--version').ok })
+    def 'opencode 2 in the sandbox does not update itself, so `oillamp update` decides its version'() {
+        reportInfo """
+            A lamp chooses its opencode with `agent_tools.versions.opencode`, and `oillamp update`
+            installs that version into a new image. opencode 2 can update itself, and would put
+            the newer copy where the agent can write, in its home, where it outlasts the session and
+            is found before the image's copy. Then the lamp's setting and `oillamp update` would
+            no longer decide which opencode the agent runs. So the configuration sets `update` to
+            `disable`.
+
+            Here `write-opencode-config.mjs` runs with Node.js, for opencode 2, with a stand-in
+            for Eden's catalog that lists one EU model.
+        """
+        when: '`write-opencode-config.mjs` writes the configuration for opencode 2'
+            var configuration = writeOpencodeConfiguration([euModel('example/served-in-eu')], '2')
+
+        then: 'its `update` is `disable`'
+            configuration.update == 'disable'
+    }
+
+    @Requires({ Spike.run('node', '--version').ok })
+    def 'For a lamp that pins opencode 1, the configuration has the shape opencode 1 reads: the provider `edenai`, with a `whitelist` of the EU models'() {
+        reportInfo """
+            A lamp made before opencode 2 may pin an opencode 1 release in
+            `agent_tools.versions.opencode`, and opencode 1 does not read the configuration
+            opencode 2 reads. The installer passes `write-opencode-config.mjs` the major version
+            of the opencode it installed, and for opencode 1 the script writes the shape opencode
+            1 reads: the built-in provider `edenai`, pointed at the model relay with
+            `options.baseURL`, its models from Eden's EU catalog, and a `whitelist` with their IDs,
+            which keeps opencode 1's own catalog models out of the list.
+
+            Here the script runs with Node.js, for opencode 1, and `fetch` answers from a stand-in
+            for Eden's catalog with two models: `example/served-in-eu`, whose entry lists the
+            region `eu`, and `example/served-in-us`, whose entry lists only `us`.
+        """
+        given: 'a stand-in for Eden\'s catalog with one model served in the EU and one served only in the US'
+            var catalog = [euModel('example/served-in-eu'), usModel('example/served-in-us')]
+
+        when: '`write-opencode-config.mjs` writes the configuration for opencode 1'
+            var configuration = writeOpencodeConfiguration(catalog, '1')
+
+        then: 'it has the provider `edenai` under `provider`, pointed at the relay, and no `providers`'
+            configuration.provider.keySet() == ['edenai'] as Set
+            configuration.provider.edenai.options.baseURL == 'http://127.0.0.1:3129/v3'
+            configuration.providers == null
+
+        and: 'the provider lists only the EU model, and so does its `whitelist`'
+            configuration.provider.edenai.models.keySet() == ['example/served-in-eu'] as Set
+            configuration.provider.edenai.whitelist == ['example/served-in-eu']
     }
 
     def 'The image installs SDKMAN where it can be written to, which is not where it is built'() {
@@ -585,5 +678,29 @@ class The_Sandbox_Image_Spec extends Specification {
         var out = process.inputStream.text
         process.waitFor()
         out
+    }
+
+    /** An entry of Eden's model catalog for a text model served in the EU. */
+    private static Map euModel(String id) {
+        [id: id, regions: [[code: 'eu', name: 'Europe']], capabilities: [output_modalities: ['text']]]
+    }
+
+    /** An entry of Eden's model catalog for a text model served only in the US. */
+    private static Map usModel(String id) {
+        [id: id, regions: [[code: 'us', name: 'United States']], capabilities: [output_modalities: ['text']]]
+    }
+
+    /**
+     * Runs `write-opencode-config.mjs` for the given opencode major version, with `fetch` answering
+     * from a stand-in that lists `models` as Eden's catalog, and returns the configuration it wrote.
+     */
+    private Object writeOpencodeConfiguration(List<Map> models, String major) {
+        var standIn = temp.resolve('stand-in-catalog-' + UUID.randomUUID() + '.mjs')
+        Files.writeString(standIn, "globalThis.fetch = async () => new Response(${JsonOutput.toJson(JsonOutput.toJson([data: models]))});\n")
+        var configuration = temp.resolve('opencode-' + UUID.randomUUID() + '.json')
+        var run = Spike.run('node', '--import', standIn.toUri().toString(),
+                IMAGE.resolve('build/write-opencode-config.mjs').toString(), configuration.toString(), major)
+        assert run.ok, run.describe()
+        new JsonSlurper().parse(configuration.toFile())
     }
 }

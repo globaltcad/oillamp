@@ -284,15 +284,20 @@ final class AgentGuideUtil {
             if (config.agentTools().install().contains("opencode"))
                 out.append("- `opencode` reads its Eden AI settings from the file `OPENCODE_CONFIG` names.\n")
                .append("  Its list of Eden AI models is the one the EU endpoint offered when this\n")
-               .append("  sandbox's image was built.\n");
+               .append("  sandbox's image was built, under the provider `")
+               .append(opencodeOne(config) ? "edenai" : "edenai-eu")
+               .append("`, such as\n  `opencode run -m ")
+               .append(opencodeOne(config) ? "edenai" : "edenai-eu")
+               .append("/<model> ...`.\n");
             out.append('\n')
                .append("Each answer of the model is limited in length, thinking included. `pi` asks for\n")
                .append("at most 8192 tokens, because its Eden AI extension does not read each model's\n")
                .append("own limit; it asks for more when the human set `EDENAI_MAX_TOKENS` on their\n")
                .append("machine before starting the session (`echo $EDENAI_MAX_TOKENS` here says).\n")
                .append("`opencode` asks each model for the limit Eden AI's catalog gave it when this\n")
-               .append("sandbox's image was built, 8192 where the catalog gave none, and never more than\n")
-               .append("its own cap of 32000. A longer answer, such as a large file written in one go,\n")
+               .append("sandbox's image was built, and 8192 where the catalog gave none")
+               .append(opencodeOne(config) ? ", and never more than\nits own cap of 32000" : "")
+               .append(". A longer answer, such as a large file written in one go,\n")
                .append("is cut off: write large files in parts. If answers in `pi` keep being cut off,\n")
                .append("tell the human about `EDENAI_MAX_TOKENS`. Some models refuse a value above their\n")
                .append("own limit, then every request fails with 400, and the error names that limit;\n")
@@ -330,6 +335,13 @@ final class AgentGuideUtil {
             rest.
             """);
         return out.toString();
+    }
+
+    /// Whether the lamp pins an opencode 1 release (or older), whose configuration names its Eden
+    /// AI provider `edenai` and whose answers have a cap of their own.
+    private static boolean opencodeOne(LampConfig config) {
+        String version = config.agentTools().versions().get("opencode").orElse("latest");
+        return version.startsWith("0.") || version.startsWith("1.");
     }
 
     /// Which web servers in the sandbox the human can open in their browser, and how opencode's
@@ -375,7 +387,7 @@ final class AgentGuideUtil {
             out.append("\nopencode's web interface is reached by running `opencode serve --port ")
                .append(opencode.port())
                .append("`\nin the shell. The human starts it themselves when they want it; oillamp never\n")
-               .append("starts it.\n");
+               .append("starts it. It prints a password, which the web interface asks for.\n");
         return out.append(later).append('\n').toString();
     }
 
