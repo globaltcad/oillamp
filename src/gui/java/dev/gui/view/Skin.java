@@ -4,8 +4,9 @@ package dev.gui.view;
 /// `.group(..)`. Anything whose look depends on data, such as a genie's phase, is styled next to
 /// the component instead.
 enum Skin {
-    FRAME, SIDEBAR, BRAND, SECTION,
-    HEADER, TITLE, SUBTITLE, META,
+    WINDOW, FRAME, SIDEBAR, BRAND, SECTION,
+    HEADER, BANNER, PAGE, DESKTOP,
+    TITLE, SUBTITLE, META,
     CARD, EMPTY_TITLE, EMPTY_TEXT,
     FLAME_BUTTON, QUIET_BUTTON, ICON_BUTTON,
     INPUT, COMPOSER, PROBLEM, FINE,

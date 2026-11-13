@@ -219,7 +219,7 @@ final class HistoryPage {
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
         return
             scrollPane(conf -> conf.fitWidth(true))
-            .group(Skin.PAGE_SCROLL)
+            .group(Skin.PAGE)
             .withEmptyBorder(0)
             .isVisibleIf(visible)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
@@ -231,7 +231,7 @@ final class HistoryPage {
                 .withPrefSize(REFERENCE, 0)
                 .withStyle(palette, (p, it) -> it
                     .backgroundColor(p.TRANSPARENT())
-                    .padding(0, 22, 28, 22)
+                    .padding(-Look.SEA_ABOVE, 22 - Look.CANAL, 28, 22)
                 )
                 .add(WHOLE, header())
                 .add(WHOLE, undoBanner())

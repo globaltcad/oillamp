@@ -93,6 +93,13 @@ public record Palette(
         new Color(0, 0, 0, 0)
     );
 
+    /// The sea the window's parts float in as islands, the sidebar, the genie's header, its page
+    /// and its desktop: the ground of a card, which the window's title bar has too, so that the
+    /// islands stand apart from it and from each other without lines between them.
+    public Color SEA() {
+        return CARD;
+    }
+
     /// Whether this is a palette for the dark: its night is darker than the middle grey, so
     /// text and light are painted on dark ground. What the palette does not name follows it,
     /// such as the look-and-feel Genies builds on and the shadows under its cards.

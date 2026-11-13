@@ -4,6 +4,7 @@ import java.awt.Color;
 
 import javax.swing.AbstractButton;
 import javax.swing.ButtonModel;
+import javax.swing.JComponent;
 import javax.swing.text.JTextComponent;
 
 import dev.gui.model.Fonts;
@@ -31,6 +32,23 @@ final class Look extends StyleSheet {
     private static final Color FLAME_HOVER = new Color(255, 255, 255, 40);
     private static final Color PRESSED = new Color(0, 0, 0, 40);
 
+    /// How wide the sea is between two islands, a canal, as in IntelliJ's islands, and between
+    /// an island and the window's edge.
+    static final int CANAL = 5;
+    /// The sea an island keeps above it. It is taken from the island's own padding, never added
+    /// to it: the islands change how the window looks, not where anything in it is.
+    ///
+    /// Across the window, an island keeps a whole canal on its right, and none on its left: there,
+    /// the window's edge or a grip is the canal. So a grip between two islands is all sea but for
+    /// the end of the island after it, and its handle sits in the middle of the canal.
+    static final int SEA_ABOVE = 2;
+    /// The sea an island keeps under it: with the next island's [#SEA_ABOVE], a canal. Whole
+    /// units on both sides, so the shores stay sharp.
+    static final int SEA_BELOW = CANAL - SEA_ABOVE;
+    /// How round an island's corners are: the width of the arc each corner is cut on, so twice
+    /// its radius, as SwingTree and Java's own round shapes take it. A radius of 10, as IntelliJ's.
+    static final int ARC = 20;
+
     /// Held, since the state only weakly holds its views.
     private final Val<Theme> theme;
 
@@ -44,34 +62,39 @@ final class Look extends StyleSheet {
         Palette p = theme.get().palette();
         Fonts fonts = theme.get().fonts();
         Color hover = p.isDark() ? HOVER_IN_THE_DARK : ViewPartsUtil.withAlpha(p.TEXT(), HOVER_IN_THE_LIGHT);
-        // The night behind everything, with the lamp's glow in the top corner.
-        add(group(Skin.FRAME), it -> it
+        // The window: the sea, with its parts as islands in it. Along its edges, it adds what the
+        // islands do not keep themselves, so that a canal is as wide there as between two of them.
+        // Under the title bar, which is the sea too, the islands begin right away.
+        add(group(Skin.WINDOW), it -> it
+            .backgroundColor(p.SEA())
+            .foundationColor(p.SEA())
+            .padding(0, 0, CANAL - SEA_BELOW, CANAL)
+            .componentFont(f -> f.family(fonts.FONT()).size(13).color(p.TEXT()))
+        );
+        // A dialog of its own: the night, with the lamp's glow in the top corner, as on a page.
+        add(group(Skin.FRAME), it -> lamplit(p, it
             .backgroundColor(p.NIGHT())
             .foundationColor(p.NIGHT())
-            .gradient("lamplight", g -> g
-                .type(UI.GradientType.RADIAL)
-                .boundary(UI.ComponentBoundary.OUTER_TO_EXTERIOR)
-                .span(UI.Span.TOP_LEFT_TO_BOTTOM_RIGHT)
-                .offset(it.componentWidth() * 0.35, 0)
-                .size(Math.max(it.componentWidth(), it.componentHeight()) * 0.9f)
-                .colors(p.GLOW(), p.TRANSPARENT())
-                .clipTo(UI.ComponentArea.BODY)
-            )
-            .componentFont(f -> f
-                .family(fonts.FONT())
-                .size(13)
-                .color(p.TEXT())
-            )
-        );
+            .componentFont(f -> f.family(fonts.FONT()).size(13).color(p.TEXT()))
+        ));
         add(group(Skin.PAGE_SCROLL), it -> it
             .backgroundColor(p.TRANSPARENT())
             .border(0, p.TRANSPARENT())
             .padding(0)
         );
-        add(group(Skin.SIDEBAR), it -> it
-            .backgroundColor(p.SIDEBAR())
-            .borderAt(UI.Edge.RIGHT, 1, p.BORDER())
-            .padding(12, 12, 12, 12)
+        // Where the sidebar, the header and the desktop keep their sea depends on what is beside
+        // them, so the view gives them their margins, and their padding with them.
+        add(group(Skin.SIDEBAR), it -> island(p, p.SIDEBAR(), it));
+        add(group(Skin.HEADER), it -> island(p, p.SIDEBAR(), it));
+        add(group(Skin.DESKTOP), it -> island(p, p.NIGHT(), it));
+        // A page of the genie, or the settings: the night, lit by the lamp, with the sea all
+        // around it. Its content gives up as much of its own padding.
+        add(group(Skin.PAGE), it -> lamplit(p, island(p, p.NIGHT(), it)).margin(SEA_ABOVE, CANAL, SEA_BELOW, 0).padding(0));
+        // Under the header, what the genie's lamp asks of the user: the brass along its left.
+        add(group(Skin.BANNER), it -> island(p, p.YOURS(), it)
+            .borderAt(UI.Edge.LEFT, 3, p.BRASS())
+            .margin(SEA_ABOVE, CANAL, SEA_BELOW, 0)
+            .padding(10 - SEA_ABOVE, 14 - CANAL, 11 - SEA_BELOW, 14)
         );
         add(group(Skin.BRAND), it -> it
             .componentFont(f -> f
@@ -89,11 +112,6 @@ final class Look extends StyleSheet {
                 .spacing(0.14f)
                 .color(p.SUBTEXT())
             )
-        );
-        add(group(Skin.HEADER), it -> it
-            .backgroundColor(ViewPartsUtil.withAlpha(p.SIDEBAR(), 220))
-            .borderAt(UI.Edge.BOTTOM, 1, p.BORDER())
-            .padding(10, 16, 10, 16)
         );
         add(group(Skin.TITLE), it -> it
             .componentFont(f -> f
@@ -229,6 +247,31 @@ final class Look extends StyleSheet {
         );
         add(group(Skin.FINE), it -> it
             .componentFont(f -> f.family(fonts.FONT()).size(12).color(p.CONTENT()))
+        );
+    }
+
+    /// `it`, an island in the sea: on `ground`, its corners rounded, with no line around it. What
+    /// stands it apart from its neighbours is the canal between them. The sea in its margin and
+    /// its corners is the window's own, behind it: an island has no foundation colour, which on
+    /// a scroll pane would flood its ground with the sea.
+    private static <C extends JComponent> ComponentStyleDelegate<C> island(Palette p, Color ground, ComponentStyleDelegate<C> it) {
+        return it
+            .backgroundColor(ground)
+            .borderRadius(ARC)
+            .border(0, p.TRANSPARENT());
+    }
+
+    /// `it`, with the lamp's glow from its top, a little left of the middle, fading out toward
+    /// its far corner.
+    private static <C extends JComponent> ComponentStyleDelegate<C> lamplit(Palette p, ComponentStyleDelegate<C> it) {
+        return it.gradient("lamplight", g -> g
+            .type(UI.GradientType.RADIAL)
+            .boundary(UI.ComponentBoundary.OUTER_TO_EXTERIOR)
+            .span(UI.Span.TOP_LEFT_TO_BOTTOM_RIGHT)
+            .offset(it.componentWidth() * 0.35, 0)
+            .size(Math.max(it.componentWidth(), it.componentHeight()) * 0.9f)
+            .colors(p.GLOW(), p.TRANSPARENT())
+            .clipTo(UI.ComponentArea.BODY)
         );
     }
 
