@@ -1739,14 +1739,41 @@ public final class GeniesView extends JPanel {
             box("fill, ins 4 18 4 18, gap 8, hidemode 3", "[][grow]")
             .isVisibleIf(handouts.viewAs(Boolean.class, it -> !it.isEmpty()))
             .add("top, gaptop 6", label(chatWords.viewAsString(Lang.Chat::OUTBOX)).group(Skin.SECTION))
-            .add("growx, wmin 0",
-                box("ins 0, gap 6").withMinSize(0, 0)
-                .addAll(handouts, file -> UI.of(UI.use(look, () ->
-                    button(chatWords.viewAsString(it -> "⤓ " + file.name() + "  ·  " + file.readableSize(it.lang()))).group(Skin.QUIET_BUTTON)
-                    .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER(file.name())))
-                    .onClick(_ -> saveHandout(file.name()))
-                    .get(JButton.class)
-                )))
+            // Many files wrap into two rows at most, and the rest is a scroll sideways away,
+            // so they never push the composer off the page. The shelf takes the cell's width,
+            // however wide its files are in one row.
+            .add("growx, w 0, wmin 0",
+                scrollPane().withEmptyBorder(0)
+                .withVerticalScrollBarPolicy(UI.Active.NEVER)
+                .withHorizontalScrollBarPolicy(UI.Active.AS_NEEDED)
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+                .add(
+                    UI.of(new Shelf(2, 6))
+                    .addAll(handouts, file -> UI.of(UI.use(look, () -> handout(file).get(JBox.class))))
+                )
+            );
+    }
+
+    /// A file in the outbox: a button that saves it, joined to one that deletes it.
+    private UIForBox<JBox> handout(Handout file) {
+        return
+            box("ins 0, gap 0")
+            .add(
+                button(chatWords.viewAsString(it -> "⤓ " + file.name() + "  ·  " + file.readableSize(it.lang()))).group(Skin.QUIET_BUTTON)
+                .withStyle(it -> it.borderRadiusAt(UI.Corner.TOP_RIGHT, 0).borderRadiusAt(UI.Corner.BOTTOM_RIGHT, 0))
+                .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER(file.name())))
+                .onClick(_ -> saveHandout(file.name()))
+            )
+            .add(
+                button("✕").group(Skin.QUIET_BUTTON)
+                .withStyle(palette, (p, it) -> it
+                    .borderRadiusAt(UI.Corner.TOP_LEFT, 0).borderRadiusAt(UI.Corner.BOTTOM_LEFT, 0)
+                    .borderWidthAt(UI.Edge.LEFT, 0)
+                    .paddingLeft(9).paddingRight(9)
+                    .foregroundColor(p.SUBTEXT())
+                )
+                .withTooltip(chatWords.viewAsString(it -> it.DELETE_FROM_THE_OUTBOX(file.name())))
+                .onClick(_ -> confirmRemoveHandout(file.name()))
             );
     }
 
@@ -2203,6 +2230,17 @@ public final class GeniesView extends JPanel {
         chooser.setDialogTitle(state.get().lang().DIALOGS().GIVE_A_FILE(genie.get().name()));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
             app.giveFile(genie.get().id(), chooser.getSelectedFile().toPath());
+    }
+
+    private void confirmRemoveHandout(String file) {
+        Lang.Dialogs words = state.get().lang().DIALOGS();
+        Genie shown = genie.get();
+        ConfirmAnswer answer =
+            UI.confirmation(words.DELETE_FROM_GENIES_OUTBOX_FOR_GOOD_SAVED_COPIES_STAY(file, shown.name()))
+            .titled(words.DELETE_A_FILE())
+            .yesOption(words.DELETE()).noOption(words.KEEP()).cancelOption("")
+            .show();
+        if (answer == ConfirmAnswer.YES) app.removeOutboxFile(shown.id(), file);
     }
 
     private void saveHandout(String file) {
