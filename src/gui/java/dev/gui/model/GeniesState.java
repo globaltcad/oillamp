@@ -21,6 +21,7 @@ import sprouts.Tuple;
 ///                 the settings can say whether it is there, and never shown
 /// @param genieList whether the list of genies is shown, hidden to make room in a narrow window;
 ///                 and how tall it is in a narrow window, where it is above the genie
+/// @param sidebar  how wide the list of genies is beside the genie, in a window that is not narrow
 /// @param narrow   whether the window is too narrow for the list and a conversation side by side
 /// @param lookUp   the models the service in the settings offered when last asked
 /// @param zoom     how large a genie's desktop is shown
@@ -44,6 +45,7 @@ public record GeniesState(
     Page page,
     Optional<String> environmentKey,
     Fold genieList,
+    Sidebar sidebar,
     boolean narrow,
     ModelLookUp lookUp,
     DesktopZoom zoom,
@@ -129,6 +131,7 @@ public record GeniesState(
             genies.isEmpty() ? Page.SETTINGS : Page.CHAT,
             environmentKey,
             new Fold(true, Fold.CLOSED.height()),
+            Sidebar.PICKED,
             false,
             ModelLookUp.NOT_YET,
             DesktopZoom.FIT,
@@ -144,20 +147,21 @@ public record GeniesState(
         );
     }
 
-    public GeniesState withGenies(Tuple<Genie> genies) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withSelected(UUID selected)     { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withSettings(Settings settings) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withPage(Page page)             { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withGenieList(Fold genieList)   { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withZoom(DesktopZoom zoom)      { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withSplit(Split split)          { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withLookUp(ModelLookUp lookUp)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withNow(Instant now)            { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withOllama(OllamaSetup ollama)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withAdvanced(boolean advanced)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withPalette(Palette palette)    { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withFonts(Fonts fonts)          { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
-    public GeniesState withLang(Lang lang)             { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withGenies(Tuple<Genie> genies) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withSelected(UUID selected)     { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withSettings(Settings settings) { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withPage(Page page)             { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withSidebar(Sidebar sidebar)    { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withGenieList(Fold genieList)   { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withZoom(DesktopZoom zoom)      { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withSplit(Split split)          { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withLookUp(ModelLookUp lookUp)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withNow(Instant now)            { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withOllama(OllamaSetup ollama)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withAdvanced(boolean advanced)  { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withPalette(Palette palette)    { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withFonts(Fonts fonts)          { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
+    public GeniesState withLang(Lang lang)             { return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang); }
 
     /// How many troubles the window keeps.
     public static final int MOST_TROUBLES = 20;
@@ -166,13 +170,13 @@ public record GeniesState(
     public GeniesState withTrouble(Trouble trouble) {
         Tuple<Trouble> more = troubles.add(trouble);
         Tuple<Trouble> kept = more.size() > MOST_TROUBLES ? more.removeFirst(more.size() - MOST_TROUBLES) : more;
-        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, kept, ollama, advanced, palette, fonts, lang);
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, kept, ollama, advanced, palette, fonts, lang);
     }
 
     /// Without the troubles the user has `seen`; the error log still has them. One that came
     /// while they looked stays.
     public GeniesState withoutTroubles(Tuple<Trouble> seen) {
-        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, area, now, troubles.removeAll(seen), ollama, advanced, palette, fonts, lang);
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles.removeAll(seen), ollama, advanced, palette, fonts, lang);
     }
 
     /// Below this width, in the window's own units, the list of genies and a conversation do not
@@ -186,7 +190,17 @@ public record GeniesState(
     public GeniesState withViewWidth(int width) {
         boolean nowNarrow = narrow ? width < NARROW * 1.1 : width < NARROW / 1.1;
         if (nowNarrow == narrow) return this;
-        return new GeniesState(genies, selected, settings, page, environmentKey, genieList.withShown(!nowNarrow), nowNarrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang);
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList.withShown(!nowNarrow), sidebar, nowNarrow, lookUp, zoom, split, area, now, troubles, ollama, advanced, palette, fonts, lang);
+    }
+
+    /// The user let go of the grip at the edge of the list of genies beside the genie. With less
+    /// than half the width it needs, the list hides, and shows again as wide as it was before that
+    /// drag. Otherwise it keeps the width the drag gave it, at least the width it needs.
+    ///
+    /// @param before the list's width when the drag began
+    public GeniesState sidebarReleased(Sidebar before) {
+        if (sidebar.hides()) return withSidebar(before).withGenieList(genieList.withShown(false));
+        return withSidebar(sidebar.released());
     }
 
     /// From this width of the conversation's area, a genie's desktop is shown beside the chat;
@@ -199,7 +213,7 @@ public record GeniesState(
     public GeniesState withArea(int width, int height) {
         Area rounded = new Area(width / 10 * 10, height / 10 * 10);
         if (rounded.equals(area)) return this;
-        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, narrow, lookUp, zoom, split, rounded, now, troubles, ollama, advanced, palette, fonts, lang);
+        return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, rounded, now, troubles, ollama, advanced, palette, fonts, lang);
     }
 
     /// Below this width of the conversation's area, the header's buttons do not fit with their
