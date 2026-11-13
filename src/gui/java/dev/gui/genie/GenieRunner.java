@@ -799,6 +799,16 @@ public final class GenieRunner {
         transfer(Optional.of(new Notice.SavedFile(name, target.toString())), lit -> GenieFileTransferUtil.fetch(lit, name, target));
     }
 
+    /// Deletes the outbox file `name`, which the user no longer wants, and looks into the
+    /// outbox again, so the chat stops offering it.
+    public void removeOutboxFile(String name) {
+        transfer(Optional.empty(), lit -> {
+            GenieFileTransferUtil.remove(lit, name);
+            var files = GenieFileTransferUtil.list(lit);
+            changes.accept(genie -> genie.outbox(files));
+        });
+    }
+
     /// Puts `file` into the genie's inbox, and tells the genie. A folder is not given: the chat
     /// says that only files are.
     public void giveFile(Path file) {

@@ -60,6 +60,7 @@ final class StagedGenies implements Genies {
     @Override public void addLamp(Path directory) {}
     @Override public void giveFile(UUID genie, Path file) {}
     @Override public void saveOutboxFile(UUID genie, String name, Path target) {}
+    @Override public void removeOutboxFile(UUID genie, String name) {}
     @Override public void saveJob(UUID genie) {}
     @Override public void removeJob(UUID genie, String job) {}
     @Override public void switchJob(UUID genie, String job, boolean on) {}

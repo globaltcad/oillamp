@@ -416,6 +416,29 @@ class KeepingAGenieAliveSpec extends Specification {
             waitUntil { genie.transcript().entries().any { it.kind() == Entry.Kind.FILE && it.title() == 'recipe.md' } }
     }
 
+    def 'A file the user deletes from the outbox is gone from the genie\'s home and from the chat'() {
+        reportInfo """
+            Let's consider the user deletes a file from the outbox, after the window asked them
+            whether they are sure. The runner deletes it from the genie's ~/outbox through the
+            lamp's ssh command, and looks into the outbox again, so the chat no longer offers to
+            save it. The other files stay.
+        """
+        given:
+            awake()
+            Files.writeString(home().resolve('outbox/poem.txt'), 'roses are red')
+            Files.writeString(home().resolve('outbox/song.txt'), 'la la la')
+            runner.checkOutbox()
+            waitUntil { genie.handouts().size() == 2 }
+
+        when:
+            runner.removeOutboxFile('poem.txt')
+
+        then:
+            waitUntil { genie.handouts()*.name() == ['song.txt'] }
+            !Files.exists(home().resolve('outbox/poem.txt'))
+            Files.exists(home().resolve('outbox/song.txt'))
+    }
+
     def 'A folder given to the genie stays on the host, and the chat says only files can be given'() {
         reportInfo """
             Let's consider `GenieRunner.giveFile` is handed a folder rather than a file. A genie

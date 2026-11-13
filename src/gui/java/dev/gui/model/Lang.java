@@ -1807,6 +1807,16 @@ public enum Lang {
             };
         }
 
+        public String DELETE_FROM_THE_OUTBOX(String file) {
+            return switch (lang) {
+                case ENGLISH -> "Delete " + file + " from the outbox";
+                case GERMAN -> file + " aus dem Ausgang löschen";
+                case SPANISH -> "Eliminar " + file + " de la bandeja de salida";
+                case JAPANESE -> file + " を受け取ったファイルから削除";
+                case CHINESE -> "从收到的文件中删除 " + file;
+            };
+        }
+
         public String SAVE_SOMEWHERE_ON_THIS_COMPUTER(String file) {
             return switch (lang) {
                 case ENGLISH -> "Save " + file + " somewhere on this computer";
@@ -2157,6 +2167,26 @@ public enum Lang {
                 case SPANISH -> "¿Eliminar para siempre la conversación «" + title + "», con todas sus ramas?";
                 case JAPANESE -> "会話「" + title + "」を、すべての分岐ごと完全に削除しますか？";
                 case CHINESE -> "要永久删除对话“" + title + "”及其所有分支吗？";
+            };
+        }
+
+        public String DELETE_FROM_GENIES_OUTBOX_FOR_GOOD_SAVED_COPIES_STAY(String file, String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Delete \"" + file + "\" from " + genie + "'s outbox for good? Copies you saved on this computer stay where they are.";
+                case GERMAN -> "„" + file + "“ endgültig aus dem Ausgang von " + genie + " löschen? Kopien, die du auf diesem Rechner gespeichert hast, bleiben, wo sie sind.";
+                case SPANISH -> "¿Eliminar para siempre «" + file + "» de la bandeja de salida de " + genie + "? Las copias que guardaste en este equipo se quedan donde están.";
+                case JAPANESE -> "「" + file + "」を " + genie + " から受け取ったファイルから完全に削除しますか？このコンピューターに保存したコピーはそのまま残ります。";
+                case CHINESE -> "要从 " + genie + " 发来的文件中永久删除“" + file + "”吗？你保存在这台电脑上的副本会保留原处。";
+            };
+        }
+
+        public String DELETE_A_FILE() {
+            return switch (lang) {
+                case ENGLISH -> "Delete a file";
+                case GERMAN -> "Datei löschen";
+                case SPANISH -> "Eliminar un archivo";
+                case JAPANESE -> "ファイルの削除";
+                case CHINESE -> "删除文件";
             };
         }
 

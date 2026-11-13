@@ -503,6 +503,7 @@ public final class GeniesBackend implements Genies {
     @Override public void giveFile(UUID id, Path file) { runner(id).giveFile(file); }
 
     @Override public void saveOutboxFile(UUID id, String name, Path target) { runner(id).saveOutboxFile(name, target); }
+    @Override public void removeOutboxFile(UUID id, String name) { runner(id).removeOutboxFile(name); }
 
     // ─── the home ──────────────────────────────────────────────────────────────────────────
 

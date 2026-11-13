@@ -29,6 +29,7 @@ final class GenieFileTransferUtil {
     /// joined but never woke.
     static final String LIST = "[ -d \"$HOME/outbox\" ] || exit 0; find \"$HOME/outbox\" -maxdepth 1 -type f -printf '%s\\t%f\\n'";
     static final String READ = "cat -- \"$HOME/outbox/$1\"";
+    static final String REMOVE = "rm -f -- \"$HOME/outbox/$1\"";
     static final String WRITE = "mkdir -p \"$HOME/inbox\" && cat > \"$HOME/inbox/$1\"";
 
     static void makeDirectories(LampLighter.Lit lamp) throws IOException, InterruptedException {
@@ -79,6 +80,14 @@ final class GenieFileTransferUtil {
         } finally {
             Files.deleteIfExists(partial);
         }
+    }
+
+    /// Deletes the file `name` from the genie's `~/outbox`.
+    static void remove(LampLighter.Lit lamp, String name) throws IOException, InterruptedException {
+        if (!isPlainName(name)) throw new IOException("not a file name: " + name);
+        Process removing = lamp.exec("sh", "-c", REMOVE, "sh", name);
+        removing.getOutputStream().close();
+        finish(removing, "could not delete ~/outbox/" + name);
     }
 
     /// Puts the host file `source` into the genie's `~/inbox`, under the same name.
