@@ -114,6 +114,9 @@ public interface Genies {
     /// To where the user chose.
     void saveOutboxFile(UUID genie, String name, Path target);
 
+    /// Deletes the file from the genie's outbox. The window has asked the user already.
+    void removeOutboxFile(UUID genie, String name);
+
     /// Adds the job written in the genie's schedule editor, or changes the job it replaces.
     void saveJob(UUID genie);
 
