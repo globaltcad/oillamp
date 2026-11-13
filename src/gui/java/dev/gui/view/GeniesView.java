@@ -221,25 +221,31 @@ public final class GeniesView extends JPanel {
 
         UI.use(look, () ->
             of(this).group(Skin.FRAME)
-            .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? ONE_COLUMN : SIDE_BY_SIDE))
+            .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? ONE_COLUMN : sideBySide(it.sidebar())))
             .withPrefSize(1280, 820)
             .withMinSize(0, 0)
             .onResize(it -> state.update(From.VIEW, s -> s.withViewWidth(it.getWidth())))
             .add(sidebar())
+            .add(sidebarGrip())
             .add(mainArea())
         );
     }
 
-    /// The genies beside the selected one, or, in a narrow window, above it. The genie keeps
-    /// some height whatever the list's, so the list cannot push it out of the window.
-    private static final Layout SIDE_BY_SIDE = Layout.mig(
-        "fill, ins 0, gap 0, hidemode 3",
-        MigAddConstraint.of("growy, width 250!"),
-        MigAddConstraint.of("grow, push, wmin 0")
-    );
+    /// The genies beside the selected one, as wide as the user dragged them, with the grip
+    /// between the two; or, in a narrow window, above it, where the grip is hidden. The genie
+    /// keeps some height whatever the list's, so the list cannot push it out of the window.
+    private static Layout sideBySide(Sidebar sidebar) {
+        return Layout.mig(
+            "fill, ins 0, gap 0, hidemode 3",
+            MigAddConstraint.of("growy, width " + sidebar.width() + "!"),
+            MigAddConstraint.of("growy, width " + Sidebar.GRIP + "!"),
+            MigAddConstraint.of("grow, push, wmin 0")
+        );
+    }
     private static final Layout ONE_COLUMN = Layout.mig(
         "fill, wrap 1, ins 0, gap 0, hidemode 3",
         MigAddConstraint.of("growx, wmin 0"),
+        MigAddConstraint.of("growx"),
         MigAddConstraint.of("grow, push, wmin 0, hmin 160")
     );
 
@@ -312,12 +318,15 @@ public final class GeniesView extends JPanel {
         return
             panel().group(Skin.SIDEBAR)
             .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? aboveTheGenie(it.genieList().height()) : BESIDE_THE_GENIE))
+            // Beside the genie, the grip after the list is its right edge, and the list's padding
+            // there, so the cards keep their distance from the edge.
             .withStyle(Themed.of(narrow, theme), (themed, it) -> {
                 var on = themed.item();
                 Palette p = themed.palette();
+                it = it.borderAt(UI.Edge.RIGHT, 0, p.TRANSPARENT());
                 return on
-                    ? it.borderAt(UI.Edge.RIGHT, 0, p.TRANSPARENT()).borderAt(UI.Edge.BOTTOM, 1, p.BORDER()).padding(12, 12, 2, 12)
-                    : it;
+                    ? it.borderAt(UI.Edge.BOTTOM, 1, p.BORDER()).padding(12, 12, 2, 12)
+                    : it.padding(12, 12 - Sidebar.GRIP, 12, 12);
             })
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
@@ -379,6 +388,43 @@ public final class GeniesView extends JPanel {
                     )
                 )
             );
+    }
+
+    /// The grip at the right edge of the list of genies beside the genie: the list's own ground,
+    /// with the line of its edge on the grip's right, and a short raised handle on that line. So
+    /// the genie's header meets the list right at the line, with nothing showing between them.
+    /// The user drags it to make the list wider or narrower, and all the way to the left to hide
+    /// it. A double click lets Genies pick the width again.
+    private UIForAnySwing<?, ?> sidebarGrip() {
+        // Where a drag began: the pointer's place across the window on the screen, and the width.
+        int[] dragFrom = new int[2];
+        Sidebar[] before = { Sidebar.PICKED };
+        return
+            panel()
+            .isVisibleIf(state.viewAs(Boolean.class, it -> !it.narrow() && it.genieList().shown() && it.hasGenies()))
+            .withCursor(UI.Cursor.RESIZE_RIGHT)
+            .withTooltip(windowWords.viewAsString(Lang.Window::DRAG_TO_MAKE_THE_LIST_OF_GENIES_WIDER_OR_NARROWER))
+            .withStyle(palette, (p, it) -> {
+                int width = it.componentWidth(), height = it.componentHeight();
+                return it.backgroundColor(p.SIDEBAR()).painter(UI.Layer.CONTENT, g -> {
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g.setColor(p.BORDER());
+                    g.fillRect(width - 1, 0, 1, height);
+                    g.setColor(p.SUBTEXT());
+                    g.fillRoundRect(width - 3, height / 2 - 14, 3, 28, 3, 3);
+                });
+            })
+            .onMousePress(it -> {
+                dragFrom[0] = UI.unscale(it.mouseXOnScreen());
+                dragFrom[1] = state.get().sidebar().width();
+                before[0] = state.get().sidebar();
+            })
+            .onMouseDrag(it -> {
+                int along = UI.unscale(it.mouseXOnScreen());
+                state.update(From.VIEW, s -> s.withSidebar(s.sidebar().withWidth(dragFrom[1] + along - dragFrom[0])));
+            })
+            .onMouseRelease(_ -> state.update(From.VIEW, s -> s.sidebarReleased(before[0])))
+            .onMouseClick(it -> { if (it.clickCount() == 2) state.update(From.VIEW, s -> s.withSidebar(Sidebar.PICKED)); });
     }
 
     /// Built later than the constructor, so it enters the style sheet again.
