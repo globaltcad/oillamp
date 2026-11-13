@@ -791,7 +791,6 @@ public final class GeniesView extends JPanel {
                                     if (bounds == null) return;
                                     // SwingTree scales a painter's units to pixels; the tree's rows are in pixels.
                                     g.scale(1 / UI.scale(), 1 / UI.scale());
-                                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                                     g.setColor(ViewPartsUtil.withAlpha(p.BORDER(), 170));
                                     // Inset a little, so neighbouring rows keep a gap between them.
                                     int gap = UI.scale(ROW_GAP);
@@ -802,7 +801,12 @@ public final class GeniesView extends JPanel {
                 )
             )
             .add("growx, wmin 0, h 9!",
-                grip(fold, () -> UI.unscale(area[0].getHeight()), open, windowWords.viewAsString(Lang.Window::DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER))
+                grip(
+                    fold,
+                    () -> UI.unscale(area[0].getHeight()),
+                    open,
+                    windowWords.viewAsString(Lang.Window::DRAG_TO_MAKE_THIS_LIST_TALLER_OR_SHORTER)
+                )
             );
     }
 
