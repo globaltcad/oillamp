@@ -151,7 +151,7 @@ final class ActionsPage {
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
         return
-            scrollPane(conf -> conf.fitWidth(true)).group(Skin.PAGE_SCROLL).withEmptyBorder(0)
+            scrollPane(conf -> conf.fitWidth(true)).group(Skin.PAGE).withEmptyBorder(0)
             .isVisibleIf(visible)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
             .withVerticalScrollIncrement(24)
@@ -161,7 +161,7 @@ final class ActionsPage {
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
                 .withStyle(palette, (p, it) -> it
                     .backgroundColor(p.TRANSPARENT())
-                    .padding(10, 4, 28, 4)
+                    .padding(10 - Look.SEA_ABOVE, 4 - Look.CANAL, 28, 4)
                 )
                 .add(WHOLE, top())
                 .add(TILE, renaming())

@@ -220,7 +220,7 @@ public final class GeniesView extends JPanel {
         wakePicture = new WakePicture(genie, palette);
 
         UI.use(look, () ->
-            of(this).group(Skin.FRAME)
+            of(this).group(Skin.WINDOW)
             .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? ONE_COLUMN : sideBySide(it.sidebar())))
             .withPrefSize(1280, 820)
             .withMinSize(0, 0)
@@ -232,8 +232,9 @@ public final class GeniesView extends JPanel {
     }
 
     /// The genies beside the selected one, as wide as the user dragged them, with the grip
-    /// between the two; or, in a narrow window, above it, where the grip is hidden. The genie
-    /// keeps some height whatever the list's, so the list cannot push it out of the window.
+    /// between the two, which is the sea between them; or, in a narrow window, above it, the sea
+    /// between them and the grip hidden. The genie keeps some height whatever the list's, so the
+    /// list cannot push it out of the window.
     private static Layout sideBySide(Sidebar sidebar) {
         return Layout.mig(
             "fill, ins 0, gap 0, hidemode 3",
@@ -318,16 +319,14 @@ public final class GeniesView extends JPanel {
         return
             panel().group(Skin.SIDEBAR)
             .withLayout(state.viewAs(Layout.class, it -> it.narrow() ? aboveTheGenie(it.genieList().height()) : BESIDE_THE_GENIE))
-            // Beside the genie, the grip after the list is its right edge, and the list's padding
-            // there, so the cards keep their distance from the edge.
-            .withStyle(Themed.of(narrow, theme), (themed, it) -> {
-                var on = themed.item();
-                Palette p = themed.palette();
-                it = it.borderAt(UI.Edge.RIGHT, 0, p.TRANSPARENT());
-                return on
-                    ? it.borderAt(UI.Edge.BOTTOM, 1, p.BORDER()).padding(12, 12, 2, 12)
-                    : it.padding(12, 12 - Sidebar.GRIP, 12, 12);
-            })
+            // Its sea is taken from its padding. Beside the genie, the grip after it paints the
+            // last of the island, square here, and the sea after that. Above the genie, under
+            // the title bar, it keeps what little room there is under the grip of its cards.
+            .withStyle(narrow, (on, it) -> on
+                ? it.margin(0, Look.CANAL, Look.SEA_BELOW, 0).padding(12, 12 - Look.CANAL, 3 - Look.SEA_BELOW, 12)
+                : it.margin(0, 0, Look.SEA_BELOW, 0).padding(12, 3, 12 - Look.SEA_BELOW, 12)
+                    .borderRadiusAt(UI.Corner.TOP_RIGHT, 0).borderRadiusAt(UI.Corner.BOTTOM_RIGHT, 0)
+            )
             // Without genies, the window is the settings alone, which welcome the user.
             .isVisibleIf(state.viewAs(Boolean.class, it -> it.genieList().shown() && it.hasGenies()))
             .add(
@@ -390,11 +389,9 @@ public final class GeniesView extends JPanel {
             );
     }
 
-    /// The grip at the right edge of the list of genies beside the genie: the list's own ground,
-    /// with the line of its edge on the grip's right, and a short raised handle on that line. So
-    /// the genie's header meets the list right at the line, with nothing showing between them.
-    /// The user drags it to make the list wider or narrower, and all the way to the left to hide
-    /// it. A double click lets Genies pick the width again.
+    /// The grip between the list of genies and the genie beside it: the sea between them, with a
+    /// short raised handle in its middle. The user drags it to make the list wider or narrower,
+    /// and all the way to the left to hide it. A double click lets Genies pick the width again.
     private UIForAnySwing<?, ?> sidebarGrip() {
         // Where a drag began: the pointer's place across the window on the screen, and the width.
         int[] dragFrom = new int[2];
@@ -406,12 +403,12 @@ public final class GeniesView extends JPanel {
             .withTooltip(windowWords.viewAsString(Lang.Window::DRAG_TO_MAKE_THE_LIST_OF_GENIES_WIDER_OR_NARROWER))
             .withStyle(palette, (p, it) -> {
                 int width = it.componentWidth(), height = it.componentHeight();
-                return it.backgroundColor(p.SIDEBAR()).painter(UI.Layer.CONTENT, g -> {
-                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g.setColor(p.BORDER());
-                    g.fillRect(width - 1, 0, 1, height);
-                    g.setColor(p.SUBTEXT());
-                    g.fillRoundRect(width - 3, height / 2 - 14, 3, 28, 3, 3);
+                return it.backgroundColor(p.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
+                    // The list's island ends here, and the sea between it and the genie follows.
+                    int sea = Look.CANAL;
+                    shore(g, p.SIDEBAR(), -Look.ARC, 0, width - sea + Look.ARC, height - Look.SEA_BELOW);
+                    g.translate(width - sea, 0);
+                    handle(p, g, sea, height);
                 });
             })
             .onMousePress(it -> {
@@ -905,6 +902,23 @@ public final class GeniesView extends JPanel {
         g.fillRoundRect(length / 2 - 14, middle - 1, 28, 3, 3, 3);
     }
 
+    /// The end of an island that reaches into a grip beside it: `x, y, width, height` of the
+    /// island, of which the grip shows the part inside it, with the island's round corners.
+    private static void shore(final Graphics2D g, final Color ground, int x, int y, int width, int height) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(ground);
+        g.fill(new RoundRectangle2D.Double(x, y, width, height, Look.ARC, Look.ARC));
+    }
+
+    /// A grip between two islands: only a short raised handle in the middle of its sea, `width`
+    /// by `height`, which needs no line to say where either island ends.
+    private static void handle(final Palette p, final Graphics2D g, final int width, final int height) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(p.BORDER());
+        if (width < height) g.fillRoundRect(width / 2 - 1, height / 2 - 14, 3, 28, 3, 3);
+        else g.fillRoundRect(width / 2 - 14, height / 2 - 1, 28, 3, 3, 3);
+    }
+
     /// How long a conversation or a branch is, with `forks` the branches it splits into: the
     /// first of them is the one it goes on in, every other one a question asked differently.
     private String questions(int turns, Tuple<Talk.Branch> forks) {
@@ -967,6 +981,7 @@ public final class GeniesView extends JPanel {
             .add("grow, push, wmin 0", SettingsPage.of(state, app, Viewable.of(Boolean.class, onSettings, hasGenies, (a, b) -> a || !b)));
     }
 
+
     private UIForAnySwing<?, ?> header(Val<Boolean> visible) {
         Val<Boolean> onChat = page.viewAs(Boolean.class, it -> it == GeniesState.Page.CHAT);
         Val<Boolean> awake = Viewable.of(Boolean.class, phase, onChat, (it, chat) -> it.isAwake() && chat);
@@ -979,6 +994,12 @@ public final class GeniesView extends JPanel {
         return
             panel("fill, ins 0, gap 10, hidemode 3", "[]0[30!][grow][]").group(Skin.HEADER)
             .isVisibleIf(visible)
+            // Its sea is taken from its padding. At the top, the title bar is the sea, unless the
+            // list of genies is above it.
+            .withStyle(state.viewAs(Boolean.class, it -> it.narrow() && it.genieList().shown() && it.hasGenies()), (below, it) -> {
+                int top = below ? Look.SEA_ABOVE : 0;
+                return it.margin(top, Look.CANAL, Look.SEA_BELOW, 0).padding(10 - top, 16 - Look.CANAL, 11 - Look.SEA_BELOW, 16);
+            })
             // Each part has its cell, and the hidden ones' gaps go with them, so the others keep
             // their places.
             // Not this genie's: what went wrong anywhere in Genies, so it stays first, under ☰.
@@ -1126,7 +1147,7 @@ public final class GeniesView extends JPanel {
 
     private static Layout bannerLayout(String columns, String words, String quiet, String flame) {
         return
-            Layout.mig(LayoutConstraint.of("fill, ins 10 14 10 14, gap 12, hidemode 3"), LayoutConstraint.of(columns), LayoutConstraint.of(""))
+            Layout.mig(LayoutConstraint.of("fill, ins 0, gap 12, hidemode 3"), LayoutConstraint.of(columns), LayoutConstraint.of(""))
             .withChildConstraints(MigAddConstraint.of(words), MigAddConstraint.of(quiet), MigAddConstraint.of(flame));
     }
 
@@ -1186,7 +1207,7 @@ public final class GeniesView extends JPanel {
         return
             panel().withLayout(layout)
             .isVisibleIf(shown)
-            .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderAt(UI.Edge.LEFT, 3, p.BRASS()).borderAt(UI.Edge.BOTTOM, 1, p.BORDER()))
+            .group(Skin.BANNER)
             .add(
                 box("fill, wrap 1, ins 0, gap 2", "[grow]")
                 .add("growx, wmin 0",
@@ -1350,20 +1371,21 @@ public final class GeniesView extends JPanel {
      *
      *  How long each is comes from the state's Split. Nothing is rebuilt when the user drags or
      *  the arrangement changes: the layout is a value, made from the state. Inside a scroll pane,
-     *  nothing stretches to the window's height, so the heights are stated too.
+     *  nothing stretches to the window's height, so the heights are stated too. The state has the
+     *  area's height in tens, so the last row may grow by the few units more the area has.
      */
     private static Layout arrangement(GeniesState it) {
         LayoutConstraint fill = LayoutConstraint.of("fill, ins 0, gap 0, hidemode 3");
         if (!it.desktopOnScreen())
             return
-                Layout.mig(fill, LayoutConstraint.of("[grow]"), LayoutConstraint.of("[" + it.height() + "!]"))
+                Layout.mig(fill, LayoutConstraint.of("[grow]"), LayoutConstraint.of("[" + it.height() + ", grow]"))
                 .withChildConstraints(MigAddConstraint.of("cell 0 0, grow, wmin 0"));
         if (it.sideBySide())
             return
                 Layout.mig(
                     fill,
                     LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][grow]"),
-                    LayoutConstraint.of("[" + it.height() + "!]")
+                    LayoutConstraint.of("[" + it.height() + ", grow]")
                 )
                 .withChildConstraints(
                     MigAddConstraint.of("cell 0 0, grow, wmin 0"),
@@ -1374,7 +1396,7 @@ public final class GeniesView extends JPanel {
             Layout.mig(
                 fill,
                 LayoutConstraint.of("[grow]"),
-                LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][" + it.desktopPart() + "!]")
+                LayoutConstraint.of("[" + it.chatPart() + "!][" + Split.GRIP + "!][" + it.desktopPart() + ", grow]")
             )
             .withChildConstraints(
                 MigAddConstraint.of("cell 0 0, grow, wmin 0"),
@@ -1397,9 +1419,16 @@ public final class GeniesView extends JPanel {
                 panel(state.viewAs(Layout.class, GeniesView::arrangement)).withMinSize(0, 0)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
                 .add(
-                    panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][][]")
+                    panel("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][][]").group(Skin.PAGE)
                     .withMinSize(0, 0)
-                    .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+                    // The chat keeps its sea in its parts' own room at its edges, so they stay
+                    // where they are, rather than giving it up from a scroll bar as a page does.
+                    // Toward the desktop, the grip between them is the canal.
+                    .withStyle(state.viewAs(java.awt.Insets.class, it -> new java.awt.Insets(
+                        Look.SEA_ABOVE, 0,
+                        it.desktopOnScreen() && !it.sideBySide() ? 0 : Look.SEA_BELOW,
+                        it.desktopOnScreen() && it.sideBySide() ? 0 : Look.CANAL
+                    )), (sea, it) -> it.margin(sea.top, sea.right, sea.bottom, sea.left).padding(-sea.top, -sea.right, -sea.bottom, -sea.left))
                     // Files dragged from a file manager are given to the genie where they are
                     // let go of, anywhere in the chat; while they are over it, it says so.
                     .withDropSite(fileDrop::on)
@@ -1453,8 +1482,7 @@ public final class GeniesView extends JPanel {
         g.drawString(text, (width - g.getFontMetrics().stringWidth(text)) / 2f, baseline);
     }
 
-    /// The grip between the chat and the desktop, a line along it like the grips under the
-    /// lists. The user drags it to give one more room and the other less, and all the way toward
+    /// The grip between the chat and the desktop: the sea between them, with a handle in it. The user drags it to give one more room and the other less, and all the way toward
     /// the desktop to close it. A double click lets Genies pick the share again.
     private UIForAnySwing<?, ?> splitGrip(Val<Boolean> shown) {
         Val<Boolean> beside = state.viewAs(Boolean.class, GeniesState::sideBySide);
@@ -1468,7 +1496,17 @@ public final class GeniesView extends JPanel {
             .withTooltip(desktopWords.viewAsString(Lang.Desktop::DRAG_TO_SHARE_THE_ROOM_BETWEEN_THE_CHAT_AND_THE_DESKTOP))
             .withStyle(palette, (p, it) -> {
                 int width = it.componentWidth(), height = it.componentHeight();
-                return it.backgroundColor(p.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> grip(p, g, width, height));
+                // The chat's sea, then the end of the desktop's island, which reaches into the grip.
+                return it.backgroundColor(p.TRANSPARENT()).painter(UI.Layer.CONTENT, g -> {
+                    int sea = Look.CANAL;
+                    if (width < height) {
+                        shore(g, p.NIGHT(), sea, Look.SEA_ABOVE, width + Look.ARC, height - Look.SEA_ABOVE - Look.SEA_BELOW);
+                        handle(p, g, sea, height);
+                    } else {
+                        shore(g, p.NIGHT(), 0, sea, width - Look.CANAL, height + Look.ARC);
+                        handle(p, g, width, sea);
+                    }
+                });
             })
             .onMousePress(it -> {
                 dragFrom[0] = UI.unscale(beside.get() ? it.mouseXOnScreen() : it.mouseYOnScreen());
@@ -1505,10 +1543,17 @@ public final class GeniesView extends JPanel {
         return
             // No row constraints: the line on what the genie shows is hidden at times, which moves
             // the rows under it up. Only the desktop's own "push" makes its row grow.
-            panel("fill, wrap 1, ins 8 12 12 12, gap 6, hidemode 3", "[grow]")
+            panel("fill, wrap 1, ins 0, gap 6, hidemode 3", "[grow]").group(Skin.DESKTOP)
             .isVisibleIf(shown)
             .withMinSize(0, 0)
-            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
+            // Its sea is taken from its padding; toward the chat, the grip between them paints
+            // the end of the desktop's island, so its corners are square there.
+            .withStyle(state.viewAs(Boolean.class, GeniesState::sideBySide), (beside, it) -> beside
+                ? it.margin(Look.SEA_ABOVE, Look.CANAL, Look.SEA_BELOW, 0).padding(8 - Look.SEA_ABOVE, 12 - Look.CANAL, 12 - Look.SEA_BELOW, 12)
+                    .borderRadiusAt(UI.Corner.TOP_LEFT, 0).borderRadiusAt(UI.Corner.BOTTOM_LEFT, 0)
+                : it.margin(0, Look.CANAL, Look.SEA_BELOW, 0).padding(8, 12 - Look.CANAL, 12 - Look.SEA_BELOW, 12)
+                    .borderRadiusAt(UI.Corner.TOP_LEFT, 0).borderRadiusAt(UI.Corner.TOP_RIGHT, 0)
+            )
             .add("growx, wmin 0",
                 label(Viewable.of(String.class, genie, desktopWords, (it, words) -> "✦  " + words.SHOWS_YOU(it.name(), it.showing())))
                 .isVisibleIf(showing)
@@ -1886,20 +1931,20 @@ public final class GeniesView extends JPanel {
             Map.entry("ScrollBar.thumbInsets", "2,2,2,2"),
             Map.entry("ToolTip.background", hex(p.RAISED())),
             Map.entry("ToolTip.foreground", hex(p.TEXT())),
-            // The title bars Genies draws itself, of its window and its dialogs, in the sidebar's
-            // colour, a line under them as under the genie's header.
-            Map.entry("TitlePane.background", hex(p.SIDEBAR())),
-            Map.entry("TitlePane.inactiveBackground", hex(p.SIDEBAR())),
+            // The title bars Genies draws itself, of its window and its dialogs: the sea the
+            // window's islands float in, with no line under them, so the sea goes on below.
+            Map.entry("TitlePane.background", hex(p.SEA())),
+            Map.entry("TitlePane.inactiveBackground", hex(p.SEA())),
             Map.entry("TitlePane.foreground", hex(p.TEXT())),
             Map.entry("TitlePane.inactiveForeground", hex(p.SUBTEXT())),
             Map.entry("TitlePane.embeddedForeground", hex(p.TEXT())),
-            Map.entry("TitlePane.borderColor", hex(p.BORDER())),
+            Map.entry("TitlePane.borderColor", hex(p.SEA())),
             Map.entry("TitlePane.buttonHoverBackground", hex(p.RAISED())),
             Map.entry("TitlePane.buttonPressedBackground", hex(p.BORDER())),
             Map.entry("TitlePane.closeHoverBackground", hex(p.TROUBLE())),
             Map.entry("TitlePane.closePressedBackground", hex(p.TROUBLE_WASH())),
-            Map.entry("MenuBar.background", hex(p.SIDEBAR())),
-            Map.entry("MenuBar.borderColor", hex(p.SIDEBAR())),
+            Map.entry("MenuBar.background", hex(p.SEA())),
+            Map.entry("MenuBar.borderColor", hex(p.SEA())),
             Map.entry("RootPane.activeBorderColor", hex(p.BORDER())),
             Map.entry("RootPane.inactiveBorderColor", hex(p.BORDER()))
         ));

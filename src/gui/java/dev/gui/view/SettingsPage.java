@@ -261,7 +261,10 @@ final class SettingsPage {
             if (it.currentValue().orElse(false)) play(clock, scene, fit, aside, welcome, began, playing);
         });
         return
-            scrollPane(conf -> conf.fitWidth(true)).group(Skin.PAGE_SCROLL).withEmptyBorder(0)
+            scrollPane(conf -> conf.fitWidth(true)).group(Skin.PAGE).withEmptyBorder(0)
+            // No header above the settings: under the title bar, which is the sea, as the
+            // list of genies beside them.
+            .withStyle(it -> it.marginTop(0))
             .isVisibleIf(visible)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
             .withVerticalScrollIncrement(24)
@@ -273,7 +276,7 @@ final class SettingsPage {
                 .withStyle(Themed.of(clock, theme), (themed, it) -> {
                     var at = themed.item();
                     Palette p = themed.palette();
-                    return it.backgroundColor(p.TRANSPARENT()).padding(0, 16, 0, 16)
+                    return it.backgroundColor(p.TRANSPARENT()).padding(0, 16 - Look.CANAL, 0, 16)
                     .painter(UI.Layer.BACKGROUND, g -> {
                         JComponent shown = welcomeBox.get();
                         if (shown == null || !shown.isVisible()) return;
