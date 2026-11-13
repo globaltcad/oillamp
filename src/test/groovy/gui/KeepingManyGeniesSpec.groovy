@@ -5,6 +5,7 @@ import dev.gui.model.Genie
 import dev.gui.model.GeniesState
 import dev.gui.model.Lang
 import dev.gui.model.Settings
+import dev.gui.model.Sidebar
 import spock.lang.Specification
 import sprouts.Tuple
 
@@ -118,6 +119,70 @@ class KeepingManyGeniesSpec extends Specification {
         then: 'it keeps its height, folded, wide, and narrow again'
             taller.withGenieList(taller.genieList().toggled()).genieList().height() == 320
             taller.withViewWidth(1000).withViewWidth(600).genieList() == new Fold(false, 320)
+    }
+
+    def 'The user drags the grip at the edge of the list of genies to make the list wider or narrower'() {
+        reportInfo """
+            Let's consider a window wide enough for the list of genies beside the genie. Genies
+            gives the list 250 units of the window's width, which suits short names. A user with
+            many genies of long names wants more of them readable at a glance, another wants the
+            room for the genie's chat. So a grip at the list's right edge makes it wider or
+            narrower: while the user holds it, `Sidebar.withWidth` follows the pointer, and
+            letting go is `GeniesState.sidebarReleased`. The list never takes more than 480 units,
+            so the genie keeps most of the window, and let go narrower than the 200 units it
+            needs, it gets those 200 units. Its width outlasts a spell in a narrow window, where
+            the list is above the genie instead.
+        """
+        expect: 'Genies picks 250 units before the user drags the grip'
+            state.sidebar() == Sidebar.PICKED
+            state.sidebar().width() == 250
+
+        when: 'the user drags the list to 320 units and lets go'
+            var wider = state.withSidebar(state.sidebar().withWidth(320)).sidebarReleased(state.sidebar())
+
+        then: 'the list is 320 units wide, and still shown'
+            wider.sidebar().width() == 320
+            wider.genieList().shown()
+
+        and: 'it is 320 units wide again after the window was narrow for a while'
+            wider.withViewWidth(600).withViewWidth(1000).sidebar().width() == 320
+
+        and: 'dragged to 150 units, the list gets the 200 it needs; dragged to 700, it stops at 480'
+            state.withSidebar(state.sidebar().withWidth(150)).sidebarReleased(state.sidebar()).sidebar().width() == Sidebar.NARROWEST
+            state.withSidebar(state.sidebar().withWidth(700)).sidebarReleased(state.sidebar()).sidebar().width() == Sidebar.WIDEST
+    }
+
+    def 'Dragged nearly all the way to the left, letting go of the grip hides the list of genies'() {
+        reportInfo """
+            In this scenario a user who dragged the list of genies to 320 units wide now wants the
+            whole window for the genie. They drag the grip at the list's right edge to the left.
+            While they hold it, the list may get narrower than the 200 units it needs, down to
+            nothing, which shows what letting go does. Let go narrower than half of those 200
+            units, the list hides, as the ☰ button in the title bar hides it. Shown again with ☰,
+            the list is 320 units wide, as before that drag, not the sliver it was let go at.
+        """
+        given: 'the list of genies is 320 units wide'
+            var wider = state.withSidebar(new Sidebar(320))
+
+        when: 'the user holds the grip and drags the list to 80 units'
+            var held = wider.withSidebar(wider.sidebar().withWidth(80))
+
+        then: 'the list is 80 units wide and still shown'
+            held.sidebar().width() == 80
+            held.genieList().shown()
+
+        when: 'the user lets go of the grip'
+            var hidden = held.sidebarReleased(wider.sidebar())
+
+        then: 'the list is hidden'
+            !hidden.genieList().shown()
+
+        when: 'the user shows the list again with ☰'
+            var shownAgain = hidden.withGenieList(hidden.genieList().toggled())
+
+        then: 'the list is shown, 320 units wide'
+            shownAgain.genieList().shown()
+            shownAgain.sidebar().width() == 320
     }
 
     def 'The header makes room in steps: first its buttons drop their words, then its pages nest'() {

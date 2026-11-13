@@ -452,6 +452,18 @@ public enum Lang {
             };
         }
 
+        public String DRAG_TO_MAKE_THE_LIST_OF_GENIES_WIDER_OR_NARROWER() {
+            return switch (lang) {
+                case ENGLISH ->
+                    "Drag to make the list of your genies wider or narrower, or all the way left to hide it."
+                    + " Double-click to let Genies pick its width";
+                case GERMAN -> "Ziehen, um die Liste deiner Dschinns breiter oder schmaler zu machen, oder ganz nach links, um sie auszublenden. Doppelklicken, damit Genies die Breite wählt";
+                case SPANISH -> "Arrastra para ensanchar o estrechar la lista de tus genios, o hasta la izquierda para ocultarla. Doble clic para que Genies elija su ancho";
+                case JAPANESE -> "ドラッグするとジーニーの一覧の幅を変えます。左端までドラッグすると隠します。ダブルクリックすると Genies が幅を選びます";
+                case CHINESE -> "拖动以加宽或收窄精灵列表，拖到最左侧可将其隐藏。双击则由 Genies 选择宽度";
+            };
+        }
+
         public String ADD_A_LAMP_FROM_ELSEWHERE() {
             return switch (lang) {
                 case ENGLISH -> "Add a lamp from elsewhere…";
