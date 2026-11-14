@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -797,6 +798,33 @@ public final class GenieRunner {
     /// Copies the outbox file `name` to `target`, which the user chose.
     public void saveOutboxFile(String name, Path target) {
         transfer(Optional.of(new Notice.SavedFile(name, target.toString())), lit -> GenieFileTransferUtil.fetch(lit, name, target));
+    }
+
+    /// Copies the outbox file `name` into a new folder of its own among this computer's temporary
+    /// files, for the user to drag where they want it. Both go when Genies does.
+    public CompletableFuture<Path> fetchOutboxFile(String name) {
+        CompletableFuture<Path> fetched = new CompletableFuture<>();
+        Optional<LampLighter.Lit> lit = lamp;
+        if (lit.isEmpty()) {
+            showProblem(new Notice.AsleepWakeItFirst());
+            fetched.completeExceptionally(new IOException("the genie is asleep"));
+            return fetched;
+        }
+        Thread.ofVirtual().name("handout").start(() -> {
+            try {
+                Path folder = Files.createTempDirectory("genies-");
+                // Deleted in the opposite order: the file first, then its folder.
+                folder.toFile().deleteOnExit();
+                Path copy = folder.resolve(name);
+                copy.toFile().deleteOnExit();
+                GenieFileTransferUtil.fetch(lit.get(), name, copy);
+                fetched.complete(copy);
+            } catch (IOException | InterruptedException failed) {
+                showProblem(new Notice.Said(reasonOf(failed)));
+                fetched.completeExceptionally(failed);
+            }
+        });
+        return fetched;
     }
 
     /// Deletes the outbox file `name`, which the user no longer wants, and looks into the

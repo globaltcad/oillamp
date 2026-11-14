@@ -42,20 +42,30 @@ import java.util.function.Consumer;
 /// show that letting go gives them. A drag that moves from one site into another leaves the one
 /// and enters the other, and AWT tells the sites in either order; it is caught for as long as
 /// it is over any of them.
+///
+/// A file the user drags out of the genie's outbox is refused, so the genie is not given back its
+/// own file. It stays refused until it leaves the site or is dropped: when the user lets go of it
+/// over the conversation, AWT ends the drag, and only then tells the site once more that it is
+/// over it.
 final class FileDrop {
 
     private static final Logger LOG = LoggerFactory.getLogger(FileDrop.class);
 
     private final Val<Boolean> open;
+    private final Val<Boolean> outbound;
     private final Consumer<Path> give;
     private final Var<Boolean> catching = Var.of(false);
     /// The sites the dragged files are over, which take them.
     private final Set<Component> over = new HashSet<>();
+    /// The sites a file dragged out of the outbox is over, which refuse it.
+    private final Set<Component> outboxOver = new HashSet<>();
 
-    /// @param open whether the genie can be given files now: awake, in a conversation
-    /// @param give gives the genie one file, or tells the user why it cannot
-    FileDrop(Val<Boolean> open, Consumer<Path> give) {
+    /// @param open     whether the genie can be given files now: awake, in a conversation
+    /// @param outbound whether the user drags a file out of the genie's outbox now
+    /// @param give     gives the genie one file, or tells the user why it cannot
+    FileDrop(Val<Boolean> open, Val<Boolean> outbound, Consumer<Path> give) {
         this.open = open;
+        this.outbound = outbound;
         this.give = give;
     }
 
@@ -67,15 +77,28 @@ final class FileDrop {
     /// Makes `site` take the files dropped on it, and a text area the text too.
     <C extends JComponent> DragDropComponentConf<C> on(DragDropComponentConf<C> site) {
         return site
-            .onDragEnter(it -> consider(it.getComponent(), it.getEvent()))
+            .onDragEnter(it -> enter(it.getComponent(), it.getEvent()))
             .onDragOver(it -> consider(it.getComponent(), it.getEvent()))
             .onDropActionChanged(it -> consider(it.getComponent(), it.getEvent()))
-            .onDragExit(it -> leave(it.getComponent()))
+            .onDragExit(it -> exit(it.getComponent()))
             .onDrop(it -> drop(it.getComponent(), it.getEvent()));
     }
 
+    private void enter(Component site, DropTargetDragEvent drag) {
+        if (outbound.get()) outboxOver.add(site);
+        consider(site, drag);
+    }
+
+    private void exit(Component site) {
+        outboxOver.remove(site);
+        leave(site);
+    }
+
     private void consider(Component site, DropTargetDragEvent drag) {
-        if (open.get() && offersFiles(drag.getCurrentDataFlavors())) {
+        if (outboxOver.contains(site) || outbound.get()) {
+            drag.rejectDrag();
+            leave(site);
+        } else if (open.get() && offersFiles(drag.getCurrentDataFlavors())) {
             drag.acceptDrag(DnDConstants.ACTION_COPY);
             over.add(site);
             catching.set(From.VIEW, true);
@@ -99,8 +122,9 @@ final class FileDrop {
     private void drop(Component site, DropTargetDropEvent drop) {
         over.clear();
         catching.set(From.VIEW, false);
-        boolean files = open.get() && offersFiles(drop.getCurrentDataFlavors());
-        boolean text = takesText(site) && drop.isDataFlavorSupported(DataFlavor.stringFlavor);
+        boolean ours = outboxOver.remove(site) || outbound.get();
+        boolean files = !ours && open.get() && offersFiles(drop.getCurrentDataFlavors());
+        boolean text = !ours && takesText(site) && drop.isDataFlavorSupported(DataFlavor.stringFlavor);
         if (!files && !text) {
             drop.rejectDrop();
             return;
