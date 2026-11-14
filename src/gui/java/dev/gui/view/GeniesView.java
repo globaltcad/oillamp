@@ -2,6 +2,7 @@ package dev.gui.view;
 
 import dev.gui.Genies;
 import dev.gui.model.*;
+import org.jspecify.annotations.Nullable;
 import sprouts.*;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
@@ -30,6 +31,8 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.Rectangle;
+import java.awt.Component;
+import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
 import java.awt.geom.RoundRectangle2D;
@@ -1768,13 +1771,17 @@ public final class GeniesView extends JPanel {
         Val<Boolean> away = departing.viewAs(Boolean.class, it -> it.equals(file.name()));
         return
             box("ins 0, gap 0")
-            .withDragAway(conf -> conf
-                .payload(new OutboxDrag(app.fetchOutboxFile(genie.get().id(), file.name())))
-                .dragAction(UI.DragAction.COPY)
-                .opacity(0.85)
-                .onDragStart(_ -> departing.set(From.VIEW, file.name()))
-                .onDragDropEnd(_ -> departing.set(From.VIEW, ""))
-            )
+            .withDragAway(conf -> {
+                // Where the pointer was when the drag last moved, in the glass pane.
+                Point[] last = new Point[1];
+                return conf
+                    .payload(new OutboxDrag(app.fetchOutboxFile(genie.get().id(), file.name())))
+                    .dragAction(UI.DragAction.COPY)
+                    .opacity(0.85)
+                    .onDragStart(_ -> departing.set(From.VIEW, file.name()))
+                    .onDragMove(it -> repaintAroundTheDrag(it.getComponent(), it.getEvent().getLocation(), last))
+                    .onDragDropEnd(_ -> departing.set(From.VIEW, ""));
+            })
             .withTransitionalStyle(away, DEPARTING, (status, it) -> it
                 .painter(UI.Layer.FOREGROUND, "departing", departing(palette.get(), it.componentWidth(), it.componentHeight(), status.progress()))
             )
@@ -1795,6 +1802,27 @@ public final class GeniesView extends JPanel {
                 .withTooltip(chatWords.viewAsString(it -> it.DELETE_FROM_THE_OUTBOX(file.name())))
                 .onClick(_ -> confirmRemoveHandout(file.name()))
             );
+    }
+
+    /// Repaints where the picture of the dragged `chip` may be, around where the pointer was and
+    /// is now, `onScreen`; `last` keeps where it was, in the glass pane.
+    ///
+    /// SwingTree 1.1.1 draws that picture in its glass pane's coordinates, but asks the root pane
+    /// to repaint it in its own. FlatLaf puts the glass pane below the title bar, so the picture
+    /// would leave copies of itself all over the window (reported in SwingTree as
+    /// `docs/bugs/JGlassPane-Drag-Overlay-Coordinates.md`). The picture is as large as the chip,
+    /// and wherever the user took hold of it, it lies within one chip of the pointer.
+    private static void repaintAroundTheDrag(JComponent chip, @Nullable Point onScreen, Point[] last) {
+        JRootPane root = SwingUtilities.getRootPane(chip);
+        if (onScreen == null || root == null || !root.getGlassPane().isShowing()) return;
+        Component glass = root.getGlassPane();
+        Point at = new Point(onScreen);
+        SwingUtilities.convertPointFromScreen(at, glass);
+        int width = chip.getWidth(), height = chip.getHeight();
+        Rectangle around = new Rectangle(at.x - width, at.y - height, 2 * width, 2 * height);
+        if (last[0] != null) around.add(new Rectangle(last[0].x - width, last[0].y - height, 2 * width, 2 * height));
+        glass.repaint(around.x, around.y, around.width, around.height);
+        last[0] = at;
     }
 
     /// What an outbox file's place on the shelf shows while it is dragged away, `progress` of
