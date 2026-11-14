@@ -14,6 +14,7 @@ import javax.swing.Timer;
 import dev.gui.genie.Shelf;
 import dev.gui.model.Genie;
 import dev.gui.model.Lang;
+import dev.gui.view.DragGlassPane;
 import dev.gui.view.GeniesView;
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -22,7 +23,6 @@ import sprouts.From;
 import sprouts.Var;
 import sprouts.Viewable;
 import swingtree.UI;
-import swingtree.components.JGlassPane;
 import swingtree.dialogs.ConfirmAnswer;
 
 /// Starts Genies: the app, [Genies#open], in a window of its own.
@@ -44,7 +44,7 @@ final class Main {
         Var<String> title = Var.of("Genies");
         JFrame frame = new JFrame(title.get());
         Viewable.cast(title).onChange(From.ALL, it -> frame.setTitle(it.currentValue().orElse("Genies")));
-        new JGlassPane(frame.getRootPane());
+        new DragGlassPane(frame.getRootPane());
         GeniesView view = new GeniesView(app);
         frame.setContentPane(view);
         // Genies draws the title bar itself, and says its name there.
