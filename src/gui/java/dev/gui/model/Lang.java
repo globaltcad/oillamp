@@ -1817,13 +1817,13 @@ public enum Lang {
             };
         }
 
-        public String SAVE_SOMEWHERE_ON_THIS_COMPUTER(String file) {
+        public String SAVE_SOMEWHERE_ON_THIS_COMPUTER_OR_DRAG_IT_WHERE_YOU_WANT_IT(String file) {
             return switch (lang) {
-                case ENGLISH -> "Save " + file + " somewhere on this computer";
-                case GERMAN -> file + " irgendwo auf diesem Rechner speichern";
-                case SPANISH -> "Guardar " + file + " en algún lugar de este equipo";
-                case JAPANESE -> file + " をこのコンピューターに保存";
-                case CHINESE -> "将 " + file + " 保存到这台电脑上";
+                case ENGLISH -> "Save " + file + " somewhere on this computer, or drag it where you want it";
+                case GERMAN -> file + " irgendwo auf diesem Rechner speichern, oder dorthin ziehen, wo du es haben willst";
+                case SPANISH -> "Guardar " + file + " en algún lugar de este equipo, o arrástralo adonde lo quieras";
+                case JAPANESE -> file + " をこのコンピューターに保存、または置きたい場所へドラッグ";
+                case CHINESE -> "将 " + file + " 保存到这台电脑上，或把它拖到你想放的地方";
             };
         }
 

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -113,6 +114,11 @@ public interface Genies {
 
     /// To where the user chose.
     void saveOutboxFile(UUID genie, String name, Path target);
+
+    /// Into a folder of its own among this computer's temporary files, for a drag to carry to
+    /// where the user lets go of it. The folder goes when Genies does. The copy is complete when
+    /// the answer is; when it fails, the chat says why.
+    CompletableFuture<Path> fetchOutboxFile(UUID genie, String name);
 
     /// Deletes the file from the genie's outbox. The window has asked the user already.
     void removeOutboxFile(UUID genie, String name);

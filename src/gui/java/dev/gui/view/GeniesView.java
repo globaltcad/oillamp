@@ -65,6 +65,9 @@ public final class GeniesView extends JPanel {
     /// How long the conversation takes to show that it would take the files dragged over it,
     /// and to stop showing it.
     private static final LifeTime CATCHING = LifeTime.of(0.28, TimeUnit.SECONDS);
+    /// How long an outbox file's place takes to show that it is being dragged away, and to
+    /// show the file again once it was let go of.
+    private static final LifeTime DEPARTING = LifeTime.of(0.22, TimeUnit.SECONDS);
     /// How tall a row of a genie's tree of conversations is, in units: a few more than its text.
     private static final int ROW_HEIGHT = 23;
     /// How far the highlight of the row under the pointer stays from the rows above and below it.
@@ -90,6 +93,8 @@ public final class GeniesView extends JPanel {
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
     private final Var<Genie> genie;
     private final Var<String> draft;
+    /// The outbox file the user is dragging away, or nothing while they drag none.
+    private final Var<String> departing = Var.of("");
     private final Var<String> name;
     private final Var<Boolean> desktopShown;
     private final Var<GeniesState.Page> page;
@@ -167,7 +172,7 @@ public final class GeniesView extends JPanel {
         handouts     = genie.viewAs(Tuple.classTyped(Handout.class), Genie::handouts);
         phase        = genie.viewAs(Genie.Phase.class, Genie::phase);
         composing    = genie.viewAs(Boolean.class, it -> it.phase().isAwake() && !it.conversations().overview());
-        fileDrop     = new FileDrop(composing, file -> app.giveFile(genie.get().id(), file));
+        fileDrop     = new FileDrop(composing, departing.viewAs(Boolean.class, it -> !it.isEmpty()), file -> app.giveFile(genie.get().id(), file));
         selected     = state.viewAs(UUID.class, GeniesState::selected);
         // The genie whose desktop is on screen: the selected one, while it is awake and asked
         // for; nobody otherwise.
@@ -1755,13 +1760,28 @@ public final class GeniesView extends JPanel {
     }
 
     /// A file in the outbox: a button that saves it, joined to one that deletes it.
+    ///
+    /// The user can also drag it away, onto their desktop or into a folder of their file
+    /// manager, which copies it there. The chat then shows the file as a picture under the
+    /// pointer, and its place on the shelf as a dashed outline, until the user lets go.
     private UIForBox<JBox> handout(Handout file) {
+        Val<Boolean> away = departing.viewAs(Boolean.class, it -> it.equals(file.name()));
         return
             box("ins 0, gap 0")
+            .withDragAway(conf -> conf
+                .payload(new OutboxDrag(app.fetchOutboxFile(genie.get().id(), file.name())))
+                .dragAction(UI.DragAction.COPY)
+                .opacity(0.85)
+                .onDragStart(_ -> departing.set(From.VIEW, file.name()))
+                .onDragDropEnd(_ -> departing.set(From.VIEW, ""))
+            )
+            .withTransitionalStyle(away, DEPARTING, (status, it) -> it
+                .painter(UI.Layer.FOREGROUND, "departing", departing(palette.get(), it.componentWidth(), it.componentHeight(), status.progress()))
+            )
             .add(
                 button(chatWords.viewAsString(it -> "⤓ " + file.name() + "  ·  " + file.readableSize(it.lang()))).group(Skin.QUIET_BUTTON)
                 .withStyle(it -> it.borderRadiusAt(UI.Corner.TOP_RIGHT, 0).borderRadiusAt(UI.Corner.BOTTOM_RIGHT, 0))
-                .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER(file.name())))
+                .withTooltip(chatWords.viewAsString(it -> it.SAVE_SOMEWHERE_ON_THIS_COMPUTER_OR_DRAG_IT_WHERE_YOU_WANT_IT(file.name())))
                 .onClick(_ -> saveHandout(file.name()))
             )
             .add(
@@ -1775,6 +1795,24 @@ public final class GeniesView extends JPanel {
                 .withTooltip(chatWords.viewAsString(it -> it.DELETE_FROM_THE_OUTBOX(file.name())))
                 .onClick(_ -> confirmRemoveHandout(file.name()))
             );
+    }
+
+    /// What an outbox file's place on the shelf shows while it is dragged away, `progress` of
+    /// the way: the file fades into the night, and a dashed outline in the flame's colour keeps
+    /// its place.
+    private static Painter departing(Palette p, int width, int height, double progress) {
+        return g -> {
+            if (progress <= 0) return;
+            // Eased at both ends, as the chat's frame for files dragged onto it is.
+            double shown = progress * progress * (3 - 2 * progress);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            var place = new RoundRectangle2D.Double(1, 1, width - 2, height - 2, 20, 20);
+            g.setColor(ViewPartsUtil.withAlpha(p.NIGHT(), (int) Math.round(200 * shown)));
+            g.fill(place);
+            g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[] { 5f, 4f }, 0f));
+            g.setColor(ViewPartsUtil.withAlpha(p.FLAME(), (int) Math.round(200 * shown)));
+            g.draw(place);
+        };
     }
 
     /// The composer while the genie is awake; otherwise a bar that wakes it, and says how
