@@ -726,7 +726,10 @@ public final class Lamp implements AutoCloseable {
     /// Ends the session and waits until the engine has shut the sandbox down.
     ///
     /// Closing the engine's standard input is the signal. The engine then stops the container,
-    /// which takes up to `timeouts.stop_seconds`, and exits.
+    /// which takes up to `timeouts.stop_seconds`, and exits. A lamp that is still starting stops
+    /// starting, as `oillamp at` does on Ctrl-C: a sandbox image being built is not finished, a
+    /// sandbox that came up part of the way is removed, and [#exitStatus()] is then
+    /// [LampExitStatus#INTERRUPTED].
     ///
     /// After [#leaveRunning()], this ends nothing and returns at once.
     ///
@@ -751,6 +754,9 @@ public final class Lamp implements AutoCloseable {
     /// For an application that closes while the agent should keep working: on its schedule, say.
     /// The engine is told on its standard input, which is closed after. Its events keep coming
     /// to the listeners until this application exits.
+    ///
+    /// A lamp that is still starting goes on starting, and runs on in the same way;
+    /// [LampDirectory#join] finds it once its session runs.
     ///
     /// Without this, the session ends when the application does, however it ends, so a crash
     /// never leaves a sandbox running. On a lamp this application joined, it is the same as

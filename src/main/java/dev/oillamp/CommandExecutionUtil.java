@@ -257,6 +257,10 @@ final class CommandExecutionUtil {
             context.sinkAcceptProblems(wrong.problems());
             return LampExitStatus.USAGE;
         }
+        // The application that started an embedded session is watched from now on: if it goes
+        // away while the sandbox starts, the start ends, as for a Ctrl-C.
+        Optional<ApplicationWatch> application = context.options().embedded()
+                ? Optional.of(ApplicationWatch.start(machine)) : Optional.empty();
         // Only a session that opens windows needs the host's display.
         boolean opensWindows = !context.options().embedded() && context.options().openWindows();
         HostPhase.Outcome host = new HostPhase(machine, context)
@@ -331,13 +335,34 @@ final class CommandExecutionUtil {
                     + ", desktop " + prepared.config().display().size()
                     + ", renderer " + prepared.gpu().renderer()));
 
-            Result<SandboxPhase.Running> sandbox =
-                    new SandboxPhase(machine, context).start(prepared, host.facts());
+            // An application gone already started nothing to remove.
+            if (application.isPresent() && !application.get().whileStarting(Thread.currentThread())) {
+                context.sink().accept(new LampEvent.Info("session",
+                        "the application that started the session went away before its sandbox started"));
+                return LampExitStatus.INTERRUPTED;
+            }
+            Result<SandboxPhase.Running> sandbox;
+            boolean applicationGone;
+            try {
+                sandbox = new SandboxPhase(machine, context).start(prepared, host.facts());
+            } finally {
+                applicationGone = application.map(ApplicationWatch::started).orElse(false);
+            }
             if (sandbox instanceof Result.Err<SandboxPhase.Running> failure) {
                 // After a Ctrl-C the start fails because the hook removed the container. Saying
                 // "the sandbox stopped while starting up" would blame the sandbox for the user's
                 // own interrupt.
                 if (interrupted.get()) return LampExitStatus.INTERRUPTED;
+                // Nor is it the sandbox's fault when the application that started the session went
+                // away, which interrupted the start.
+                if (applicationGone) {
+                    context.sink().accept(new LampEvent.Info("session",
+                            "the application that started the session went away while its sandbox was starting"
+                            + " — removing it"));
+                    removeUnfinishedSandbox(machine, context, container,
+                            "the application went away while the sandbox was starting");
+                    return LampExitStatus.INTERRUPTED;
+                }
                 context.sinkAcceptProblems(failure.problems());
                 removeUnfinishedSandbox(machine, context, container, "it did not start");
                 return LampExitStatus.ERROR;
@@ -353,8 +378,10 @@ final class CommandExecutionUtil {
             // From here `at` does not return until the session is over, and the supervisor
             // removes the container however the session ends.
             stopWatching(abandon);
+            // A sandbox that started although the application went away is handed to the
+            // supervisor all the same, which hears that it is gone and shuts the session down.
             return new Supervisor(machine, context, host.facts(), prepared, running,
-                                  ((Result.Ok<Optional<String>>) instructions).value()).run();
+                                  ((Result.Ok<Optional<String>>) instructions).value(), application).run();
         } catch (RuntimeException bug) {
             // A bug while the sandbox starts reaches the user as a problem; the container it
             // started must not outlive it.

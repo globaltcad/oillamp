@@ -156,6 +156,75 @@ class Holding_A_Lamp_Spec extends Specification {
             !Files.exists(host.lampPath().resolve('.oillamp/session.json'))
     }
 
+    def 'Closing a lamp while its sandbox image is built ends the start at once, and leaves nothing running'() {
+        reportInfo """
+            Let's consider an application that starts a lamp for the first time, so that the
+            engine builds the sandbox image, which takes minutes. The user changes their mind,
+            and the application closes the lamp. Waiting for the build to finish, only to shut
+            the session down, would hold the application up for those minutes. Instead the
+            engine stops starting, as `oillamp at` does on Ctrl-C: the build is not finished,
+            the engine ends with `INTERRUPTED`, and `close()` returns as soon as it has.
+        """
+        given: 'a sandbox image that takes five minutes to build'
+            host.machine { it.imageBuildTakes(Duration.ofMinutes(5)) }
+
+        and: 'an application that started its lamp, which is building the image'
+            var lamp = Lamp.at(host.lampPath()).onEvent { received << it }.launchedBy(host.launcher).start()
+            eventually { received.any { it instanceof LampEvent.StepStarted && it.step().kind() == 'BuildImage' } }
+
+        when: 'the application closes the lamp'
+            var closing = System.nanoTime()
+            lamp.close()
+            var took = Duration.ofNanos(System.nanoTime() - closing)
+
+        then: '`close()` returned within seconds, not after the build'
+            took < Duration.ofSeconds(30)
+
+        and: 'the engine ended the start, saying why, and never ran the session'
+            lamp.exitStatus() == Optional.of(LampExitStatus.INTERRUPTED)
+            received.any { it instanceof LampEvent.Info && it.text().contains('went away while its sandbox was starting') }
+            !received.any { it instanceof LampEvent.SessionOpened }
+
+        and: 'nothing runs for the lamp'
+            !Lamp.at(host.lampPath()).isRunning()
+            Lamp.running(host.launcher).isEmpty()
+    }
+
+    def 'A lamp left running while it starts goes on starting, and runs on after the application is gone'() {
+        reportInfo """
+            Let's consider an application that starts a lamp, and is closed while the sandbox
+            image is still being built, with the user asking that the lamp be kept running. It
+            calls `Lamp.leaveRunning()` and then `close()`, before the session runs. The engine
+            hears that it is to go on, so the end of its standard input that follows does not
+            end the start: the session comes up, and runs until `Lamp.stop()` ends it.
+        """
+        given: 'a sandbox image that takes two seconds to build'
+            host.machine { it.imageBuildTakes(Duration.ofSeconds(2)) }
+
+        and: 'an application that started its lamp, which is building the image'
+            var lamp = Lamp.at(host.lampPath()).onEvent { received << it }.launchedBy(host.launcher).start()
+            eventually { received.any { it instanceof LampEvent.StepStarted && it.step().kind() == 'BuildImage' } }
+
+        when: 'the application leaves the lamp running, and closes it'
+            lamp.leaveRunning()
+            lamp.close()
+
+        then: 'the session comes up all the same'
+            eventually { Lamp.at(host.lampPath()).isRunning() }
+
+        when: 'it is stopped'
+            var joined = Lamp.at(host.lampPath()).launchedBy(host.launcher).join()
+            joined.awaitRunning(Duration.ofSeconds(10))
+            joined.stop()
+
+        then: 'the session ended with success'
+            joined.exitStatus() == Optional.of(LampExitStatus.SUCCESS)
+            !Lamp.at(host.lampPath()).isRunning()
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+    }
+
     def 'An application that left its lamp running joins the session again, and can stop it'() {
         reportInfo """
             Let's consider an application built on oillamp's Java API that left its lamp running,
@@ -539,5 +608,13 @@ class Holding_A_Lamp_Spec extends Specification {
 
         cleanup:
             lamp?.close()
+    }
+
+    private static void eventually(Closure<Boolean> condition) {
+        var deadline = System.currentTimeMillis() + 60_000
+        while (!condition()) {
+            assert System.currentTimeMillis() < deadline : 'it never happened'
+            Thread.sleep(20)
+        }
     }
 }

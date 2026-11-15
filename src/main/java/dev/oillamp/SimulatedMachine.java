@@ -27,6 +27,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,6 +70,9 @@ final class SimulatedMachine implements Machine {
     private final Duration stopsAfterClosingTheShell;
     private final Optional<Duration> sandboxDiesAfter;
     private final Duration applicationLeavesAfter;
+    /// Counted down once the simulated sandbox runs, from when the application's time counts.
+    private final CountDownLatch sandboxRan = new CountDownLatch(1);
+    private final Optional<Duration> imageBuildTakes;
     private final Optional<InputStream> standardInput;
     private final RealMachine realMachine = new RealMachine();
     private final Optional<SimulatedAgentAtWork> agent;
@@ -95,6 +99,7 @@ final class SimulatedMachine implements Machine {
         this.stopsAfterClosingTheShell = builder.stopsAfterClosingTheShell;
         this.sandboxDiesAfter = builder.sandboxDiesAfter;
         this.applicationLeavesAfter = builder.applicationLeavesAfter;
+        this.imageBuildTakes = builder.imageBuildTakes;
         this.standardInput = builder.standardInput;
         this.operatingSystemName = builder.operatingSystemName;
         this.systemFiles = Map.copyOf(builder.systemFiles);
@@ -143,7 +148,10 @@ final class SimulatedMachine implements Machine {
     @Override public boolean isInteractive() { return interactive; }
 
     /// A standard input that stays open for a while and then closes, the way an application that
-    /// started an embedded session closes it when it is done. The time counts from the first read.
+    /// started an embedded session closes it when it is done. The time counts from when this
+    /// machine's sandbox first ran: oillamp reads it from the start of the session, and an
+    /// application that went away while the sandbox started would end that start. Where no
+    /// sandbox runs within a minute, as when the session never gets that far, it closes then.
     @Override public InputStream standardInput() {
         if (standardInput.isPresent()) return standardInput.get();
         return new InputStream() {
@@ -153,6 +161,7 @@ final class SimulatedMachine implements Machine {
 
             @Override public int read() throws IOException {
                 try {
+                    sandboxRan.await(1, TimeUnit.MINUTES);
                     Thread.sleep(applicationLeavesAfter);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -172,6 +181,7 @@ final class SimulatedMachine implements Machine {
         for (Map.Entry<String, Outcome> scripted : scriptedCommands.entrySet())
             if (commandLine.startsWith(scripted.getKey())) return scripted.getValue();
         if (commandLine.startsWith("podman run ")) return startSimulatedSandbox(command);
+        if (commandLine.startsWith("podman build ") && imageBuildTakes.isPresent()) return buildSlowly(imageBuildTakes.get());
         if (commandLine.startsWith("podman stop ") || commandLine.startsWith("podman rm ")) {
             command.argv().forEach(containers::remove);
             return stopSimulatedSandbox();
@@ -234,6 +244,7 @@ final class SimulatedMachine implements Machine {
         }
         containerRunning = true;
         containerExitedWith = Optional.empty();
+        sandboxRan.countDown();
         Optional<String> name = argumentAfter(command, "--name");
         name.ifPresent(it -> containers.put(it, labels(command)));
         sandboxDiesAfter.ifPresent(delay -> Thread.ofVirtual().name("simulated-sandbox-death").start(() -> {
@@ -249,6 +260,19 @@ final class SimulatedMachine implements Machine {
             containerRunning = false;
         }));
         return new Outcome.Finished(0, "simulated-container-id\n", "", Duration.ofMillis(120));
+    }
+
+    /// A `podman build` that takes `duration`, unless the thread that waits for it is interrupted
+    /// first. Then, as [RealMachine] does, the build is stopped, and it did not finish.
+    private static Outcome buildSlowly(Duration duration) {
+        Instant started = Instant.now();
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
+            return new Outcome.TimedOut(Duration.between(started, Instant.now()), "");
+        }
+        return new Outcome.Finished(0, "", "", duration);
     }
 
     /// The value after `option` on the command line, such as the name after `--name`.
@@ -1060,9 +1084,10 @@ final class SimulatedMachine implements Machine {
         /// `oillamp stop`. Long enough for the session to report the window closing first.
         private Duration stopsAfterClosingTheShell = Duration.ofMillis(200);
         private Optional<Duration> sandboxDiesAfter = Optional.empty();
-        /// How long the application that started an embedded session keeps it. Long enough for the
-        /// session to come up and say so.
+        /// How long the application that started an embedded session keeps it, from when its
+        /// sandbox runs. Long enough for the session to come up and say so.
         private Duration applicationLeavesAfter = Duration.ofMillis(500);
+        private Optional<Duration> imageBuildTakes = Optional.empty();
         private Optional<InputStream> standardInput = Optional.empty();
         private Optional<SimulatedAgentAtWork> agent = Optional.empty();
         private Optional<Tuple<String>> modelsOffered = Optional.empty();
@@ -1175,6 +1200,7 @@ final class SimulatedMachine implements Machine {
 
         public void sandboxDiesAfter(Duration duration) { this.sandboxDiesAfter = Optional.of(duration); }
         public void applicationLeavesAfter(Duration duration) { this.applicationLeavesAfter = duration; }
+        public void imageBuildTakes(Duration duration) { this.imageBuildTakes = Optional.of(duration); }
         public void standardInput(InputStream input) { this.standardInput = Optional.of(input); }
 
         public void passThrough(Tuple<String> executables) {

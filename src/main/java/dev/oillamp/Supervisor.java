@@ -1,10 +1,7 @@
 package dev.oillamp;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -111,6 +108,8 @@ final class Supervisor {
     /// Whether the application that started this embedded session left it running, so that the
     /// end of oillamp's standard input no longer ends it.
     private volatile boolean leftRunning;
+    /// The application that started an embedded session; empty for one started from a terminal.
+    private final Optional<ApplicationWatch> application;
     /// What the last health check found, so that only a _change_ is reported.
     private boolean desktopAnswering = true;
     private boolean shellAnswering = true;
@@ -173,9 +172,13 @@ final class Supervisor {
 
     /// @param instructions what the agent is told in addition to pi's own instructions, from
     ///                     `--instructions-env`; empty to leave pi's instructions as they are
+    /// @param application  the application that started an embedded session, as its standard
+    ///                     input tells; empty for a session started from a terminal
     Supervisor(Machine machine, Context context, HostFacts host,
-               LampPhase.Prepared prepared, SandboxPhase.Running sandbox, Optional<String> instructions) {
+               LampPhase.Prepared prepared, SandboxPhase.Running sandbox, Optional<String> instructions,
+               Optional<ApplicationWatch> application) {
         this.machine = machine;
+        this.application = application;
         this.context = context.alsoTelling(followers);
         this.host = host;
         this.prepared = prepared;
@@ -222,7 +225,7 @@ final class Supervisor {
         Runtime.getRuntime().addShutdownHook(hook);
         watchTheSandbox();
         awaitTheSandboxsEnd();
-        if (context.options().embedded()) watchTheApplication();
+        application.ifPresent(this::watchTheApplication);
         post(new SessionEvent.ContainerReady(ReadyInfo.parse(sandbox.readyJson())));
 
         LampExitStatus status;
@@ -914,41 +917,28 @@ final class Supervisor {
 
     // ─── the producers ─────────────────────────────────────────────────────────────────────
 
-    /// Ends an embedded session when the application that started it goes away, unless it left
-    /// the session running first.
+    /// Ends an embedded session when the application that started it goes away, as [application]
+    /// tells, unless it left the session running first.
     ///
-    /// The application holds oillamp's standard input open for as long as it wants the session.
-    /// When it closes it, or dies, and the operating system closes it on its behalf, reading
-    /// reaches the end, and the session shuts down as it would for `oillamp stop`.
-    ///
-    /// An application that writes the line [#LEAVE_RUNNING] before it closes leaves the session
-    /// running: from then on it ends only as a session started from a terminal with
-    /// `--no-windows` does, with `oillamp stop`. Anything else the application writes is ignored.
-    /// The line arrives before the end of the input, so an application may write it and exit at
-    /// once.
-    private void watchTheApplication() {
-        Thread.ofVirtual().name("oillamp-application-watch").start(() -> {
-            try (var input = new BufferedReader(new InputStreamReader(
-                    machine.standardInput(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = input.readLine()) != null) {
-                    if (!line.strip().equals(LEAVE_RUNNING)) continue;
-                    leftRunning = true;
-                    context.sink().accept(new LampEvent.Info("session",
-                            "the application left the session running; it ends with `oillamp stop "
-                            + prepared.layout().root() + "`"));
-                    announceState();
-                    return;
-                }
-            } catch (IOException closed) {
-                // A broken pipe means the same as a closed one: the application is gone.
+    /// The session then shuts down as it would for `oillamp stop`. An application that left it
+    /// running, with [ApplicationWatch#LEAVE_RUNNING], whether before the session ran or since,
+    /// leaves it to end only as a session started from a terminal with `--no-windows` does, with
+    /// `oillamp stop`.
+    private void watchTheApplication(ApplicationWatch application) {
+        application.handOver(new ApplicationWatch.Listener() {
+            @Override public void leftRunning() {
+                leftRunning = true;
+                context.sink().accept(new LampEvent.Info("session",
+                        "the application left the session running; it ends with `oillamp stop "
+                        + prepared.layout().root() + "`"));
+                announceState();
             }
-            post(new SessionEvent.StopRequested("the application that started it"));
+
+            @Override public void gone() {
+                post(new SessionEvent.StopRequested("the application that started it"));
+            }
         });
     }
-
-    /// What an application writes on oillamp's standard input to leave its session running.
-    static final String LEAVE_RUNNING = "leave-running";
 
     /// Checks every two seconds that the sandbox's sockets answer, and prints a health line every
     /// 30 seconds. Whether the container still runs is not asked here: [#awaitTheSandboxsEnd]

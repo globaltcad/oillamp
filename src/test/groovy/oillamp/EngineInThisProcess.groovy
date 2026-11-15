@@ -6,6 +6,7 @@ import dev.oillamp.OilLamp
 import java.nio.channels.Channels
 import java.nio.channels.Pipe
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
 
 /**
  * oillamp's engine, run on a thread of this JVM against a simulated machine, but looking to a
@@ -14,6 +15,10 @@ import java.nio.charset.StandardCharsets
  * <p>The two pipes are real: the lamp writes to the engine's standard input and reads JSON lines
  * from its standard output, and closing the input ends the session. Only where the engine runs is
  * different. A real child process would run against the real machine, and would need podman.
+ *
+ * <p>The engine's events are written to the pipe by a thread of their own, not by the thread
+ * that reports them. A real engine prints them to its standard output, which an interrupt does
+ * not close; a pipe's channel, written by an interrupted thread, would be closed.
  */
 class EngineInThisProcess extends Process {
 
@@ -45,17 +50,26 @@ class EngineInThisProcess extends Process {
             environment.each { name, value -> simulation.environmentVariable(name, value) }
             machine = simulation.standardInput(Channels.newInputStream(toEngine.source())).build()
         }
-        runner = Thread.start('engine-in-this-process') {
+        // Each line in order, and then an empty one for the end of the output.
+        var lines = new LinkedBlockingQueue<String>()
+        Thread.start('engine-in-this-process-output') {
             try {
-                var outcome = OilLamp.on(machine).observedBy { event ->
-                    synchronized (engineWrites) {
-                        engineWrites.write((event.toJson() + '\n').getBytes(StandardCharsets.UTF_8))
-                        engineWrites.flush()
-                    }
-                }.run(arguments as String[])
-                exit = outcome.status().code()
+                String line
+                while (!(line = lines.take()).isEmpty()) {
+                    engineWrites.write((line + '\n').getBytes(StandardCharsets.UTF_8))
+                    engineWrites.flush()
+                }
             } finally {
                 engineWrites.close()
+            }
+        }
+        runner = Thread.start('engine-in-this-process') {
+            try {
+                var outcome = OilLamp.on(machine).observedBy { event -> lines.offer(event.toJson()) }
+                                     .run(arguments as String[])
+                exit = outcome.status().code()
+            } finally {
+                lines.offer('')
             }
         }
     }

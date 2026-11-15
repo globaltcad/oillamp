@@ -478,10 +478,17 @@ public sealed interface Machine permits RealMachine, SimulatedMachine {
             return this;
         }
 
-        /// How long the application that started an embedded session keeps it, before it closes
-        /// oillamp's standard input.
+        /// How long the application that started an embedded session keeps it, once its sandbox
+        /// runs, before it closes oillamp's standard input.
         public SimulationBuilder applicationLeavesAfter(Duration duration) {
             builder.applicationLeavesAfter(duration);
+            return this;
+        }
+
+        /// A `podman build` that takes `duration`, as building the sandbox image does on a real
+        /// machine, unless it is stopped first.
+        public SimulationBuilder imageBuildTakes(Duration duration) {
+            builder.imageBuildTakes(duration);
             return this;
         }
 

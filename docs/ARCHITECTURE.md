@@ -918,10 +918,14 @@ stateDiagram-v2
 person. It opens no windows and goes straight to `Running`, so the terminal timeout never applies.
 Its standard output carries every event as one line of JSON (`LampEvent.toJson()`), and nothing
 else: no banner, no colour, no activity line.
-The supervisor reads its standard input until it closes, then posts `StopRequested`: the
+Its standard input is read from the start of `at` until it closes (`ApplicationWatch`): the
 application closes it when it is done, and the operating system closes it when the application
-dies. If a line `leave-running` comes first, the supervisor stops reading and posts nothing: the
-session then runs on its own, `status` says "running on its own", and it ends with `oillamp stop`.
+dies. When it closes once the session runs, the supervisor posts `StopRequested`. While the
+sandbox is still starting, the end of the input ends the start instead, as Ctrl-C does in a terminal: the thread
+that starts it is interrupted, which stops an image build or any other command it waits for, the
+container is removed if one came up, and `at` exits with `INTERRUPTED`. If a line `leave-running`
+comes first, before the session runs or after, reading stops and nothing is posted: the session
+then runs on its own, `status` says "running on its own", and it ends with `oillamp stop`.
 
 **A session without windows** (`oillamp at <dir> --no-windows`) is for a person who wants to attach
 on their own terms, for example one who starts oillamp under tmux so that it outlives their

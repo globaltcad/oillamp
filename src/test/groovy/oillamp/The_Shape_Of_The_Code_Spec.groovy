@@ -199,6 +199,11 @@ class The_Shape_Of_The_Code_Spec extends Specification {
                            // and start the windows. They decide nothing: every decision a
                            // session makes is SessionMachine's.
                            'Supervisor', 'Relay', 'Control',
+                           // The application that started an embedded session: reads the engine's
+                           // standard input on a thread of its own, and interrupts the thread that
+                           // starts the sandbox. What the end of the input means, before the
+                           // session runs and after, is CommandExecutionUtil's and Supervisor's.
+                           'ApplicationWatch',
                            // The egress proxy: sockets, DNS and byte copying. Whether a
                            // connection is allowed is decided by NetworkPolicyUtil, a pure function.
                            'Egress',

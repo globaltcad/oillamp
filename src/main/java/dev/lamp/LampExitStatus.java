@@ -22,7 +22,8 @@ public enum LampExitStatus {
     LAMP_BUSY(4),
     /// The container or the session itself failed.
     SESSION_FAILED(5),
-    /// The user interrupted before the session was running.
+    /// The session never ran: the user interrupted it, or the application that started it went
+    /// away, while it was starting.
     INTERRUPTED(130);
 
     private final int code;
