@@ -206,11 +206,8 @@ public final class GeniesBackend implements Genies {
         Settings settings = shelf.hasSettings() ? shelf.settings()
                 : shelf.settings().withPlace(ollama.program().isEmpty() && environmentKey.isPresent()
                                              ? Settings.Place.EDEN_AI : Settings.Place.THIS_MACHINE);
-        // The palette the user picked; before they ever did, the one that fits the desktop, so
-        // that Genies comes light on a light desktop; and the lamp at night when nothing says.
-        Palette palette = shelf.palette().or(desktop::palette).orElse(Palette.DARK);
-        // The language the user picked; before they ever did, the desktop's, if Genies speaks it.
-        Lang lang = shelf.lang().or(desktop::lang).orElse(Lang.ENGLISH);
+        Palette palette = shelf.paletteOr(desktop);
+        Lang lang = shelf.langOr(desktop);
         GeniesBackend app = new GeniesBackend(Var.of(GeniesState.of(shelf.genies(), settings, environmentKey).withPalette(palette).withLang(lang)),
                                 shelf, lighter, ollama, GenieHomeUtil.documents(environment));
         errors.showIn(trouble -> SwingUtilities.invokeLater(() -> app.state.update(it -> it.withTrouble(trouble))));

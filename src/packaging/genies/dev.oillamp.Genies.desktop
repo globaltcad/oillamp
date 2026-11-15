@@ -9,3 +9,4 @@ Terminal=false
 Categories=Development;
 Keywords=AI;agent;chat;sandbox;
 StartupWMClass=dev-gui-Main
+SingleMainWindow=true
