@@ -230,6 +230,15 @@ public record Genie(
     /// Whether its lamp's directory was found gone, so that it cannot be woken.
     public boolean lampGone() { return activity instanceof Activity.LampGone; }
 
+    /// Whether it can be put to sleep: while it is awake, and while its lamp is being lit, which
+    /// then stops starting. Not while Genies joins a lamp that is lit already, which takes
+    /// moments, and whose session Genies cannot end before it has joined it.
+    public boolean canSleep() {
+        return phase.isAwake() || (phase == Phase.WAKING
+                                   && !(activity instanceof Activity.JoiningLitElsewhere)
+                                   && !(activity instanceof Activity.JoiningLeftRunning));
+    }
+
     /// The genie once Genies has looked for its lamp's directory, and found it `gone` or there.
     /// Only a sleeping genie whose lamp is from elsewhere says that it is gone, and is asleep as
     /// before once it is back; any other is as it was.

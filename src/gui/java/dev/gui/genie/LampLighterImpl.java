@@ -63,7 +63,8 @@ public final class LampLighterImpl implements LampLighter {
         final String key,
         final LampWallpaper wallpaper,
         final Consumer<Genie.Activity> progress,
-        final Consumer<LampEvent> events
+        final Consumer<LampEvent> events,
+        final Consumer<Starting> starting
     ) throws IOException, InterruptedException {
         LampDirectory lampDir;
         try {
@@ -79,7 +80,8 @@ public final class LampLighterImpl implements LampLighter {
                 settings,
                 key,
                 progress,
-                events
+                events,
+                starting
         );
     }
 
@@ -91,20 +93,24 @@ public final class LampLighterImpl implements LampLighter {
         final Settings settings,
         final String key,
         final Consumer<Genie.Activity> progress,
-        final Consumer<LampEvent> events
+        final Consumer<LampEvent> events,
+        final Consumer<Starting> starting
     ) throws IOException, InterruptedException {
-        return light(unlit(directory), settings, key, progress, events);
+        return light(unlit(directory), settings, key, progress, events, starting);
     }
 
+    /// A lamp put out while it starts ends its engine at once, which the engine takes for being
+    /// asked to stop starting: it removes what it started, and so does not run.
     private Lit light(
-        final LampDirectory starting,
+        final LampDirectory unlit,
         final Settings settings,
         final String key,
         final Consumer<Genie.Activity> progress,
-        final Consumer<LampEvent> events
+        final Consumer<LampEvent> events,
+        final Consumer<Starting> starting
     ) throws IOException, InterruptedException {
         AtomicReference<String> problem = new AtomicReference<>("");
-        Lamp lamp = starting
+        Lamp lamp = unlit
                 .modelService(URI.create(settings.service().strip()))
                 .modelKey(key)
                 .onEvent(event -> {
@@ -114,6 +120,10 @@ public final class LampLighterImpl implements LampLighter {
                     events.accept(event);
                 })
                 .start();
+        starting.accept(new Starting() {
+            @Override public void putOut() { lamp.close(); }
+            @Override public void leaveRunning() { lamp.leaveRunning(); }
+        });
         if (!lamp.awaitRunning(WAKING_TIME)) {
             lamp.close();
             String why = Optional.ofNullable(problem.get()).orElse("");

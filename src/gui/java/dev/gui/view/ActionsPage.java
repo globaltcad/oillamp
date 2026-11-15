@@ -301,12 +301,14 @@ final class ActionsPage {
         );
     }
 
-    /// Sleep while the genie is awake, and wake while it is not, as the genie's menu has it.
+    /// Sleep while the genie can be put to sleep, awake or its lamp still being lit, and wake
+    /// while it is not, as the genie's menu has it.
     private UIForAnySwing<?, ?> sleepingOrWaking() {
         return tile(
             phase.viewAs(Boolean.class, Genie.Phase::isAwake),
             Palette::TEXT,
-            Viewable.of(String.class, phase, words, (it, page) -> it.isAwake() ? page.SLEEP() : page.WAKE()),
+            Viewable.of(String.class, genie, words, (it, page) -> it.canSleep() ? page.SLEEP()
+                    : it.phase() == Genie.Phase.WAKING ? page.WAKING() : page.WAKE()),
             Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
                 case ASLEEP -> it.lampGone()
                     ? page.THE_FOLDER_OF_ITS_LAMP_IS_GONE(it.name(), it.elsewhere().map(String::valueOf).orElse(""))
@@ -318,18 +320,18 @@ final class ActionsPage {
                     ? page.END_ITS_SANDBOX_FOR_WHOEVER_LIT_IT_TOO(it.name())
                     : page.END_ITS_SANDBOX(it.name());
             }),
-            big(button(Viewable.of(String.class, phase, words, (it, page) -> switch (it) {
+            big(button(Viewable.of(String.class, genie, words, (it, page) -> switch (it.phase()) {
                 case ASLEEP -> page.WAKE();
-                case WAKING -> page.WAKING();
+                case WAKING -> it.canSleep() ? page.SLEEP() : page.WAKING();
                 case FALLING_ASLEEP -> page.FALLING_ASLEEP();
                 case BROKEN -> page.TRY_WAKING_AGAIN();
                 default -> page.SLEEP();
             })))
             .group(Skin.QUIET_BUTTON)
             // A lamp from elsewhere whose folder is gone has nothing to wake.
-            .isEnabledIf(genie.viewAs(Boolean.class, it -> !it.phase().isBetween() && !it.lampGone()))
+            .isEnabledIf(genie.viewAs(Boolean.class, it -> (it.canSleep() || !it.phase().isBetween()) && !it.lampGone()))
             .onClick(_ -> {
-                if (phase.get().isAwake()) app.sleep(selected());
+                if (genie.get().canSleep()) app.sleep(selected());
                 else app.wake(selected());
             })
         );
