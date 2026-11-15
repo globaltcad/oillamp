@@ -37,7 +37,8 @@ import sprouts.Tuple;
 ///   language they picked; until they pick either, it is not there, and the window follows the
 ///   desktop ([SystemLook]);
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
-/// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it.
+/// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it;
+/// - `genies.lock` and `genies.socket`: the [ShelfClaim] of the Genies open on the shelf.
 ///
 /// The directory is `$XDG_DATA_HOME/genies`, which is usually `~/.local/share/genies`.
 public final class Shelf {
@@ -64,6 +65,12 @@ public final class Shelf {
 
     /// Where Genies installs Ollama.
     public Path ollama() { return root.resolve("ollama"); }
+
+    /// The file whose lock is the [ShelfClaim] on this shelf.
+    public Path claimLock() { return root.resolve("genies.lock"); }
+
+    /// Where the Genies that holds the [ShelfClaim] listens for another asking it to show itself.
+    public Path claimSocket() { return root.resolve("genies.socket"); }
 
     /// Whether settings were kept before; not the first time Genies starts.
     public boolean hasSettings() { return Files.exists(root.resolve("settings.json")); }
@@ -126,6 +133,12 @@ public final class Shelf {
         };
     }
 
+    /// The palette the user picked; before they ever did, the one that fits the `desktop`, so
+    /// that Genies comes light on a light desktop; and the lamp at night when nothing says.
+    public Palette paletteOr(SystemLook desktop) {
+        return palette().or(desktop::palette).orElse(Palette.DARK);
+    }
+
     public void keep(Palette palette) throws IOException {
         write("look.json", look().put("palette", palette.isDark() ? "DARK" : "LIGHT"));
     }
@@ -134,6 +147,12 @@ public final class Shelf {
     public Optional<Lang> lang() {
         String name = read("look.json").path("lang").asText();
         return Arrays.stream(Lang.values()).filter(it -> it.name().equals(name)).findFirst();
+    }
+
+    /// The language the user picked; before they ever did, the `desktop`'s, if Genies speaks it;
+    /// English otherwise.
+    public Lang langOr(SystemLook desktop) {
+        return lang().or(desktop::lang).orElse(Lang.ENGLISH);
     }
 
     public void keep(Lang lang) throws IOException {

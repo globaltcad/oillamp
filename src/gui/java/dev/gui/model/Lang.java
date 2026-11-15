@@ -2160,6 +2160,36 @@ public enum Lang {
 
     /// The words of the dialogs the window asks and tells the user things in.
     public record Dialogs(Lang lang) {
+        public String GENIES_IS_ALREADY_OPEN() {
+            return switch (lang) {
+                case ENGLISH -> "Genies is already open";
+                case GERMAN -> "Genies ist schon offen";
+                case SPANISH -> "Genies ya está abierto";
+                case JAPANESE -> "Genies はすでに開いています";
+                case CHINESE -> "Genies 已经打开了";
+            };
+        }
+
+        public String GENIES_IS_OPEN_ALREADY_LOOK_FOR_ITS_WINDOW() {
+            return switch (lang) {
+                case ENGLISH -> "Genies is already open for you, and one at a time is enough: two would take the same genies from each other. Look for its window.";
+                case GERMAN -> "Genies ist schon offen, und einmal reicht: Zweimal geöffnet würden sich die beiden dieselben Dschinns gegenseitig wegnehmen. Such nach seinem Fenster.";
+                case SPANISH -> "Genies ya está abierto para ti, y basta con uno: dos se quitarían los mismos genios el uno al otro. Busca su ventana.";
+                case JAPANESE -> "Genies はすでに開いています。開けるのは一つだけです。二つ開くと、同じジーニーを取り合ってしまいます。そのウィンドウを探してください。";
+                case CHINESE -> "Genies 已经打开了，一次开一个就够了：开两个会争抢同样的精灵。请找到它的窗口。";
+            };
+        }
+
+        public String GENIES_IS_STILL_CLOSING_OPEN_IT_AGAIN_ONCE_ITS_WINDOW_HAS_GONE() {
+            return switch (lang) {
+                case ENGLISH -> "Genies is still closing. Open it again once its window has gone.";
+                case GERMAN -> "Genies wird gerade noch geschlossen. Öffne es wieder, sobald sein Fenster verschwunden ist.";
+                case SPANISH -> "Genies todavía se está cerrando. Ábrelo de nuevo cuando su ventana haya desaparecido.";
+                case JAPANESE -> "Genies はまだ終了処理中です。ウィンドウが閉じたら、もう一度開いてください。";
+                case CHINESE -> "Genies 仍在关闭中。等它的窗口消失后，再重新打开。";
+            };
+        }
+
         public String DELETE_THE_CONVERSATION_FOR_GOOD_WITH_ALL_ITS_BRANCHES(String title) {
             return switch (lang) {
                 case ENGLISH -> "Delete the conversation \"" + title + "\" for good, with all its branches?";
