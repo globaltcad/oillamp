@@ -16,7 +16,12 @@ import spock.lang.Timeout
 import spock.lang.Title
 import sprouts.Tuple
 
+import groovy.json.JsonSlurper
+
 import javax.swing.SwingUtilities
+import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
+import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -151,6 +156,46 @@ class KeepingLampsFromElsewhereSpec extends Specification {
         then: 'it is awake, joined, and still the person\'s'
             waitUntil { app.state().get().find(fromElsewhere).orElseThrow().phase().isAwake() }
             person.alive
+            Lamp.running(sandbox.launcher)*.lamp() == [north]
+    }
+
+    def 'Waking a lamp from elsewhere whose engine was killed lights it again, rather than join a session that is gone'() {
+        reportInfo '''
+            Let's consider a person who lit "north" from a terminal, and its engine then killed
+            with `kill -9`, or by the out-of-memory killer, without shutting down. "north" still
+            holds the record a session keeps while it runs, `.oillamp/session.json`, and its
+            control socket's file, with no one listening behind it; here only those two are left
+            behind. Genies must not take that record at its word: joining a session that is gone
+            would fail on every Wake, and only `oillamp stop` in a terminal would help. The lamp
+            is not running, so when the user adds it and presses Wake, Genies lights it with
+            `oillamp at`, and never tries to join it.
+        '''
+        given: '"north" was lit from a terminal, and its record kept, before its session ended'
+            lightFromTheCommandLine(north)
+            var record = north.resolve('.oillamp/session.json')
+            var recorded = Files.readString(record)
+            var controlSocket = Path.of(new JsonSlurper().parseText(recorded).controlSocket as String)
+            assert sandbox.oillamp.run('stop', north.toString()).succeeded()
+            person.join(20_000)
+            assert !person.alive
+
+        and: 'what a killed engine leaves: its record, and its control socket\'s file with no one listening'
+            Files.writeString(record, recorded)
+            Files.createDirectories(controlSocket.parent)
+            ServerSocketChannel.open(StandardProtocolFamily.UNIX).withCloseable {
+                it.bind(UnixDomainSocketAddress.of(controlSocket))
+            }
+            assert Files.exists(controlSocket)
+
+        when: 'the user adds "north", and wakes it'
+            SwingUtilities.invokeAndWait { app.addLamp(north) }
+            UUID fromElsewhere = app.state().get().selected()
+            SwingUtilities.invokeAndWait { app.wake(fromElsewhere) }
+
+        then: 'it is awake, lit by Genies with `oillamp at`, never joined'
+            waitUntil { app.state().get().find(fromElsewhere).orElseThrow().phase().isAwake() }
+            sandbox.engines.any { it.arguments.take(2) == ['at', north.toString()] }
+            !sandbox.engines.any { it.arguments.first() == 'follow' }
             Lamp.running(sandbox.launcher)*.lamp() == [north]
     }
 
