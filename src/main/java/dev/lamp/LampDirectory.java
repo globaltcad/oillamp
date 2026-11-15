@@ -3,12 +3,17 @@ package dev.lamp;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.net.UnixDomainSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /// A lamp's directory, whether or not a session runs it: what can be done to the lamp at rest,
 /// and how to start or join its session. [Lamp#at(Path)] returns one.
@@ -34,6 +39,8 @@ import java.util.function.Consumer;
 /// passes what it reports to the listeners; each says whether it works while a session runs.
 /// The conversation methods read the agent's home directly, and [#ask] needs a running session.
 public final class LampDirectory {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Path directory;
     private final List<Consumer<LampEvent>> listeners;
@@ -281,11 +288,39 @@ public final class LampDirectory {
         return lamp;
     }
 
-    /// Whether a session is running this lamp, so that [#join] finds it. Looks only at the
-    /// record a session keeps while it runs; a session whose engine was killed leaves that
-    /// record behind, and [#join] then says it cannot reach it.
+    /// Whether a session is running this lamp, so that [#join] finds it: it keeps a record
+    /// while it runs, and its engine answers on the control socket that record names. The
+    /// application must reach that socket where the engine made it, as an application does that
+    /// starts the engine on this computer, as its own user.
+    ///
+    /// A session whose engine was killed, or whose computer lost power, leaves its record
+    /// behind, with no one answering. That lamp is not running: [#start] starts it, and clears
+    /// away what the old session left. A record that names no socket, or cannot be read, is
+    /// taken at its word.
     public boolean isRunning() {
-        return Files.exists(directory.resolve(".oillamp").resolve("session.json"));
+        Path record = directory.resolve(".oillamp").resolve("session.json");
+        if (!Files.exists(record)) return false;
+        Optional<Path> socket;
+        try {
+            socket = Optional.ofNullable(JSON.readTree(record.toFile()))
+                             .map(session -> session.path("controlSocket"))
+                             .filter(JsonNode::isTextual)
+                             .map(name -> Path.of(name.asText()));
+        } catch (IOException | RuntimeException unreadable) {
+            return true;
+        }
+        return socket.map(LampDirectory::answers).orElse(true);
+    }
+
+    /// Whether a server listens on the Unix socket `socket`. A file left where a server listened
+    /// once refuses the connection. The session's engine is handed an empty connection, and lets
+    /// it go.
+    private static boolean answers(Path socket) {
+        try (SocketChannel channel = SocketChannel.open(UnixDomainSocketAddress.of(socket))) {
+            return channel.isConnected();
+        } catch (IOException | RuntimeException refused) {
+            return false;
+        }
     }
 
     /// Deletes this lamp for good: the agent's home with everything the agent made in it,

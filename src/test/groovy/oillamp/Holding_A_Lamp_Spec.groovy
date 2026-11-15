@@ -12,6 +12,11 @@ import spock.lang.TempDir
 import spock.lang.Timeout
 import spock.lang.Title
 
+import groovy.json.JsonSlurper
+
+import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
+import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -205,6 +210,45 @@ class Holding_A_Lamp_Spec extends Specification {
             !starting.isRunning()
             !joined.awaitRunning(Duration.ofSeconds(10))
             received.any { it instanceof LampEvent.Failure && it.problem().code().value() == 'OIL-SESSION-001' }
+    }
+
+    def 'A lamp whose engine was killed is not running, so the application starts it again rather than join a session that is gone'() {
+        reportInfo """
+            Let's consider an application whose lamp runs, and an engine then killed with
+            `kill -9`, or by the out-of-memory killer, without shutting down. The record a session
+            keeps while it runs, `.oillamp/session.json`, is still there, and so is the file of
+            its control socket, with no one listening behind it. Here only those two are left
+            behind. `LampDirectory.isRunning()` does not take the record at its word: the lamp is
+            not running. So the application starts it, and the new session starts.
+        """
+        given: 'a lamp that runs, its record kept, and then its session ended'
+            var first = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
+            first.awaitRunning(Duration.ofSeconds(30))
+            var record = host.lampPath().resolve('.oillamp/session.json')
+            var recorded = Files.readString(record)
+            var controlSocket = Path.of(new JsonSlurper().parseText(recorded).controlSocket as String)
+            first.close()
+
+        and: 'what a killed engine leaves: its record, and its control socket\'s file with no one listening'
+            Files.writeString(record, recorded)
+            Files.createDirectories(controlSocket.parent)
+            ServerSocketChannel.open(StandardProtocolFamily.UNIX).withCloseable {
+                it.bind(UnixDomainSocketAddress.of(controlSocket))
+            }
+            assert Files.exists(controlSocket)
+
+        expect: 'the lamp is not running'
+            !Lamp.at(host.lampPath()).isRunning()
+
+        when: 'the application starts it'
+            var second = Lamp.at(host.lampPath()).launchedBy(host.launcher).start()
+
+        then: 'the new session runs, and the lamp is running again'
+            second.awaitRunning(Duration.ofSeconds(30))
+            Lamp.at(host.lampPath()).isRunning()
+
+        cleanup:
+            second?.close()
     }
 
     def '`Lamp.commandLine` gives the ssh command line for a command in the sandbox, with each argument arriving exactly as given'() {
