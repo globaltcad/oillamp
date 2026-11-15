@@ -72,10 +72,10 @@ public final class GenieRunner {
     /// whose service and key Genies cannot know.
     private volatile Optional<LitWith> litWith = Optional.empty();
     private volatile boolean sleeping;
-    /// How many lamps were put out. Each lamp's events are heard with the number it was lit or
-    /// joined under, and only while no lamp was put out since: a lamp's last events, such as its
-    /// session stopping, can arrive after it was put out and the genie woke again, and must not
-    /// break the genie that lives on.
+    /// How many lamps were put out, let go of, or went out by themselves. Each lamp's events are
+    /// heard with the number it was lit or joined under, and only while no lamp went out since:
+    /// a lamp's last events, such as its session stopping, can arrive after it went out and the
+    /// genie woke again, and must not break the genie that lives on.
     private final AtomicLong lampsPutOut = new AtomicLong();
 
     /// Where the next message goes: the conversation's file, relative to the genie's home, and
@@ -403,14 +403,7 @@ public final class GenieRunner {
     /// Stops following the lamp, and leaves its session running. What it reports after that is
     /// not this genie's to hear.
     private void letGo() {
-        schedule.wentOut();
-        sleeping = true;
-        lamp.ifPresent(LampLighter.Lit::leaveRunning);
-        lamp = Optional.empty();
-        lampsPutOut.incrementAndGet();
-        litWith = Optional.empty();
-        history.wentOut();
-        hostAccess.wentOut();
+        forgetLamp(LampLighter.Lit::leaveRunning);
     }
 
     /// `event` in the [AppLog], as a line from this genie's lamp: its warnings and failures as
@@ -513,7 +506,8 @@ public final class GenieRunner {
 
     // ─── what the lamp reports ─────────────────────────────────────────────────────────────
 
-    /// Hears the events of the lamp lit or joined now, until it is put out.
+    /// Hears the events of the lamp lit or joined now, until it is put out, let go of, or goes
+    /// out by itself.
     private Consumer<LampEvent> heardFromThisLamp() {
         long lampNumber = lampsPutOut.get();
         return event -> {
@@ -558,10 +552,12 @@ public final class GenieRunner {
                 changes.accept(genie -> genie.lampSays(new Genie.Activity.LampSays(info.text())));
             case LampEvent.StepStarted step when sleeping ->
                 changes.accept(genie -> genie.lampSays(new Genie.Activity.LampSays(step.step().describe())));
+            // Its session ended by itself, and the engine's process ends with it: nothing is left
+            // to put out, and closing the lamp here, on the thread that reads its events, would
+            // wait for that very thread. It is forgotten as one put out is, so that what it still
+            // reports, late, cannot reach the genie once it woke again.
             case LampEvent.SessionStateChanged changed when changed.status().state().equals("stopped") && !sleeping -> {
-                lamp = Optional.empty();
-                schedule.wentOut();
-                hostAccess.wentOut();
+                forgetLamp(_ -> { });
                 changes.accept(genie -> genie.broken(new Genie.Broke.SandboxStopped(changed.status().detail())));
             }
             default -> { }
@@ -698,9 +694,20 @@ public final class GenieRunner {
     public Optional<Desktop> desktop() { return lamp.map(LampLighter.Lit::desktop); }
 
     private void putOutLamp() {
+        forgetLamp(LampLighter.Lit::close);
+    }
+
+    /// Ends the lamp with `ending`, then forgets it: nothing it reports from then on is heard,
+    /// and the schedule, the history and the host access learn that it is out. For a lamp put
+    /// out, let go of, or gone out by itself.
+    ///
+    /// The genie is sleeping before the lamp is told to end: its session reports how it ends,
+    /// stopped at last, while `ending` waits, and that is heard as falling asleep, not as the
+    /// sandbox stopping under the genie.
+    private void forgetLamp(Consumer<LampLighter.Lit> ending) {
         schedule.wentOut();
         sleeping = true;
-        lamp.ifPresent(LampLighter.Lit::close);
+        lamp.ifPresent(ending);
         lamp = Optional.empty();
         lampsPutOut.incrementAndGet();
         litWith = Optional.empty();
