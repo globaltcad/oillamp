@@ -51,6 +51,8 @@ class KeepingAGenieAliveSpec extends Specification {
     Genie genie = Genie.named('Jafar')
     final List<String> prompts = new CopyOnWriteArrayList<>()
     final List<String> closed = new CopyOnWriteArrayList<>()
+    /** Every phase the genie was in, in order, as the runner's changes left it. */
+    final List<Genie.Phase> phases = new CopyOnWriteArrayList<>()
     final CountDownLatch release = new CountDownLatch(1)
     GenieRunner runner
 
@@ -67,7 +69,10 @@ class KeepingAGenieAliveSpec extends Specification {
             'You said: ' + prompt
         } }
         runner = new GenieRunner(lamp, lighter(), { UnaryOperator<Genie> change ->
-            synchronized (this) { genie = change.apply(genie) }
+            synchronized (this) {
+                genie = change.apply(genie)
+                phases << genie.phase()
+            }
         } as Consumer)
     }
 
@@ -535,6 +540,88 @@ class KeepingAGenieAliveSpec extends Specification {
             genie.phase() == Genie.Phase.READY
             runner.isAwake()
 
+    }
+
+    def 'Putting a genie to sleep never shows it broken, though its session reports that it stopped'() {
+        reportInfo """
+            Let's consider Jafar, awake, put to sleep by the user. Genies ends the session it
+            started, and while it waits for the sandbox to go, the session reports how it ends,
+            down to its `SessionStateChanged` saying that it stopped. That is the end the user
+            asked for, not the sandbox stopping under the genie: Jafar falls asleep and is
+            asleep, never broken on the way, and the chat holds no broken notice.
+        """
+        given: 'a lighter that notes every event the lamp reports'
+            var real = lighter()
+            var heard = new CopyOnWriteArrayList<LampEvent>()
+            runner = new GenieRunner(lamp, [
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                        real.light(directory, name, lang, settings, key, wallpaper, progress, { LampEvent event ->
+                            heard << event
+                            events.accept(event)
+                        } as Consumer<LampEvent>)
+                    },
+                    unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
+                    { UnaryOperator<Genie> change ->
+                        synchronized (this) {
+                            genie = change.apply(genie)
+                            phases << genie.phase()
+                        }
+                    } as Consumer)
+
+        and: 'Jafar is awake'
+            awake()
+            phases.clear()
+
+        when:
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP && !runner.isAwake() }
+
+        then: 'the session reported that it stopped'
+            heard.any { event -> event instanceof LampEvent.SessionStateChanged && event.status().state() == 'stopped' }
+
+        and: 'Jafar fell asleep, and was never broken'
+            phases.contains(Genie.Phase.FALLING_ASLEEP)
+            !phases.contains(Genie.Phase.BROKEN)
+
+        and: 'the chat has no broken notice'
+            !genie.transcript().entries().any { entry -> entry.notice().filter { notice -> notice instanceof Notice.Broke }.isPresent() }
+    }
+
+    def 'A lamp that stopped under the genie cannot break it once it woke again, whatever it reports late'() {
+        reportInfo """
+            Let's consider Jafar, awake, whose session someone ends with `oillamp stop` from a
+            terminal. Jafar is shown broken, and the user wakes it again, in a new lamp. The
+            first lamp's events come on a thread of their own, so one of them can still arrive
+            after that: here, a `SessionStateChanged` saying that its session stopped.
+            `GenieRunner` stops hearing a lamp as soon as it went out by itself, as it does
+            for one it put out, so Jafar stays awake in its new lamp rather than being shown
+            broken.
+        """
+        given: 'a lighter that keeps where each lamp it lit sends its events'
+            var real = lighter()
+            var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
+            runner = new GenieRunner(lamp, [
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                        listeners << events
+                        real.light(directory, name, lang, settings, key, wallpaper, progress, events)
+                    },
+                    unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
+                    { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
+
+        and: 'Jafar woke, its session was stopped from a terminal, and it woke again'
+            awake()
+            assert host.oillamp.run('stop', lamp.toString()).succeeded()
+            waitUntil { genie.phase() == Genie.Phase.BROKEN }
+            awake()
+
+        when: 'the first lamp reports, late, that its session stopped'
+            listeners.first().accept(new LampEvent.SessionStateChanged(
+                    new LampSessionStatus('stopped', 'asked to stop with oillamp stop', Duration.ofMinutes(1), 0, Tuple.of(LampWebPort))))
+
+        then: 'Jafar is still awake, in its second lamp'
+            listeners.size() == 2
+            genie.phase() == Genie.Phase.READY
+            runner.isAwake()
     }
 
     def 'When the genie shows the user something, its desktop opens next to the chat, saying what'() {
