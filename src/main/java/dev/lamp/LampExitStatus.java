@@ -3,7 +3,8 @@ package dev.lamp;
 import java.util.Optional;
 
 /// The process exit codes. Scripts depend on them, so a code's meaning never changes: `4`
-/// always means "that lamp is already running".
+/// always means "that lamp is busy": a session runs on it, or one is starting or ending there,
+/// or another oillamp command is changing it.
 ///
 /// [LampDirectory#remove] and [Lamp#exitStatus()] report one, so that an application acts on how
 /// an engine process ended by name rather than by number. A script reads the same codes from
@@ -17,7 +18,7 @@ public enum LampExitStatus {
     USAGE(2),
     /// Host prerequisites are missing and oillamp was not allowed to install them.
     PREREQUISITES_MISSING(3),
-    /// Another session already holds this lamp — `OIL-LOCK-001`.
+    /// Another session or oillamp command holds this lamp — `OIL-LOCK-001`.
     LAMP_BUSY(4),
     /// The container or the session itself failed.
     SESSION_FAILED(5),

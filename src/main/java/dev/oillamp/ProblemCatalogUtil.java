@@ -454,6 +454,24 @@ final class ProblemCatalogUtil {
                 Optional.empty());
     }
 
+    /// The lamp's lock is held, but no session says that it holds it: it is a session that has
+    /// not opened yet, or one that has closed and is saving the lamp, or another oillamp command
+    /// that changes the lamp, such as `oillamp save`. Each lets go of the lamp once it is done.
+    /// Unlike [#lockBusy], there is no session here to watch, join or stop.
+    ///
+    /// @param sessionMeta the lamp's `session.json`, which is not there, or could not be read
+    public static LampProblem lockBusyWithoutSession(Path root, Path sessionMeta) {
+        return new LampProblem(LOCK_BUSY, Severity.ERROR, "Lamp is busy",
+                "something else is using " + root + " right now: a session that is starting or ending "
+              + "there, or another oillamp command, such as a save",
+                "one lamp runs at most one sandbox, and the lamp may not change underneath whatever "
+              + "is using it",
+                Tuple.of(Evidence.class, new Evidence.File(sessionMeta, "not there, or unreadable, so no session can be named")),
+                Tuple.of(Fix.class, Fix.of("wait until it is done, then try again; a first start that builds "
+                                         + "the sandbox image can take many minutes")),
+                Optional.empty());
+    }
+
     /// `oillamp remove` asked to delete a lamp that is in use.
     ///
     /// Deleting the agent's home under a running container would leave the session using

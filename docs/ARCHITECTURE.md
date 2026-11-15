@@ -664,7 +664,9 @@ The same, step by step:
 5. **`--dry-run` stops here**, after also planning the image and container steps, so the full
    `podman run` command is printed. A dry run takes no lock and changes nothing.
 6. **Lock.** `LampLock.tryAcquire` takes an exclusive OS file lock on `.oillamp/lock`. If another
-   session holds it, oillamp reports `OIL-LOCK-001` and exits with code 4. The OS releases the lock
+   session holds it, oillamp reports `OIL-LOCK-001` and exits with code 4, naming the session from
+   its `session.json`. Without one, the holder is a session that is starting or ending, or another
+   command such as `oillamp save`, and the problem says that instead. The OS releases the lock
    when the process dies, however it dies.
    Then, with `autosave.startup` on, the lamp is saved, if anything changed since its last
    snapshot (a startup save). A save that fails is a warning, and the session starts anyway.
@@ -2119,7 +2121,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-CONVERSATION-001` | No conversation, or no entry in one, has that name. |
 | `OIL-SCHEDULE-005` | Warning: the agent could not be woken for a run, or pi stopped in the middle of one. |
 | `OIL-SCHEDULE-006` | Warning: the file listing the agent's runs, `.oillamp/agent-runs`, could not be written, so a run without a snapshot after it does not count against `schedule.max_agent_runs_per_day`. |
-| `OIL-LOCK-001` | Lamp already running. |
+| `OIL-LOCK-001` | Lamp already running, or busy: a session starting or ending, or another command, holds it. |
 | `OIL-LOCK-002` | Warning: cleaned up after a previous session that crashed. |
 | `OIL-CONFIG-001` | TOML syntax error. |
 | `OIL-CONFIG-002` | Unknown key. |

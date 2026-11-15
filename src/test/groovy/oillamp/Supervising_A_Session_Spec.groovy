@@ -11,6 +11,9 @@ import spock.lang.Timeout
 import spock.lang.Title
 
 import java.net.InetSocketAddress
+import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -228,6 +231,63 @@ class Supervising_A_Session_Spec extends Specification {
         and: 'the lamp is free again: a second `oillamp at` is not refused as busy'
             var second = host.oillamp.run('at', host.lampPath().toString())
             second.status() != LampExitStatus.LAMP_BUSY
+    }
+
+    def '`oillamp at` calls a lamp busy without naming a session, while its lock is held and it has no `session.json`'() {
+        reportInfo """
+            Let's consider a lamp whose lock, the operating-system lock on `.oillamp/lock`, is
+            held while no session is open on it. A session takes the lock before it starts the
+            sandbox, and keeps it after it has closed, while it saves the lamp; `oillamp save`
+            takes it while it saves. Only an open session writes `.oillamp/session.json`, with
+            its supervisor's pid and the time it started.
+
+            A second `oillamp at` in such a moment is refused with `OIL-LOCK-001` and exit code 4,
+            as when a session runs. But no session is there for the problem to name, nor one to
+            view, open a shell in or stop. So the problem is titled "Lamp is busy", says neither
+            "supervisor pid" nor "an earlier time", offers no command, and tells the user to wait
+            until whatever holds the lamp is done.
+
+            The engine runs in this scenario's JVM, so the scenario holds the lock from that JVM
+            too, on a channel of its own; `oillamp at` cannot take a lock the JVM already holds,
+            just as it cannot take one another process holds.
+        """
+        given: 'a lamp on which one `oillamp at` session ran and ended, which leaves `.oillamp/lock` and no `session.json`'
+            assert host.oillamp.run('at', host.lampPath().toString()).status() == LampExitStatus.SUCCESS
+            assert !Files.exists(host.lampPath().resolve('.oillamp/session.json'))
+
+        and: 'the lamp\'s lock, held by the scenario'
+            var channel = FileChannel.open(host.lampPath().resolve('.oillamp/lock'),
+                                           StandardOpenOption.READ, StandardOpenOption.WRITE)
+            var held = channel.lock()
+
+        when: '`oillamp at` starts a session on the lamp'
+            var refused = host.oillamp.run('at', host.lampPath().toString())
+            var problem = refused.events().find { it instanceof LampEvent.Failure }?.problem()
+
+        then: 'it is refused as busy, with `OIL-LOCK-001` and exit code 4'
+            refused.status() == LampExitStatus.LAMP_BUSY
+            problem.code().value() == 'OIL-LOCK-001'
+
+        and: 'the problem is titled "Lamp is busy", and names no session'
+            problem.title() == 'Lamp is busy'
+            !problem.whatHappened().contains('supervisor pid')
+            !problem.whatHappened().contains('an earlier time')
+
+        and: 'its one fix is to wait until whatever holds the lamp is done, with no command'
+            problem.fixes()*.description() == ['wait until it is done, then try again; a first start that builds '
+                                               + 'the sandbox image can take many minutes']
+            problem.fixes()*.command() == [Optional.empty()]
+
+        when: 'the scenario lets go of the lock, and `oillamp at` starts a session again'
+            held.release()
+            channel.close()
+            var again = host.oillamp.run('at', host.lampPath().toString())
+
+        then: 'the session runs, and ends with success'
+            again.status() == LampExitStatus.SUCCESS
+
+        cleanup:
+            channel?.close()
     }
 
     def '`oillamp at --no-viewer` opens the shell window and nothing else'() {

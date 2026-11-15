@@ -1863,18 +1863,22 @@ final class CommandExecutionUtil {
              + access.requirements().lines().map(line -> "                 | " + line).reduce("", (a, b) -> a + (a.isEmpty() ? "" : "\n") + b);
     }
 
-    /// Says who holds the lamp, from the `session.json` the running session wrote.
+    /// As [#busyProblem(LampLayout)], for the prepared lamp.
     private static LampProblem busyProblem(LampPhase.Prepared prepared) {
         return busyProblem(prepared.layout());
     }
 
+    /// Says who holds the lamp, from the `session.json` the running session wrote. Without one
+    /// that can be read, no session can be named: the lamp is held by a session that is starting
+    /// or ending, or by another command, for a while.
     private static LampProblem busyProblem(LampLayout layout) {
         Optional<com.fasterxml.jackson.databind.JsonNode> session =
                 FilesystemUtil.readString(layout.sessionMeta()).flatMap(JsonUtil::parse);
+        if (session.isEmpty()) return ProblemCatalogUtil.lockBusyWithoutSession(layout.root(), layout.sessionMeta());
         return ProblemCatalogUtil.lockBusy(layout.root(),
-                session.map(json -> json.path("supervisorPid").asLong(0)).orElse(0L),
-                session.map(json -> JsonUtil.text(json, "startedAt")).filter(when -> !when.isEmpty())
-                       .orElse("an earlier time"));
+                session.get().path("supervisorPid").asLong(0),
+                Optional.of(JsonUtil.text(session.get(), "startedAt")).filter(when -> !when.isEmpty())
+                        .orElse("an earlier time"));
     }
 
     /// The exit code for a list of problems: 4 for a busy lamp, 2 for configuration errors and for a
