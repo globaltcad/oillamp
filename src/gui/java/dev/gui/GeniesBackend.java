@@ -407,9 +407,11 @@ public final class GeniesBackend implements Genies {
     ///
     /// Each lamp found lit that Genies does not know yet joins the list, after Genies' own, and
     /// Genies joins its session. Only the lamps the user removed are left out, and Genies' own
-    /// lamps on the shelf. A genie asleep in the list whose lamp someone lit since, with
-    /// `oillamp at`, is joined. Off Swing's event thread. When it cannot be found out, as without
-    /// podman, nothing changes: Genies says so when a genie wakes, and this is asked again.
+    /// lamps on the shelf. A genie asleep in the list whose lamp runs is joined: one someone lit
+    /// since, with `oillamp at`, or one of Genies' own that a Genies left running as it closed
+    /// while the lamp was still starting, once that lamp runs. Off Swing's event thread. When it
+    /// cannot be found out, as without podman, nothing changes: Genies says so when a genie wakes,
+    /// and this is asked again.
     @Override public void lookForLamps() {
         Map<UUID, Path> elsewhere = new HashMap<>();
         for (Genie genie : state.get().genies()) genie.elsewhere().ifPresent(lamp -> elsewhere.put(genie.id(), lamp));

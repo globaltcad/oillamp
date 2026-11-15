@@ -57,7 +57,11 @@ public interface LampLighter {
     /// @param progress receives what the lamp is doing, in a few words, while it starts
     /// @param events   receives every event of the lamp's session, from any thread, including
     ///                 the progress of the agent's runs
-    /// @throws IOException when the lamp did not start; a [Failed] says why
+    /// @param starting receives the lamp as soon as it starts, before it runs, so that it can be
+    ///                 put out, or left running, while it starts; a lighter that cannot hand it
+    ///                 over hands over nothing
+    /// @throws IOException when the lamp did not start, as when it was put out while it started;
+    ///                     a [Failed] says why
     Lit light(
         final Path directory,
         final String name,
@@ -66,7 +70,8 @@ public interface LampLighter {
         final String key,
         final LampWallpaper wallpaper,
         final Consumer<Genie.Activity> progress,
-        final Consumer<LampEvent> events
+        final Consumer<LampEvent> events,
+        final Consumer<Starting> starting
     ) throws IOException, InterruptedException;
 
     /// Starts a lamp someone made elsewhere, with `oillamp at`, as its own configuration has it:
@@ -81,11 +86,12 @@ public interface LampLighter {
         final Settings settings,
         final String key,
         final Consumer<Genie.Activity> progress,
-        final Consumer<LampEvent> events
+        final Consumer<LampEvent> events,
+        final Consumer<Starting> starting
     ) throws IOException, InterruptedException {
         Path name = directory.getFileName();
         return light(directory, name == null ? directory.toString() : name.toString(), Lang.ENGLISH, settings, key,
-                     LampWallpaper.WAVES_DARK, progress, events);
+                     LampWallpaper.WAVES_DARK, progress, events, starting);
     }
 
     /// The lamp in `directory`, not lit, for what works without its sandbox: its schedule and
@@ -114,6 +120,20 @@ public interface LampLighter {
     /// @return empty when no lamp is lit there, or it cannot be reached
     default Optional<Lit> join(Path directory, Consumer<LampEvent> events) throws IOException, InterruptedException {
         return Optional.empty();
+    }
+
+    /// A lamp that is starting: what can be done with it before its sandbox runs.
+    interface Starting {
+
+        /// Stops it starting: its sandbox does not come up, or is removed again. Returns once
+        /// that is done. Lighting it then fails, as for a lamp that did not start. A lamp that
+        /// came to run just before is put out as one that runs: lighting it may have returned it
+        /// already.
+        void putOut();
+
+        /// Lets it go on starting, and run on after the app has closed, as [Lit#leaveRunning]
+        /// does. Returns at once.
+        void leaveRunning();
     }
 
     /// A lamp whose sandbox runs.

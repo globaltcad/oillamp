@@ -56,7 +56,8 @@ import sprouts.Tuple;
 /// the genie, `UnaryOperator<Genie>`, handed to `changes`; the app applies it to its state.
 ///
 /// Waking and sleeping take long, so they run one after the other on a thread of the runner's
-/// own; the calls return at once.
+/// own; the calls return at once. Only a lamp still being lit is put out, or left running, from
+/// the caller's thread: see [#lighting].
 public final class GenieRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(GenieRunner.class);
@@ -106,6 +107,26 @@ public final class GenieRunner {
     private volatile boolean leftRunning;
     /// Whether someone made the lamp elsewhere, with `oillamp at`, not Genies. See the constructor.
     private final boolean fromElsewhere;
+    /// What becomes of a lamp while it is being lit, which takes minutes the first time, as its
+    /// sandbox image is built: the user may put the genie to sleep meanwhile, or close Genies.
+    /// Waking waits on the runner's own thread until the lamp runs, so these act on the lamp
+    /// from the caller's thread, through what the lighter handed over, and waking then hears
+    /// what was asked. Guarded by itself.
+    private final Lighting lighting = new Lighting();
+
+    /// See [#lighting].
+    private static final class Lighting {
+        /// What was asked of the lamp being lit, before it ran.
+        enum Asked { NOTHING, PUT_OUT, LEAVE_RUNNING }
+
+        /// Whether a lamp is being lit now.
+        private boolean now;
+        private Asked asked = Asked.NOTHING;
+        /// The lamp being lit, once the lighter handed it over.
+        private Optional<LampLighter.Starting> lamp = Optional.empty();
+        /// Whether the lighter handed the lamp over, and what was asked of it by then was done.
+        private boolean handedOver;
+    }
 
     public GenieRunner(Path directory, LampLighter lighter, Consumer<UnaryOperator<Genie>> changes) {
         this(directory, false, lighter, changes);
@@ -159,24 +180,51 @@ public final class GenieRunner {
     ) {
         work.execute(() -> {
             if (lamp.isPresent()) return;
-            // Lit elsewhere, it is joined: lighting it again would find it taken.
-            if (fromElsewhere && lighter.isLit(directory)) {
+            // Lit already, by someone else, or by a Genies that left it running, it is joined:
+            // lighting it again would find it taken.
+            if (lighter.isLit(directory)) {
                 join(conversation, leaf);
                 return;
             }
             sleeping = false;
             changes.accept(Genie::waking);
+            synchronized (lighting) {
+                lighting.now = true;
+                lighting.asked = Lighting.Asked.NOTHING;
+                lighting.handedOver = false;
+            }
             try {
-                LampLighter.Lit lit = fromElsewhere
+                LampLighter.Lit lit;
+                try {
+                    lit = fromElsewhere
                         ? lighter.lightAsItIs(
                                 directory, settings, key,
-                                what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
+                                what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp(),
+                                this::lightingStarted
                             )
                         : lighter.light(
                                 directory, name, lang, settings, key, wallpaper,
-                                 what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp()
+                                what -> changes.accept(genie -> genie.lampSays(what)), heardFromThisLamp(),
+                                this::lightingStarted
                             );
+                } finally {
+                    lightingEnded();
+                }
                 lamp = Optional.of(lit);
+                // Asked for before the lamp ran, and done to it now that it does.
+                switch (askedWhileLighting()) {
+                    case PUT_OUT -> {
+                        putOutLamp();
+                        changes.accept(Genie::asleep);
+                        return;
+                    }
+                    case LEAVE_RUNNING -> {
+                        leftRunning = true;
+                        letGo();
+                        return;
+                    }
+                    case NOTHING -> { }
+                }
                 litWith = Optional.of(new LitWith(settings.service().strip(), key, settings.model().strip()));
                 changes.accept(genie -> genie.lampSays(new Genie.Activity.WakingTheGenie()));
                 GenieFileTransferUtil.makeDirectories(lit);
@@ -186,13 +234,68 @@ public final class GenieRunner {
                 reloadConversations();
             } catch (IOException | RuntimeException failed) {
                 putOutLamp();
-                changes.accept(genie -> genie.broken(why(failed)));
+                // A lamp put out while it was lit did not start, as the user asked.
+                if (askedWhileLighting() == Lighting.Asked.NOTHING) changes.accept(genie -> genie.broken(why(failed)));
+                else changes.accept(Genie::asleep);
             } catch (InterruptedException interrupted) {
                 putOutLamp();
                 changes.accept(Genie::asleep);
                 Thread.currentThread().interrupt();
             }
         });
+    }
+
+    /// The lighter handed over the lamp being lit. What the user asked of it already is done to
+    /// it now; otherwise it is kept for what they may ask until it runs.
+    private void lightingStarted(LampLighter.Starting starting) {
+        Lighting.Asked asked;
+        synchronized (lighting) {
+            asked = lighting.asked;
+            if (asked == Lighting.Asked.NOTHING) lighting.lamp = Optional.of(starting);
+        }
+        switch (asked) {
+            case PUT_OUT -> starting.putOut();
+            case LEAVE_RUNNING -> starting.leaveRunning();
+            case NOTHING -> { }
+        }
+        synchronized (lighting) {
+            lighting.handedOver = true;
+            lighting.notifyAll();
+        }
+    }
+
+    private void lightingEnded() {
+        synchronized (lighting) {
+            lighting.now = false;
+            lighting.lamp = Optional.empty();
+            lighting.notifyAll();
+        }
+    }
+
+    /// What the user asked of the lamp while it was lit, last.
+    private Lighting.Asked askedWhileLighting() {
+        synchronized (lighting) {
+            return lighting.asked;
+        }
+    }
+
+    /// Asks the lamp being lit, if one is, to be put out or left running: runs `first`, then does
+    /// it to the lamp at once, if the lighter handed it over already; putting out, which waits
+    /// until the lamp is out, on a thread of its own. Waking then ends with the lamp out, or left
+    /// running.
+    ///
+    /// @return whether a lamp was being lit
+    private boolean askWhileLighting(Lighting.Asked asked, Runnable first) {
+        Optional<LampLighter.Starting> starting;
+        synchronized (lighting) {
+            if (!lighting.now) return false;
+            lighting.asked = asked;
+            starting = lighting.lamp;
+        }
+        first.run();
+        if (asked == Lighting.Asked.LEAVE_RUNNING) starting.ifPresent(LampLighter.Starting::leaveRunning);
+        else starting.ifPresent(lamp -> Thread.ofVirtual().name("put out a lamp being lit").start(lamp::putOut));
+        return true;
     }
 
     /// Sends the user's message, to where the chat is. While the genie still works on another
@@ -469,8 +572,19 @@ public final class GenieRunner {
     }
 
     /// Leaves the lamp running as the app closes, and waits until it is told.
+    ///
+    /// A lamp still being lit is told to go on, and to run on after the app has closed, and this
+    /// returns as soon as the lamp was told, not once it runs, which could take minutes. Until
+    /// its session runs, nothing can join it: a Genies opened again meanwhile shows the genie
+    /// asleep, and joins its lamp once it runs, when it looks for lamps, every minute, or when
+    /// the user wakes the genie. Woken before then, the genie says that its lamp is busy.
     public void leaveRunningAndWait(long seconds) throws InterruptedException {
         if (work.isShutdown()) return;
+        if (askWhileLighting(Lighting.Asked.LEAVE_RUNNING, () -> leftRunning = true)) {
+            work.shutdown();
+            awaitHandover(seconds);
+            return;
+        }
         work.execute(() -> {
             sleeping = true;
             leftRunning = true;
@@ -479,6 +593,20 @@ public final class GenieRunner {
         });
         work.shutdown();
         work.awaitTermination(seconds, TimeUnit.SECONDS);
+    }
+
+    /// Waits until the lighter handed over the lamp being lit, and what was asked of it was done,
+    /// or lighting ended, or `seconds` passed. The lighter hands it over moments after it starts
+    /// the lamp; an app that closed before then would leave a lamp that heard nothing.
+    private void awaitHandover(long seconds) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
+        synchronized (lighting) {
+            while (lighting.now && !lighting.handedOver) {
+                long left = deadline - System.nanoTime();
+                if (left <= 0) return;
+                TimeUnit.NANOSECONDS.timedWait(lighting, left);
+            }
+        }
     }
 
     /// Hands a question to the lamp's session, on a thread of its own: it starts a short-lived
@@ -669,7 +797,16 @@ public final class GenieRunner {
     /// Puts the lamp out. The genie's home, and with it the conversations, stays. Until the lamp
     /// is out, which takes a while as the sandbox stops and the home may be saved, the genie is
     /// falling asleep, and says what its lamp reports meanwhile.
+    ///
+    /// A lamp still being lit stops starting, at once rather than once it runs: its sandbox image
+    /// is not finished, and a sandbox that came up part of the way is removed.
     public void sleep() {
+        // Falling asleep before the lamp is told, so that what it reports as it stops starting
+        // is heard as such.
+        askWhileLighting(Lighting.Asked.PUT_OUT, () -> {
+            sleeping = true;
+            changes.accept(Genie::fallingAsleep);
+        });
         work.execute(() -> {
             if (lamp.isPresent())
                 changes.accept(Genie::fallingAsleep);

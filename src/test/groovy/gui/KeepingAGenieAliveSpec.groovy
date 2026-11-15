@@ -475,7 +475,7 @@ class KeepingAGenieAliveSpec extends Specification {
             and in its chat.
         """
         given:
-            runner = new GenieRunner(lamp, { dir, name, lang, settings, key, wallpaper, progress, events ->
+            runner = new GenieRunner(lamp, { dir, name, lang, settings, key, wallpaper, progress, events, starting ->
                 progress.accept(new Genie.Activity.CheckingThisComputer())
                 throw new IOException('podman is not installed')
             } as LampLighter, { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -519,9 +519,9 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
                         listeners << events
-                        real.light(directory, name, lang, settings, key, wallpaper, progress, events)
+                        real.light(directory, name, lang, settings, key, wallpaper, progress, events, starting)
                     },
                     unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
                     { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -554,11 +554,11 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var heard = new CopyOnWriteArrayList<LampEvent>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
                         real.light(directory, name, lang, settings, key, wallpaper, progress, { LampEvent event ->
                             heard << event
                             events.accept(event)
-                        } as Consumer<LampEvent>)
+                        } as Consumer<LampEvent>, starting)
                     },
                     unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
                     { UnaryOperator<Genie> change ->
@@ -601,9 +601,9 @@ class KeepingAGenieAliveSpec extends Specification {
             var real = lighter()
             var listeners = new CopyOnWriteArrayList<Consumer<LampEvent>>()
             runner = new GenieRunner(lamp, [
-                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
+                    light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
                         listeners << events
-                        real.light(directory, name, lang, settings, key, wallpaper, progress, events)
+                        real.light(directory, name, lang, settings, key, wallpaper, progress, events, starting)
                     },
                     unlit: { Path directory -> real.unlit(directory) }] as LampLighter,
                     { UnaryOperator<Genie> change -> synchronized (this) { genie = change.apply(genie) } } as Consumer)
@@ -621,6 +621,163 @@ class KeepingAGenieAliveSpec extends Specification {
         then: 'Jafar is still awake, in its second lamp'
             listeners.size() == 2
             genie.phase() == Genie.Phase.READY
+            runner.isAwake()
+    }
+
+    def 'Putting a genie to sleep while it wakes stops its lamp starting, at once'() {
+        reportInfo """
+            Let's consider Jafar, woken for the first time, so that its lamp builds the sandbox
+            image, which takes minutes. The user puts Jafar to sleep meanwhile. Its lamp stops
+            starting there and then, rather than once it runs: Jafar falls asleep, and is asleep
+            within seconds, never broken on the way, and nothing runs for its lamp.
+        """
+        given: 'a sandbox image that takes five minutes to build'
+            host.machine { it.imageBuildTakes(Duration.ofMinutes(5)) }
+            var heard = new CopyOnWriteArrayList<LampEvent>()
+            runner = new GenieRunner(lamp, lighterNoting(heard), { UnaryOperator<Genie> change ->
+                synchronized (this) {
+                    genie = change.apply(genie)
+                    phases << genie.phase()
+                }
+            } as Consumer)
+
+        and: 'Jafar waking, its lamp building the image'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
+            waitUntil { buildingTheImage(heard) }
+
+        when: 'the user puts Jafar to sleep'
+            var asked = System.nanoTime()
+            runner.sleep()
+            waitUntil { genie.phase() == Genie.Phase.ASLEEP }
+            var took = Duration.ofNanos(System.nanoTime() - asked)
+
+        then: 'Jafar was asleep within seconds, not after the build'
+            took < Duration.ofSeconds(30)
+
+        and: 'it fell asleep, and was never broken'
+            phases.contains(Genie.Phase.FALLING_ASLEEP)
+            !phases.contains(Genie.Phase.BROKEN)
+            !genie.transcript().entries().any { entry -> entry.notice().filter { notice -> notice instanceof Notice.Broke }.isPresent() }
+
+        and: 'nothing runs for its lamp'
+            !runner.isAwake()
+            !Lamp.at(lamp).isRunning()
+            Lamp.running(host.launcher).isEmpty()
+    }
+
+    def 'Closing Genies with a genie still waking, kept running, returns at once, and its lamp comes up all the same'() {
+        reportInfo """
+            Let's consider Jafar, waking, its lamp building the sandbox image, when the user
+            closes Genies and asks that the genies keep running. Genies does not wait until the
+            lamp runs, which could take minutes: `GenieRunner.leaveRunningAndWait` tells the lamp
+            to go on without Genies, and returns at once. The lamp goes on starting, and its
+            session comes up.
+        """
+        given: 'a sandbox image that takes two seconds to build'
+            host.machine { it.imageBuildTakes(Duration.ofSeconds(2)) }
+            var heard = new CopyOnWriteArrayList<LampEvent>()
+            runner = new GenieRunner(lamp, lighterNoting(heard), { UnaryOperator<Genie> change ->
+                synchronized (this) { genie = change.apply(genie) }
+            } as Consumer)
+
+        and: 'Jafar waking, its lamp building the image'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
+            waitUntil { buildingTheImage(heard) }
+
+        when: 'Genies closes, keeping its genies running'
+            var asked = System.nanoTime()
+            runner.leaveRunningAndWait(180)
+            var took = Duration.ofNanos(System.nanoTime() - asked)
+
+        then: 'it returned at once'
+            took < Duration.ofSeconds(1)
+
+        and: 'the lamp\'s session comes up all the same'
+            waitUntil { Lamp.at(lamp).isRunning() }
+
+        cleanup:
+            host.oillamp.run('stop', lamp.toString())
+    }
+
+    def 'Closing Genies with a genie still waking, put to sleep, stops its lamp starting within seconds'() {
+        reportInfo """
+            Let's consider Jafar, waking, its lamp building the sandbox image, which takes minutes,
+            when the user closes Genies and asks that the genies be put to sleep.
+            `GenieRunner.sleepAndWait` stops the lamp starting, and returns as soon as it has,
+            within seconds, so that Genies can close; nothing runs for the lamp then.
+        """
+        given: 'a sandbox image that takes five minutes to build'
+            host.machine { it.imageBuildTakes(Duration.ofMinutes(5)) }
+            var heard = new CopyOnWriteArrayList<LampEvent>()
+            runner = new GenieRunner(lamp, lighterNoting(heard), { UnaryOperator<Genie> change ->
+                synchronized (this) { genie = change.apply(genie) }
+            } as Consumer)
+
+        and: 'Jafar waking, its lamp building the image'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
+            waitUntil { buildingTheImage(heard) }
+
+        when: 'Genies closes, putting its genies to sleep'
+            var asked = System.nanoTime()
+            runner.sleepAndWait(180)
+            var took = Duration.ofNanos(System.nanoTime() - asked)
+
+        then: 'it returned within seconds, with Jafar asleep'
+            took < Duration.ofSeconds(30)
+            genie.phase() == Genie.Phase.ASLEEP
+
+        and: 'nothing runs for its lamp'
+            !Lamp.at(lamp).isRunning()
+            Lamp.running(host.launcher).isEmpty()
+    }
+
+    def 'A waking genie can be put to sleep while its lamp is lit, but not while Genies joins a lamp that runs already'() {
+        reportInfo """
+            Let's consider what `Genie.canSleep()` tells the window, which offers Sleep by it. An
+            awake genie can be put to sleep, and so can one whose lamp is being lit: the lamp then
+            stops starting. A genie whose lamp Genies joins, lit elsewhere or left running, is
+            waking too, for a moment, but cannot: its session is not Genies' to end before Genies
+            has joined it. Asleep, there is nothing to put to sleep.
+        """
+        given:
+            var jafar = Genie.named('Jafar')
+
+        expect: 'awake, and while its lamp is lit, it can be put to sleep'
+            jafar.waking().awake().canSleep()
+            jafar.waking().canSleep()
+            jafar.waking().lampSays(new Genie.Activity.MakingTheSandbox()).canSleep()
+
+        and: 'not while Genies joins its lamp, nor asleep'
+            !jafar.waking().withActivity(new Genie.Activity.JoiningLitElsewhere()).canSleep()
+            !jafar.waking().withActivity(new Genie.Activity.JoiningLeftRunning()).canSleep()
+            !jafar.asleep().canSleep()
+    }
+
+    def 'Waking a genie whose lamp runs already joins it, rather than lighting it a second time'() {
+        reportInfo """
+            Let's consider Jafar, whose lamp a Genies that closed left running, and a Genies that
+            did not find it then: it was still starting, say. The user presses Wake. Lighting the
+            lamp again would find it taken, and leave Jafar broken. `GenieRunner.wake` joins the
+            lamp that runs instead, and Jafar is awake in it.
+        """
+        given: 'Jafar\'s lamp, left running by a Genies that closed'
+            awake()
+            runner.leaveRunningAndWait(30)
+            assert Lamp.at(lamp).isRunning()
+
+        and: 'a Genies that holds no lamp of Jafar\'s'
+            synchronized (this) { genie = Genie.named('Jafar') }
+            runner = new GenieRunner(lamp, lighter(), { UnaryOperator<Genie> change ->
+                synchronized (this) { genie = change.apply(genie) }
+            } as Consumer)
+            var engines = host.engines.size()
+
+        when: 'the user wakes Jafar'
+            runner.wake('Jafar', Settings.defaults(), 'sk-key', LampWallpaper.WAVES_DARK)
+            waitUntil { genie.phase() == Genie.Phase.READY }
+
+        then: 'Genies joined the lamp, and lit nothing'
+            host.engines.drop(engines)*.arguments*.first() == ['follow']
             runner.isAwake()
     }
 
@@ -794,14 +951,32 @@ class KeepingAGenieAliveSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
-            noted(real.light(directory, name, lang, settings, key, wallpaper, progress, events))
+        var light = { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
+            noted(real.light(directory, name, lang, settings, key, wallpaper, progress, events, starting))
         }
         var join = { Path directory, Consumer<LampEvent> events ->
             real.join(directory, events).map { noted(it) }
         }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
                 unlit: { Path directory -> real.unlit(directory) }] as LampLighter
+    }
+
+    /** oillamp's engine in this JVM, through the Lamp API, noting every event its lamps report in `heard`. */
+    private LampLighter lighterNoting(List<LampEvent> heard) {
+        var real = lighter()
+        return [light: { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
+                    real.light(directory, name, lang, settings, key, wallpaper, progress, { LampEvent event ->
+                        heard << event
+                        events.accept(event)
+                    } as Consumer<LampEvent>, starting)
+                },
+                isLit: { Path directory -> real.isLit(directory) },
+                unlit: { Path directory -> real.unlit(directory) }] as LampLighter
+    }
+
+    /** Whether the lamp has begun to build its sandbox image, as `heard` tells. */
+    private static boolean buildingTheImage(List<LampEvent> heard) {
+        heard.any { it instanceof LampEvent.StepStarted && it.step().kind() == 'BuildImage' }
     }
 
     /** `lit`, except that putting it out is noted. */

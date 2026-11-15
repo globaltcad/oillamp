@@ -996,7 +996,8 @@ public final class GeniesView extends JPanel {
         Val<Boolean> working = phase.viewAs(Boolean.class, it -> it == Genie.Phase.WORKING);
         Val<Boolean> wide = state.viewAs(Boolean.class, GeniesState::roomForWords);
         // A quick way to sleep, while the header has room; in a narrow one, the genie's actions have it.
-        Val<Boolean> canSleepHere = Viewable.of(Boolean.class, phase, state, (it, s) -> it.isAwake() && s.roomForPages());
+        // A genie whose lamp is still being lit can be put to sleep too: its lamp stops starting.
+        Val<Boolean> canSleepHere = Viewable.of(Boolean.class, genie, state, (it, s) -> it.canSleep() && s.roomForPages());
         // The list of genies says when something went wrong; while it is hidden, the header does.
         Val<Boolean> hiddenTroubles = state.viewAs(Boolean.class, it -> !it.genieList().shown() && !it.troubles().isEmpty());
         return
@@ -2134,10 +2135,11 @@ public final class GeniesView extends JPanel {
                 .add(ViewPartsUtil.item(words.SAVE_NOW_ELLIPSIS(), shown.history().busy().isEmpty(), () -> historyPage.save(this)))
                 .add(ViewPartsUtil.item(words.LINK_ITS_WORKSPACE_INTO(String.valueOf(app.documents().getFileName())), true, () -> linkWorkspace(id)))
                 .peek(JPopupMenu::addSeparator)
-                .applyIf(now.isAwake(), ui1 -> ui1
+                // A genie whose lamp is still being lit can be put to sleep too: its lamp stops starting.
+                .applyIf(shown.canSleep(), ui1 -> ui1
                     .add(ViewPartsUtil.item(words.SLEEP(), true, () -> app.sleep(id)))
                 )
-                .applyIf(!now.isAwake(), ui1 -> ui1
+                .applyIf(!shown.canSleep(), ui1 -> ui1
                     .add(ViewPartsUtil.item(wake, !now.isBetween() && !shown.lampGone(), () -> app.wake(id)))
                 )
                 .peek(JPopupMenu::addSeparator)

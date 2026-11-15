@@ -205,6 +205,17 @@ break it. A lamp Genies joined (see below) is ended with
 progress going until `oillamp stop`. If Genies is killed instead, without being asked, each engine
 notices that its standard input closed and shuts down by itself.
 
+A genie still waking is not waited for, as its lamp may take minutes to start. `light` hands
+`GenieRunner` the starting lamp (`LampLighter.Starting`) before it runs. Putting the genie to sleep,
+from its header, its menu or its Actions page, closes it: the engine stops starting, as for a Ctrl-C,
+and the genie falls asleep within seconds. So do *Put to sleep* and deleting the genie. *Keep
+running* leaves it to start, and run, on its own, and Genies closes at once. Until that lamp runs,
+nothing can join it: a Genies opened meanwhile shows the genie asleep, and joins the lamp once it
+runs, when it looks for lamps, every minute, or when the user wakes the genie, as Wake joins any
+lamp that runs already. Woken before then, the genie says its lamp is busy. A genie whose lamp is
+being joined, which takes moments, offers no Sleep: its session is not Genies' to end before
+Genies has joined it.
+
 **Opening Genies** looks for a lamp left running under every genie (`LampDirectory.isRunning`) and
 joins it (`LampDirectory.join`, which runs `oillamp follow <lamp> --embedded`). The session's
 catch-up comes first and ends with an `AgentStatus`; `GenieRunner` holds those events back until

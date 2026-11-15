@@ -398,8 +398,8 @@ class ChoosingTheGeniesModelSpec extends Specification {
     /** oillamp's engine in this JVM, through the Lamp API, noting when the genie's lamp is put out. */
     private LampLighter lighter() {
         var real = new LampLighterImpl(host.launcher)
-        var light = { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events ->
-            noted(real.light(directory, name, lang, settings, key, wallpaper, progress, events))
+        var light = { Path directory, String name, Lang lang, Settings settings, String key, LampWallpaper wallpaper, Consumer<Genie.Activity> progress, Consumer<LampEvent> events, Consumer<LampLighter.Starting> starting ->
+            noted(real.light(directory, name, lang, settings, key, wallpaper, progress, events, starting))
         }
         var join = { Path directory, Consumer<LampEvent> events -> real.join(directory, events).map { noted(it) } }
         return [light: light, join: join, isLit: { Path directory -> real.isLit(directory) },
