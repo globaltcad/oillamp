@@ -12,7 +12,9 @@ import sprouts.HasId;
 ///              streams in
 /// @param kind  who or what the entry is from
 /// @param title a short heading: the tool's name, the file's name, or nothing
-/// @param text  the message, or what a tool does, such as the command it runs
+/// @param text  the message, or what a tool does, in one short line, such as the command it runs
+/// @param input for a tool, what it does as the genie wrote it, all of it, such as the whole
+///              command; otherwise nothing
 /// @param detail what a tool printed, or nothing
 /// @param ref   pi's id for a tool call, which the call's result refers to; for a question of the
 ///              user's, pi's id for it, once known; or nothing
@@ -29,6 +31,7 @@ public record Entry(
     Kind kind,
     String title,
     String text,
+    String input,
     String detail,
     String ref,
     State state,
@@ -49,7 +52,7 @@ public record Entry(
 
     /// An entry of `kind` that the app words, as `notice` says, such as a file handed over.
     public static Entry of(Kind kind, Notice notice) {
-        return new Entry(UUID.randomUUID(), kind, "", "", "", "", State.DONE, false, false, "", Optional.of(notice));
+        return new Entry(UUID.randomUUID(), kind, "", "", "", "", "", State.DONE, false, false, "", Optional.of(notice));
     }
 
     /// What it says, in `lang`: its [#notice] in that language, or its [#text] as it was written.
@@ -58,20 +61,21 @@ public record Entry(
     }
 
     public static Entry of(Kind kind, String text) {
-        return new Entry(UUID.randomUUID(), kind, "", text, "", "", State.DONE, false, false, "", Optional.empty());
+        return new Entry(UUID.randomUUID(), kind, "", text, "", "", "", State.DONE, false, false, "", Optional.empty());
     }
 
-    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
-    public Entry withText(String text)     { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
-    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
-    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
-    public Entry withState(State state)    { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withTitle(String title)   { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withText(String text)     { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withInput(String input)   { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withDetail(String detail) { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withRef(String ref)       { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withState(State state)    { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
 
-    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withExpanded(boolean expanded) { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
 
-    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withBeforeTools(boolean beforeTools) { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
 
-    public Entry withModel(String model) { return new Entry(id, kind, title, text, detail, ref, state, expanded, beforeTools, model, notice); }
+    public Entry withModel(String model) { return new Entry(id, kind, title, text, input, detail, ref, state, expanded, beforeTools, model, notice); }
 
     /// What the chat says about the entry when the user points at it: for an answer, which model
     /// wrote it. Nothing when that is not known, so that nothing is shown.

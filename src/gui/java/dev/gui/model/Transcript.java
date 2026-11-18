@@ -77,6 +77,7 @@ public record Transcript(Tuple<Entry> entries) {
                 .beforeTools()
                 .add(
                     Entry.of(Entry.Kind.TOOL, tool.summary())
+                    .withInput(tool.input())
                     .withTitle(tool.tool())
                     .withRef(tool.call())
                     .withState(Entry.State.WRITING)

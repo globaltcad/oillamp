@@ -17,8 +17,9 @@ public sealed interface PiEvent {
     ///
     /// @param call    pi's id for this use of the tool, repeated in [ToolFinished]
     /// @param tool    the tool's name, such as `bash` or `write`
-    /// @param summary what it does, in one line, such as the command being run
-    record ToolStarted(String call, String tool, String summary) implements PiEvent {}
+    /// @param summary what it does, in one short line, such as the command being run
+    /// @param input   what it does as the genie wrote it, all of it, such as the whole command
+    record ToolStarted(String call, String tool, String summary, String input) implements PiEvent {}
 
     /// A tool the genie used finished.
     ///

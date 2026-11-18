@@ -297,6 +297,7 @@ final class ChatRows {
                     label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸"))
                     .withStyle(palette, (p, it) -> it.componentFont(f -> f.size(12).color(p.SUBTEXT())))
                 ),
+                6,
                 box().withMinSize(0, 0).isVisibleIf(expanded)
                 .withStyle(Themed.of(entry.viewAsString(Entry::text), theme), (themed, it) -> {
                     var thoughts = themed.item();
@@ -345,6 +346,7 @@ final class ChatRows {
                             .isVisibleIf(waiting.viewAs(Boolean.class, it -> !it.time().isEmpty()))
                             .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(12).color(now.palette().SUBTEXT())))
                         ),
+                        6,
                         box().isVisibleIf(Val.of(false))
                     )
                     .withTooltip(Viewable.of(String.class, waiting, words, (it, chat) ->
@@ -438,16 +440,16 @@ final class ChatRows {
     private record Glow(boolean moving, double at) {}
 
     /// The shape of a tool's or a thought's row: a line of its own, on smoke, with an optional
-    /// part below that shows when it is expanded. Left of it, under the genies beside the
-    /// answers, stands `beside`: the genie, or nothing.
-    private UIForPanel<JPanel> strip(UIForAnySwing<?, ?> beside, UIForAnySwing<?, ?> line, UIForAnySwing<?, ?> below) {
+    /// part below that shows when it is expanded, `gap` below the line. Left of it, under the
+    /// genies beside the answers, stands `beside`: the genie, or nothing.
+    private UIForPanel<JPanel> strip(UIForAnySwing<?, ?> beside, UIForAnySwing<?, ?> line, int gap, UIForAnySwing<?, ?> below) {
         return
             panel("fill, ins 0, gap 8, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .withCursor(UI.Cursor.HAND)
             .add("top", beside)
             .add("growx, wmin 0",
-                panel("fill, wrap 1, ins 5 10 5 10, gap 6, hidemode 3", "[grow]")
+                panel("fill, wrap 1, ins 5 10 5 10, gap " + gap + ", hidemode 3", "[grow]")
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.SMOKE()).borderRadius(8).margin(2, 0, 2, 0))
                 .add("growx, wmin 0", line)
                 .add("growx, wmin 0", below)
@@ -457,21 +459,42 @@ final class ChatRows {
     // ─── a tool the genie used ─────────────────────────────────────────────────────────────
 
     /// One line saying what the tool does, and how it went. Click it to see what the tool
-    /// printed, right there in the conversation.
+    /// printed, right there in the conversation. A fine line then separates the two: click it
+    /// to read all of what the tool does, such as a command too long for its line, and click it
+    /// again to cut it short.
     private UIForAnySwing<?, ?> tool(Var<Entry> entry) {
         Val<Boolean> expanded = entry.viewAs(Boolean.class, it -> it.expanded() && !it.detail().isBlank());
         Val<Boolean> hasDetail = entry.viewAs(Boolean.class, it -> !it.detail().isBlank());
+        Var<Boolean> wholeChosen = Var.of(false);
+        Val<Boolean> whole = Viewable.of(Boolean.class, wholeChosen, expanded, (chosen, open) -> chosen && open);
+        Var<Boolean> lineHovered = Var.of(false);
         return
             strip(
                 box(),
-                box("fill, ins 0, gap 8, hidemode 3", "[][grow][][]")
+                // At the top, beside all of what the tool does, on as many lines as it takes.
+                box("fill, ins 0, gap 8, hidemode 3", "[][grow][][]", "[top]")
                 .add(
                     label("⚙ " + entry.get().title())
                     .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).weight(2f).color(now.palette().BRASS())))
                 )
                 .add("growx, wmin 0",
-                    label(entry.viewAsString(Entry::text))
-                    .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).color(now.palette().SUBTEXT())))
+                    box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]")
+                    .add("growx, wmin 0",
+                        label(entry.viewAsString(Entry::text)).isVisibleIf(whole.viewAs(Boolean.class, it -> !it))
+                        .withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().MONO()).size(12).color(now.palette().SUBTEXT())))
+                    )
+                    .add("growx, wmin 0",
+                        // All of it as the genie wrote it, its own line breaks kept.
+                        box().withMinSize(0, 0).isVisibleIf(whole)
+                        .withStyle(Themed.of(entry.viewAsString(Entry::input), theme), (themed, it) -> it
+                            .text(t -> t
+                                .content(StyledString.of(f -> f.family(themed.fonts().MONO()).size(12).color(themed.palette().SUBTEXT()), themed.item()))
+                                .placement(UI.Placement.TOP_LEFT)
+                                .wrapLines(true)
+                                .autoPreferredHeight(true)
+                            )
+                        )
+                    )
                 )
                 .add(
                     label(Viewable.of(String.class, entry, words, (it, chat) -> switch (it.state()) {
@@ -494,20 +517,42 @@ final class ChatRows {
                     label(entry.viewAsString(it -> it.expanded() ? "▾" : "▸")).isVisibleIf(hasDetail)
                     .withStyle(palette, (p, it) -> it.componentFont(f -> f.size(12).color(p.SUBTEXT())))
                 ),
-                box().withMinSize(0, 0).isVisibleIf(expanded)
-                .withStyle(Themed.of(entry.viewAsString(Entry::detail), theme), (themed, it) -> {
-                    var detail = themed.item();
-                    Palette p = themed.palette();
-                    return it
-                        .padding(6, 2, 2, 2)
-                        .borderAt(UI.Edge.TOP, 1, p.BORDER())
-                        .text(t -> t
-                            .content(StyledString.of(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), detail))
-                            .placement(UI.Placement.TOP_LEFT)
-                            .wrapLines(true)
-                            .autoPreferredHeight(true)
-                        );
-                })
+                // No gap: the fine line's box reaches up to the line above, and down to what the
+                // tool printed, so it is easy to click, and takes no more room than a gap, a line
+                // and the padding under it did.
+                0,
+                box("fill, wrap 1, ins 0, gap 0", "[grow]").isVisibleIf(expanded)
+                .add("growx, h 13!",
+                    // The fine line, 6 below the row's first line, stronger under the pointer,
+                    // which it takes from the row: a click on it shows all of what the tool does,
+                    // or cuts it short again.
+                    box()
+                    .withStyle(Themed.of(lineHovered, theme), (themed, it) -> themed.item()
+                        ? it.margin(5, 0, 0, 0).borderAt(UI.Edge.TOP, 2, themed.palette().BRASS())
+                        : it.margin(6, 0, 0, 0).borderAt(UI.Edge.TOP, 1, themed.palette().BORDER())
+                    )
+                    .withTooltip(Viewable.of(String.class, wholeChosen, words, (it, chat) ->
+                        it ? chat.CLICK_TO_CUT_IT_SHORT_AGAIN() : chat.CLICK_TO_SEE_ALL_OF_WHAT_IT_DOES()
+                    ))
+                    .onMouseEnter(_ -> lineHovered.set(From.VIEW, true))
+                    .onMouseExit(_ -> lineHovered.set(From.VIEW, false))
+                    .onMouseClick(_ -> wholeChosen.update(From.VIEW, it -> !it))
+                )
+                .add("growx, wmin 0",
+                    box().withMinSize(0, 0)
+                    .withStyle(Themed.of(entry.viewAsString(Entry::detail), theme), (themed, it) -> {
+                        var detail = themed.item();
+                        Palette p = themed.palette();
+                        return it
+                            .padding(0, 2, 2, 2)
+                            .text(t -> t
+                                .content(StyledString.of(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), detail))
+                                .placement(UI.Placement.TOP_LEFT)
+                                .wrapLines(true)
+                                .autoPreferredHeight(true)
+                            );
+                    })
+                )
             )
             .withTooltip(Viewable.of(String.class, entry, words, (it, chat) ->
                 it.detail().isBlank() ? it.title() + ": " + it.text() : chat.CLICK_TO_SEE_WHAT_IT_PRINTED()

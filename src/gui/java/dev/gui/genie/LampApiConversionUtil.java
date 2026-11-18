@@ -82,7 +82,7 @@ final class LampApiConversionUtil {
             case LampAgentProgress.Answered answered -> Optional.of(new PiEvent.Answered(
                     answered.failed() ? "" : answered.text(), answered.failed() ? answered.text() : "", 0,
                     answered.model().orElse("")));
-            case LampAgentProgress.ToolStarted tool -> Optional.of(new PiEvent.ToolStarted(tool.call(), tool.tool(), tool.summary()));
+            case LampAgentProgress.ToolStarted tool -> Optional.of(new PiEvent.ToolStarted(tool.call(), tool.tool(), tool.summary(), tool.input()));
             case LampAgentProgress.ToolFinished tool -> Optional.of(new PiEvent.ToolFinished(tool.call(), tool.failed(), tool.output()));
             case LampAgentProgress.Retrying retrying -> Optional.of(new PiEvent.Retrying(retrying.attempt(), retrying.most(), retrying.why()));
         };

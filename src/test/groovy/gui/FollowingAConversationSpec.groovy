@@ -84,8 +84,8 @@ class FollowingAConversationSpec extends Specification {
         when:
             var working = genie.withDraft('what is in my outbox?').send()
                     .hear(new PiEvent.Thinking(''))
-                    .hear(new PiEvent.ToolStarted('call_1', 'bash', 'ls ~/outbox'))
-                    .hear(new PiEvent.ToolStarted('call_2', 'read', '~/outbox/notes.md'))
+                    .hear(new PiEvent.ToolStarted('call_1', 'bash', 'ls ~/outbox', 'ls ~/outbox'))
+                    .hear(new PiEvent.ToolStarted('call_2', 'read', '~/outbox/notes.md', '~/outbox/notes.md'))
                     .hear(new PiEvent.ToolFinished('call_1', false, 'notes.md'))
                     .hear(new PiEvent.ToolFinished('call_2', true, 'permission denied'))
 
@@ -98,6 +98,29 @@ class FollowingAConversationSpec extends Specification {
             entries[1].state() == Entry.State.DONE
             entries[2].state() == Entry.State.FAILED
             working.activity() == new Genie.Activity.Using('read')
+    }
+
+    def 'A tool\'s entry keeps its short summary to show on one line, and all of what it does to show when asked'() {
+        reportInfo """
+            Let's consider a genie that runs a long `bash` command of two lines. oillamp reports
+            the tool with its `summary`, one shortened line, and its `input`, the command as the
+            genie wrote it. The chat shows the summary on the tool's row, and all of the command
+            when the user asks to read it, so the conversation entry of the tool keeps both: the
+            summary as its `text`, and the whole command, line breaks and all, as its `input`.
+        """
+        given: 'a command of two lines, and the shortened summary oillamp gives it'
+            var command = 'find ~/workspace -name "*.java" -print0 |\nxargs -0 grep -n -E "TODO|FIXME" > ~/outbox/todos.txt'
+            var summary = 'find ~/workspace -name "*.java" -print0 | ⏎ xargs -0 grep -n -E "TODO|FIXME" > ~/outb…'
+
+        when: 'the genie starts running the command with `bash`'
+            var working = genie.withDraft('which TODOs are left?').send()
+                    .hear(new PiEvent.ToolStarted('call_1', 'bash', summary, command))
+
+        then: 'the tool\'s entry holds the summary as its `text`, and the whole command as its `input`'
+            var tool = working.transcript().entries().last()
+            tool.kind() == Entry.Kind.TOOL
+            tool.text() == summary
+            tool.input() == command
     }
 
     def 'A genie whose model shares its thoughts can be watched thinking'() {
@@ -264,9 +287,9 @@ class FollowingAConversationSpec extends Specification {
             var worked = genie.withDraft('tidy up').send()
                     .hear(new PiEvent.Said('Let me look.'))
                     .hear(new PiEvent.Answered('Let me look.', '', 0, ''))
-                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'ls'))
+                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'ls', 'ls'))
                     .hear(new PiEvent.ToolFinished('c1', false, 'notes.md'))
-                    .hear(new PiEvent.ToolStarted('c2', 'bash', 'rm -r tmp'))
+                    .hear(new PiEvent.ToolStarted('c2', 'bash', 'rm -r tmp', 'rm -r tmp'))
                     .hear(new PiEvent.ToolFinished('c2', false, ''))
                     .hear(new PiEvent.Said('Done.'))
                     .hear(new PiEvent.Answered('Done.', '', 0, ''))
@@ -348,7 +371,7 @@ class FollowingAConversationSpec extends Specification {
         """
         given:
             var answered = genie.withDraft('draw me a map').send()
-                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'draw-map'))
+                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'draw-map', 'draw-map'))
                     .hear(new PiEvent.Answered('Here it is.', '', 10, ''))
                     .hear(new PiEvent.Settled())
 
@@ -404,7 +427,7 @@ class FollowingAConversationSpec extends Specification {
         given:
             var line = { boolean fromUser, String text, String id -> new PiEvent.History.Line(fromUser, text, id, false, false, '') }
             var talked = genie.withDraft('Plan a trip').send()
-                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'look up trains'))
+                    .hear(new PiEvent.ToolStarted('c1', 'bash', 'look up trains', 'look up trains'))
                     .hear(new PiEvent.Answered('Where to?', '', 10, ''))
                     .hear(new PiEvent.Settled())
                     .learn(new PiEvent.History(Tuple.of(PiEvent.History.Line,
@@ -484,7 +507,7 @@ class FollowingAConversationSpec extends Specification {
         """
         given:
             var interrupted = genie.withDraft('hi').send().hear(new PiEvent.Said('Once upon'))
-                    .hear(new PiEvent.ToolStarted('c', 'bash', 'sleep 100'))
+                    .hear(new PiEvent.ToolStarted('c', 'bash', 'sleep 100', 'sleep 100'))
 
         expect:
             interrupted.asleep().transcript().entries().every { !it.isWriting() }
