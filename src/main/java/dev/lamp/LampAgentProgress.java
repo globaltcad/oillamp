@@ -22,10 +22,13 @@ public sealed interface LampAgentProgress {
     record Answered(String text, boolean failed, Optional<String> model) implements LampAgentProgress {}
     /// A tool call began.
     ///
-    /// @param call    the id the matching [ToolFinished] has
-    /// @param summary the command for `bash`, the path for the file tools, otherwise the
-    ///                arguments as JSON; one line, at most 160 characters
-    record ToolStarted(String call, String tool, String summary) implements LampAgentProgress {}
+    /// @param call  the id the matching [ToolFinished] has
+    /// @param input what the tool was given, as the agent wrote it: the command for `bash`, the
+    ///              path for the file tools, otherwise the arguments as JSON
+    record ToolStarted(String call, String tool, String input) implements LampAgentProgress {
+        /// [#input] on one line, its line breaks shown as " ⏎ ", at most 160 characters.
+        public String summary() { return InternalToolSummaryUtil.summaryOf(input); }
+    }
     /// A tool call ended.
     ///
     /// @param failed the tool reported an error

@@ -36,6 +36,13 @@ streams its answers the way pi does.
 @Timeout(value = 120, unit = TimeUnit.SECONDS)
 class Following_A_Run_Spec extends Specification {
 
+    /// A `bash` command of 267 characters, longer than one line of a chat window.
+    static final String LONG_COMMAND =
+        'find ~/workspace -name "*.java" -not -path "*/build/*" -print0 ' +
+        '| xargs -0 grep -n -E "TODO|FIXME" | sort -t: -k1,1 -k2,2n ' +
+        '| awk -F: \'{ print $1 }\' | uniq -c | sort -rn | head -n 40 ' +
+        '> ~/outbox/open-todos.txt && wc -l ~/outbox/open-todos.txt && echo "the list is ready"'
+
     @TempDir Path tmp
     ScenarioHost host
 
@@ -56,6 +63,7 @@ class Following_A_Run_Spec extends Specification {
             prompts << prompt
             if (prompt.startsWith('wait')) release.await()
             if (prompt.startsWith('forever')) Thread.sleep(60_000)
+            if (prompt.startsWith('todos')) return '⚙ bash: ' + LONG_COMMAND + '\nThe list is in ~/outbox.'
             if (prompt.startsWith('files')) {
                 Files.writeString(Lamp.agentHome(lamp).orElseThrow().resolve('workspace/list.txt'), 'a\nb\n')
                 return '⚙ bash: ls ~/workspace\nThere are two files here.'
@@ -105,6 +113,29 @@ class Following_A_Run_Spec extends Specification {
             finished.outcome() == LampRunOutcome.FINISHED
             finished.answer() == 'There are two files here.'
             finished.snapshot().isPresent()
+    }
+
+    def '`ToolStarted` carries a long command whole as its `input`, and shortened as its `summary`'() {
+        reportInfo """
+            Let's consider a chat app built on oillamp that shows each tool the agent runs: one
+            short line per tool in a list, and the whole command for a user who wants to read
+            it before trusting what it printed. The `ToolStarted` progress, which oillamp sends
+            while the run goes on, carries both. Its `input` is the command as the agent wrote
+            it, however long. Its `summary` is worked out from the input: one line of at most
+            160 characters, cut short with "…".
+        """
+        when: '`Lamp.send` hands over a question, which the agent answers by running a `bash` command of 267 characters'
+            var run = held.send(LampPrompt.fresh('todos, please'))
+            waitFor(LampEvent.RunFinished) { it.run().id() == run.id() }
+
+        then: 'the `input` of the `ToolStarted` progress is the whole command'
+            LONG_COMMAND.length() == 267
+            var tool = progressOf(run.id()).find { it instanceof LampAgentProgress.ToolStarted }
+            tool.tool() == 'bash'
+            tool.input() == LONG_COMMAND
+
+        and: 'its `summary` is the command\'s first 159 characters and "…"'
+            tool.summary() == LONG_COMMAND.substring(0, 159) + '…'
     }
 
     def '`Lamp.agentStatus` names the run the agent works on, and the runs waiting behind it'() {

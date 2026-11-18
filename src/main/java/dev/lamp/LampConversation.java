@@ -76,9 +76,12 @@ public record LampConversation(
 
     /// A tool an answer called.
     ///
-    /// @param summary the command for `bash`, the path for the file tools, otherwise the
-    ///                arguments as JSON; one line, at most 160 characters
-    public record ToolCall(String id, String name, String summary) {}
+    /// @param input what the tool was given, as the agent wrote it: the command for `bash`, the
+    ///              path for the file tools, otherwise the arguments as JSON
+    public record ToolCall(String id, String name, String input) {
+        /// [#input] on one line, its line breaks shown as " ⏎ ", at most 160 characters.
+        public String summary() { return InternalToolSummaryUtil.summaryOf(input); }
+    }
 
     /// How the conversation is shown: its name, or its first question.
     public String title() {

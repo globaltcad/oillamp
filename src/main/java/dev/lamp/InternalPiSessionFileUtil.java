@@ -29,9 +29,6 @@ final class InternalPiSessionFileUtil {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /// How long a tool call's summary may be, in characters.
-    private static final int SUMMARY_LENGTH = 160;
-
     /// Reads the lines of one session file.
     ///
     /// @param file where the file is, relative to the agent's home
@@ -141,20 +138,15 @@ final class InternalPiSessionFileUtil {
         for (JsonNode block : content)
             if (block.path("type").asText().equals("toolCall"))
                 calls = calls.add(new LampConversation.ToolCall(block.path("id").asText(""),
-                        block.path("name").asText(""), summary(block.path("arguments"))));
+                        block.path("name").asText(""), input(block.path("arguments"))));
         return calls;
     }
 
-    /// One line saying what a tool call does: the command for `bash`, the file for the file
-    /// tools, and the arguments as JSON for anything else.
-    static String summary(JsonNode arguments) {
+    /// What a tool call was given, as the agent wrote it: the command for `bash`, the file for
+    /// the file tools, and the arguments as JSON for anything else.
+    static String input(JsonNode arguments) {
         for (String field : new String[] {"command", "path", "file_path", "pattern", "url"})
-            if (arguments.path(field).isTextual()) return oneLine(arguments.path(field).asText());
-        return oneLine(arguments.isMissingNode() || arguments.isNull() ? "" : arguments.toString());
-    }
-
-    private static String oneLine(String text) {
-        String line = text.strip().replaceAll("\\s*\\n\\s*", " ⏎ ");
-        return line.length() <= SUMMARY_LENGTH ? line : line.substring(0, SUMMARY_LENGTH - 1) + "…";
+            if (arguments.path(field).isTextual()) return arguments.path(field).asText();
+        return arguments.isMissingNode() || arguments.isNull() ? "" : arguments.toString();
     }
 }

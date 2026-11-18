@@ -157,6 +157,36 @@ class Reading_The_Agents_Conversations_Spec extends Specification {
             failed.text() == '403: model not allowed'
     }
 
+    def 'A tool call in a conversation carries its command whole as its `input`, and shortened as its `summary`'() {
+        reportInfo """
+            Let's consider a chat app that shows a conversation the agent had earlier, with each
+            tool it ran, and a user who wants to read a long `bash` command in it. The answer's
+            `ToolCall`, read with `Lamp.conversations`, carries the command as the agent wrote
+            it, line breaks and all, as its `input`. Its `summary` is worked out from the
+            input: one line, the line breaks shown as " ⏎ ", of at most 160 characters, cut
+            short with "…".
+        """
+        given: 'an answer that runs a `bash` command of two lines, 209 characters in all'
+            var first = 'find ~/workspace -name "*.java" -not -path "*/build/*" -print0 | xargs -0 grep -n -E "TODO|FIXME"'
+            var second = 'sort -t: -k1,1 -k2,2n | uniq -c | sort -rn | head -n 40 > ~/outbox/open-todos.txt && echo "the list is ready"'
+            conversation('01a0ec69-de1c-7234-914c-b970a862c13f', '2026-09-28T10:00:00Z') {
+                question 'q1', 'Which TODOs are left?'
+                entry id: 'a1', parentId: 'q1', message: [role: 'assistant', stopReason: 'toolUse', content: [
+                        [type: 'toolCall', id: 'call-1', name: 'bash', arguments: [command: first + ' |\n' + second]]]]
+            }
+
+        when: '`Lamp.conversations` reads the conversation\'s line'
+            var line = Lamp.conversations(lamp).first().line()
+
+        then: 'the `input` of the call is the whole command, on its two lines'
+            (first + ' |\n' + second).length() == 209
+            var call = line.find { it.id() == 'a1' }.calls().first()
+            call.input() == first + ' |\n' + second
+
+        and: 'its `summary` is the command on one line, cut short after 159 characters'
+            call.summary() == (first + ' | ⏎ ' + second).substring(0, 159) + '…'
+    }
+
     def '`Lamp.conversations` does not follow links or trust files that the agent left among its conversations'() {
         reportInfo """
             The agent writes these files and can write anything there: a link to a file of the

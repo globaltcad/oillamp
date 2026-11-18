@@ -269,7 +269,7 @@ final class Harness implements AutoCloseable {
                     }
                 }
                 case "tool_execution_start" -> progress.accept(new LampAgentProgress.ToolStarted(
-                        event.path("toolCallId").asText(), event.path("toolName").asText(), summary(event.path("args"))));
+                        event.path("toolCallId").asText(), event.path("toolName").asText(), input(event.path("args"))));
                 case "tool_execution_end" -> {
                     String output = text(event.path("result").path("content"));
                     progress.accept(new LampAgentProgress.ToolFinished(event.path("toolCallId").asText(),
@@ -371,17 +371,12 @@ final class Harness implements AutoCloseable {
     /// Asks the current run to stop, and every later one not to start: the session is ending.
     void stop() { stopping = true; }
 
-    /// One line saying what a tool call does: the command for `bash`, the file for the file tools,
-    /// and the arguments as JSON for anything else.
-    private static String summary(JsonNode arguments) {
+    /// What a tool call was given, as the agent wrote it: the command for `bash`, the file for
+    /// the file tools, and the arguments as JSON for anything else.
+    private static String input(JsonNode arguments) {
         for (String field : new String[] {"command", "path", "file_path", "pattern", "url"})
-            if (arguments.path(field).isTextual()) return oneLine(arguments.path(field).asText());
-        return oneLine(arguments.isMissingNode() || arguments.isNull() ? "" : arguments.toString());
-    }
-
-    private static String oneLine(String text) {
-        String line = text.strip().replaceAll("\\s*\\n\\s*", " ⏎ ");
-        return line.length() <= 160 ? line : line.substring(0, 159) + "…";
+            if (arguments.path(field).isTextual()) return arguments.path(field).asText();
+        return arguments.isMissingNode() || arguments.isNull() ? "" : arguments.toString();
     }
 
     /// Ends pi, if it runs.
