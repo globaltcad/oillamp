@@ -2107,6 +2107,26 @@ public enum Lang {
             };
         }
 
+        public String CLICK_TO_SEE_ALL_OF_WHAT_IT_DOES() {
+            return switch (lang) {
+                case ENGLISH -> "Click to see all of what it does";
+                case GERMAN -> "Klicken, um alles zu sehen, was es tut";
+                case SPANISH -> "Haz clic para ver todo lo que hace";
+                case JAPANESE -> "クリックで内容をすべて表示";
+                case CHINESE -> "点击查看完整内容";
+            };
+        }
+
+        public String CLICK_TO_CUT_IT_SHORT_AGAIN() {
+            return switch (lang) {
+                case ENGLISH -> "Click to cut it short again";
+                case GERMAN -> "Klicken, um es wieder zu kürzen";
+                case SPANISH -> "Haz clic para acortarlo de nuevo";
+                case JAPANESE -> "クリックで再び短く表示";
+                case CHINESE -> "点击再次缩短";
+            };
+        }
+
         public String CLICK_TO_SEE_WHAT_IT_PRINTED() {
             return switch (lang) {
                 case ENGLISH -> "Click to see what it printed";
