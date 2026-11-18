@@ -252,8 +252,7 @@ final class Look extends StyleSheet {
 
     /// `it`, an island in the sea: on `ground`, its corners rounded, with no line around it. What
     /// stands it apart from its neighbours is the canal between them. The sea in its margin and
-    /// its corners is the window's own, behind it: an island has no foundation colour, which on
-    /// a scroll pane would flood its ground with the sea.
+    /// its corners is the window's own, behind it: an island has no foundation colour.
     private static <C extends JComponent> ComponentStyleDelegate<C> island(Palette p, Color ground, ComponentStyleDelegate<C> it) {
         return it
             .backgroundColor(ground)

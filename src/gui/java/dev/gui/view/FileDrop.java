@@ -33,10 +33,9 @@ import java.util.function.Consumer;
 ///
 /// Every part of the conversation that should take files is made a drop site with [#on]. AWT
 /// hands a drag to the innermost component under the pointer that has a site, and Swing gives
-/// one to every component with a transfer handler: a text area, for text, and an answer whose
-/// text can be selected, for copying. Over such a part, the drag would leave the conversation
-/// and be refused. The composer and the answers are therefore sites of this kind too; the
-/// composer still takes text in where it is dropped.
+/// one to every text area, for text. Over the composer, the drag would leave the conversation
+/// and be refused. The composer is therefore a site of this kind too, and still takes text in
+/// where it is dropped.
 ///
 /// While files are over a site that takes them, [#catching()] is true, for the conversation to
 /// show that letting go gives them. A drag that moves from one site into another leaves the one
