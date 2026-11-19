@@ -550,32 +550,42 @@ banner, and the user clicks the button again to see what the change would throw 
 Experimental, like the feature in oillamp ([HOST-ACCESS.md](HOST-ACCESS.md)). Never turn it on on
 a computer with sensitive data.
 
-A genie may be let reach this computer: read a document, write a file, run a program. oillamp's
-checker model judges each request before it happens, against the user's own rules. Genies has no
-permission system of its own: the page only writes the rules down.
+A genie may be let reach this computer: read a document, write a file, run a command. Genies has
+no permission system of its own: the page only writes down the five settings a person decides on
+in the `[host_access]` table of the genie's lamp, and oillamp enforces them.
 
-**The page**, "Access" in the switch between a genie's pages, has the switch ("No" / "Yes"),
-with the note that the feature is experimental beside it, and three texts: the folders the genie
-may read, the folders it may read and change, one per line, and anything else in the user's own
-words. On a wide page the three stand side by side. What they say is only checked for a warning,
-such as a line that is not a path: the model that judges reads words, so "everything" is a rule
-it understands, and Save writes whatever they say. Save writes them into the genie's lamp with
-`LampDirectory.hostAccess(enabled, requirements)`: `enabled` and `requirements` under
-`[host_access]` in its `oillamp.toml`, nothing else. The requirements are the rules as JSON
-(`HostAccess.PermissionRules`, pure), which the checker reads as it reads any words:
+**The page**, "Access" in the switch between a genie's pages, reads top to bottom in the order of
+the file, under its title and the note that the feature is experimental:
 
-```json
-{
-  "written_by" : "Genies, from the genie's host access page",
-  "rule" : "Allow a request only when these settings allow it. Refuse everything else.",
-  "folders_it_may_read" : [ "~/Documents" ],
-  "folders_it_may_read_and_change" : [ "~/Notes" ],
-  "in_the_users_own_words" : "Never open my tax returns."
-}
-```
+| On the page | In the lamp's file |
+|---|---|
+| "What may Jafar do on this computer?": Nothing, Read, Read & change, or Read, change & run commands | `may`, a ladder |
+| "What guards each request?": Allowlists, Allowlists + checker, or Allowlists + checker + you | `guards`, a chain |
+| "Folders it may read", one per line | `read_allowlist` |
+| "Folders it may read and change", one per line | `change_allowlist` |
+| "Instructions for the checker", free text | `checker_instructions` |
 
-Requirements that are not this JSON, such as rules a person wrote into the file by hand, show as
-the user's own words, so nothing of them is lost.
+Each choice is a switch whose parts stand in a row on a page wide enough for them in every
+language, and one under the other on a narrower one; under it, what the chosen part means, and
+the others say it as a tooltip. On a wide page the two choices stand side by side, each in a
+column of its own, and so do the two allowlists. The
+instructions are the user's own words, kept as they wrote them: the checker, another AI model,
+reads them with every request. With the allowlists alone no checker reads them, and the page
+says so and dims them, but keeps them. A `?` beside the title unfolds how a request travels: the
+allowlists, which oillamp checks itself, the checker, the user where asked, and then it happens;
+and that a command, once allowed, is not fenced by the allowlists beyond the folder it starts
+in.
+
+Commands with the allowlists alone as their guard, `read_change_run` with `allowlists`, run with
+nothing judging them. The page allows it, as oillamp does, and shows a red warning under the
+guards while it is chosen (`HostAccess.Rules.runsCommandsUnchecked`).
+
+Save writes the five settings with `LampDirectory.hostAccess(Lamp.HostAccess)`, the allowlists as
+lists of folders, and the page then shows what the file has. What oillamp would refuse, the page
+says beside Save instead of sending it (`HostAccess.Rules.mistake`): a line that is not `~`,
+`~/…` or an absolute folder, a folder with a colon, or no instructions while a checker is among
+the guards of a genie that may do something. A lamp an older Genies wrote has the JSON it once
+built as its instructions; the page shows it as the text it is.
 
 **Only while it sleeps.** A lamp reads its file as it wakes, so while the genie is awake, or
 waking, the page shows the rules greyed and cannot change them, and a banner says to send it to
@@ -584,11 +594,12 @@ that never woke has no lamp yet, and the page says to wake it once first. `HostA
 reads the rules when the page comes on show, and for every genie as Genies starts, so that a
 genie's card can say "may reach this computer".
 
-**Requests for permission.** Some requests the checker allowed need the user too, such as running
-a program. The lamp reports a `HostAccessAsked`; a banner under the header, on every page of that
-genie, shows the request with Allow and Refuse, which call `Lamp.decidePermission`. The card says
-"asks you to allow something" meanwhile. The lamp refuses a request nobody decided about within a
-minute, and the banner lets it go then.
+**Requests for permission.** With "Allowlists + checker + you", the user decides too, after the
+checker allowed a request: about every command, and about a path outside the allowlists. The lamp
+reports a `HostAccessAsked`; a banner under the header, on every page of that genie, shows the
+request with Allow and Refuse, which call `Lamp.decidePermission`. The card says "asks you to
+allow something" meanwhile. The lamp refuses a request nobody decided about within a minute, and
+the banner lets it go then.
 
 ## The desktop
 

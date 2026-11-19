@@ -30,6 +30,7 @@ import dev.gui.model.GeniesState;
 import dev.gui.model.Notice;
 import dev.gui.model.History;
 import dev.gui.model.Home;
+import dev.gui.model.HostAccess;
 import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
@@ -608,9 +609,11 @@ public final class GeniesBackend implements Genies {
 
     // ─── the host access ───────────────────────────────────────────────────────────────────
 
-    /// Not while the genie is awake or waking: its lamp read the file as it woke.
+    /// Not while the genie is awake or waking: its lamp read the file as it woke. Nor rules
+    /// with a mistake, which oillamp would refuse; the page says what it is.
     @Override public void saveHostAccess(UUID id) {
-        if (asleep(id)) runner(id).hostAccess().save(state.get().find(id).orElseThrow().hostAccess().draft());
+        HostAccess.Rules draft = state.get().find(id).orElseThrow().hostAccess().draft();
+        if (asleep(id) && draft.mistake().isEmpty()) runner(id).hostAccess().save(draft);
     }
 
     @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }

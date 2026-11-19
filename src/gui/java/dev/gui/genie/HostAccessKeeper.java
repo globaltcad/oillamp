@@ -38,16 +38,17 @@ public final class HostAccessKeeper {
         this.changes = changes;
     }
 
-    /// Reads the switch, the rules, and when the user is asked, from the lamp's file. A genie
-    /// that never woke has no lamp yet, and so no rules: its host access is off.
+    /// Reads the rules from the lamp's file: what the genie may do, its guards, its allowlists
+    /// and the checker instructions. A genie that never woke has no lamp yet, and so no file:
+    /// its host access is off, as oillamp's defaults have it.
     public void read() {
         work.execute(() -> {
             if (Lamp.agentHome(directory).isEmpty()) {
-                change(it -> it.readAs(false, HostAccess.PermissionRules.OFF));
+                change(it -> it.readAs(false, HostAccess.Rules.DEFAULTS));
                 return;
             }
             try {
-                HostAccess.PermissionRules read = LampApiConversionUtil.permissionRules(lamp.hostAccess());
+                HostAccess.Rules read = LampApiConversionUtil.rules(lamp.hostAccess());
                 change(it -> it.readAs(true, read));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withProblem(new HostAccess.Problem.CouldNotRead(reason(failed))));
@@ -59,11 +60,11 @@ public final class HostAccessKeeper {
 
     /// Writes `rules`, the ones the page shows, into the lamp's file. The page then shows what
     /// the file has, or says why it could not be written.
-    public void save(HostAccess.PermissionRules rules) {
+    public void save(HostAccess.Rules rules) {
         change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
             try {
-                HostAccess.PermissionRules written = LampApiConversionUtil.permissionRules(lamp.hostAccess(LampApiConversionUtil.hostAccess(rules)));
+                HostAccess.Rules written = LampApiConversionUtil.rules(lamp.hostAccess(LampApiConversionUtil.hostAccess(rules)));
                 change(it -> it.readAs(true, written));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));

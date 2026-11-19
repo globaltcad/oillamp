@@ -194,21 +194,32 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             history.withNote(History.Note.NOTHING_CHANGED).noProblem().noNote().problem().isEmpty()
     }
 
-    def 'What failed on the schedule and host access pages is said in the language Genies speaks'() {
+    def 'What failed on the schedule and host access pages, and what keeps host access from being saved, is said in the language Genies speaks'() {
         reportInfo """
             Let's consider a job oillamp could not switch off, and host access it could not
             save. As on the history page, each page says what failed in the language Genies
-            speaks, and why as oillamp said it.
+            speaks, and why as oillamp said it. Before saving, the host access page also says
+            what oillamp would refuse, `HostAccess.Rules.mistake()`, such as a line of an
+            allowlist that is not a folder: in the language Genies speaks, with the line quoted
+            as the user typed it.
         """
         given: 'a job that could not be switched off, and host access that could not be saved'
             def job = new Schedule.Problem.CouldNotSwitchOff('the lamp is busy')
             def access = new HostAccess.Problem.CouldNotSave('permission denied')
 
-        expect: 'each is said in each language, and why as oillamp said it'
+        and: 'host access rules whose read allowlist has the line "Dokumente", which is not a folder'
+            def rules = new HostAccess.Rules(HostAccess.May.READ, HostAccess.Guards.ALLOWLISTS_CHECKER, 'Dokumente', '~', 'Nur lesen.')
+
+        expect: 'each failure is said in each language, and why as oillamp said it'
             job.words(Lang.ENGLISH) == 'The job could not be switched off: the lamp is busy'
             job.words(Lang.GERMAN) == 'Der Auftrag ließ sich nicht ausschalten: the lamp is busy'
             access.words(Lang.ENGLISH) == 'oillamp could not save it: permission denied'
             access.words(Lang.SPANISH) == 'oillamp no pudo guardarlo: permission denied'
+
+        and: 'the mistake is said in each language, with the line as it was typed'
+            rules.mistake().orElseThrow().words(Lang.ENGLISH) == '"Dokumente" is not a folder. Write ~, or a folder starting with ~/ or with /.'
+            rules.mistake().orElseThrow().words(Lang.GERMAN) == '„Dokumente“ ist kein Ordner. Schreib ~ oder einen Ordner, der mit ~/ oder mit / beginnt.'
+            rules.mistake().orElseThrow().words(Lang.JAPANESE) == '「Dokumente」はフォルダーではありません。~ か、~/ または / で始まるフォルダーを書いてください。'
     }
 
     def 'How far setting up Ollama is, is said in the language Genies speaks'() {
