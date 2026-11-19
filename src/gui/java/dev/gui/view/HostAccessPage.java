@@ -1,7 +1,9 @@
 package dev.gui.view;
 
 import java.awt.Color;
-import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -19,6 +21,8 @@ import sprouts.Var;
 import sprouts.Viewable;
 import swingtree.UI;
 import swingtree.UIForAnySwing;
+import swingtree.UIForBox;
+import swingtree.components.JBox;
 import swingtree.animation.Animation;
 import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
@@ -30,13 +34,13 @@ import swingtree.style.StyledString;
 
 import static swingtree.UI.*;
 
-/// A genie's host access: whether its agent may reach this computer, the permission rules the
-/// checker model judges each of its requests against, who lets it run commands, and whether the
-/// user is asked about folders outside their home folder. Genies writes them into the genie's
-/// lamp, the rules as JSON, which the checker reads like any words; see [HostAccess].
+/// A genie's host access, in the order of the `[host_access]` table of its lamp's file: what its
+/// agent may do on this computer, what guards each of its requests, the folders it may read, the
+/// folders it may read and change, and the instructions for the checker. Genies writes them into
+/// the genie's lamp as they are; see [HostAccess].
 ///
-/// What all of it means, and how a request goes from the genie to this computer, the page
-/// explains in a panel under its title, which the user unfolds with the `?` beside it.
+/// How a request goes from the genie to this computer, the page explains in a panel under its
+/// title, which the user unfolds with the `?` beside it.
 ///
 /// The lamp reads them as it wakes, so they can only be changed while the genie sleeps. While it
 /// is awake, the page shows them, greyed, and says so in a banner.
@@ -46,103 +50,72 @@ import static swingtree.UI.*;
 final class HostAccessPage {
 
     /*
-     *  A responsive grid. The switch and the note that the feature is experimental share a row
-     *  from LARGE up. The two lists of folders stand side by side from LARGE up, with the user's
-     *  own words under them; below that, each follows the one before. On a page wider than
-     *  THREE_FROM, as on a wide monitor, the three texts stand side by side.
+     *  A responsive grid, read top to bottom as the lamp's file is. Every part takes the whole
+     *  row, except the two allowlists, which stand side by side from LARGE up. What it may do
+     *  and what guards it share their row too, side by side on a page at least
+     *  TIERS_SIDE_BY_SIDE_FROM wide, and one under the other on a narrower one:
      *
-     *                        very small  small  medium  large  very large  from THREE_FROM
-     *      what is said on top    12       12     12     12       12            12
-     *      the switch             12       12     12      5        5             4
-     *      experimental           12       12     12      7        7             8
-     *      each list of folders   12       12     12      6        6             4
-     *      in your own words      12       12     12     12       12             4
-     *      who runs commands      12       12     12      7        7             4
-     *      what that choice means 12       12     12      5        5             3
-     *      outside the home       12       12      6      7        7             2
-     *      what that choice means 12       12      6      5        5             3
-     *      how you are asked      12       12     12     12       12            12
-     *      saving                 12       12     12     12       12            12
+     *                          very small  small  medium  large  very large
+     *      on top, the caution     12        12     12      12       12
+     *      what it may do, and
+     *      what guards it          12        12     12      12       12
+     *      each allowlist          12        12     12       6        6
+     *      checker instructions    12        12     12      12       12
+     *      saving                  12        12     12      12       12
      *
-     *  The width decides THREE_FROM, not the size class: the page is laid out at its own width,
-     *  so the size class never goes past what fits two texts.
+     *  Each switch has its heading above it and what the chosen part means under it. Its parts
+     *  stand in a row on a page at least as wide as their row, in the widest of the languages,
+     *  and one under the other on a narrower one.
      *
-     *  The two switches that say when the user is asked, who lets the genie run commands and
-     *  whether it asks about folders outside the home folder, each have their heading above
-     *  them, and what their choice means beside them where there is room: both in one row on
-     *  a page wider than THREE_FROM. The cell of who runs commands is never narrower than its
-     *  three parts in a row, in any language, except on a page narrower than
-     *  PARTS_IN_A_ROW_FROM: there they stand one under the other.
-     *
-     *  Saving is a row of its own, the warning beside the buttons. On a page narrower than
-     *  SAVING_IN_ONE_ROW_FROM, the warning would be squeezed into a column a word wide, so the
+     *  Saving is a row of its own, the mistake beside the buttons. On a page narrower than
+     *  SAVING_IN_ONE_ROW_FROM, the mistake would be squeezed into a column a word wide, so the
      *  buttons go under it, to the right, and on a page narrower still, one under the other:
      *
-     *      from SAVING_IN_ONE_ROW_FROM     [warning ……………………………  Undo changes  Save]
-     *      from BUTTONS_SIDE_BY_SIDE_FROM  [warning ………………………………………………………]
+     *      from SAVING_IN_ONE_ROW_FROM     [mistake ……………………………  Undo changes  Save]
+     *      from BUTTONS_SIDE_BY_SIDE_FROM  [mistake ………………………………………………………]
      *                                      [                 Undo changes  Save]
-     *      narrower still, where the two   [warning ……………………………]
+     *      narrower still, where the two   [mistake ……………………………]
      *      buttons would not fit beside    [          Save          ]
      *      each other in every language    [      Undo changes      ]
      *
      *  The widths are the page's, as the state has them: [GeniesState#area].
      */
     private static final int REFERENCE = 1100;
-    private static final int THREE_FROM = 1200;
-    /// How tall each of the three texts is, so that they line up side by side.
-    private static final int TEXT_HEIGHT = 170;
-    private static final FlowCell WHOLE = span(12, 12, 12, UI.VerticalAlignment.TOP);
-    private static final FlowCell SWITCH = span(12, 5, 4, UI.VerticalAlignment.CENTER);
-    private static final FlowCell BESIDE_THE_SWITCH = span(12, 7, 8, UI.VerticalAlignment.CENTER);
-    private static final FlowCell FOLDERS = span(12, 6, 4, UI.VerticalAlignment.TOP);
-    private static final FlowCell OWN_WORDS = span(12, 12, 4, UI.VerticalAlignment.TOP);
-    private static final FlowCell WHO_RUNS_COMMANDS = span(12, 12, 7, 4, UI.VerticalAlignment.CENTER);
-    private static final FlowCell BESIDE_WHO_RUNS_COMMANDS = span(12, 12, 5, 3, UI.VerticalAlignment.CENTER);
-    private static final FlowCell OUTSIDE_THE_HOME_FOLDER = span(12, 6, 7, 2, UI.VerticalAlignment.CENTER);
-    private static final FlowCell BESIDE_OUTSIDE_THE_HOME_FOLDER = span(12, 6, 5, 3, UI.VerticalAlignment.CENTER);
-    /// From this width of the page, the three parts of who runs commands stand in a row. Their
-    /// row is about 325 pixels wide in German, the widest of the languages; the page loses
-    /// its padding and the scroll bar, and keeps a margin.
-    private static final int PARTS_IN_A_ROW_FROM = 400;
-    /// The heading and the switch of who runs commands, in this order.
-    private static final Layout PARTS_IN_A_ROW = Layout.mig(
-        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
-    ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""));
-    private static final Layout PARTS_ONE_UNDER_THE_OTHER = Layout.mig(
-        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
+    private static final FlowCell WHOLE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12));
+    private static final FlowCell ALLOWLIST = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(6).veryLarge(6).oversize(6));
+    /// How tall each allowlist is, so that the two line up side by side, and the checker
+    /// instructions, which may say a lot more.
+    private static final int ALLOWLIST_HEIGHT = 92;
+    private static final int INSTRUCTIONS_HEIGHT = 150;
+    /// From these widths of the page, the parts of a switch stand in a row. With its longest
+    /// part chosen, so in bold, the row of what it may do is 469 units wide in German, the
+    /// widest of the languages for it, and the row of what guards it 454 in Japanese; the page
+    /// adds 40 of padding around it, and the scroll bar 12 at most.
+    private static final int MAY_IN_A_ROW_FROM = 525;
+    private static final int GUARDS_IN_A_ROW_FROM = 510;
+    /// From this width of the page, what it may do and what guards it stand side by side, each
+    /// in a column as wide as the other: both switches still fit their columns in a row, with
+    /// the gap of 18 between the columns.
+    private static final int TIERS_SIDE_BY_SIDE_FROM = 1010;
+    /// What it may do and what guards it, in this order: side by side, each at the top of its
+    /// column, or one under the other.
+    private static final Layout TIERS_SIDE_BY_SIDE = Layout.mig(
+        LayoutConstraint.of("fillx, ins 0, gap 18 18"), LayoutConstraint.of("[0:0, grow, fill, sg tier][0:0, grow, fill, sg tier]"), LayoutConstraint.of("")
+    ).withChildConstraints(MigAddConstraint.of("growx, aligny top, wmin 0"), MigAddConstraint.of("growx, aligny top, wmin 0"));
+    private static final Layout TIERS_ONE_UNDER_THE_OTHER = Layout.mig(
+        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 18 18"), LayoutConstraint.of("[grow, fill]"), LayoutConstraint.of("")
     ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0"));
-    /// The user's home folder, which the genie's lamp reaches without asking: Genies leaves the
-    /// lamp's roots empty, and empty roots are the home folder.
-    private static final Path HOME = Path.of(System.getProperty("user.home"));
     private static final int SAVING_IN_ONE_ROW_FROM = 560;
     private static final int BUTTONS_SIDE_BY_SIDE_FROM = 400;
-    /// The warning, Undo changes and Save, in this order.
+    /// The mistake, Undo changes and Save, in this order.
     private static final Layout SAVING_IN_ONE_ROW = savingLayout("[grow][][]", "cell 0 0, growx, wmin 0", "cell 1 0", "cell 2 0");
-    private static final Layout SAVING_UNDER_THE_WARNING = savingLayout("[grow][][]", "cell 0 0, span 3, growx, wmin 0", "cell 1 1", "cell 2 1");
+    private static final Layout SAVING_UNDER_THE_MISTAKE = savingLayout("[grow][][]", "cell 0 0, span 3, growx, wmin 0", "cell 1 1", "cell 2 1");
     private static final Layout SAVING_ONE_UNDER_THE_OTHER = savingLayout("[grow, fill]", "cell 0 0, wmin 0", "cell 0 2", "cell 0 1");
 
-    private static Layout savingLayout(String columns, String warning, String undo, String save) {
+    private static Layout savingLayout(String columns, String mistake, String undo, String save) {
         return
             Layout.mig(LayoutConstraint.of("fillx, ins 0, gap 12, hidemode 3"), LayoutConstraint.of(columns), LayoutConstraint.of(""))
-            .withChildConstraints(MigAddConstraint.of(warning), MigAddConstraint.of(undo), MigAddConstraint.of(save));
-    }
-
-    /// A cell that spans `narrow` columns up to MEDIUM, `large` from LARGE up, and `wide` on a
-    /// page wider than [#THREE_FROM].
-    private static FlowCell span(int narrow, int large, int wide, UI.VerticalAlignment align) {
-        return span(narrow, narrow, large, wide, align);
-    }
-
-    /// A cell that spans `narrow` columns up to SMALL, `medium` on a MEDIUM page, `large` from
-    /// LARGE up, and `wide` on a page wider than [#THREE_FROM].
-    private static FlowCell span(int narrow, int medium, int large, int wide, UI.VerticalAlignment align) {
-        return AUTO_SPAN(it -> {
-            int span = it.parentSize().widthOrElse(0) >= UI.scale(THREE_FROM) ? wide : large;
-            return
-                it.align(align)
-                .verySmall(narrow).small(narrow).medium(medium)
-                .large(span).veryLarge(span).oversize(span);
-        });
+            .withChildConstraints(MigAddConstraint.of(mistake), MigAddConstraint.of(undo), MigAddConstraint.of(save));
     }
 
     private final Var<GeniesState> state;
@@ -154,16 +127,19 @@ final class HostAccessPage {
     // Lenses and views, held as fields: a lens is observed only weakly by its parent.
     private final Var<Genie> genie;
     private final Var<HostAccess> hostAccess;
-    private final Var<HostAccess.PermissionRules> draft;
-    private final Var<String> mayRead;
-    private final Var<String> mayChange;
-    private final Var<String> words;
-    private final Var<HostAccess.Commands> commands;
-    private final Var<Boolean> askOutsideHome;
-    /// The words of the page, unlike [#words], which are the user's own.
+    private final Var<HostAccess.Rules> draft;
+    private final Var<HostAccess.May> may;
+    private final Var<HostAccess.Guards> guards;
+    private final Var<String> readAllowlist;
+    private final Var<String> changeAllowlist;
+    private final Var<String> checkerInstructions;
+    private final Val<String> genieName;
+    /// The words of the page, unlike [#checkerInstructions], which are the user's own.
     private final Val<Lang.HostAccessPage> pageWords;
     /// Whether the rules may be changed now: the genie sleeps, has a lamp, and nothing is on its way.
     private final Val<Boolean> changeable;
+    /// Whether a checker reads the instructions: not with the allowlists alone.
+    private final Val<Boolean> checked;
     /// Whether the user wants the explanation unfolded, and how far it has unfolded on its way there.
     private final Var<Boolean> explained = Var.of(false);
     private final Var<Unfolding> unfolding = Var.of(Unfolding.FOLDED);
@@ -175,15 +151,17 @@ final class HostAccessPage {
         palette = Theme.paletteOf(state);
         pageWords = Theme.langOf(state).viewAs(Lang.HostAccessPage.class, Lang::HOST_ACCESS_PAGE);
         this.app = app;
-        genie      = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
-        hostAccess = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
-        draft      = hostAccess.zoomTo(HostAccess::draft, HostAccess::withDraft);
-        mayRead    = draft.zoomTo(HostAccess.PermissionRules::mayRead, HostAccess.PermissionRules::withMayRead);
-        mayChange  = draft.zoomTo(HostAccess.PermissionRules::mayChange, HostAccess.PermissionRules::withMayChange);
-        words      = draft.zoomTo(HostAccess.PermissionRules::words, HostAccess.PermissionRules::withWords);
-        commands   = draft.zoomTo(HostAccess.PermissionRules::commands, HostAccess.PermissionRules::withCommands);
-        askOutsideHome = draft.zoomTo(HostAccess.PermissionRules::askOutsideHome, HostAccess.PermissionRules::withAskOutsideHome);
+        genie           = state.zoomTo(GeniesState::genie, GeniesState::withGenie);
+        hostAccess      = genie.zoomTo(Genie::hostAccess, Genie::withHostAccess);
+        draft           = hostAccess.zoomTo(HostAccess::draft, HostAccess::withDraft);
+        may             = draft.zoomTo(HostAccess.Rules::may, HostAccess.Rules::withMay);
+        guards          = draft.zoomTo(HostAccess.Rules::guards, HostAccess.Rules::withGuards);
+        readAllowlist   = draft.zoomTo(HostAccess.Rules::readAllowlist, HostAccess.Rules::withReadAllowlist);
+        changeAllowlist = draft.zoomTo(HostAccess.Rules::changeAllowlist, HostAccess.Rules::withChangeAllowlist);
+        checkerInstructions = draft.zoomTo(HostAccess.Rules::checkerInstructions, HostAccess.Rules::withCheckerInstructions);
+        genieName  = genie.viewAsString(Genie::name);
         changeable = genie.viewAs(Boolean.class, it -> asleep(it) && it.hostAccess().lamp() && !it.hostAccess().busy());
+        checked    = guards.viewAs(Boolean.class, HostAccess.Guards::checks);
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
@@ -201,32 +179,43 @@ final class HostAccessPage {
                     .padding(10, 4, 28, 4)
                 )
                 .add(WHOLE, top())
-                .add(SWITCH, onOrOff())
-                .add(BESIDE_THE_SWITCH, experimental())
-                .add(FOLDERS,
-                    text(Lang.HostAccessPage::FOLDERS_IT_MAY_READ, mayRead, Lang.HostAccessPage::ONE_PER_LINE_SUCH_AS_DOCUMENTS)
+                .add(WHOLE,
+                    box().withLayout(state.viewAs(Layout.class, it ->
+                        it.area().width() >= UI.scale(TIERS_SIDE_BY_SIDE_FROM) ? TIERS_SIDE_BY_SIDE : TIERS_ONE_UNDER_THE_OTHER
+                    ))
+                    .add(whatItMayDo())
+                    .add(whatGuardsIt())
                 )
-                .add(FOLDERS,
+                .add(ALLOWLIST,
                     text(
-                        Lang.HostAccessPage::FOLDERS_IT_MAY_READ_AND_CHANGE,
-                        mayChange,
-                        Lang.HostAccessPage::IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE
+                        pageWords.viewAsString(Lang.HostAccessPage::FOLDERS_IT_MAY_READ),
+                        readAllowlist,
+                        pageWords.viewAsString(Lang.HostAccessPage::ITS_READ_ALLOWLIST_ONE_FOLDER_PER_LINE_EACH_WITH_EVERYTHING_BELOW_IT),
+                        Val.of(true),
+                        ALLOWLIST_HEIGHT
                     )
                 )
-                .add(OWN_WORDS,
-                    text(Lang.HostAccessPage::ANYTHING_ELSE_IN_YOUR_OWN_WORDS, words, Lang.HostAccessPage::SAY_WHAT_MUST_NOT_HAPPEN)
-                )
-                .add(WHO_RUNS_COMMANDS, commands())
-                .add(BESIDE_WHO_RUNS_COMMANDS, ViewPartsUtil.note(theme, Viewable.of(String.class, commands, pageWords, HostAccessPage::meaning), Val.of(true)))
-                .add(OUTSIDE_THE_HOME_FOLDER, outsideTheHomeFolder())
-                .add(BESIDE_OUTSIDE_THE_HOME_FOLDER,
-                    ViewPartsUtil.note(
-                        theme,
-                        pageWords.viewAsString(it -> it.IT_CAN_ONLY_REACH_YOUR_HOME_FOLDER_WITH_YES_GENIES_ASKS_YOU_ABOUT_OTHERS(HOME.toString())),
-                        Val.of(true)
+                .add(ALLOWLIST,
+                    text(
+                        pageWords.viewAsString(Lang.HostAccessPage::FOLDERS_IT_MAY_READ_AND_CHANGE),
+                        changeAllowlist,
+                        pageWords.viewAsString(Lang.HostAccessPage::ITS_CHANGE_ALLOWLIST_COMMANDS_START_IN_THESE_TOO),
+                        Val.of(true),
+                        ALLOWLIST_HEIGHT
                     )
                 )
-                .add(WHOLE, howYouAreAsked())
+                .add(WHOLE,
+                    text(
+                        pageWords.viewAsString(Lang.HostAccessPage::INSTRUCTIONS_FOR_THE_CHECKER),
+                        checkerInstructions,
+                        Viewable.of(String.class, checked, pageWords, (reads, page) ->
+                            reads ? page.THE_CHECKER_IS_ANOTHER_AI_MODEL_OILLAMP_ASKS_IT_ABOUT_EVERY_REQUEST()
+                                  : page.UNUSED_WITH_THE_ALLOWLISTS_ALONE_NO_CHECKER_READS_THESE()
+                        ),
+                        checked,
+                        INSTRUCTIONS_HEIGHT
+                    )
+                )
                 .add(WHOLE, saving())
             );
     }
@@ -248,11 +237,6 @@ final class HostAccessPage {
 
     private UIForAnySwing<?, ?> top() {
         Val<String> lockedBecause = Viewable.of(String.class, genie, pageWords, HostAccessPage::locked);
-        Val<String> says = Viewable.of(String.class, genie, pageWords, (it, page) ->
-            it.hostAccess().saved().on()
-                ? page.MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST(it.name())
-                : page.CANNOT_REACH_THIS_COMPUTER(it.name())
-        );
         Val<String> problem = Viewable.of(String.class, hostAccess, pageWords, (it, page) -> it.problem().map(why -> why.words(page.lang())).orElse(""));
         return
             box("fill, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
@@ -267,7 +251,7 @@ final class HostAccessPage {
                 )
                 .add("growx, wmin 0", explanation())
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, says, Palette::SUBTEXT, Val.of(true)))
+            .add("growx, wmin 0", experimental())
             // As loud as the banner of a request for permission: the user should not have to
             // find out by typing that nothing they type is kept.
             .add("growx, wmin 0",
@@ -278,6 +262,21 @@ final class HostAccessPage {
                 .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true)))
             )
             .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
+    }
+
+    private UIForAnySwing<?, ?> experimental() {
+        return
+            panel("fill, ins 8 14 8 14, gap 10", "[][grow]")
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TROUBLE_WASH()).borderRadius(12))
+            .add("top", label("⚠").withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(14).color(now.palette().TROUBLE()))))
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(
+                    theme,
+                    pageWords.viewAsString(Lang.HostAccessPage::EXPERIMENTAL_NEVER_ALLOW_ANYTHING_ON_A_COMPUTER_WITH_SENSITIVE_DATA),
+                    Palette::TEXT,
+                    Val.of(true)
+                )
+            );
     }
 
     // ─── what it all means ─────────────────────────────────────────────────────────────────
@@ -308,9 +307,8 @@ final class HostAccessPage {
 
     /// The explanation, in a panel that opens as tall as its words, as far as it has unfolded;
     /// the words are laid out as tall as they are all along, and the panel shows as much of
-    /// them as it is tall.
+    /// them as it is tall. It follows a request along the chain of guards, in their order.
     private UIForAnySwing<?, ?> explanation() {
-        Val<String> genieName = genie.viewAsString(Genie::name);
         return
             // The gap above the panel opens with it, so that it does not come at once either.
             box().withLayout(unfolding.viewAs(Layout.class, it -> belowTheTitle(it.height())))
@@ -324,16 +322,20 @@ final class HostAccessPage {
                     box("fillx, wrap 1, ins 14 16 16 16, gap 10", "[grow]")
                     .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::HOW_IT_WORKS), 11, 2f, Palette::SUBTEXT))
                     .add("growx, wmin 0",
-                        faded(Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::THE_MAIN_SWITCH_GIVES_IT_TOOLS_TO_REACH_THIS_COMPUTER_AT_ALL), 12, 1f, Palette::TEXT)
+                        faded(pageWords.viewAsString(Lang.HostAccessPage::A_REQUEST_THE_ALLOWLISTS_THE_CHECKER_YOU_WHERE_ASKED_IT_HAPPENS), 12, 2f, Palette::BRASS)
                     )
+                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::THE_ALLOWLISTS_ARE_CHECKED_BY_OILLAMP_ITSELF), 12, 1f, Palette::TEXT))
                     .add("growx, wmin 0",
-                        faded(pageWords.viewAsString(Lang.HostAccessPage::A_REQUEST_THE_CHECKER_JUDGES_IT_YOU_DECIDE_WHERE_YOU_ARE_ASKED_IT_HAPPENS), 12, 2f, Palette::BRASS)
+                        faded(
+                            Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::THE_CHECKER_IS_ANOTHER_AI_MODEL_IT_SEES_YOUR_INSTRUCTIONS_AND_WHAT_THE_GENIE_DOES),
+                            12, 1f, Palette::TEXT
+                        )
                     )
-                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::EVERY_REQUEST_FIRST_GOES_TO_A_SEPARATE_MODEL_THE_CHECKER), 12, 1f, Palette::TEXT))
-                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::YOUR_HOME_FOLDER_IS_A_FENCE_THE_CHECKER_CANNOT_WIDEN), 12, 1f, Palette::TEXT))
-                    .add("growx, wmin 0", faded(pageWords.viewAsString(Lang.HostAccessPage::COMMANDS_ARE_DIFFERENT_SO_YOU_CHOOSE_WHO_APPROVES_THEM), 12, 1f, Palette::TEXT))
                     .add("growx, wmin 0",
                         faded(pageWords.viewAsString(Lang.HostAccessPage::WHEN_YOU_ARE_ASKED_THE_QUESTION_APPEARS_AT_THE_TOP_OF_THE_GENIES_PAGES), 12, 1f, Palette::TEXT)
+                    )
+                    .add("growx, wmin 0",
+                        faded(pageWords.viewAsString(Lang.HostAccessPage::A_COMMAND_ONCE_ALLOWED_IS_NOT_FENCED_BY_THE_ALLOWLISTS_BEYOND_WHERE_IT_STARTS), 12, 1f, Palette::TEXT)
                     )
                 )
             );
@@ -370,7 +372,6 @@ final class HostAccessPage {
             });
     }
 
-
     /// Unfolds the explanation, or folds it away, one frame after the other, until it arrived
     /// where the user wants it. The user may change their mind on the way: it turns back from
     /// where it is.
@@ -394,125 +395,143 @@ final class HostAccessPage {
         });
     }
 
-    // ─── the switch, and what it switches ──────────────────────────────────────────────────
+    // ─── what it may do, and what guards it ────────────────────────────────────────────────
 
-    private UIForAnySwing<?, ?> onOrOff() {
-        Val<Boolean> on = draft.viewAs(Boolean.class, HostAccess.PermissionRules::on);
+    /// What it may do: its heading, a switch of the four steps of the ladder, each saying what it
+    /// means to a pointer that rests on it, and what the chosen one means under it.
+    private UIForAnySwing<?, ?> whatItMayDo() {
         return
-            box("fillx, wrap 1, ins 0, gap 8", "[grow]")
-            .add("growx, wmin 0", section(Lang.HostAccessPage::MAY_IT_REACH_THIS_COMPUTER))
-            .add(ViewPartsUtil.yesOrNo(theme, Theme.langOf(state).viewAs(Lang.Parts.class, Lang::PARTS), on, changeable, yes -> draft.update(From.VIEW, it -> it.withOn(yes))));
+            choice(
+                Viewable.of(String.class, pageWords, genieName, (page, name) -> page.WHAT_MAY_IT_DO_ON_THIS_COMPUTER(name.toUpperCase(Locale.ROOT))),
+                Arrays.stream(HostAccess.May.values())
+                    .map(it -> ViewPartsUtil.Choice.of(
+                        it,
+                        pageWords.viewAsString(page -> name(it, page)),
+                        Viewable.of(String.class, pageWords, genieName, (page, name) -> meaning(it, page, name))
+                    ))
+                    .toList(),
+                may,
+                MAY_IN_A_ROW_FROM,
+                Viewable.of(String.class, genie, pageWords, (it, page) -> meaning(it.hostAccess().draft().may(), page, it.name()))
+            );
     }
 
-    private UIForAnySwing<?, ?> experimental() {
+    private static String name(HostAccess.May may, Lang.HostAccessPage words) {
+        return switch (may) {
+            case NOTHING -> words.NOTHING();
+            case READ -> words.READ();
+            case READ_CHANGE -> words.READ_AND_CHANGE();
+            case READ_CHANGE_RUN -> words.READ_CHANGE_AND_RUN_COMMANDS();
+        };
+    }
+
+    /// What choosing a step of what it may do means, for the genie called `genie`.
+    private static String meaning(HostAccess.May may, Lang.HostAccessPage words, String genie) {
+        return switch (may) {
+            case NOTHING -> words.IT_HAS_NO_TOOLS_TO_REACH_THIS_COMPUTER(genie);
+            case READ -> words.IT_MAY_LIST_FOLDERS_READ_FILES_AND_COPY_ONE_INTO_ITS_SANDBOX();
+            case READ_CHANGE -> words.IT_MAY_ALSO_WRITE_AND_EDIT_FILES_COPY_ITS_WORK_OVER_AND_OPEN_A_WEB_PAGE();
+            case READ_CHANGE_RUN -> words.IT_MAY_ALSO_RUN_COMMANDS_WHICH_CAN_DO_ANYTHING_YOU_CAN();
+        };
+    }
+
+    /// What guards each request: its heading, a switch of the three links of the chain, what the
+    /// chosen one means, and, while commands would run with nothing but the allowlists in their
+    /// way, a warning nobody can miss. The page still saves it: it is the user's computer.
+    private UIForAnySwing<?, ?> whatGuardsIt() {
+        Val<Boolean> unchecked = draft.viewAs(Boolean.class, HostAccess.Rules::runsCommandsUnchecked);
         return
-            panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
-            .withStyle(palette, (p, it) -> it.backgroundColor(p.TROUBLE_WASH()).borderRadius(12))
-            .add("top", label("⚠").withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(14).color(now.palette().TROUBLE()))))
-            .add("growx, wmin 0",
-                ViewPartsUtil.wrapped(
-                    theme,
-                    pageWords.viewAsString(Lang.HostAccessPage::EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA),
-                    Palette::TEXT,
-                    Val.of(true)
+            choice(
+                pageWords.viewAsString(Lang.HostAccessPage::WHAT_GUARDS_EACH_REQUEST),
+                Arrays.stream(HostAccess.Guards.values())
+                    .map(it -> ViewPartsUtil.Choice.of(it, pageWords.viewAsString(page -> name(it, page)), pageWords.viewAsString(page -> meaning(it, page))))
+                    .toList(),
+                guards,
+                GUARDS_IN_A_ROW_FROM,
+                Viewable.of(String.class, guards, pageWords, HostAccessPage::meaning)
+            )
+            .add(
+                panel("fill, wrap 2, ins 12 14 12 14, gap 10 4", "[][grow]")
+                .isVisibleIf(unchecked)
+                .withStyle(palette, (p, it) -> it.backgroundColor(p.TROUBLE_WASH()).border(2, p.TROUBLE()).borderRadius(12))
+                .add("top, spany 2", label("⚠").withStyle(theme, (now, it) -> it.componentFont(f -> f.family(now.fonts().FONT()).size(20).color(now.palette().TROUBLE()))))
+                .add("growx, wmin 0", ViewPartsUtil.words(theme, pageWords.viewAsString(Lang.HostAccessPage::COMMANDS_RUN_UNCHECKED), 13, 2f, Palette::TROUBLE))
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(
+                        theme,
+                        Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::NOTHING_JUDGES_A_COMMAND_AND_NOBODY_ASKS_YOU),
+                        Palette::TEXT,
+                        Val.of(true)
+                    )
                 )
             );
     }
 
-    // ─── when the user is asked ────────────────────────────────────────────────────────────
-
-    /// Whoever is asked must be there to answer: the page says so while anything asks them.
-    private UIForAnySwing<?, ?> howYouAreAsked() {
-        return
-            panel("fill, ins 10 14 10 14, gap 10", "[grow]")
-            .isVisibleIf(draft.viewAs(Boolean.class, HostAccess.PermissionRules::asksYou))
-            .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, p.BRASS()))
-            .add("growx, wmin 0",
-                ViewPartsUtil.wrapped(
-                    theme,
-                    pageWords.viewAsString(Lang.HostAccessPage::GENIES_ASKS_YOU_AT_THE_TOP_OF_THE_GENIES_PAGES_NO_ANSWER_WITHIN_A_MINUTE_COUNTS_AS_NO),
-                    Palette::TEXT,
-                    Val.of(true)
-                )
-            );
+    private static String name(HostAccess.Guards guards, Lang.HostAccessPage words) {
+        return switch (guards) {
+            case ALLOWLISTS -> words.ALLOWLISTS();
+            case ALLOWLISTS_CHECKER -> words.ALLOWLISTS_AND_CHECKER();
+            case ALLOWLISTS_CHECKER_USER -> words.ALLOWLISTS_CHECKER_AND_YOU();
+        };
     }
 
-    /// Who lets it run commands: its heading, and a switch of three parts, each saying what it
-    /// means to a pointer that rests on it. What the chosen one means stands beside it.
-    private UIForAnySwing<?, ?> commands() {
-        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(PARTS_IN_A_ROW_FROM));
+    /// What choosing a link of the chain of guards means.
+    private static String meaning(HostAccess.Guards guards, Lang.HostAccessPage words) {
+        return switch (guards) {
+            case ALLOWLISTS -> words.ONLY_THE_ALLOWLISTS_NO_MODEL_JUDGES_AND_NOBODY_ASKS_YOU();
+            case ALLOWLISTS_CHECKER -> words.THEN_THE_CHECKER_ANOTHER_AI_MODEL_ALLOWS_OR_REFUSES_EACH_REQUEST();
+            case ALLOWLISTS_CHECKER_USER -> words.THEN_YOU_ABOUT_EVERY_COMMAND_AND_A_PATH_OUTSIDE_THE_ALLOWLISTS();
+        };
+    }
+
+    /// A choice of the page: its heading, a switch of parts, and what the chosen part means, one
+    /// under the other. The parts stand in a row on a page at least `inARowFrom` wide, and one
+    /// under the other, as wide as the page, on a narrower one.
+    private <T> UIForBox<JBox> choice(Val<String> heading, List<ViewPartsUtil.Choice<T>> choices, Var<T> chosen, int inARowFrom, Val<String> meaning) {
+        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(inARowFrom));
         return
             box().withLayout(inARow.viewAs(Layout.class, it -> it ? PARTS_IN_A_ROW : PARTS_ONE_UNDER_THE_OTHER))
-            .add(section(Lang.HostAccessPage::WHO_LETS_IT_RUN_COMMANDS))
-            .add(
-                ViewPartsUtil.oneOf(
-                    theme,
-                    java.util.Arrays.stream(HostAccess.Commands.values())
-                        .map(it -> ViewPartsUtil.Choice.of(it, pageWords.viewAsString(page -> name(it, page)), pageWords.viewAsString(page -> meaning(it, page))))
-                        .toList(),
-                    commands,
-                    changeable,
-                    inARow,
-                    it -> commands.set(From.VIEW, it)
-                )
-            );
+            .add(section(heading, Val.of(true)))
+            .add(ViewPartsUtil.oneOf(theme, choices, chosen, changeable, inARow, it -> chosen.set(From.VIEW, it)))
+            .add(ViewPartsUtil.note(theme, meaning, Val.of(true)));
     }
 
-    /// The name of a part of the switch of who lets it run commands. Letting the model that
-    /// judges decide alone carries a sign.
-    private static String name(HostAccess.Commands commands, Lang.HostAccessPage words) {
-        return switch (commands) {
-            case NEVER -> words.NOBODY();
-            case YOU_EACH_TIME -> words.YOU_EACH_TIME();
-            case THE_MODEL_ALONE -> words.THE_MODEL_ALONE() + "  ⚠";
-        };
-    }
-
-    /// What choosing a part of the switch of who lets it run commands means.
-    private static String meaning(HostAccess.Commands commands, Lang.HostAccessPage words) {
-        return switch (commands) {
-            case NEVER -> words.IT_CANNOT_RUN_COMMANDS_AT_ALL();
-            case YOU_EACH_TIME -> words.THE_MODEL_TURNS_AWAY_WHAT_CLEARLY_BREAKS_YOUR_RULES_EVERY_OTHER_COMMAND_COMES_TO_YOU();
-            case THE_MODEL_ALONE -> words.COMMANDS_THE_MODEL_ALLOWS_RUN_STRAIGHT_AWAY_SAY_WHICH_ARE_FINE();
-        };
-    }
-
-    // ─── folders outside the home folder ───────────────────────────────────────────────────
-
-    /// Whether it asks about folders outside the home folder: its heading, and No or Yes. What
-    /// that means stands beside it.
-    private UIForAnySwing<?, ?> outsideTheHomeFolder() {
-        return
-            box("fillx, wrap 1, ins 0, gap 8", "[grow]")
-            .add("growx, wmin 0", section(Lang.HostAccessPage::ASK_YOU_ABOUT_FOLDERS_OUTSIDE_YOUR_HOME_FOLDER))
-            .add(ViewPartsUtil.yesOrNo(theme, Theme.langOf(state).viewAs(Lang.Parts.class, Lang::PARTS), askOutsideHome, changeable, yes -> askOutsideHome.set(From.VIEW, yes)));
-    }
+    /// The heading, the switch and what the chosen part means, and a warning that may follow them. The
+    /// switch is as wide as its parts while they stand in a row, and as wide as the page while
+    /// they stand one under the other.
+    private static final Layout PARTS_IN_A_ROW = Layout.mig(
+        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8, hidemode 3"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
+    ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of(""), MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0, gaptop 4"));
+    private static final Layout PARTS_ONE_UNDER_THE_OTHER = Layout.mig(
+        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 8, hidemode 3"), LayoutConstraint.of("[grow]"), LayoutConstraint.of("")
+    ).withChildConstraints(MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("growx, wmin 0, gaptop 4"));
 
     // ─── saving ────────────────────────────────────────────────────────────────────────────
 
     private UIForAnySwing<?, ?> saving() {
-        Val<String> warning = Viewable.of(String.class, draft, Theme.langOf(state), (it, lang) -> it.warning(lang, HOME).orElse(""));
+        Val<String> mistake = Viewable.of(String.class, draft, Theme.langOf(state), (it, lang) -> it.mistake().map(wrong -> wrong.words(lang)).orElse(""));
         Val<Boolean> changed = hostAccess.viewAs(Boolean.class, HostAccess::changed);
-        Val<Boolean> canSave = Viewable.of(Boolean.class, changeable, changed, (a, b) -> a && b);
+        Val<Boolean> canUndo = Viewable.of(Boolean.class, changeable, changed, (a, b) -> a && b);
+        Val<Boolean> canSave = Viewable.of(Boolean.class, canUndo, mistake, (can, wrong) -> can && wrong.isEmpty());
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
         Val<Layout> layout = state.viewAs(Layout.class, it -> {
             int width = it.area().width();
             if (width >= UI.scale(SAVING_IN_ONE_ROW_FROM)) return SAVING_IN_ONE_ROW;
-            if (width >= UI.scale(BUTTONS_SIDE_BY_SIDE_FROM)) return SAVING_UNDER_THE_WARNING;
+            if (width >= UI.scale(BUTTONS_SIDE_BY_SIDE_FROM)) return SAVING_UNDER_THE_MISTAKE;
             return SAVING_ONE_UNDER_THE_OTHER;
         });
         return
             box().withLayout(layout)
-            .add(ViewPartsUtil.wrapped(theme, warning, Palette::BRASS, warning.viewAs(Boolean.class, it -> !it.isEmpty())))
+            .add(ViewPartsUtil.wrapped(theme, mistake, Palette::TROUBLE, mistake.viewAs(Boolean.class, it -> !it.isEmpty())))
             .add(
                 button(pageWords.viewAsString(Lang.HostAccessPage::UNDO_CHANGES)).group(Skin.QUIET_BUTTON)
-                .isEnabledIf(canSave)
+                .isEnabledIf(canUndo)
                 .onClick(_ -> hostAccess.update(From.VIEW, access -> access.withDraft(access.saved())))
             )
             .add(
                 button(Viewable.of(String.class, busy, pageWords, (it, page) -> it ? page.SAVING() : page.SAVE())).group(Skin.FLAME_BUTTON)
                 .isEnabledIf(canSave)
-                .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::WRITE_THESE_RULES_INTO_THE_GENIES_LAMP))
+                .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::WRITE_THESE_SETTINGS_INTO_THE_GENIES_LAMP))
                 .withStyle(Themed.of(canSave, theme), (themed, it) -> {
                     var can = themed.item();
                     Palette p = themed.palette();
@@ -531,16 +550,17 @@ final class HostAccessPage {
 
     private UUID selected() { return state.get().selected(); }
 
-    /// A section's heading, dimmed while nothing under it can be changed. Wrapped, rather than
-    /// cut short, on a narrow page.
-    private UIForAnySwing<?, ?> section(Function<Lang.HostAccessPage, String> heading) {
-        Val<Heading> shown = Viewable.of(Heading.class, pageWords.viewAsString(heading), changeable, Heading::new);
+    /// A section's heading, dimmed while nothing under it can be changed, or while what is under
+    /// it is not `used`. Wrapped, rather than cut short, on a narrow page.
+    private UIForAnySwing<?, ?> section(Val<String> heading, Val<Boolean> used) {
+        Val<Boolean> lit = Viewable.of(Boolean.class, changeable, used, (a, b) -> a && b);
+        Val<Heading> shown = Viewable.of(Heading.class, heading, lit, Heading::new);
         return
             box().withMinSize(0, 0)
             .withStyle(Themed.of(shown, theme), (themed, it) -> {
                 Heading now = themed.item();
                 Palette p = themed.palette();
-                Color colour = now.changeable() ? p.SUBTEXT() : ViewPartsUtil.dim(p.SUBTEXT());
+                Color colour = now.lit() ? p.SUBTEXT() : ViewPartsUtil.dim(p.SUBTEXT());
                 return it
                     .padding(1, 0, 1, 0)
                     .text(t ->
@@ -552,42 +572,48 @@ final class HostAccessPage {
             });
     }
 
-    /// A section's heading, and whether what is under it can be changed.
-    private record Heading(String text, boolean changeable) {}
+    /// A section's heading, and whether it is lit.
+    private record Heading(String text, boolean lit) {}
 
-    /// One of the three texts: a heading, the text, as tall as the other two so they line up
-    /// side by side, and a note under it. While the rules cannot be changed, the text sinks into
-    /// the page, greyed, and cannot be typed in.
-    private UIForAnySwing<?, ?> text(Function<Lang.HostAccessPage, String> heading, Var<String> text, Function<Lang.HostAccessPage, String> note) {
+    /// How a text looks: whether it can be typed in, and whether what it says is used.
+    private record Field(boolean changeable, boolean used) {}
+
+    /// One of the texts: a heading, the text, `height` tall, and a note under it. While the rules
+    /// cannot be changed, the text sinks into the page, greyed, and cannot be typed in; while what
+    /// it says is not `used`, it sinks in too and its words are dimmed, but it can be typed in.
+    private UIForAnySwing<?, ?> text(Val<String> heading, Var<String> text, Val<String> note, Val<Boolean> used, int height) {
+        Val<Field> looks = Viewable.of(Field.class, changeable, used, Field::new);
         return
             box("fillx, wrap 1, ins 0, gap 8", "[grow]")
-            .add("growx, wmin 0", section(heading))
-            .add("growx, wmin 0, h " + TEXT_HEIGHT + "!",
+            .add("growx, wmin 0", section(heading, used))
+            .add("growx, wmin 0, h " + height + "!",
                 scrollPane().withEmptyBorder(0)
                 .withHorizontalScrollBarPolicy(UI.Active.NEVER)
-                .withStyle(Themed.of(changeable, theme), (themed, it) -> {
-                    var can = themed.item();
+                .withStyle(Themed.of(looks, theme), (themed, it) -> {
+                    Field field = themed.item();
+                    boolean raised = field.changeable() && field.used();
                     Palette p = themed.palette();
                     return it
-                        .backgroundColor(can ? p.RAISED() : p.SMOKE())
-                        .border(1, can ? p.BORDER() : p.SMOKE())
+                        .backgroundColor(raised ? p.RAISED() : p.SMOKE())
+                        .border(1, field.changeable() ? p.BORDER() : p.SMOKE())
                         .borderRadius(12);
                 })
                 .add(
                     textArea(text).group(Skin.INPUT).peek(ViewPartsUtil::softWrap)
                     .isEnabledIf(changeable)
-                    .withStyle(Themed.of(changeable, theme), (themed, it) -> {
-                        var can = themed.item();
+                    .withStyle(Themed.of(looks, theme), (themed, it) -> {
+                        Field field = themed.item();
                         Palette p = themed.palette();
+                        Color words = !field.changeable() ? ViewPartsUtil.dim(p.SUBTEXT()) : field.used() ? p.TEXT() : p.SUBTEXT();
                         return it
                             .backgroundColor(p.TRANSPARENT())
                             .border(0, p.TRANSPARENT())
-                            .padding(10, 12, 10, 12)
-                            .cursor(can ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
-                            .componentFont(f -> f.family(themed.fonts().FONT()).size(14).color(can ? p.TEXT() : ViewPartsUtil.dim(p.SUBTEXT())));
+                            .padding(8, 12, 8, 12)
+                            .cursor(field.changeable() ? UI.Cursor.TEXT : UI.Cursor.DEFAULT)
+                            .componentFont(f -> f.family(themed.fonts().FONT()).size(14).color(words));
                     })
                 )
             )
-            .add("growx, wmin 0", ViewPartsUtil.note(theme, pageWords.viewAsString(note), Val.of(true)));
+            .add("growx, wmin 0", ViewPartsUtil.note(theme, note, Val.of(true)));
     }
 }

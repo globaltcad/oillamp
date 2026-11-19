@@ -8,7 +8,8 @@ import dev.gui.model.Lang
 import dev.gui.model.Notifications
 import dev.gui.model.Settings
 import dev.lamp.Lamp
-import dev.lamp.LampHostCommandApproval
+import dev.lamp.LampHostAccess
+import dev.lamp.LampHostAccessGuards
 import oillamp.ScenarioHost
 import spock.lang.Narrative
 import spock.lang.Specification
@@ -27,15 +28,21 @@ import java.util.concurrent.TimeUnit
 
 @Title('A genie\'s host access, read from its lamp and written into it')
 @Narrative('''
-A genie's host access page says whether its agent may reach this computer, and with which
-permission rules: folders it may read, folders it may read and change, and anything else in the
-user's own words. Genies writes them into the genie's lamp, as `enabled` and `requirements` under
-`[host_access]` in its `oillamp.toml`, with the requirements as JSON. There is no permission
-system in Genies: the checker model reads the JSON with every request, as it would any words.
+A genie's host access page shows the five settings a person decides on in the `[host_access]`
+table of the genie's lamp's `oillamp.toml`, in the order the file has them, and Genies writes
+them back as they are, with the Lamp API's `LampDirectory.hostAccess(Lamp.HostAccess)`:
 
-The page also says when the user decides too, after the checker model allowed a request: who
-lets the agent run a command on this computer, `commands`, and whether a request for a folder
-outside the user's home folder goes to the user rather than being refused, `ask_the_user`.
+| On the page, in `HostAccess.Rules` | In the lamp's file |
+|---|---|
+| `may`: what it may do on this computer | `may`, from `nothing` up to `read_change_run` |
+| `guards`: what guards each request | `guards`, from `allowlists` up to `allowlists_checker_user` |
+| `readAllowlist`: folders it may read, one per line | `read_allowlist` |
+| `changeAllowlist`: folders it may read and change, one per line | `change_allowlist` |
+| `checkerInstructions`: free text | `checker_instructions` |
+
+There is no permission system in Genies. oillamp checks the allowlists itself, and the checker,
+another AI model, judges each request against the checker instructions as the user wrote them.
+Genies only refuses to send what oillamp would refuse anyway, and says why on the page.
 
 Here the app is driven as its window drives it, through `Genies`; its lamps are oillamp's real
 engine, in this JVM, on a simulated machine, with a stand-in pi.
@@ -72,154 +79,118 @@ class KeepingAGeniesHostAccessSpec extends Specification {
     }
 
     def 'A genie that never woke has no lamp to keep the rules in, and its host access is off'() {
-        when:
+        reportInfo '''
+            Let's consider Jafar, a genie that was never woken. A genie gets its lamp, and with
+            it the `oillamp.toml` that keeps its host access, as it first wakes. When the user
+            opens its host access page, Genies finds no lamp, and the page shows oillamp's
+            defaults, `HostAccess.Rules.DEFAULTS`: `may = "nothing"`, so host access is off.
+        '''
+        when: 'the user opens Jafar\'s host access page'
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
 
-        then:
+        then: 'the page has read that there is no lamp, and shows oillamp\'s defaults, with host access off'
             waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().read() }
             !app.state().get().find(jafar).orElseThrow().hostAccess().lamp()
+            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == HostAccess.Rules.DEFAULTS
             !app.state().get().find(jafar).orElseThrow().hostAccess().saved().on()
     }
 
-    def 'The permission rules are written into the lamp as JSON, and read back into the page'() {
-        reportInfo """
-            A new lamp has host access off. The user turns it on, names the folders and says the
-            rest in their own words, and saves while the genie sleeps. The lamp's file then has
-            the switch on and the rules as JSON, which is what the checker model reads.
-        """
-        given: 'a genie that woke once, and sleeps'
+    def 'Saving the host access page writes its five settings into the lamp, and the page shows them as the file has them'() {
+        reportInfo '''
+            Let's consider a user who lets Jafar read and change files, `may = READ_CHANGE`, with
+            the checker among the guards, `guards = ALLOWLISTS_CHECKER`. They type two folders it
+            may read, with a blank line and stray spaces between them, one folder it may change,
+            and one instruction for the checker. While the page shows this draft, it differs from
+            the saved rules, `HostAccess.changed()`. The user presses Save, `Genies.saveHostAccess`,
+            while Jafar sleeps. Genies writes the five settings with
+            `LampDirectory.hostAccess(Lamp.HostAccess)`, each allowlist as a list of folders,
+            without the blank line and the spaces. The page then shows the rules as the lamp's
+            file now has them, one folder per line, and nothing is left to save.
+        '''
+        given: 'Jafar woke once, so it has a lamp, and sleeps'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+
+        and: 'the user opened its host access page, which shows the new lamp\'s defaults'
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
-
-        expect: 'a new lamp keeps it off'
             waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().lamp() }
-            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == HostAccess.PermissionRules.OFF
+            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == HostAccess.Rules.DEFAULTS
 
-        when: 'the user turns it on, with rules, and saves'
-            var rules = new HostAccess.PermissionRules(true, '~/Documents\n\n  ~/Pictures ', '~/Notes',
-                    'Never open my tax returns.', HostAccess.Commands.NEVER, false)
-            SwingUtilities.invokeAndWait {
-                app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(rules)) } }
-                app.saveHostAccess(jafar)
-            }
+        when: 'the user changes the five settings on the page'
+            var typed = new HostAccess.Rules(HostAccess.May.READ_CHANGE, HostAccess.Guards.ALLOWLISTS_CHECKER,
+                    '~/Documents\n\n  ~/Pictures ', '~/Notes', 'Never open my tax returns.')
+            SwingUtilities.invokeAndWait { app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(typed)) } } }
 
-        then: 'the page shows what the file now has'
+        then: 'the page has changes to save'
+            app.state().get().find(jafar).orElseThrow().hostAccess().changed()
+
+        when: 'the user presses Save'
+            SwingUtilities.invokeAndWait { app.saveHostAccess(jafar) }
+
+        then: 'the page shows the rules as the file now has them, one folder per line, with nothing left to save'
             waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().saved().on() && !app.state().get().find(jafar).orElseThrow().hostAccess().busy() }
-            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == new HostAccess.PermissionRules(true, '~/Documents\n~/Pictures', '~/Notes',
-                    'Never open my tax returns.', HostAccess.Commands.NEVER, false)
+            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == new HostAccess.Rules(HostAccess.May.READ_CHANGE, HostAccess.Guards.ALLOWLISTS_CHECKER,
+                    '~/Documents\n~/Pictures', '~/Notes', 'Never open my tax returns.')
             !app.state().get().find(jafar).orElseThrow().hostAccess().changed()
 
-        and: 'the file has the switch on, and the rules as JSON'
-            var written = Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess()
-            written.enabled()
-            var json = new groovy.json.JsonSlurper().parseText(written.requirements()) as Map
-            json.folders_it_may_read == ['~/Documents', '~/Pictures']
-            json.folders_it_may_read_and_change == ['~/Notes']
-            json.in_the_users_own_words == 'Never open my tax returns.'
-            json.rule == 'Allow a request only when these settings allow it. Refuse everything else.'
-            !json.containsKey('commands')
+        and: 'the lamp\'s file has the same five settings, as the Lamp API reads them'
+            Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess() ==
+                new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String, '~/Documents', '~/Pictures'), Tuple.of(String, '~/Notes'), 'Never open my tax returns.')
     }
 
-    def 'Requirements a person wrote by hand become the user\'s own words, so nothing of them is lost'() {
-        given:
-            SwingUtilities.invokeAndWait { app.wake(jafar) }
-            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
-            SwingUtilities.invokeAndWait { app.sleep(jafar) }
-            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
-            Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess(true, 'Only ~/Documents, and nothing private.')
-
-        when:
-            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
-
-        then:
-            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().saved() == new HostAccess.PermissionRules(true, '', '', 'Only ~/Documents, and nothing private.',
-                                                                                                        HostAccess.Commands.NEVER, false) }
-    }
-
-    def 'Rules that name something other than a path, or nothing while on, are saved with a warning'() {
-        reportInfo """
-            The model that judges reads words, so "everything" in the folders it may read is a
-            rule it understands. The page only warns, and saves the rules as they are.
-        """
-        given: 'a genie that woke once, and sleeps'
+    def 'The host access page shows what a program wrote into the lamp\'s file, the checker instructions as plain text'() {
+        reportInfo '''
+            Let's consider a lamp whose `[host_access]` table a program wrote with the Lamp API's
+            `LampDirectory.hostAccess(Lamp.HostAccess)`. Its checker instructions may be any text:
+            in a lamp an older Genies wrote, they are the JSON that Genies once built, which oillamp
+            carried over from the old key `requirements`. When the user opens
+            Jafar's host access page, Genies reads the table with `LampDirectory.hostAccess()`, and
+            the page shows each of the five settings as the file has them: `may` and `guards` as
+            the same values of `HostAccess.May` and `HostAccess.Guards`, each allowlist one folder
+            per line, and the checker instructions as the very text the file holds, JSON or not.
+            Nothing differs from the file until the user changes something.
+        '''
+        given: 'Jafar woke once, so it has a lamp, and sleeps'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
 
-        expect:
-            var rules = new HostAccess.PermissionRules(on, mayRead, '', words, HostAccess.Commands.NEVER, false)
-            rules.warning(Lang.ENGLISH, Path.of('/home/jafar')).orElse('').contains(because)
-
-        when:
-            SwingUtilities.invokeAndWait {
-                app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(rules)) } }
-                app.saveHostAccess(jafar)
-            }
-
-        then:
-            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().saved() == rules }
-
-        where:
-            on    | mayRead        | words      | because
-            true  | 'everything'   | ''         | '"everything" is not a path'
-            true  | ''             | ''         | 'will refuse every request'
-            true  | '~/Documents'  | ''         | ''
-            true  | ''             | 'Only ~/x' | ''
-    }
-
-    def 'Who lets a genie run commands, and whether it asks about folders outside the home folder, are read from its lamp\'s file'() {
-        reportInfo """
-            Let's consider a lamp whose `oillamp.toml` already says, under `[host_access]`, who
-            approves a shell command the agent wants to run on this computer, `commands`, and
-            whether a request for a folder outside the user's home folder goes to the user,
-            `ask_the_user`. Here a program wrote them with the Lamp API's
-            `LampDirectory.hostAccess(Lamp.HostAccess)`. When the user opens the genie's host
-            access page, Genies reads them back with `LampDirectory.hostAccess()`: `off` becomes
-            "Nobody" (`Commands.NEVER`), `ask` becomes "You, each time" (`Commands.YOU_EACH_TIME`)
-            and `checker` becomes "The model alone" (`Commands.THE_MODEL_ALONE`). The page shows
-            them as the file has them, so nothing is changed until the user changes it.
-        """
-        given: 'a genie that woke once, and sleeps'
-            SwingUtilities.invokeAndWait { app.wake(jafar) }
-            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
-            SwingUtilities.invokeAndWait { app.sleep(jafar) }
-            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
-
-        and: 'its lamp\'s file says who approves commands, and whether to ask the user'
+        and: 'a program wrote its lamp\'s host access with the Lamp API'
             Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher)
-                .hostAccess(new Lamp.HostAccess(true, 'Only ~/Documents.', approval, askTheUser))
+                .hostAccess(new Lamp.HostAccess(writtenMay, writtenGuards, Tuple.of(String, '/media/stick', '~/Documents'), Tuple.of(String, '~/project'), instructions))
 
-        when: 'the user opens its host access page'
+        when: 'the user opens Jafar\'s host access page'
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
 
-        then: 'the page shows what the file has'
+        then: 'the page shows the five settings as the file has them, with nothing changed'
             waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().lamp() }
             app.state().get().find(jafar).orElseThrow().hostAccess().saved() ==
-                new HostAccess.PermissionRules(true, '', '', 'Only ~/Documents.', commands, askTheUser)
+                new HostAccess.Rules(shownMay, shownGuards, '/media/stick\n~/Documents', '~/project', instructions)
             !app.state().get().find(jafar).orElseThrow().hostAccess().changed()
 
         where:
-            approval                        | askTheUser || commands
-            LampHostCommandApproval.OFF     | false      || HostAccess.Commands.NEVER
-            LampHostCommandApproval.ASK     | true       || HostAccess.Commands.YOU_EACH_TIME
-            LampHostCommandApproval.CHECKER | true       || HostAccess.Commands.THE_MODEL_ALONE
+            writtenMay                         | writtenGuards                                | instructions                                              || shownMay                        | shownGuards
+            LampHostAccess.NOTHING             | LampHostAccessGuards.ALLOWLISTS              | ''                                                        || HostAccess.May.NOTHING          | HostAccess.Guards.ALLOWLISTS
+            LampHostAccess.MAY_READ            | LampHostAccessGuards.ALLOWLISTS_CHECKER      | 'Only what I name.'                                       || HostAccess.May.READ             | HostAccess.Guards.ALLOWLISTS_CHECKER
+            LampHostAccess.MAY_READ_CHANGE_RUN | LampHostAccessGuards.ALLOWLISTS_CHECKER_USER | '{\n  "in_the_users_own_words" : "Never delete a file."\n}' || HostAccess.May.READ_CHANGE_RUN  | HostAccess.Guards.ALLOWLISTS_CHECKER_USER
     }
 
-    def 'Saving the host access page writes who lets the genie run commands, and whether it asks, into its lamp\'s file'() {
-        reportInfo """
-            Let's consider a user who lets the genie run commands with nobody asked but the model
-            that judges, "The model alone", and who wants to be asked about a USB stick under
-            `/media`, which is outside their home folder, rather than have it refused. They
-            choose both on the host access page and press Save, `Genies.saveHostAccess`, while
-            the genie sleeps. Genies writes them with `LampDirectory.hostAccess(Lamp.HostAccess)`,
-            so the lamp's file then has `commands = "checker"` and `ask_the_user = true`, next to
-            the switch and the rules.
-        """
-        given: 'a genie that woke once, and sleeps'
+    def 'Rules that oillamp would refuse say why on the host access page, and Save does not send them to the lamp'() {
+        reportInfo '''
+            Let's consider a user who makes a mistake that oillamp would refuse to write into the
+            lamp's file: a line in an allowlist that is not `~`, does not start with `~/` and is not
+            absolute, such as "everything"; a folder with a colon in it, which oillamp keeps
+            between the folders of a list; or no checker instructions while the checker is among
+            the guards of a genie that may do something. `HostAccess.Rules.mistake()` names the
+            first such mistake, which the page says, in the language Genies speaks, beside Save.
+            Pressing Save, `Genies.saveHostAccess`, sends nothing to the lamp then, so its file
+            keeps the settings it had.
+        '''
+        given: 'Jafar woke once, so it has a lamp with oillamp\'s defaults, and sleeps'
             SwingUtilities.invokeAndWait { app.wake(jafar) }
             waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
             SwingUtilities.invokeAndWait { app.sleep(jafar) }
@@ -227,71 +198,86 @@ class KeepingAGeniesHostAccessSpec extends Specification {
             SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
             waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().lamp() }
 
-        when: 'the user chooses "The model alone", and Yes for folders outside the home folder, and saves'
-            var rules = new HostAccess.PermissionRules(true, '/media/stick', '', 'Only builds in ~/project.',
-                    HostAccess.Commands.THE_MODEL_ALONE, true)
+        when: 'the user makes the mistake on the page, and presses Save'
+            var typed = new HostAccess.Rules(HostAccess.May.READ, HostAccess.Guards.ALLOWLISTS_CHECKER, readAllowlist, changeAllowlist, instructions)
             SwingUtilities.invokeAndWait {
-                app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(rules)) } }
+                app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(typed)) } }
                 app.saveHostAccess(jafar)
             }
 
-        then: 'the page shows what the file now has'
-            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().saved() == rules }
-            !app.state().get().find(jafar).orElseThrow().hostAccess().changed()
+        then: 'the page says what is wrong, in English here'
+            app.state().get().find(jafar).orElseThrow().hostAccess().draft().mistake().orElseThrow().words(Lang.ENGLISH) == said
 
-        and: 'the file has who approves commands, and that the user is asked'
-            var written = Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess()
-            written.commands() == LampHostCommandApproval.CHECKER
-            written.askTheUser()
-    }
-
-    def 'The requirements tell the model that judges about commands only once the user lets the genie run them'() {
-        reportInfo """
-            Let's consider the requirements JSON Genies writes for the model that judges. Its
-            `rule` says to refuse everything the settings do not allow, and the settings list
-            only folders, so a command would always be refused. The key `commands` lifts that,
-            and says nothing about which commands are fine: that is the user's to say, in their
-            own words. With "You, each time" it tells the model that the person approves every
-            command, so the model refuses only one that clearly breaks the rules, and lets every
-            other one through to the person. With "The model alone" it tells the model to judge
-            each command against the settings and the user's own words. With "Nobody" there is
-            no key `commands` at all, so the JSON of a genie that never ran commands stays as it
-            was.
-        """
-        given: 'the rules of a genie that may read ~/Documents'
-            var rules = new HostAccess.PermissionRules(true, '~/Documents', '', '', commands, false)
-
-        expect:
-            (new groovy.json.JsonSlurper().parseText(rules.requirements()) as Map).commands == said
+        and: 'nothing is on its way to the lamp, and its file still has oillamp\'s defaults'
+            !app.state().get().find(jafar).orElseThrow().hostAccess().busy()
+            app.state().get().find(jafar).orElseThrow().hostAccess().saved() == HostAccess.Rules.DEFAULTS
+            Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess().may() == LampHostAccess.NOTHING
 
         where:
-            commands                            || said
-            HostAccess.Commands.NEVER           || null
-            HostAccess.Commands.YOU_EACH_TIME   || HostAccess.PermissionRules.THE_PERSON_APPROVES_EVERY_COMMAND
-            HostAccess.Commands.THE_MODEL_ALONE || HostAccess.PermissionRules.COMMANDS_ARE_SWITCHED_ON
+            readAllowlist            | changeAllowlist | instructions     || said
+            '~/Documents\neverything' | '~'            | 'Only ~/Documents.' || '"everything" is not a folder. Write ~, or a folder starting with ~/ or with /.'
+            '~'                      | '~/a:b'         | 'Only ~/Documents.' || '"~/a:b" holds a colon, which a folder here cannot.'
+            '~'                      | '~'             | '  \n '          || 'The checker needs instructions to judge by. Write them, or choose the allowlists alone.'
     }
 
-    def 'A folder outside the home folder is saved with a warning, unless the user lets the lamp ask them'() {
-        reportInfo """
-            Let's consider a user whose home folder is `/home/jafar`, and who lists `/media/stick`
-            under the folders the genie may read. Genies leaves the lamp's `roots` empty, which
-            means the home folder, so the lamp refuses `/media/stick` before the model that
-            judges even sees the request, unless `ask_the_user` is on: then a request the model
-            allowed goes to the user. `PermissionRules.warning` says so while the user is not
-            asked. A folder inside the home folder, written out in full, gets no warning.
-        """
-        given:
-            var rules = new HostAccess.PermissionRules(true, folder, '', '', HostAccess.Commands.NEVER, askOutsideHome)
+    def 'Empty checker instructions are a mistake only while host access is on and the checker is among the guards'() {
+        reportInfo '''
+            Let's consider rules with no checker instructions. The checker, another AI model,
+            judges every request against them, so oillamp refuses to write empty ones while it
+            would be asked: while `may` is not `NOTHING` and `guards` include the checker. With
+            `may = NOTHING` nothing is asked at all, and with `guards = ALLOWLISTS` no checker
+            reads them, so `HostAccess.Rules.mistake()` finds none there, and the page saves them.
+        '''
+        given: 'rules with empty checker instructions'
+            var rules = new HostAccess.Rules(may, guards, '~', '~', '')
 
         expect:
-            rules.warning(Lang.ENGLISH, Path.of('/home/jafar')).orElse('') == warning
+            rules.mistake().isPresent() == mistake
 
         where:
-            folder                | askOutsideHome || warning
-            '/media/stick'        | false          || '"/media/stick" is outside your home folder, so the lamp refuses it unless you let Genies ask you.'
-            '/media/stick'        | true           || ''
-            '/home/jafar/Music'   | false          || ''
-            '/home/jafar/../anna' | false          || '"/home/jafar/../anna" is outside your home folder, so the lamp refuses it unless you let Genies ask you.'
+            may                            | guards                                   || mistake
+            HostAccess.May.NOTHING         | HostAccess.Guards.ALLOWLISTS_CHECKER     || false
+            HostAccess.May.READ            | HostAccess.Guards.ALLOWLISTS             || false
+            HostAccess.May.READ            | HostAccess.Guards.ALLOWLISTS_CHECKER     || true
+            HostAccess.May.READ_CHANGE_RUN | HostAccess.Guards.ALLOWLISTS_CHECKER_USER || true
+    }
+
+    def 'Commands that only the allowlists guard are flagged as unchecked, and saved all the same'() {
+        reportInfo '''
+            Let's consider a user who lets Jafar run commands, `may = READ_CHANGE_RUN`, with only
+            the allowlists among the guards, `guards = ALLOWLISTS`. No model then judges a
+            command and nobody is asked, and a command can do anything the user can; the
+            allowlists only decide the folder it starts in. `HostAccess.Rules.runsCommandsUnchecked()`
+            says so, as `Lamp.HostAccess.runsCommandsUnchecked()` does, and the page shows a
+            red warning for it. It is the user's computer, so Save, `Genies.saveHostAccess`,
+            writes the rules all the same.
+        '''
+        given: 'Jafar woke once, so it has a lamp, and sleeps'
+            SwingUtilities.invokeAndWait { app.wake(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.READY }
+            SwingUtilities.invokeAndWait { app.sleep(jafar) }
+            waitUntil { app.state().get().find(jafar).orElseThrow().phase() == Genie.Phase.ASLEEP }
+            SwingUtilities.invokeAndWait { app.state().update { it.select(jafar).withPage(GeniesState.Page.HOST_ACCESS) } }
+            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().lamp() }
+
+        expect: 'only commands with the allowlists alone are flagged'
+            !new HostAccess.Rules(HostAccess.May.READ_CHANGE, HostAccess.Guards.ALLOWLISTS, '~', '~', '').runsCommandsUnchecked()
+            !new HostAccess.Rules(HostAccess.May.READ_CHANGE_RUN, HostAccess.Guards.ALLOWLISTS_CHECKER, '~', '~', 'Only builds.').runsCommandsUnchecked()
+            new HostAccess.Rules(HostAccess.May.READ_CHANGE_RUN, HostAccess.Guards.ALLOWLISTS, '~', '~/project', '').runsCommandsUnchecked()
+
+        when: 'the user chooses to let it run commands, guarded by the allowlists alone, and presses Save'
+            var unchecked = new HostAccess.Rules(HostAccess.May.READ_CHANGE_RUN, HostAccess.Guards.ALLOWLISTS, '~', '~/project', '')
+            SwingUtilities.invokeAndWait {
+                app.state().update { it.update(jafar) { genie -> genie.withHostAccess(genie.hostAccess().withDraft(unchecked)) } }
+                app.saveHostAccess(jafar)
+            }
+
+        then: 'the page shows the saved rules, still flagged'
+            waitUntil { app.state().get().find(jafar).orElseThrow().hostAccess().saved() == unchecked }
+            app.state().get().find(jafar).orElseThrow().hostAccess().saved().runsCommandsUnchecked()
+
+        and: 'the lamp\'s file has them, which the Lamp API flags too'
+            Lamp.at(app.lampOf(jafar)).launchedBy(sandbox.launcher).hostAccess().runsCommandsUnchecked()
     }
 
     def 'A request for permission waits a minute for the user, and is kept with its answer'() {

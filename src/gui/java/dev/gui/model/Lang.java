@@ -72,7 +72,7 @@ public enum Lang {
         return new HomeFolders(this);
     }
 
-    /// The words of whether a genie may reach this computer, and its rules.
+    /// The words of what a genie may do on this computer, and what guards it.
     public HostAccessPage HOST_ACCESS_PAGE() {
         return new HostAccessPage(this);
     }
@@ -2850,8 +2850,8 @@ public enum Lang {
         }
     }
 
-    /// The words of a genie's Host access page: whether it may reach this computer, and the
-    /// rules a model judges its requests by.
+    /// The words of a genie's Host access page: what it may do on this computer, what guards
+    /// each of its requests, its allowlists, and the instructions for the checker.
     public record HostAccessPage(Lang lang) {
         public String THE_HOST_ACCESS_COULD_NOT_BE_READ(String reason) {
             return switch (lang) {
@@ -2880,26 +2880,6 @@ public enum Lang {
                 case SPANISH -> "Acceso al equipo";
                 case JAPANESE -> "ホストへのアクセス";
                 case CHINESE -> "主机访问";
-            };
-        }
-
-        public String MAY_ASK_TO_REACH_THIS_COMPUTER_A_MODEL_JUDGES_EACH_REQUEST(String genie) {
-            return switch (lang) {
-                case ENGLISH -> genie + " may ask to reach this computer. A model judges each request against these rules before anything happens.";
-                case GERMAN -> genie + " darf darum bitten, auf diesen Rechner zuzugreifen. Ein Modell prüft jede Anfrage anhand dieser Regeln, bevor irgendetwas passiert.";
-                case SPANISH -> genie + " puede pedir acceso a este equipo. Un modelo juzga cada petición según estas reglas antes de que pase nada.";
-                case JAPANESE -> genie + " はこのコンピューターへのアクセスを求めることができます。何かが実行される前に、モデルが各リクエストをこのルールに照らして判断します。";
-                case CHINESE -> genie + " 可以请求访问这台电脑。在执行任何操作之前，都会由一个模型按这些规则审核每个请求。";
-            };
-        }
-
-        public String CANNOT_REACH_THIS_COMPUTER(String genie) {
-            return switch (lang) {
-                case ENGLISH -> genie + " cannot reach this computer.";
-                case GERMAN -> genie + " kann nicht auf diesen Rechner zugreifen.";
-                case SPANISH -> genie + " no puede acceder a este equipo.";
-                case JAPANESE -> genie + " はこのコンピューターにアクセスできません。";
-                case CHINESE -> genie + " 无法访问这台电脑。";
             };
         }
 
@@ -2933,27 +2913,201 @@ public enum Lang {
             };
         }
 
-        public String MAY_IT_REACH_THIS_COMPUTER() {
+        public String EXPERIMENTAL_NEVER_ALLOW_ANYTHING_ON_A_COMPUTER_WITH_SENSITIVE_DATA() {
             return switch (lang) {
-                case ENGLISH -> "MAY IT REACH THIS COMPUTER?";
-                case GERMAN -> "DARF ER AUF DIESEN RECHNER ZUGREIFEN?";
-                case SPANISH -> "¿PUEDE ACCEDER A ESTE EQUIPO?";
-                case JAPANESE -> "このコンピューターへのアクセスを許可しますか？";
-                case CHINESE -> "是否允许它访问这台电脑？";
+                case ENGLISH -> "Experimental. Never allow anything here on a computer with sensitive data.";
+                case GERMAN -> "Experimentell. Erlaube hier nie etwas auf einem Rechner mit sensiblen Daten.";
+                case SPANISH -> "Experimental. Nunca permitas nada aquí en un equipo con datos sensibles.";
+                case JAPANESE -> "試験的な機能です。機密データのあるコンピューターでは、ここで何も許可しないでください。";
+                case CHINESE -> "实验性功能。在存有敏感数据的电脑上，切勿在这里允许任何操作。";
             };
         }
 
-        public String EXPERIMENTAL_NEVER_TURN_THIS_ON_ON_A_COMPUTER_WITH_SENSITIVE_DATA() {
+        // ─── what it may do ────────────────────────────────────────────────────────────────
+
+        public String WHAT_MAY_IT_DO_ON_THIS_COMPUTER(String genie) {
             return switch (lang) {
-                case ENGLISH ->
-                    "Experimental. Never turn this on on a computer with sensitive data. "
-                    + "The model that judges reads these rules with every request, and nothing else.";
-                case GERMAN -> "Experimentell. Schalte das nie auf einem Rechner mit sensiblen Daten ein. Das prüfende Modell liest bei jeder Anfrage diese Regeln, und nichts sonst.";
-                case SPANISH -> "Experimental. Nunca lo actives en un equipo con datos sensibles. El modelo que juzga lee estas reglas con cada petición, y nada más.";
-                case JAPANESE -> "試験的な機能です。機密データのあるコンピューターでは絶対にオンにしないでください。判断するモデルは、リクエストのたびにこのルールだけを読みます。";
-                case CHINESE -> "实验性功能。切勿在存有敏感数据的电脑上开启。审核模型每次处理请求时只会阅读这些规则，别无其他。";
+                case ENGLISH -> "WHAT MAY " + genie + " DO ON THIS COMPUTER?";
+                case GERMAN -> "WAS DARF " + genie + " AUF DIESEM RECHNER TUN?";
+                case SPANISH -> "¿QUÉ PUEDE HACER " + genie + " EN ESTE EQUIPO?";
+                case JAPANESE -> genie + " がこのコンピューターでしてよいこと";
+                case CHINESE -> genie + " 可以在这台电脑上做什么？";
             };
         }
+
+        public String NOTHING() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing";
+                case GERMAN -> "Nichts";
+                case SPANISH -> "Nada";
+                case JAPANESE -> "何もしない";
+                case CHINESE -> "什么都不做";
+            };
+        }
+
+        public String READ() {
+            return switch (lang) {
+                case ENGLISH -> "Read";
+                case GERMAN -> "Lesen";
+                case SPANISH -> "Leer";
+                case JAPANESE -> "読む";
+                case CHINESE -> "读取";
+            };
+        }
+
+        public String READ_AND_CHANGE() {
+            return switch (lang) {
+                case ENGLISH -> "Read & change";
+                case GERMAN -> "Lesen & ändern";
+                case SPANISH -> "Leer y cambiar";
+                case JAPANESE -> "読む・変更";
+                case CHINESE -> "读取和修改";
+            };
+        }
+
+        public String READ_CHANGE_AND_RUN_COMMANDS() {
+            return switch (lang) {
+                case ENGLISH -> "Read, change & run commands";
+                case GERMAN -> "Lesen, ändern & Befehle ausführen";
+                case SPANISH -> "Leer, cambiar y ejecutar comandos";
+                case JAPANESE -> "読む・変更・コマンド実行";
+                case CHINESE -> "读取、修改和运行命令";
+            };
+        }
+
+        public String IT_HAS_NO_TOOLS_TO_REACH_THIS_COMPUTER(String genie) {
+            return switch (lang) {
+                case ENGLISH -> genie + " has no tools to reach this computer. What is below applies once you allow something.";
+                case GERMAN -> genie + " hat keine Werkzeuge, um diesen Rechner zu erreichen. Was darunter steht, gilt erst, wenn du etwas erlaubst.";
+                case SPANISH -> genie + " no tiene herramientas para llegar a este equipo. Lo de abajo se aplica en cuanto permitas algo.";
+                case JAPANESE -> genie + " には、このコンピューターに届く道具がありません。下の設定は、何かを許可したときに効きます。";
+                case CHINESE -> genie + " 没有任何访问这台电脑的工具。下面的设置要在你允许某些操作后才会生效。";
+            };
+        }
+
+        public String IT_MAY_LIST_FOLDERS_READ_FILES_AND_COPY_ONE_INTO_ITS_SANDBOX() {
+            return switch (lang) {
+                case ENGLISH -> "It may list folders and read files, copy a file into its own sandbox, and show you a document.";
+                case GERMAN -> "Er darf Ordner auflisten und Dateien lesen, eine Datei in seine Sandbox kopieren und dir ein Dokument zeigen.";
+                case SPANISH -> "Puede listar carpetas y leer archivos, copiar un archivo a su propio sandbox y mostrarte un documento.";
+                case JAPANESE -> "フォルダーの一覧とファイルの読み取り、ファイルを自分のサンドボックスへコピーすること、文書をあなたに見せることができます。";
+                case CHINESE -> "它可以列出文件夹、读取文件、把文件复制到它自己的沙盒里，以及给你打开文档。";
+            };
+        }
+
+        public String IT_MAY_ALSO_WRITE_AND_EDIT_FILES_COPY_ITS_WORK_OVER_AND_OPEN_A_WEB_PAGE() {
+            return switch (lang) {
+                case ENGLISH -> "It may also write and edit files, copy a file over to this computer, open a web page and show you a notification.";
+                case GERMAN -> "Er darf außerdem Dateien schreiben und bearbeiten, eine Datei auf diesen Rechner kopieren, eine Webseite öffnen und dir eine Benachrichtigung zeigen.";
+                case SPANISH -> "También puede escribir y editar archivos, copiar un archivo a este equipo, abrir una página web y mostrarte una notificación.";
+                case JAPANESE -> "さらに、ファイルの書き込みと編集、このコンピューターへのファイルのコピー、Web ページを開くこと、通知を出すことができます。";
+                case CHINESE -> "它还可以写入和编辑文件、把文件复制到这台电脑、打开网页，以及给你发通知。";
+            };
+        }
+
+        public String IT_MAY_ALSO_RUN_COMMANDS_WHICH_CAN_DO_ANYTHING_YOU_CAN() {
+            return switch (lang) {
+                case ENGLISH -> "It may also run commands, starting in a folder it may change. A command can do anything you can on this computer.";
+                case GERMAN -> "Er darf außerdem Befehle ausführen, die in einem Ordner starten, den er ändern darf. Ein Befehl kann auf diesem Rechner alles, was du kannst.";
+                case SPANISH -> "También puede ejecutar comandos, que empiezan en una carpeta que puede cambiar. Un comando puede hacer en este equipo todo lo que tú puedes.";
+                case JAPANESE -> "さらに、変更してよいフォルダーから始まるコマンドを実行できます。コマンドは、このコンピューターであなたができることを何でもできます。";
+                case CHINESE -> "它还可以运行命令，命令从它可以修改的文件夹中开始。一条命令能在这台电脑上做你能做的任何事。";
+            };
+        }
+
+        // ─── what guards each request ──────────────────────────────────────────────────────
+
+        public String WHAT_GUARDS_EACH_REQUEST() {
+            return switch (lang) {
+                case ENGLISH -> "WHAT GUARDS EACH REQUEST?";
+                case GERMAN -> "WAS PRÜFT JEDE ANFRAGE?";
+                case SPANISH -> "¿QUÉ VIGILA CADA PETICIÓN?";
+                case JAPANESE -> "各リクエストを確認するもの";
+                case CHINESE -> "每个请求由什么把关？";
+            };
+        }
+
+        public String ALLOWLISTS() {
+            return switch (lang) {
+                case ENGLISH -> "Allowlists";
+                case GERMAN -> "Ordnerlisten";
+                case SPANISH -> "Listas de carpetas";
+                case JAPANESE -> "許可リスト";
+                case CHINESE -> "允许列表";
+            };
+        }
+
+        public String ALLOWLISTS_AND_CHECKER() {
+            return switch (lang) {
+                case ENGLISH -> "Allowlists + checker";
+                case GERMAN -> "Ordnerlisten + Prüfer";
+                case SPANISH -> "Listas + revisor";
+                case JAPANESE -> "許可リスト＋チェッカー";
+                case CHINESE -> "允许列表 + 审核模型";
+            };
+        }
+
+        public String ALLOWLISTS_CHECKER_AND_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Allowlists + checker + you";
+                case GERMAN -> "Ordnerlisten + Prüfer + du";
+                case SPANISH -> "Listas + revisor + tú";
+                case JAPANESE -> "許可リスト＋チェッカー＋あなた";
+                case CHINESE -> "允许列表 + 审核模型 + 你";
+            };
+        }
+
+        public String ONLY_THE_ALLOWLISTS_NO_MODEL_JUDGES_AND_NOBODY_ASKS_YOU() {
+            return switch (lang) {
+                case ENGLISH -> "Only the allowlists below: oillamp refuses a path outside them. No model judges a request, and nobody asks you.";
+                case GERMAN -> "Nur die Ordnerlisten unten: oillamp lehnt jeden Pfad außerhalb ab. Kein Modell beurteilt eine Anfrage, und niemand fragt dich.";
+                case SPANISH -> "Solo las listas de carpetas de abajo: oillamp rechaza una ruta fuera de ellas. Ningún modelo juzga las peticiones y nadie te pregunta.";
+                case JAPANESE -> "下の許可リストだけです。リストの外のパスは oillamp が拒否します。リクエストを判断するモデルはなく、あなたへの確認もありません。";
+                case CHINESE -> "只有下面的允许列表：列表以外的路径由 oillamp 拒绝。没有模型审核请求，也不会询问你。";
+            };
+        }
+
+        public String THEN_THE_CHECKER_ANOTHER_AI_MODEL_ALLOWS_OR_REFUSES_EACH_REQUEST() {
+            return switch (lang) {
+                case ENGLISH -> "The allowlists first, then the checker: another AI model judges each request against your instructions below, and allows or refuses it.";
+                case GERMAN -> "Erst die Ordnerlisten, dann der Prüfer: Ein anderes KI-Modell beurteilt jede Anfrage anhand deiner Anweisungen unten und erlaubt oder verweigert sie.";
+                case SPANISH -> "Primero las listas, luego el revisor: otro modelo de IA juzga cada petición según tus instrucciones de abajo, y la permite o la rechaza.";
+                case JAPANESE -> "まず許可リスト、次にチェッカーです。別の AI モデルが下の指示に照らして各リクエストを判断し、許可か拒否を決めます。";
+                case CHINESE -> "先是允许列表，然后是审核模型：另一个 AI 模型按你在下面写的指示审核每个请求，决定允许还是拒绝。";
+            };
+        }
+
+        public String THEN_YOU_ABOUT_EVERY_COMMAND_AND_A_PATH_OUTSIDE_THE_ALLOWLISTS() {
+            return switch (lang) {
+                case ENGLISH -> "The allowlists, the checker, and then you: about every command, and about a path outside the allowlists, once the checker allowed it. No answer within a minute counts as no.";
+                case GERMAN -> "Die Ordnerlisten, der Prüfer und dann du: bei jedem Befehl und bei einem Pfad außerhalb der Ordnerlisten, nachdem der Prüfer ihn erlaubt hat. Kommt binnen einer Minute keine Antwort, gilt das als Nein.";
+                case SPANISH -> "Las listas, el revisor y luego tú: por cada comando, y por una ruta fuera de las listas, una vez que el revisor lo permitió. Si no respondes en un minuto, cuenta como un no.";
+                case JAPANESE -> "許可リスト、チェッカー、そしてあなたです。すべてのコマンドと、許可リストの外のパスについて、チェッカーが許可したあとであなたに確認します。1 分以内に答えがなければ「いいえ」として扱われます。";
+                case CHINESE -> "允许列表、审核模型，然后是你：每条命令，以及允许列表以外的路径，在审核模型允许后都会询问你。一分钟内没有回答就算作拒绝。";
+            };
+        }
+
+        public String COMMANDS_RUN_UNCHECKED() {
+            return switch (lang) {
+                case ENGLISH -> "Commands run unchecked";
+                case GERMAN -> "Befehle laufen ungeprüft";
+                case SPANISH -> "Los comandos se ejecutan sin revisar";
+                case JAPANESE -> "コマンドが確認なしで実行されます";
+                case CHINESE -> "命令将不经审核直接运行";
+            };
+        }
+
+        public String NOTHING_JUDGES_A_COMMAND_AND_NOBODY_ASKS_YOU(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "No model judges a command " + genie + " runs, and nobody asks you. A command can do anything you can, and the allowlists only decide the folder it starts in. Add the checker unless you are sure.";
+                case GERMAN -> "Kein Modell beurteilt einen Befehl, den " + genie + " ausführt, und niemand fragt dich. Ein Befehl kann alles, was du kannst, und die Ordnerlisten bestimmen nur, in welchem Ordner er startet. Nimm den Prüfer dazu, wenn du dir nicht sicher bist.";
+                case SPANISH -> "Ningún modelo juzga los comandos que ejecuta " + genie + ", y nadie te pregunta. Un comando puede hacer todo lo que tú puedes, y las listas solo deciden la carpeta en la que empieza. Añade el revisor si no estás seguro.";
+                case JAPANESE -> genie + " が実行するコマンドを判断するモデルはなく、あなたへの確認もありません。コマンドはあなたができることを何でもでき、許可リストが決めるのは開始するフォルダーだけです。確信がなければチェッカーを加えてください。";
+                case CHINESE -> "没有模型审核 " + genie + " 运行的命令，也不会询问你。一条命令能做你能做的任何事，允许列表只决定它从哪个文件夹开始。除非你很确定，否则请加上审核模型。";
+            };
+        }
+
+        // ─── the allowlists ────────────────────────────────────────────────────────────────
 
         public String FOLDERS_IT_MAY_READ() {
             return switch (lang) {
@@ -2965,13 +3119,13 @@ public enum Lang {
             };
         }
 
-        public String ONE_PER_LINE_SUCH_AS_DOCUMENTS() {
+        public String ITS_READ_ALLOWLIST_ONE_FOLDER_PER_LINE_EACH_WITH_EVERYTHING_BELOW_IT() {
             return switch (lang) {
-                case ENGLISH -> "One per line, such as ~/Documents.";
-                case GERMAN -> "Einer pro Zeile, etwa ~/Dokumente.";
-                case SPANISH -> "Una por línea, como ~/Documentos.";
-                case JAPANESE -> "1 行に 1 つずつ。例：~/Documents";
-                case CHINESE -> "每行一个，例如 ~/Documents。";
+                case ENGLISH -> "Its read allowlist. One folder per line, such as ~/Documents; each includes everything below it.";
+                case GERMAN -> "Seine Ordnerliste zum Lesen. Ein Ordner pro Zeile, etwa ~/Dokumente; jeder schließt alles darunter ein.";
+                case SPANISH -> "Su lista de carpetas para leer. Una carpeta por línea, como ~/Documentos; cada una incluye todo lo que hay debajo.";
+                case JAPANESE -> "読み取りの許可リストです。1 行に 1 フォルダー（例：~/Documents）。各フォルダーは、その下のすべてを含みます。";
+                case CHINESE -> "它的读取允许列表。每行一个文件夹，例如 ~/Documents；每个文件夹都包括它下面的所有内容。";
             };
         }
 
@@ -2985,35 +3139,81 @@ public enum Lang {
             };
         }
 
-        public String IT_MAY_WRITE_FILES_THERE_AND_COPY_WHAT_IT_MADE_THERE() {
+        public String ITS_CHANGE_ALLOWLIST_COMMANDS_START_IN_THESE_TOO() {
             return switch (lang) {
-                case ENGLISH -> "It may write files there, and copy what it made there.";
-                case GERMAN -> "Dort darf er Dateien schreiben und hinkopieren, was er gemacht hat.";
-                case SPANISH -> "Puede escribir archivos ahí y copiar ahí lo que ha creado.";
-                case JAPANESE -> "そこにファイルを書き込んだり、作ったものをコピーしたりできます。";
-                case CHINESE -> "它可以在那里写入文件，也可以把它创建的内容复制过去。";
+                case ENGLISH -> "Its change allowlist, where commands may start too. One folder per line; each includes everything below it.";
+                case GERMAN -> "Seine Ordnerliste zum Ändern; hier dürfen auch Befehle starten. Ein Ordner pro Zeile; jeder schließt alles darunter ein.";
+                case SPANISH -> "Su lista de carpetas para cambiar, donde también pueden empezar los comandos. Una carpeta por línea; cada una incluye todo lo que hay debajo.";
+                case JAPANESE -> "変更の許可リストです。コマンドもここから始められます。1 行に 1 フォルダー。各フォルダーは、その下のすべてを含みます。";
+                case CHINESE -> "它的修改允许列表，命令也可以从这里开始。每行一个文件夹；每个文件夹都包括它下面的所有内容。";
             };
         }
 
-        public String ANYTHING_ELSE_IN_YOUR_OWN_WORDS() {
+        // ─── the instructions for the checker ──────────────────────────────────────────────
+
+        public String INSTRUCTIONS_FOR_THE_CHECKER() {
             return switch (lang) {
-                case ENGLISH -> "ANYTHING ELSE, IN YOUR OWN WORDS";
-                case GERMAN -> "SONST NOCH ETWAS, IN DEINEN EIGENEN WORTEN";
-                case SPANISH -> "CUALQUIER OTRA COSA, CON TUS PROPIAS PALABRAS";
-                case JAPANESE -> "そのほかのルール（自由記述）";
-                case CHINESE -> "其他要求（用你自己的话说）";
+                case ENGLISH -> "INSTRUCTIONS FOR THE CHECKER";
+                case GERMAN -> "ANWEISUNGEN FÜR DEN PRÜFER";
+                case SPANISH -> "INSTRUCCIONES PARA EL REVISOR";
+                case JAPANESE -> "チェッカーへの指示";
+                case CHINESE -> "给审核模型的指示";
             };
         }
 
-        public String SAY_WHAT_MUST_NOT_HAPPEN() {
+        public String THE_CHECKER_IS_ANOTHER_AI_MODEL_OILLAMP_ASKS_IT_ABOUT_EVERY_REQUEST() {
             return switch (lang) {
-                case ENGLISH -> "Say what must not happen, such as \"never open my tax returns\".";
-                case GERMAN -> "Schreib, was nicht passieren darf, etwa „öffne nie meine Steuererklärungen“.";
-                case SPANISH -> "Di lo que no debe pasar, como «nunca abras mis declaraciones de la renta».";
-                case JAPANESE -> "してはいけないことを書いてください。例：「確定申告の書類は絶対に開かない」";
-                case CHINESE -> "写下绝不能发生的事，例如“永远不要打开我的报税文件”。";
+                case ENGLISH -> "The checker is another AI model. oillamp asks it about every request, with these instructions, and it allows or refuses. Write anything, such as what must not happen: \"never open my tax returns\".";
+                case GERMAN -> "Der Prüfer ist ein anderes KI-Modell. oillamp fragt ihn bei jeder Anfrage, mit diesen Anweisungen, und er erlaubt oder verweigert. Schreib, was du willst, etwa was nicht passieren darf: „öffne nie meine Steuererklärungen“.";
+                case SPANISH -> "El revisor es otro modelo de IA. oillamp le pregunta por cada petición, con estas instrucciones, y él la permite o la rechaza. Escribe lo que quieras, como lo que no debe pasar: «nunca abras mis declaraciones de la renta».";
+                case JAPANESE -> "チェッカーは別の AI モデルです。oillamp はリクエストのたびにこの指示を添えてチェッカーに尋ね、チェッカーが許可か拒否を決めます。何を書いてもかまいません。例：「確定申告の書類は絶対に開かない」";
+                case CHINESE -> "审核模型是另一个 AI 模型。每个请求，oillamp 都会带着这些指示去问它，由它决定允许还是拒绝。想写什么都可以，例如绝不能发生的事：“永远不要打开我的报税文件”。";
             };
         }
+
+        public String UNUSED_WITH_THE_ALLOWLISTS_ALONE_NO_CHECKER_READS_THESE() {
+            return switch (lang) {
+                case ENGLISH -> "Unused: with the allowlists alone, no checker reads these. They are kept for when you add it.";
+                case GERMAN -> "Ungenutzt: Mit den Ordnerlisten allein liest kein Prüfer diese Anweisungen. Sie bleiben für den Fall, dass du ihn dazunimmst.";
+                case SPANISH -> "Sin uso: con las listas solas, ningún revisor las lee. Se guardan para cuando lo añadas.";
+                case JAPANESE -> "未使用：許可リストだけのときは、チェッカーはこの指示を読みません。チェッカーを加えたときのために残しておきます。";
+                case CHINESE -> "未使用：只用允许列表时，没有审核模型会读这些指示。它们会保留，等你加上审核模型时使用。";
+            };
+        }
+
+        // ─── what keeps them from being saved ──────────────────────────────────────────────
+
+        public String IS_NOT_A_FOLDER_WRITE_ONE_STARTING_WITH_A_TILDE_OR_A_SLASH(String line) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + line + "\" is not a folder. Write ~, or a folder starting with ~/ or with /.";
+                case GERMAN -> "„" + line + "“ ist kein Ordner. Schreib ~ oder einen Ordner, der mit ~/ oder mit / beginnt.";
+                case SPANISH -> "«" + line + "» no es una carpeta. Escribe ~, o una carpeta que empiece por ~/ o por /.";
+                case JAPANESE -> "「" + line + "」はフォルダーではありません。~ か、~/ または / で始まるフォルダーを書いてください。";
+                case CHINESE -> "“" + line + "”不是文件夹。请写 ~，或以 ~/ 或 / 开头的文件夹。";
+            };
+        }
+
+        public String HOLDS_A_COLON_WHICH_A_FOLDER_HERE_CANNOT(String line) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + line + "\" holds a colon, which a folder here cannot.";
+                case GERMAN -> "„" + line + "“ enthält einen Doppelpunkt, und den darf ein Ordner hier nicht haben.";
+                case SPANISH -> "«" + line + "» contiene dos puntos, y aquí una carpeta no puede tenerlos.";
+                case JAPANESE -> "「" + line + "」にはコロンが含まれていますが、ここでのフォルダーには使えません。";
+                case CHINESE -> "“" + line + "”包含冒号，而这里的文件夹不能包含冒号。";
+            };
+        }
+
+        public String THE_CHECKER_NEEDS_INSTRUCTIONS_WRITE_THEM_OR_CHOOSE_ALLOWLISTS_ALONE() {
+            return switch (lang) {
+                case ENGLISH -> "The checker needs instructions to judge by. Write them, or choose the allowlists alone.";
+                case GERMAN -> "Der Prüfer braucht Anweisungen, nach denen er urteilt. Schreib sie, oder wähle nur die Ordnerlisten.";
+                case SPANISH -> "El revisor necesita instrucciones para juzgar. Escríbelas, o elige solo las listas de carpetas.";
+                case JAPANESE -> "チェッカーには判断の基準となる指示が必要です。指示を書くか、許可リストだけを選んでください。";
+                case CHINESE -> "审核模型需要指示才能做判断。请写下指示，或者只选允许列表。";
+            };
+        }
+
+        // ─── saving ────────────────────────────────────────────────────────────────────────
 
         public String UNDO_CHANGES() {
             return switch (lang) {
@@ -3045,125 +3245,18 @@ public enum Lang {
             };
         }
 
-        public String WRITE_THESE_RULES_INTO_THE_GENIES_LAMP() {
+        public String WRITE_THESE_SETTINGS_INTO_THE_GENIES_LAMP() {
             return switch (lang) {
-                case ENGLISH -> "Write these rules into the genie's lamp";
-                case GERMAN -> "Diese Regeln in die Lampe des Dschinns schreiben";
-                case SPANISH -> "Escribir estas reglas en la lámpara del genio";
-                case JAPANESE -> "これらのルールをジーニーのランプに書き込みます";
-                case CHINESE -> "将这些规则写入精灵的神灯";
+                case ENGLISH -> "Write these settings into the genie's lamp";
+                case GERMAN -> "Diese Einstellungen in die Lampe des Dschinns schreiben";
+                case SPANISH -> "Escribir estos ajustes en la lámpara del genio";
+                case JAPANESE -> "この設定をジーニーのランプに書き込みます";
+                case CHINESE -> "将这些设置写入精灵的神灯";
             };
         }
 
-        public String IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS(String folder) {
-            return switch (lang) {
-                case ENGLISH -> "\"" + folder + "\" is not a path. The model that judges reads it as words, so make sure they say what you mean.";
-                case GERMAN -> "„" + folder + "“ ist kein Pfad. Das prüfende Modell liest es als Worte, also achte darauf, dass sie sagen, was du meinst.";
-                case SPANISH -> "«" + folder + "» no es una ruta. El modelo que juzga lo lee como palabras, así que asegúrate de que digan lo que quieres decir.";
-                case JAPANESE -> "「" + folder + "」はパスではありません。判断するモデルはこれを言葉として読むので、意図したとおりの意味になっているか確認してください。";
-                case CHINESE -> "“" + folder + "”不是路径。审核模型会把它当作文字来理解，所以请确保它表达的是你的本意。";
-            };
-        }
+        // ─── how it works ──────────────────────────────────────────────────────────────────
 
-        public String WHO_LETS_IT_RUN_COMMANDS() {
-            return switch (lang) {
-                case ENGLISH -> "WHO LETS IT RUN COMMANDS?";
-                case GERMAN -> "WER LÄSST IHN BEFEHLE AUSFÜHREN?";
-                case SPANISH -> "¿QUIÉN LE DEJA EJECUTAR COMANDOS?";
-                case JAPANESE -> "コマンドの実行を誰が許可しますか？";
-                case CHINESE -> "谁来允许它运行命令？";
-            };
-        }
-        public String NOBODY() {
-            return switch (lang) {
-                case ENGLISH -> "Nobody";
-                case GERMAN -> "Niemand";
-                case SPANISH -> "Nadie";
-                case JAPANESE -> "誰も許可しない";
-                case CHINESE -> "谁都不允许";
-            };
-        }
-        public String IT_CANNOT_RUN_COMMANDS_AT_ALL() {
-            return switch (lang) {
-                case ENGLISH -> "It can't run commands at all. The safest choice.";
-                case GERMAN -> "Er kann gar keine Befehle ausführen. Die sicherste Wahl.";
-                case SPANISH -> "No puede ejecutar comandos en absoluto. La opción más segura.";
-                case JAPANESE -> "コマンドを一切実行できません。最も安全な選択です。";
-                case CHINESE -> "它完全不能运行命令。最安全的选择。";
-            };
-        }
-        public String YOU_EACH_TIME() {
-            return switch (lang) {
-                case ENGLISH -> "You, each time";
-                case GERMAN -> "Du, jedes Mal";
-                case SPANISH -> "Tú, cada vez";
-                case JAPANESE -> "毎回あなたが";
-                case CHINESE -> "每次由你决定";
-            };
-        }
-        public String THE_MODEL_TURNS_AWAY_WHAT_CLEARLY_BREAKS_YOUR_RULES_EVERY_OTHER_COMMAND_COMES_TO_YOU() {
-            return switch (lang) {
-                case ENGLISH -> "The model that judges turns away a command that clearly breaks your rules. Every other one comes to you, and runs only once you say yes.";
-                case GERMAN -> "Das prüfende Modell weist einen Befehl ab, der klar gegen deine Regeln verstößt. Jeder andere kommt zu dir und läuft erst, wenn du Ja sagst.";
-                case SPANISH -> "El modelo que juzga rechaza un comando que rompa claramente tus reglas. Cualquier otro te llega a ti, y solo se ejecuta cuando dices que sí.";
-                case JAPANESE -> "明らかにルールに反するコマンドは、判断するモデルが断ります。それ以外のコマンドはすべてあなたに届き、あなたが許可したときだけ実行されます。";
-                case CHINESE -> "明显违反你规则的命令会被审核模型拒绝。其他每条命令都会交给你，只有你同意后才会运行。";
-            };
-        }
-        public String THE_MODEL_ALONE() {
-            return switch (lang) {
-                case ENGLISH -> "The model alone";
-                case GERMAN -> "Das Modell allein";
-                case SPANISH -> "Solo el modelo";
-                case JAPANESE -> "モデルだけ";
-                case CHINESE -> "仅由模型决定";
-            };
-        }
-        public String COMMANDS_THE_MODEL_ALLOWS_RUN_STRAIGHT_AWAY_SAY_WHICH_ARE_FINE() {
-            return switch (lang) {
-                case ENGLISH -> "Commands the model allows run straight away, without asking you, and a command can do anything you can. Say in your own words which commands are fine, such as \"builds in ~/project\" or \"never delete anything\".";
-                case GERMAN -> "Befehle, die das Modell erlaubt, laufen sofort, ohne dich zu fragen, und ein Befehl kann alles, was du kannst. Schreib in deinen eigenen Worten, welche Befehle in Ordnung sind, etwa „Builds in ~/projekt“ oder „nie etwas löschen“.";
-                case SPANISH -> "Los comandos que el modelo permite se ejecutan enseguida, sin preguntarte, y un comando puede hacer todo lo que tú puedes. Di con tus propias palabras qué comandos están bien, como «compilar en ~/proyecto» o «no borrar nunca nada».";
-                case JAPANESE -> "モデルが許可したコマンドは、あなたに確認せずにすぐ実行されます。コマンドはあなたができることを何でもできます。どのコマンドなら良いかを自由記述欄に書いてください。例：「~/project でのビルド」「何も削除しない」";
-                case CHINESE -> "模型允许的命令会立即运行，不会询问你，而命令能做你能做的任何事。请用你自己的话写明哪些命令可以运行，例如“在 ~/project 中构建”或“永远不要删除任何东西”。";
-            };
-        }
-        public String ASK_YOU_ABOUT_FOLDERS_OUTSIDE_YOUR_HOME_FOLDER() {
-            return switch (lang) {
-                case ENGLISH -> "ASK YOU ABOUT FOLDERS OUTSIDE YOUR HOME FOLDER?";
-                case GERMAN -> "DICH BEI ORDNERN AUSSERHALB DEINES PERSÖNLICHEN ORDNERS FRAGEN?";
-                case SPANISH -> "¿PREGUNTARTE POR CARPETAS FUERA DE TU CARPETA PERSONAL?";
-                case JAPANESE -> "ホームフォルダーの外のフォルダーについて確認しますか？";
-                case CHINESE -> "主目录以外的文件夹是否询问你？";
-            };
-        }
-        public String IT_CAN_ONLY_REACH_YOUR_HOME_FOLDER_WITH_YES_GENIES_ASKS_YOU_ABOUT_OTHERS(String home) {
-            return switch (lang) {
-                case ENGLISH -> "It can only reach your home folder, " + home + ". With Yes, when it wants a folder elsewhere that your rules allow, such as a USB stick under /media, Genies asks you instead of refusing.";
-                case GERMAN -> "Er erreicht nur deinen persönlichen Ordner, " + home + ". Mit Ja fragt Genies dich, statt abzulehnen, wenn er einen Ordner anderswo will, den deine Regeln erlauben, etwa einen USB-Stick unter /media.";
-                case SPANISH -> "Solo puede acceder a tu carpeta personal, " + home + ". Con Sí, cuando quiera una carpeta de otro sitio que tus reglas permiten, como una memoria USB en /media, Genies te pregunta en lugar de rechazarla.";
-                case JAPANESE -> "アクセスできるのはホームフォルダー " + home + " の中だけです。「はい」にすると、ルールで許可された別の場所のフォルダー（/media の USB メモリーなど）を求めたとき、拒否せずに Genies があなたに確認します。";
-                case CHINESE -> "它只能访问你的主目录 " + home + "。选“是”后，当它需要你的规则允许的其他位置的文件夹（例如 /media 下的 U 盘）时，Genies 会询问你，而不是直接拒绝。";
-            };
-        }
-        public String GENIES_ASKS_YOU_AT_THE_TOP_OF_THE_GENIES_PAGES_NO_ANSWER_WITHIN_A_MINUTE_COUNTS_AS_NO() {
-            return switch (lang) {
-                case ENGLISH -> "Genies asks you at the top of the genie's pages. No answer within a minute counts as no, so whatever it asks while you're away is refused.";
-                case GERMAN -> "Genies fragt dich oben auf den Seiten des Dschinns. Kommt binnen einer Minute keine Antwort, gilt das als Nein, also wird alles abgelehnt, was er fragt, während du weg bist.";
-                case SPANISH -> "Genies te pregunta arriba, en las páginas del genio. Si no respondes en un minuto, cuenta como un no, así que lo que pregunte mientras no estás se rechaza.";
-                case JAPANESE -> "Genies はジーニーのページの上部であなたに確認します。1 分以内に答えがなければ「いいえ」として扱われるので、離席中の確認はすべて拒否されます。";
-                case CHINESE -> "Genies 会在精灵页面的顶部询问你。一分钟内没有回答就算作拒绝，所以你不在时它提出的请求都会被拒绝。";
-            };
-        }
-        public String IS_OUTSIDE_YOUR_HOME_FOLDER_SO_THE_LAMP_REFUSES_IT_UNLESS_YOU_ARE_ASKED(String folder) {
-            return switch (lang) {
-                case ENGLISH -> "\"" + folder + "\" is outside your home folder, so the lamp refuses it unless you let Genies ask you.";
-                case GERMAN -> "„" + folder + "“ liegt außerhalb deines persönlichen Ordners, also lehnt die Lampe es ab, es sei denn, du lässt Genies dich fragen.";
-                case SPANISH -> "«" + folder + "» está fuera de tu carpeta personal, así que la lámpara lo rechaza, salvo que dejes que Genies te pregunte.";
-                case JAPANESE -> "「" + folder + "」はホームフォルダーの外にあるため、Genies があなたに確認するようにしない限り、ランプはこれを拒否します。";
-                case CHINESE -> "“" + folder + "”位于你的主目录之外，因此除非你允许 Genies 询问你，神灯会拒绝它。";
-            };
-        }
         public String HOW_HOST_ACCESS_WORKS() {
             return switch (lang) {
                 case ENGLISH -> "How host access works";
@@ -3173,6 +3266,7 @@ public enum Lang {
                 case CHINESE -> "主机访问是如何运作的";
             };
         }
+
         public String FOLD_THE_EXPLANATION_AWAY() {
             return switch (lang) {
                 case ENGLISH -> "Fold the explanation away";
@@ -3182,6 +3276,7 @@ public enum Lang {
                 case CHINESE -> "收起说明";
             };
         }
+
         public String HOW_IT_WORKS() {
             return switch (lang) {
                 case ENGLISH -> "HOW IT WORKS";
@@ -3191,51 +3286,37 @@ public enum Lang {
                 case CHINESE -> "运作方式";
             };
         }
-        public String THE_MAIN_SWITCH_GIVES_IT_TOOLS_TO_REACH_THIS_COMPUTER_AT_ALL(String genie) {
+
+        public String A_REQUEST_THE_ALLOWLISTS_THE_CHECKER_YOU_WHERE_ASKED_IT_HAPPENS() {
             return switch (lang) {
-                case ENGLISH -> "\"May it reach this computer?\" gives " + genie + " tools to reach this computer at all: to read and change files and, if you let it, to run commands. With No, it has none.";
-                case GERMAN -> "„Darf er auf diesen Rechner zugreifen?“ gibt " + genie + " überhaupt erst Werkzeuge, um diesen Rechner zu erreichen: Dateien lesen und ändern und, wenn du es erlaubst, Befehle ausführen. Mit Nein hat er keine.";
-                case SPANISH -> "«¿Puede acceder a este equipo?» le da a " + genie + " herramientas para llegar a este equipo: leer y cambiar archivos y, si lo permites, ejecutar comandos. Con No, no tiene ninguna.";
-                case JAPANESE -> "「このコンピューターへのアクセスを許可しますか？」で「はい」を選ぶと、" + genie + " はこのコンピューターに届く道具を初めて持ちます。ファイルの読み取りと変更、そして許可すればコマンドの実行です。「いいえ」なら、道具は何もありません。";
-                case CHINESE -> "“是否允许它访问这台电脑？”决定 " + genie + " 是否拥有访问这台电脑的工具：读取和修改文件，以及在你允许时运行命令。选“否”，它就没有任何这类工具。";
+                case ENGLISH -> "A request  →  the allowlists  →  the checker  →  you, where asked  →  it happens";
+                case GERMAN -> "Eine Anfrage  →  die Ordnerlisten  →  der Prüfer  →  du, wo du gefragt wirst  →  sie wird ausgeführt";
+                case SPANISH -> "Una petición  →  las listas de carpetas  →  el revisor  →  tú, donde se te pregunta  →  se lleva a cabo";
+                case JAPANESE -> "リクエスト  →  許可リスト  →  チェッカー  →  確認がある場合はあなた  →  実行";
+                case CHINESE -> "请求  →  允许列表  →  审核模型  →  需要询问时由你决定  →  执行";
             };
         }
-        public String A_REQUEST_THE_CHECKER_JUDGES_IT_YOU_DECIDE_WHERE_YOU_ARE_ASKED_IT_HAPPENS() {
+
+        public String THE_ALLOWLISTS_ARE_CHECKED_BY_OILLAMP_ITSELF() {
             return switch (lang) {
-                case ENGLISH -> "A request  →  the checker judges it  →  you decide, where you are asked  →  it happens";
-                case GERMAN -> "Eine Anfrage  →  das prüfende Modell beurteilt sie  →  du entscheidest, wo du gefragt wirst  →  sie wird ausgeführt";
-                case SPANISH -> "Una petición  →  el modelo que juzga la evalúa  →  tú decides, donde se te pregunta  →  se lleva a cabo";
-                case JAPANESE -> "リクエスト  →  判断するモデルが判断  →  確認がある場合はあなたが決める  →  実行";
-                case CHINESE -> "请求  →  审核模型判断  →  需要询问时由你决定  →  执行";
+                case ENGLISH -> "The allowlists are checked by oillamp itself, not by a model. A path outside them is refused at once, unless you are asked. Each folder includes everything below it, and a link cannot lead out of one. A folder it may change, it may read too.";
+                case GERMAN -> "Die Ordnerlisten prüft oillamp selbst, kein Modell. Ein Pfad außerhalb wird sofort abgelehnt, außer du wirst gefragt. Jeder Ordner schließt alles darunter ein, und ein Link führt nicht aus ihm hinaus. Einen Ordner, den er ändern darf, darf er auch lesen.";
+                case SPANISH -> "Las listas de carpetas las comprueba el propio oillamp, no un modelo. Una ruta fuera de ellas se rechaza enseguida, salvo que se te pregunte. Cada carpeta incluye todo lo que hay debajo, y un enlace no puede sacar de ella. Una carpeta que puede cambiar, también puede leerla.";
+                case JAPANESE -> "許可リストは、モデルではなく oillamp 自身が確認します。リストの外のパスは、あなたに確認する場合を除き、すぐに拒否されます。各フォルダーはその下のすべてを含み、リンクでフォルダーの外へ出ることはできません。変更してよいフォルダーは、読み取りもできます。";
+                case CHINESE -> "允许列表由 oillamp 自己检查，而不是由模型检查。列表以外的路径会被立即拒绝，除非会询问你。每个文件夹都包括它下面的所有内容，链接也无法通向文件夹之外。可以修改的文件夹，也可以读取。";
             };
         }
-        public String EVERY_REQUEST_FIRST_GOES_TO_A_SEPARATE_MODEL_THE_CHECKER() {
+
+        public String THE_CHECKER_IS_ANOTHER_AI_MODEL_IT_SEES_YOUR_INSTRUCTIONS_AND_WHAT_THE_GENIE_DOES(String genie) {
             return switch (lang) {
-                case ENGLISH -> "Every request first goes to a separate model, the checker. It judges the request against the rules on this page: the folder lists and your own words. It also sees what the genie is working on, your instruction and its recent steps, but only as information: nothing the genie writes can change your rules.";
-                case GERMAN -> "Jede Anfrage geht zuerst an ein eigenes Modell, das prüfende Modell. Es beurteilt sie anhand der Regeln auf dieser Seite: der Ordnerlisten und deiner eigenen Worte. Es sieht auch, woran der Dschinn gerade arbeitet, deinen Auftrag und seine letzten Schritte, aber nur als Information: Nichts, was der Dschinn schreibt, kann deine Regeln ändern.";
-                case SPANISH -> "Cada petición pasa primero por un modelo aparte, el modelo que juzga. La evalúa según las reglas de esta página: las listas de carpetas y tus propias palabras. También ve en qué está trabajando el genio, tu encargo y sus últimos pasos, pero solo como información: nada de lo que escriba el genio puede cambiar tus reglas.";
-                case JAPANESE -> "すべてのリクエストは、まず別のモデル、判断するモデルに届きます。このページのルール、つまりフォルダーの一覧とあなた自身の言葉に照らして判断します。ジーニーが取り組んでいること（あなたの指示と直近の手順）も見ますが、あくまで情報としてです。ジーニーが何を書いても、あなたのルールは変わりません。";
-                case CHINESE -> "每个请求都会先交给一个独立的模型，即审核模型。它按本页的规则来判断：文件夹列表和你自己写的话。它也会看到精灵正在做什么，包括你的指示和它最近的步骤，但只作为参考信息：精灵写的任何内容都改变不了你的规则。";
+                case ENGLISH -> "The checker is another AI model. oillamp asks it about every request, with your instructions, what you asked " + genie + " and what it just did, and the checker allows or refuses. What " + genie + " writes is only information to it: nothing " + genie + " writes can change your instructions.";
+                case GERMAN -> "Der Prüfer ist ein anderes KI-Modell. oillamp fragt ihn bei jeder Anfrage, mit deinen Anweisungen, deinem Auftrag an " + genie + " und dem, was er gerade getan hat, und der Prüfer erlaubt oder verweigert. Was " + genie + " schreibt, ist für ihn nur Information: Nichts davon kann deine Anweisungen ändern.";
+                case SPANISH -> "El revisor es otro modelo de IA. oillamp le pregunta por cada petición, con tus instrucciones, lo que le pediste a " + genie + " y lo que acaba de hacer, y el revisor la permite o la rechaza. Lo que escribe " + genie + " es solo información para él: nada de lo que escriba puede cambiar tus instrucciones.";
+                case JAPANESE -> "チェッカーは別の AI モデルです。oillamp はリクエストのたびに、あなたの指示、あなたが " + genie + " に頼んだこと、" + genie + " が直前にしたことを添えてチェッカーに尋ね、チェッカーが許可か拒否を決めます。" + genie + " が書いたことはあくまで情報で、あなたの指示を変えることはできません。";
+                case CHINESE -> "审核模型是另一个 AI 模型。每个请求，oillamp 都会带上你的指示、你交给 " + genie + " 的任务和它刚做过的事去问它，由它决定允许还是拒绝。" + genie + " 写的内容对它来说只是参考信息，改变不了你的指示。";
             };
         }
-        public String YOUR_HOME_FOLDER_IS_A_FENCE_THE_CHECKER_CANNOT_WIDEN() {
-            return switch (lang) {
-                case ENGLISH -> "Your home folder is a fence the checker cannot widen. \"Ask you about folders outside your home folder?\" turns crossing it into a question to you, asked only after the checker allowed the request.";
-                case GERMAN -> "Dein persönlicher Ordner ist ein Zaun, den das prüfende Modell nicht erweitern kann. „Dich bei Ordnern außerhalb deines persönlichen Ordners fragen?“ macht aus dem Überschreiten eine Frage an dich, gestellt erst, nachdem das prüfende Modell die Anfrage erlaubt hat.";
-                case SPANISH -> "Tu carpeta personal es una valla que el modelo que juzga no puede ampliar. «¿Preguntarte por carpetas fuera de tu carpeta personal?» convierte el cruzarla en una pregunta para ti, que solo llega después de que el modelo que juzga haya permitido la petición.";
-                case JAPANESE -> "ホームフォルダーは、判断するモデルにも広げられない柵です。「ホームフォルダーの外のフォルダーについて確認しますか？」で「はい」を選ぶと、柵を越えるリクエストは、判断するモデルが許可したあとであなたへの質問になります。";
-                case CHINESE -> "你的主目录是一道审核模型也无法扩大的围栏。“主目录以外的文件夹是否询问你？”会把越过它变成向你提出的问题，而且只在审核模型允许该请求之后才会问。";
-            };
-        }
-        public String COMMANDS_ARE_DIFFERENT_SO_YOU_CHOOSE_WHO_APPROVES_THEM() {
-            return switch (lang) {
-                case ENGLISH -> "Commands are different: a command can do anything you can do on this computer, including deleting your files or sending them away, and no folder limits it. So you choose who approves them.";
-                case GERMAN -> "Befehle sind anders: Ein Befehl kann alles tun, was du auf diesem Rechner tun kannst, auch deine Dateien löschen oder verschicken, und kein Ordner begrenzt ihn. Darum wählst du, wer sie erlaubt.";
-                case SPANISH -> "Los comandos son distintos: un comando puede hacer todo lo que tú puedes hacer en este equipo, incluso borrar tus archivos o enviarlos fuera, y ninguna carpeta lo limita. Por eso eliges tú quién los aprueba.";
-                case JAPANESE -> "コマンドは別物です。コマンドは、ファイルの削除や外部への送信を含め、このコンピューターであなたができることを何でもでき、フォルダーの指定では制限できません。そのため、誰が許可するかをあなたが選びます。";
-                case CHINESE -> "命令则不同：命令可以做你在这台电脑上能做的任何事，包括删除你的文件或把它们发送出去，而且不受任何文件夹的限制。所以由你来选择谁批准它们。";
-            };
-        }
+
         public String WHEN_YOU_ARE_ASKED_THE_QUESTION_APPEARS_AT_THE_TOP_OF_THE_GENIES_PAGES() {
             return switch (lang) {
                 case ENGLISH -> "When you are asked, the question appears at the top of the genie's pages, with Refuse and Allow. No answer within a minute counts as no.";
@@ -3245,13 +3326,14 @@ public enum Lang {
                 case CHINESE -> "需要询问你时，问题会出现在精灵页面的顶部，并附有“拒绝”和“允许”。一分钟内没有回答就算作拒绝。";
             };
         }
-        public String NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST() {
+
+        public String A_COMMAND_ONCE_ALLOWED_IS_NOT_FENCED_BY_THE_ALLOWLISTS_BEYOND_WHERE_IT_STARTS() {
             return switch (lang) {
-                case ENGLISH -> "Nothing is listed, so the model that judges will refuse every request.";
-                case GERMAN -> "Hier steht nichts, also lehnt das prüfende Modell jede Anfrage ab.";
-                case SPANISH -> "No hay nada en la lista, así que el modelo que juzga rechazará todas las peticiones.";
-                case JAPANESE -> "何も指定されていないため、判断するモデルはすべてのリクエストを拒否します。";
-                case CHINESE -> "这里什么都没有列出，因此审核模型会拒绝所有请求。";
+                case ENGLISH -> "One limit to know: a command, once allowed, is not fenced by the allowlists beyond the folder it starts in. It can do anything you can, so only the checker and you stand between a command and your files.";
+                case GERMAN -> "Eine Grenze solltest du kennen: Ein erlaubter Befehl wird von den Ordnerlisten nur darin begrenzt, wo er startet. Er kann alles, was du kannst, also stehen nur der Prüfer und du zwischen einem Befehl und deinen Dateien.";
+                case SPANISH -> "Un límite que conviene saber: un comando, una vez permitido, no queda cercado por las listas más allá de la carpeta en la que empieza. Puede hacer todo lo que tú puedes, así que entre un comando y tus archivos solo estáis el revisor y tú.";
+                case JAPANESE -> "知っておくべき限界がひとつあります。許可されたコマンドは、開始するフォルダー以外は許可リストで制限されません。コマンドはあなたができることを何でもできるので、コマンドとあなたのファイルの間に立つのはチェッカーとあなただけです。";
+                case CHINESE -> "有一个限制需要知道：命令一旦被允许，允许列表只限制它从哪个文件夹开始，此外不再约束它。它能做你能做的任何事，所以挡在命令和你的文件之间的，只有审核模型和你。";
             };
         }
     }

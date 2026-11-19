@@ -20,7 +20,8 @@ import dev.lamp.LampEvent;
 import dev.lamp.LampAgentProgress;
 import dev.lamp.LampBranch;
 import dev.lamp.LampConversation;
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampJob;
 import dev.lamp.LampJobAuthor;
 import dev.lamp.LampRunOutcome;
@@ -183,30 +184,50 @@ final class LampApiConversionUtil {
         return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
     }
 
-    /// A lamp's host access as its page shows it: the switch, the rules Genies wrote as JSON, or
-    /// anything else in the user's own words, and when the user is asked.
-    static HostAccess.PermissionRules permissionRules(Lamp.HostAccess access) {
-        return HostAccess.PermissionRules.of(access.enabled(), access.requirements(), commands(access.commands()), access.askTheUser());
+    /// A lamp's host access as its page shows it: the same five values, each allowlist one
+    /// folder per line.
+    static HostAccess.Rules rules(Lamp.HostAccess access) {
+        return HostAccess.Rules.of(may(access.may()), guards(access.guards()), access.readAllowlist(), access.changeAllowlist(),
+                                   access.checkerInstructions());
     }
 
     /// The rules the page shows, as the lamp's file keeps them.
-    static Lamp.HostAccess hostAccess(HostAccess.PermissionRules rules) {
-        return new Lamp.HostAccess(rules.on(), rules.requirements(), approval(rules.commands()), rules.askOutsideHome());
+    static Lamp.HostAccess hostAccess(HostAccess.Rules rules) {
+        return new Lamp.HostAccess(may(rules.may()), guards(rules.guards()), rules.readFolders(), rules.changeFolders(),
+                                   rules.checkerInstructions());
     }
 
-    private static HostAccess.Commands commands(LampHostCommandApproval approval) {
-        return switch (approval) {
-            case OFF -> HostAccess.Commands.NEVER;
-            case ASK -> HostAccess.Commands.YOU_EACH_TIME;
-            case CHECKER -> HostAccess.Commands.THE_MODEL_ALONE;
+    private static HostAccess.May may(LampHostAccess may) {
+        return switch (may) {
+            case NOTHING -> HostAccess.May.NOTHING;
+            case MAY_READ -> HostAccess.May.READ;
+            case MAY_READ_CHANGE -> HostAccess.May.READ_CHANGE;
+            case MAY_READ_CHANGE_RUN -> HostAccess.May.READ_CHANGE_RUN;
         };
     }
 
-    private static LampHostCommandApproval approval(HostAccess.Commands commands) {
-        return switch (commands) {
-            case NEVER -> LampHostCommandApproval.OFF;
-            case YOU_EACH_TIME -> LampHostCommandApproval.ASK;
-            case THE_MODEL_ALONE -> LampHostCommandApproval.CHECKER;
+    private static LampHostAccess may(HostAccess.May may) {
+        return switch (may) {
+            case NOTHING -> LampHostAccess.NOTHING;
+            case READ -> LampHostAccess.MAY_READ;
+            case READ_CHANGE -> LampHostAccess.MAY_READ_CHANGE;
+            case READ_CHANGE_RUN -> LampHostAccess.MAY_READ_CHANGE_RUN;
+        };
+    }
+
+    private static HostAccess.Guards guards(LampHostAccessGuards guards) {
+        return switch (guards) {
+            case ALLOWLISTS -> HostAccess.Guards.ALLOWLISTS;
+            case ALLOWLISTS_CHECKER -> HostAccess.Guards.ALLOWLISTS_CHECKER;
+            case ALLOWLISTS_CHECKER_USER -> HostAccess.Guards.ALLOWLISTS_CHECKER_USER;
+        };
+    }
+
+    private static LampHostAccessGuards guards(HostAccess.Guards guards) {
+        return switch (guards) {
+            case ALLOWLISTS -> LampHostAccessGuards.ALLOWLISTS;
+            case ALLOWLISTS_CHECKER -> LampHostAccessGuards.ALLOWLISTS_CHECKER;
+            case ALLOWLISTS_CHECKER_USER -> LampHostAccessGuards.ALLOWLISTS_CHECKER_USER;
         };
     }
 }

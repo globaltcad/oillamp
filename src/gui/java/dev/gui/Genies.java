@@ -170,7 +170,8 @@ public interface Genies {
     /// the branch. The user confirmed. Only while it sleeps.
     void reset(UUID genie, String moment);
 
-    /// Writes the rules the genie's host access page shows into its lamp. Only while it sleeps.
+    /// Writes the rules the genie's host access page shows into its lamp. Only while it sleeps,
+    /// and only rules without a [dev.gui.model.HostAccess.Rules#mistake()].
     void saveHostAccess(UUID genie);
 
     /// The user allows or refuses a request the genie's lamp asked them about, named by its words.

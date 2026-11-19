@@ -1,21 +1,18 @@
 package dev.gui.model;
 
-import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import sprouts.Tuple;
 
-/// A genie's host access as its page shows it: whether its agent may reach this computer, the
-/// rules the checker model judges each of its requests against, and when the user decides too.
+/// A genie's host access as its page shows it: what its agent may do on this computer, what
+/// guards each of its requests, the folders it may read and change, and the instructions for
+/// the checker.
 ///
-/// All live in the genie's lamp, as `enabled`, `requirements`, `commands` and `ask_the_user`
-/// under `[host_access]` in its `oillamp.toml`. Genies writes the requirements as JSON built from
-/// [PermissionRules], and reads them back into it. There is no permission system here: the
-/// checker reads the JSON as it would any words.
+/// All live in the genie's lamp, as `may`, `guards`, `read_allowlist`, `change_allowlist` and
+/// `checker_instructions` under `[host_access]` in its `oillamp.toml`. [Rules] has one value for
+/// each, with the same names, as the Lamp API's `Lamp.HostAccess` has them. There is no
+/// permission system here: oillamp checks the allowlists itself, and the checker, another AI
+/// model, reads the instructions as the user wrote them.
 ///
 /// The lamp's file can only be changed while the genie sleeps, since a session reads it as it
 /// starts; the page says so while it is awake.
@@ -31,8 +28,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public record HostAccess(
     boolean read,
     boolean lamp,
-    PermissionRules saved,
-    PermissionRules draft,
+    Rules saved,
+    Rules draft,
     boolean busy,
     Optional<Problem> problem
 ) {
@@ -59,146 +56,134 @@ public record HostAccess(
         }
     }
 
-    public static final HostAccess UNREAD = new HostAccess(false, false, PermissionRules.OFF, PermissionRules.OFF, false, Optional.empty());
+    public static final HostAccess UNREAD = new HostAccess(false, false, Rules.DEFAULTS, Rules.DEFAULTS, false, Optional.empty());
 
-    /// Who lets the agent run a command on this computer: `commands` in the lamp's file. A
-    /// command names no folder the lamp could check, and can do anything the user can.
-    public enum Commands {
-        /// Nobody: the agent cannot run commands at all.
-        NEVER,
-        /// The user, each time: the checker model refuses only a command that clearly breaks the
-        /// rules, and the user is asked before any other runs.
-        YOU_EACH_TIME,
-        /// The checker model alone: what it allows runs straight away.
-        THE_MODEL_ALONE;
-
-        /// Whether the user is asked before a command runs.
-        public boolean asksYou() { return this == YOU_EACH_TIME; }
+    /// What the agent may do on this computer: `may` in the lamp's file. A ladder: each step
+    /// allows everything the one before it does, and more.
+    public enum May {
+        /// Nothing: host access is off, and the agent has no tools to reach this computer.
+        NOTHING,
+        /// List folders, read files, copy a file into the sandbox, show a document.
+        READ,
+        /// Also write and edit files, copy a file out of the sandbox, open a web page, show a
+        /// notification.
+        READ_CHANGE,
+        /// Also run commands, which can do anything the user can.
+        READ_CHANGE_RUN
     }
 
-    /// The user's rules for the genie, as the page edits them.
+    /// What every request passes before it happens: `guards` in the lamp's file. A chain, always
+    /// in this order, each value adding one guard to the one before it: the allowlists, which
+    /// oillamp checks itself; the checker, another AI model, which judges the request against
+    /// the checker instructions; the user, asked about every command, and about a path outside
+    /// the allowlists.
+    public enum Guards {
+        /// The allowlists alone. No model judges anything, and nobody is asked.
+        ALLOWLISTS,
+        /// The allowlists, then the checker.
+        ALLOWLISTS_CHECKER,
+        /// The allowlists, then the checker, then the user.
+        ALLOWLISTS_CHECKER_USER;
+
+        /// Whether the checker judges each request.
+        public boolean checks() { return this != ALLOWLISTS; }
+    }
+
+    /// The user's settings for the genie, as the page edits them: one value for each a person
+    /// decides on in the lamp's file. The allowlists are text, one folder per line, as the page
+    /// shows them; [#readFolders()] and [#changeFolders()] are the folders the file lists.
     ///
-    /// @param on             whether the agent may ask to reach this computer at all
-    /// @param mayRead        folders it may read, one per line, such as `~/Documents`
-    /// @param mayChange      folders it may read and change, one per line
-    /// @param words          anything else, in the user's own words
-    /// @param commands       who lets it run a command
-    /// @param askOutsideHome whether a request for a folder outside the user's home folder,
-    ///                       which the checker model allowed, goes to the user rather than being
-    ///                       refused: `ask_the_user`. The lamp's roots, which Genies leaves empty,
-    ///                       are the home folder
-    public record PermissionRules(boolean on, String mayRead, String mayChange, String words, Commands commands, boolean askOutsideHome) {
+    /// @param may                 what the agent may do on this computer
+    /// @param guards              what each request passes before it happens
+    /// @param readAllowlist       the folders it may read, one per line, such as `~/Documents`
+    /// @param changeAllowlist     the folders it may read and change, and start commands in, one
+    ///                            per line
+    /// @param checkerInstructions what the checker judges each request against, in the user's
+    ///                            own words, as they wrote them; unused with [Guards#ALLOWLISTS]
+    public record Rules(May may, Guards guards, String readAllowlist, String changeAllowlist, String checkerInstructions) {
 
-        public static final PermissionRules OFF = new PermissionRules(false, "", "", "", Commands.NEVER, false);
+        /// What oillamp's file says when nobody changed it: off, with the checker among the
+        /// guards should it be turned on, and the whole home folder in both allowlists.
+        public static final Rules DEFAULTS = new Rules(May.NOTHING, Guards.ALLOWLISTS_CHECKER, "~", "~", "");
 
-        /// What the requirements tell the checker model about commands, which lifts "refuse
-        /// everything else" for them; with [Commands#NEVER] they say nothing, as before there
-        /// were commands. Written in English, for the model. While the user is asked, the
-        /// model turns away only what clearly breaks the rules, and lets every other command
-        /// through to them. While it decides alone,
-        /// which commands are fine is the user's to say, in their own words: Genies adds no rule
-        /// of its own.
-        public static final String THE_PERSON_APPROVES_EVERY_COMMAND =
-            "The person approves every command themselves. Refuse only a command that clearly breaks "
-            + "these settings or the user's own words; allow every other one, so that it reaches the person.";
-        public static final String COMMANDS_ARE_SWITCHED_ON =
-            "Commands are switched on. Judge each one against these settings and the user's own words.";
+        public Rules withMay(May may)                                 { return new Rules(may, guards, readAllowlist, changeAllowlist, checkerInstructions); }
+        public Rules withGuards(Guards guards)                        { return new Rules(may, guards, readAllowlist, changeAllowlist, checkerInstructions); }
+        public Rules withReadAllowlist(String readAllowlist)          { return new Rules(may, guards, readAllowlist, changeAllowlist, checkerInstructions); }
+        public Rules withChangeAllowlist(String changeAllowlist)      { return new Rules(may, guards, readAllowlist, changeAllowlist, checkerInstructions); }
+        public Rules withCheckerInstructions(String checkerInstructions) { return new Rules(may, guards, readAllowlist, changeAllowlist, checkerInstructions); }
 
-        private static final ObjectMapper JSON = new ObjectMapper();
-        private static final String WRITTEN_BY = "Genies, from the genie's host access page";
-
-        public PermissionRules withOn(boolean on)                         { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-        public PermissionRules withMayRead(String mayRead)                { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-        public PermissionRules withMayChange(String mayChange)            { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-        public PermissionRules withWords(String words)                    { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-        public PermissionRules withCommands(Commands commands)            { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-        public PermissionRules withAskOutsideHome(boolean askOutsideHome) { return new PermissionRules(on, mayRead, mayChange, words, commands, askOutsideHome); }
-
-        /// Whether the lamp may ask the user about a request, which then waits for them.
-        public boolean asksYou() { return commands.asksYou() || askOutsideHome; }
-
-        /// The requirements Genies writes into the lamp's file: these rules as JSON, for the
-        /// checker model to read. Empty while host access is off and there are no rules at all.
-        public String requirements() {
-            return !on && empty() ? "" : rule().toPrettyString();
+        /// The rules as the lamp's file lists them: each allowlist one folder per line.
+        public static Rules of(May may, Guards guards, Tuple<String> readFolders, Tuple<String> changeFolders, String checkerInstructions) {
+            return new Rules(may, guards, String.join("\n", readFolders), String.join("\n", changeFolders), checkerInstructions);
         }
 
-        /// Whether no folder is listed and nothing is said.
-        public boolean empty() {
-            return folders(mayRead).isEmpty() && folders(mayChange).isEmpty() && words.isBlank();
+        /// The folders of the read allowlist: its lines, without blank ones and the spaces around each.
+        public Tuple<String> readFolders() { return folders(readAllowlist); }
+
+        /// The folders of the change allowlist, as [#readFolders()].
+        public Tuple<String> changeFolders() { return folders(changeAllowlist); }
+
+        /// Whether the agent may do anything on this computer at all.
+        public boolean on() { return may != May.NOTHING; }
+
+        /// Whether commands would run with nothing but the allowlists in their way: no checker,
+        /// and nobody asked. Allowed, since it is the user's computer, but the page warns about it
+        /// loudly, as oillamp does.
+        public boolean runsCommandsUnchecked() {
+            return may == May.READ_CHANGE_RUN && !guards.checks();
         }
 
-        private ObjectNode rule() {
-            ObjectNode json = JSON.createObjectNode();
-            json.put("written_by", WRITTEN_BY);
-            json.put("rule", "Allow a request only when these settings allow it. Refuse everything else.");
-            ArrayNode read = json.putArray("folders_it_may_read");
-            folders(mayRead).forEach(read::add);
-            ArrayNode change = json.putArray("folders_it_may_read_and_change");
-            folders(mayChange).forEach(change::add);
-            if (!words.isBlank()) json.put("in_the_users_own_words", words.strip());
-            switch (commands) {
-                case NEVER -> {}
-                case YOU_EACH_TIME -> json.put("commands", THE_PERSON_APPROVES_EVERY_COMMAND);
-                case THE_MODEL_ALONE -> json.put("commands", COMMANDS_ARE_SWITCHED_ON);
+        /// What keeps these rules from being saved, as oillamp would refuse them; empty when
+        /// nothing does. The first one found: a folder of the read allowlist, then of the change
+        /// allowlist, then the checker instructions.
+        public Optional<Mistake> mistake() {
+            for (String folder : readFolders().addAll(changeFolders())) {
+                if (folder.contains(":")) return Optional.of(new Mistake.HoldsAColon(folder));
+                if (!folder.equals("~") && !folder.startsWith("~/") && !folder.startsWith("/"))
+                    return Optional.of(new Mistake.NotAFolder(folder));
             }
-            return json;
-        }
-
-        /// Permission rules read back from the lamp's file. Requirements that are not JSON Genies wrote,
-        /// such as rules a person wrote into `oillamp.toml` by hand, become the user's own words,
-        /// so that nothing of them is lost. What the requirements say about commands is not read
-        /// back: `commands` says it, and the requirements follow from it.
-        public static PermissionRules of(boolean enabled, String requirements, Commands commands, boolean askOutsideHome) {
-            Optional<JsonNode> json;
-            try {
-                json = Optional.of(JSON.readTree(requirements)).filter(it -> it.path("written_by").asText().equals(WRITTEN_BY));
-            } catch (Exception notJson) {
-                json = Optional.empty();
-            }
-            if (json.isEmpty()) return new PermissionRules(enabled, "", "", requirements.strip(), commands, askOutsideHome);
-            JsonNode rule = json.get();
-            return new PermissionRules(enabled, lines(rule.path("folders_it_may_read")), lines(rule.path("folders_it_may_read_and_change")),
-                             rule.path("in_the_users_own_words").asText(""), commands, askOutsideHome);
-        }
-
-        /// What the user may want to look at before saving; empty when nothing stands out. Only a
-        /// warning: the model that judges reads words too, so "everything" is a rule it
-        /// understands, and these rules save whatever they say.
-        ///
-        /// @param home the user's home folder, which the lamp reaches without asking the user
-        public Optional<String> warning(Lang lang, Path home) {
-            Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
-            for (String folder : folders(mayRead + "\n" + mayChange))
-                if (!folder.startsWith("/") && !folder.startsWith("~"))
-                    return Optional.of(words.IS_NOT_A_PATH_THE_MODEL_THAT_JUDGES_READS_IT_AS_WORDS(folder));
-            if (!askOutsideHome)
-                for (String folder : folders(mayRead + "\n" + mayChange))
-                    if (folder.startsWith("/") && !Path.of(folder).normalize().startsWith(home))
-                        return Optional.of(words.IS_OUTSIDE_YOUR_HOME_FOLDER_SO_THE_LAMP_REFUSES_IT_UNLESS_YOU_ARE_ASKED(folder));
-            if (on && empty() && !commands.asksYou())
-                return Optional.of(words.NOTHING_IS_LISTED_SO_THE_MODEL_THAT_JUDGES_WILL_REFUSE_EVERY_REQUEST());
+            if (on() && guards.checks() && checkerInstructions.isBlank())
+                return Optional.of(new Mistake.NoCheckerInstructions());
             return Optional.empty();
         }
 
-        private static java.util.List<String> folders(String lines) {
-            return Arrays.stream(lines.split("\n")).map(String::strip).filter(it -> !it.isEmpty()).toList();
-        }
-
-        private static String lines(JsonNode array) {
-            StringBuilder text = new StringBuilder();
-            array.forEach(it -> text.append(text.isEmpty() ? "" : "\n").append(it.asText()));
-            return text.toString();
+        private static Tuple<String> folders(String lines) {
+            Tuple<String> folders = Tuple.of(String.class);
+            for (String line : lines.split("\n", -1))
+                if (!line.isBlank()) folders = folders.add(line.strip());
+            return folders;
         }
     }
 
-    public HostAccess withDraft(PermissionRules draft)     { return new HostAccess(read, lamp, saved, draft, busy, problem); }
-    public HostAccess withBusy(boolean busy)     { return new HostAccess(read, lamp, saved, draft, busy, problem); }
+    /// What keeps rules from being saved, said in the language Genies speaks with
+    /// [#words(Lang)].
+    public sealed interface Mistake {
+        /// A line of an allowlist that is not `~`, does not start with `~/`, and is not absolute.
+        record NotAFolder(String line) implements Mistake {}
+        /// A line of an allowlist with a colon in it, which oillamp keeps between folders.
+        record HoldsAColon(String line) implements Mistake {}
+        /// No checker instructions, while the checker is among the guards of a genie that may do
+        /// something: the checker would have nothing to judge against.
+        record NoCheckerInstructions() implements Mistake {}
+
+        /// What is wrong, in `lang`.
+        default String words(Lang lang) {
+            Lang.HostAccessPage words = lang.HOST_ACCESS_PAGE();
+            return switch (this) {
+                case NotAFolder it -> words.IS_NOT_A_FOLDER_WRITE_ONE_STARTING_WITH_A_TILDE_OR_A_SLASH(it.line());
+                case HoldsAColon it -> words.HOLDS_A_COLON_WHICH_A_FOLDER_HERE_CANNOT(it.line());
+                case NoCheckerInstructions _ -> words.THE_CHECKER_NEEDS_INSTRUCTIONS_WRITE_THEM_OR_CHOOSE_ALLOWLISTS_ALONE();
+            };
+        }
+    }
+
+    public HostAccess withDraft(Rules draft)       { return new HostAccess(read, lamp, saved, draft, busy, problem); }
+    public HostAccess withBusy(boolean busy)       { return new HostAccess(read, lamp, saved, draft, busy, problem); }
     public HostAccess withProblem(Problem problem) { return new HostAccess(read, lamp, saved, draft, busy, Optional.of(problem)); }
-    public HostAccess noProblem()                 { return new HostAccess(read, lamp, saved, draft, busy, Optional.empty()); }
+    public HostAccess noProblem()                  { return new HostAccess(read, lamp, saved, draft, busy, Optional.empty()); }
 
     /// Read from the lamp, or saved to it: what the page shows is what the file has.
-    public HostAccess readAs(boolean lamp, PermissionRules rules) {
+    public HostAccess readAs(boolean lamp, Rules rules) {
         return new HostAccess(true, lamp, rules, rules, false, Optional.empty());
     }
 

@@ -445,6 +445,8 @@ lamp.hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE, LampHostAcce
   as it started.
 - The checker instructions stay free text, the person's own words. What the lamp allows, its
   guards and its allowlists the checker is told by oillamp, so the text need not repeat them.
+  Genies writes what the user typed into its page there, as they typed it; a lamp an older
+  Genies wrote has the JSON that Genies once built, which the checker reads like any other words.
 - The same from a terminal: `oillamp host-access <dir> [--may <what>] [--guards <which>]
   [--read-allowlist <folders>] [--change-allowlist <folders>] [--checker-instructions-env <name>]`,
   with the folders of an allowlist separated by colons, as in `PATH`.
