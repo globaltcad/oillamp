@@ -9,8 +9,8 @@ import dev.lamp.LampProblem;
 
 import sprouts.Tuple;
 
-/// Resolves the paths a host request names, on this host, and decides whether the lamp's roots
-/// contain them.
+/// Resolves the paths a host request names, on this host, and decides whether the lamp's
+/// allowlists contain them.
 ///
 /// The agent writes the path, so nothing about it is trusted. A leading `~` is the user's home;
 /// any other path must be absolute, and may not contain `.` or `..`, which would make the path
@@ -38,27 +38,32 @@ final class HostPaths {
         return Path.of(text);
     }
 
-    /// Resolves a path and decides whether `roots` contain it.
-    ///
-    /// @return the resolved path, or why it may not be touched
-    static Result<ResolvedPath> resolve(String asked, Path home, Tuple<String> roots) {
-        Result<ResolvedPath> located = locate(asked, home);
-        if (!(located instanceof Result.Ok<ResolvedPath> ok)) return located;
-        if (within(ok.value().hostPath(), home, roots)) return located;
-        return Result.err(HostAccessProblems.outsideTheRoots(asked,
-                "it is not under " + String.join(", ", allowed(home, roots).mapTo(String.class, Path::toString))));
+    /// What a request does with a path, which decides the allowlist it must be in.
+    enum Use {
+        /// Reads it, which a folder of either allowlist allows: changing implies reading.
+        READ,
+        /// Changes it, or runs a command in it, which only a folder of `change_allowlist` allows.
+        CHANGE;
+
+        /// The folders that allow this use of a path, as the lamp's file writes them.
+        Tuple<String> allowedBy(LampConfig.HostAccess access) {
+            return switch (this) {
+                case READ -> access.readAllowlist().addAll(access.changeAllowlist());
+                case CHANGE -> access.changeAllowlist();
+            };
+        }
     }
 
-    /// Resolves a path on the host, without asking whether the roots contain it.
+    /// Resolves a path on the host, without asking whether the allowlists contain it.
     ///
     /// @return the resolved path, or why it is not one oillamp can judge at all
     static Result<ResolvedPath> locate(String asked, Path home) {
         Path expanded = expand(asked, home);
         if (!expanded.isAbsolute())
-            return Result.err(HostAccessProblems.outsideTheRoots(asked, "it is not an absolute path"));
+            return Result.err(HostAccessProblems.outsideTheAllowlists(asked, "it is not an absolute path"));
         for (Path part : expanded)
             if (part.toString().equals("..") || part.toString().equals("."))
-                return Result.err(HostAccessProblems.outsideTheRoots(asked,
+                return Result.err(HostAccessProblems.outsideTheAllowlists(asked,
                         "it contains \"" + part + "\"; name the place itself"));
         Path existing = expanded;
         List<String> missing = new ArrayList<>();
@@ -70,24 +75,26 @@ final class HostPaths {
             existing = existing.getParent();
         }
         if (existing == null)
-            return Result.err(HostAccessProblems.outsideTheRoots(asked, "nothing on the way exists"));
+            return Result.err(HostAccessProblems.outsideTheAllowlists(asked, "nothing on the way exists"));
         Path real;
         try {
             real = existing.toRealPath();
         } catch (java.io.IOException e) {
-            return Result.err(HostAccessProblems.outsideTheRoots(asked, ProblemCatalogUtil.reason(e)));
+            return Result.err(HostAccessProblems.outsideTheAllowlists(asked, ProblemCatalogUtil.reason(e)));
         }
         Path resolved = real;
         for (String name : missing) resolved = resolved.resolve(name);
         return Result.ok(new ResolvedPath(asked, resolved));
     }
 
-    /// Whether a resolved path is under one of `roots`, or under the home directory when there
-    /// are none. The roots have their links followed too, so that a root given through a link
-    /// and a path resolved through it compare equal.
-    static boolean within(Path resolved, Path home, Tuple<String> roots) {
-        for (Path root : allowed(home, roots))
-            if (resolved.startsWith(root)) return true;
+    /// Whether a resolved path is one of `folders` or under one, compared name by name, so that
+    /// `/a/workspace2` is not under `/a/workspace`. The folders have their links followed too, so
+    /// that a folder given through a link and a path resolved through it compare equal.
+    ///
+    /// @param folders as the lamp's file writes them: `~`, under `~/`, or absolute
+    static boolean within(Path resolved, Path home, Tuple<String> folders) {
+        for (String folder : folders)
+            if (resolved.startsWith(real(expand(folder, home)))) return true;
         return false;
     }
 
@@ -98,12 +105,5 @@ final class HostPaths {
         } catch (java.io.IOException e) {
             return path.toAbsolutePath().normalize();
         }
-    }
-
-    private static Tuple<Path> allowed(Path home, Tuple<String> roots) {
-        // Not `Tuple.of(Path.class, real(home))`: a Path is an Iterable of its names, so that
-        // would be the tuple [home, me], and no absolute path starts with either.
-        return roots.isEmpty() ? Tuple.of(Path.class).add(real(home))
-                               : roots.mapTo(Path.class, root -> real(Path.of(root)));
     }
 }

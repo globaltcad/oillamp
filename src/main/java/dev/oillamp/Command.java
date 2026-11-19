@@ -4,7 +4,8 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.Optional;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
 
@@ -109,16 +110,15 @@ sealed interface Command {
     record Model(Path lamp, String model, Context.Options options) implements Command {}
     /// The new instructions are in the variable that [Context.Options#instructionsEnv] names.
     record Instructions(Path lamp, Context.Options options) implements Command {}
-    /// `enabled` is `on` or `off`, `requirementsEnv` the variable that holds the new
-    /// requirements, `commands` who approves a command on the host and `askTheUser` whether a
-    /// request past the roots goes to the person; with none, the command only says what the
-    /// lamp's file has.
-    record HostAccess(Path lamp, Optional<Boolean> enabled, Optional<String> requirementsEnv,
-                      Optional<LampHostCommandApproval> commands, Optional<Boolean> askTheUser,
-                      Context.Options options) implements Command {
+    /// The new values of `may`, `guards`, the two allowlists, and the variable that holds the new
+    /// `checker_instructions`; with none, the command only says what the lamp's file has.
+    record HostAccess(Path lamp, Optional<LampHostAccess> may, Optional<LampHostAccessGuards> guards,
+                      Optional<Tuple<String>> readAllowlist, Optional<Tuple<String>> changeAllowlist,
+                      Optional<String> checkerInstructionsEnv, Context.Options options) implements Command {
         /// Whether the command only reads the lamp's file.
         boolean onlyReads() {
-            return enabled.isEmpty() && requirementsEnv.isEmpty() && commands.isEmpty() && askTheUser.isEmpty();
+            return may.isEmpty() && guards.isEmpty() && readAllowlist.isEmpty() && changeAllowlist.isEmpty()
+                && checkerInstructionsEnv.isEmpty();
         }
     }
     /// The person's answer to a host-access question, named by its text as the event gave it.
@@ -224,19 +224,20 @@ sealed interface Command {
                     "--model needs a value, for example --model azure/gpt-6.1-sol", usageOf("at"));
             case "--instructions-env" -> ProblemCatalogUtil.usage(
                     "--instructions-env needs a value, for example --instructions-env MY_INSTRUCTIONS", usageOf("at"));
-            case "--security-requirements-env" -> ProblemCatalogUtil.usage(
-                    "--security-requirements-env needs a value, for example --security-requirements-env MY_RULES",
-                    usageOf("at"));
+            case "--checker-instructions-env" -> ProblemCatalogUtil.usage(
+                    "--checker-instructions-env needs a value, for example --checker-instructions-env MY_RULES",
+                    usageOf(positional.isEmpty() ? "at" : positional.first()));
             case "--wallpaper" -> ProblemCatalogUtil.usage(
                     "--wallpaper needs a value: " + LampWallpaper.names(), usageOf("at"));
             case "--background" -> ProblemCatalogUtil.usage(
                     "--background needs a value, for example --background \"#15121c\"", usageOf("at"));
-            case "--requirements-env" -> ProblemCatalogUtil.usage(
-                    "--requirements-env needs a value, for example --requirements-env MY_RULES", usageOf("host-access"));
-            case "--commands" -> ProblemCatalogUtil.usage(
-                    "--commands needs a value: off, ask or checker", usageOf("host-access"));
-            case "--ask-the-user" -> ProblemCatalogUtil.usage(
-                    "--ask-the-user needs a value: on or off", usageOf("host-access"));
+            case "--may" -> ProblemCatalogUtil.usage(
+                    "--may needs a value: " + MAY_WORDS, usageOf("host-access"));
+            case "--guards" -> ProblemCatalogUtil.usage(
+                    "--guards needs a value: " + GUARDS_WORDS, usageOf("host-access"));
+            case "--read-allowlist", "--change-allowlist" -> ProblemCatalogUtil.usage(pending.get()
+                    + " needs folders separated by colons, for example " + pending.get() + " \"~/Documents:/srv/data\"",
+                    usageOf("host-access"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -269,15 +270,16 @@ sealed interface Command {
                   + "environment variable, such as MY_INSTRUCTIONS", usageOf("at")));
         options = options.withInstructionsEnv(instructionsEnv);
 
-        // What an application asks for with the `Lamp` API. The requirements are a long text, so
-        // the variable is named and the text is read from the environment, like the instructions.
-        Optional<String> requirementsEnv = values.get("--security-requirements-env");
-        if (requirementsEnv.isPresent() && !ConfigLoadingUtil.isVariableName(requirementsEnv.get()))
+        // What an application asks for with the `Lamp` API, for `at`, and what `host-access` writes
+        // into the lamp's file. The checker instructions are a long text, so the variable is named
+        // and the text is read from the environment, like the instructions.
+        Optional<String> instructionsForTheChecker = values.get("--checker-instructions-env");
+        if (instructionsForTheChecker.isPresent() && !ConfigLoadingUtil.isVariableName(instructionsForTheChecker.get()))
             return Result.err(ProblemCatalogUtil.usage(
-                    "--security-requirements-env \"" + requirementsEnv.get() + "\": expected the name of an "
-                  + "environment variable, such as OILLAMP_SECURITY_REQUIREMENTS", usageOf("at")));
-        if (requirementsEnv.isPresent())
-            options = options.withHostAccess(Optional.of(new Context.Options.HostAccessGrant(requirementsEnv.get())));
+                    "--checker-instructions-env \"" + instructionsForTheChecker.get() + "\": expected the name of an "
+                  + "environment variable, such as OILLAMP_CHECKER_INSTRUCTIONS", usageOf(positional.isEmpty() ? "at" : positional.first())));
+        if (instructionsForTheChecker.isPresent())
+            options = options.withHostAccess(Optional.of(new Context.Options.HostAccessGrant(instructionsForTheChecker.get())));
 
         Optional<String> wallpaper = values.get("--wallpaper");
         if (wallpaper.isPresent() && LampWallpaper.named(wallpaper.get()).isEmpty())
@@ -511,26 +513,27 @@ sealed interface Command {
             case "cancel" -> Result.ok(new Cancel(Path.of(rest.first()),
                     rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty(), options));
             case "host-access" -> {
-                Optional<String> rulesEnv = values.get("--requirements-env");
-                if (rulesEnv.isPresent() && !ConfigLoadingUtil.isVariableName(rulesEnv.get()))
-                    yield Result.err(ProblemCatalogUtil.usage("--requirements-env \"" + rulesEnv.get()
-                          + "\": expected the name of an environment variable, such as MY_RULES", usageOf("host-access")));
-                Optional<String> switched = rest.size() > 1 ? Optional.of(rest.get(1)) : Optional.empty();
-                if (switched.isPresent() && !switched.get().equals("on") && !switched.get().equals("off"))
-                    yield Result.err(ProblemCatalogUtil.usage(
-                            "`oillamp host-access` \"" + switched.get() + "\": expected on or off", usageOf("host-access")));
-                Optional<String> commands = values.get("--commands");
-                Optional<LampHostCommandApproval> approval = commands.flatMap(Command::commandApproval);
-                if (commands.isPresent() && approval.isEmpty())
-                    yield Result.err(ProblemCatalogUtil.usage("--commands \"" + commands.get()
-                          + "\": expected off, ask (the checker, then you, for every command) or checker (the checker alone)",
-                          usageOf("host-access")));
-                Optional<String> askTheUser = values.get("--ask-the-user");
-                if (askTheUser.isPresent() && !askTheUser.get().equals("on") && !askTheUser.get().equals("off"))
-                    yield Result.err(ProblemCatalogUtil.usage(
-                            "--ask-the-user \"" + askTheUser.get() + "\": expected on or off", usageOf("host-access")));
-                yield Result.ok(new HostAccess(Path.of(rest.first()), switched.map("on"::equals), rulesEnv,
-                        approval, askTheUser.map("on"::equals), options));
+                Optional<String> may = values.get("--may");
+                if (may.isPresent() && LampHostAccess.named(may.get()).isEmpty())
+                    yield Result.err(ProblemCatalogUtil.usage("--may \"" + may.get() + "\": expected " + MAY_WORDS,
+                            usageOf("host-access")));
+                Optional<String> guards = values.get("--guards");
+                if (guards.isPresent() && LampHostAccessGuards.named(guards.get()).isEmpty())
+                    yield Result.err(ProblemCatalogUtil.usage("--guards \"" + guards.get() + "\": expected " + GUARDS_WORDS,
+                            usageOf("host-access")));
+                Optional<Tuple<String>> read = values.get("--read-allowlist").map(Command::folders);
+                Optional<Tuple<String>> change = values.get("--change-allowlist").map(Command::folders);
+                for (var given : Tuple.of(String.class, "--read-allowlist", "--change-allowlist")) {
+                    Optional<String> wrong = (given.equals("--read-allowlist") ? read : change).stream()
+                            .flatMap(folders -> folders.stream()).filter(folder -> !LampConfig.HostAccess.isAllowlistFolder(folder))
+                            .findFirst();
+                    if (wrong.isPresent())
+                        yield Result.err(ProblemCatalogUtil.usage(given + " \"" + wrong.get() + "\": expected folders "
+                              + "separated by colons, each \"~\", starting with \"~/\", or absolute", usageOf("host-access")));
+                }
+                yield Result.ok(new HostAccess(Path.of(rest.first()), may.flatMap(LampHostAccess::named),
+                        guards.flatMap(LampHostAccessGuards::named), read, change,
+                        options.hostAccess().map(Context.Options.HostAccessGrant::checkerInstructionsEnv), options));
             }
             case "answer" -> {
                 if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
@@ -598,7 +601,7 @@ sealed interface Command {
                 .put("at",         ValueSet.of("--init", "--dry-run", "--no-install", "--no-viewer", "--no-windows",
                                                "--embedded", "--model-service", "--model-key-env",
                                                "--model", "--instructions-env", "--enable-scheduling",
-                                               "--security-requirements-env", "--wallpaper", "--background"))
+                                               "--checker-instructions-env", "--wallpaper", "--background"))
                 .put("view",       ValueSet.of("--view-only", "--embedded"))
                 .put("update",     ValueSet.of("--system", "--dry-run", "--no-install"))
                 .put("remove",     ValueSet.of("--yes", "--dry-run", "--embedded"))
@@ -611,7 +614,8 @@ sealed interface Command {
                 .put("cancel",     ValueSet.of("--embedded"))
                 .put("model",      ValueSet.of("--embedded"))
                 .put("instructions", ValueSet.of("--instructions-env", "--embedded"))
-                .put("host-access", ValueSet.of("--requirements-env", "--commands", "--ask-the-user", "--embedded"))
+                .put("host-access", ValueSet.of("--may", "--guards", "--read-allowlist", "--change-allowlist",
+                                                "--checker-instructions-env", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of("--window", "--embedded"))
@@ -628,7 +632,7 @@ sealed interface Command {
     /// The options that take a value.
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
-            "--security-requirements-env", "--requirements-env", "--commands", "--ask-the-user", "--wallpaper", "--background",
+            "--checker-instructions-env", "--may", "--guards", "--read-allowlist", "--change-allowlist", "--wallpaper", "--background",
             "--in", "--after", "--instead-of");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
@@ -657,7 +661,7 @@ sealed interface Command {
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("schedule", 3).put("ask", 2)
-                .put("conversations", 2).put("cancel", 2).put("model", 2).put("instructions", 1).put("host-access", 2).put("answer", 3)
+                .put("conversations", 2).put("cancel", 2).put("model", 2).put("instructions", 1).put("host-access", 1).put("answer", 3)
                 // The lamp, `autosave`, and each moment and chat-quiet-minutes with its value.
                 .put("history", 2 + 2 * (AUTOSAVE_MOMENTS.size() + 1))
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
@@ -665,14 +669,20 @@ sealed interface Command {
     /// The lines of [#usage] that describe `command`, such as `oillamp stop <dir>`, or the four
     /// of `oillamp history`. Only the lines indented by two spaces name a command; the lines
     /// below them describe it.
-    /// `host_access.commands` as `--commands` names it: `off`, `ask` or `checker`.
-    private static Optional<LampHostCommandApproval> commandApproval(String word) {
-        return switch (word) {
-            case "off" -> Optional.of(LampHostCommandApproval.OFF);
-            case "ask" -> Optional.of(LampHostCommandApproval.ASK);
-            case "checker" -> Optional.of(LampHostCommandApproval.CHECKER);
-            default -> Optional.empty();
-        };
+    /// The words `--may` takes, as a usage message lists them.
+    String MAY_WORDS = "nothing, read, read_change (also write files, copy them out, open pages, notify) "
+                     + "or read_change_run (also run commands)";
+
+    /// The words `--guards` takes, as a usage message lists them.
+    String GUARDS_WORDS = "allowlists, allowlists_checker (then the checker model) or allowlists_checker_user "
+                        + "(then you too, for every command and for a folder outside the allowlists)";
+
+    /// The folders of `--read-allowlist` or `--change-allowlist`, separated by colons as in
+    /// `PATH`. An empty value is no folder at all.
+    private static Tuple<String> folders(String given) {
+        Tuple<String> folders = Tuple.of(String.class);
+        for (String folder : given.split(":", -1)) if (!folder.isBlank()) folders = folders.add(folder.strip());
+        return folders;
     }
 
     static String usageOf(String command) {
@@ -695,7 +705,7 @@ sealed interface Command {
               at <dir> [--init] [--dry-run] [--no-install] [--no-viewer] [--no-windows]
                        [--embedded] [--model-service <url>] [--model-key-env <name>]
                        [--model <id>] [--instructions-env <name>] [--enable-scheduling]
-                       [--security-requirements-env <name>] [--wallpaper <name>]
+                       [--checker-instructions-env <name>] [--wallpaper <name>]
                        [--background <colour>]
                     Set up (if needed) and run a session. Opens a shell window and a viewer
                     onto the sandbox's desktop, and stays in the foreground until the session
@@ -725,10 +735,10 @@ sealed interface Command {
                       --enable-scheduling
                                       let jobs on the schedule wake the agent in this session,
                                       as `enabled = true` under [schedule] would
-                      --security-requirements-env <name>
+                      --checker-instructions-env <name>
                                       for an application that decided this itself: judge the
                                       agent's requests to the host against what this variable
-                                      holds, in place of the requirements under [host_access].
+                                      holds, in place of checker_instructions under [host_access].
                                       The feature must be on in the lamp's file; the model that
                                       judges is the file's checker_model, or else the agent's
                       --wallpaper <name>
@@ -850,18 +860,26 @@ sealed interface Command {
                     --instructions-env` would have: in new conversations and in old ones.
               conversations <dir> [<conversation>]
                     List the agent's conversations, or show one, with the ids of its entries.
-              host-access <dir> [on | off] [--requirements-env <name>] [--commands <who>] [--ask-the-user on | off]
-                    Say whether the agent may ask to reach the host, what the checker judges
-                    its requests against, and when you are asked too: `enabled`,
-                    `requirements`, `commands` and `ask_the_user` under [host_access] in
+              host-access <dir> [--may <what>] [--guards <which>] [--read-allowlist <folders>]
+                                [--change-allowlist <folders>] [--checker-instructions-env <name>]
+                    Say what the agent may do on this machine, what each of its requests passes
+                    first, and which folders it may reach: `may`, `guards`, `read_allowlist`,
+                    `change_allowlist` and `checker_instructions` under [host_access] in
                     oillamp.toml. With any of these, write them there, and change nothing
                     else in the file. Writing needs the session to be stopped.
-                      --requirements-env  the variable that holds the new requirements
-                      --commands          who approves a shell command on this machine: off
-                                          (no such tool), ask (the checker, then you) or
-                                          checker (the checker alone)
-                      --ask-the-user      on: ask you, rather than refuse, a request the
-                                          checker allows that reaches past the roots
+                      --may           nothing, read, read_change (also write files, copy them
+                                      out, open pages, notify) or read_change_run (also run
+                                      commands)
+                      --guards        allowlists, allowlists_checker (then the checker model)
+                                      or allowlists_checker_user (then you too, for every
+                                      command and for a folder outside the allowlists)
+                      --read-allowlist, --change-allowlist
+                                      the folders it may read, and those it may read and
+                                      change and run commands in, separated by colons:
+                                      "~/Documents:/srv/data". Each includes everything below
+                                      it; "" is none
+                      --checker-instructions-env
+                                      the variable that holds the new checker instructions
               answer <dir> (yes | no) "<question>"
                     Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]

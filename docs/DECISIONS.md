@@ -695,8 +695,8 @@ needs a change in `InternalPiSessionFileUtil`. *(added on 2026-09-30)*
 ### Host access is judged on the host by a model with its own prompt
 
 See [HOST-ACCESS.md](HOST-ACCESS.md). The agent gets typed tools whose implementation is on the
-host. Each request is judged by a separate model call that sees the user's requirements, the
-request and the run's activity, but never the agent's conversation. The tools are in tiers,
+host. Each request is judged by a separate model call that sees the user's checker instructions,
+the request and the run's activity, but never the agent's conversation. The tools are in tiers,
 deterministic checks enforce the outermost one, and the feature is off by default with no
 command-line switch.
 
@@ -731,22 +731,24 @@ is longer than before. *(added on 2026-10-26)*
 ### Commands on the host are one tool, `host_bash`, and the user says who allows each
 
 `host_bash` runs a command with `bash -c` in a directory the agent names. It replaced `host_run`
-and its allowlist, `host_access.executables`. `host_access.commands` decides whether it exists:
-`"off"` (the default), `"ask"` (the checker, then the person, for every command) or `"checker"`
-(the checker alone). Older lamps' files still say `executables = []`, from the template; that
-empty list is accepted, since it meant what `"off"` means. A list that names programs is refused
-with the setting that replaced it, because no value of `commands` allows only those programs.
+and its allowlist, `host_access.executables`. It exists only with `host_access.may =
+"read_change_run"`, and `host_access.guards` says who allows each command: the checker
+(`"allowlists_checker"`), the checker and then the person (`"allowlists_checker_user"`), or
+nobody (`"allowlists"`). A lamp whose file still says `executables`, from an older template, is
+converted as it is read; see "One ladder and one chain".
+
+*(changed on 2026-11-19: `may` and `guards` replaced `host_access.commands`)*
 
 *Why:* the agent should be able to work on the user's machine as it would if pi ran there, and
 the work of a coding agent is commands: builds, tests, git. An allowlist of program names did not
 bound that: a build tool runs whatever the build says, and a list long enough to be useful is a
 list of interpreters. So the bound is stated as what it is, a judgement of the whole command at
 the moment it is asked for, and the user chooses whether a person confirms each one. Without that
-choice, asking the person stays the safer of the two that run commands; with `"checker"`, a
+choice, asking the person stays the safer of the ways to run commands; with the checker last, a
 command needs no person, which is what makes long work on the host possible at all.
 
 *Given up:* a command is authorised as a whole. Once it runs, what it touches is not checked again
-file by file: the roots bound its working directory, not its effects, and a script it runs is
+file by file: the allowlists bound its working directory, not its effects, and a script it runs is
 judged by its name and the run's recent tool calls, not its content. The checker is shown the
 whole command, and a command longer than 16 KiB is refused rather than shown in part.
 *(added on 2026-10-26)*
@@ -755,16 +757,49 @@ whole command, and a command longer than 16 KiB is refused rather than shown in 
 
 A command runs with the environment oillamp was started with, as one typed into the user's
 terminal would, minus the variables that hold the model key and the text an application handed
-over for the checker's requirements and the agent's instructions. `env -u` removes them before
+over for the checker's instructions and the agent's instructions. `env -u` removes them before
 bash starts.
 
 *Why:* a command without `PATH`, `HOME` and the user's toolchain settings could not build
-anything. The key is the checker's, and the requirements are what the checker judges by; the
-agent is not the checker and must not read either.
+anything. The key is the checker's, and the checker instructions are what the checker judges by;
+the agent is not the checker and must not read either.
 
 *Given up:* anything else the user keeps in their environment, a command gets, as it would in
-their terminal. The requirements are where to say which of those it must not print or send.
-*(added on 2026-10-26)*
+their terminal. The checker instructions are where to say which of those it must not print or
+send. *(added on 2026-10-26)*
+
+### One ladder and one chain: `may`, `guards` and two allowlists
+
+What the agent may do on the host is one word, `host_access.may`: `"nothing"`, `"read"`,
+`"read_change"` or `"read_change_run"`, each step allowing what the one before it does. What a
+request passes first is another, `host_access.guards`, a chain always in the same order: the
+allowlists, then the checker, then the person (`"allowlists"`, `"allowlists_checker"`,
+`"allowlists_checker_user"`). The folders the agent may reach are two lists:
+`read_allowlist`, and `change_allowlist`, whose folders it may also change and run commands in.
+The text the checker judges by is `checker_instructions`. These replaced `enabled`,
+`allow_additive`, `commands`, `roots`, `ask_the_user` and `requirements`.
+
+The allowlists are checked by oillamp, before the checker, as `roots` were. With the person last
+among the guards, a request outside them is asked about instead of refused, and so is every
+command. `may = "read_change_run"` with `guards = "allowlists"` runs commands that nobody judges;
+it is allowed, and warned about loudly (`OIL-HOSTACCESS-016`) whenever the settings are read for a
+session, checked or written.
+
+A lamp whose file still has the old keys is rewritten in the new ones the first time oillamp
+reads it, without a word, keeping what it did; the user's global
+`~/.config/oillamp/config.toml` is only ever converted as it is read. The mapping is in
+[HOST-ACCESS.md](HOST-ACCESS.md#configuration).
+
+*Why:* the old switches were one ladder said three ways, with the outer fence (`roots`) hidden
+behind a vague name and two separate knobs for asking the person. People reading the file or a
+settings page could not tell what a combination meant. One word for how far, one for who checks,
+and two plainly named lists say the same with nothing to combine. Removing a key once refused
+every lamp that still had it, so old files are converted rather than refused.
+
+*Given up:* a lamp that ran commands but kept the additive tier closed has no exact equivalent; it
+becomes `read_change_run`. An old lamp with `commands = "ask"` and `ask_the_user = false` is now
+asked about paths outside its allowlists rather than refusing them. The user can run commands
+unchecked if they insist. *(added on 2026-11-19)*
 
 ---
 

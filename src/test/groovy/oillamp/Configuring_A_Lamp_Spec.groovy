@@ -824,67 +824,87 @@ class Configuring_A_Lamp_Spec extends Specification {
             runtimeEnv.contains("OILLAMP_FORWARDS='llm:8000'")
     }
 
-    def 'Host access is off unless a lamp turns it on, and `oillamp config check` refuses to turn it on without requirements'() {
+    def 'Host access is off unless a lamp turns it on, and `oillamp config check` refuses a checker without instructions and an allowlist folder that is not absolute'() {
         reportInfo """
-            Host access gives the agent tools that reach the user's computer. A checker, a
-            separate call to a model, judges each request against the requirements in
-            `host_access.requirements`: the user's own words for what the agent may and may not do
-            there. Host access is off unless a lamp turns it on, so a lamp whose file does not
-            mention it works as it did before the feature existed.
+            Host access gives the agent tools that reach the user's computer. What it may do there
+            is `host_access.may`, which is `"nothing"` unless a lamp says otherwise, so a lamp
+            whose file does not mention host access works as it did before the feature existed.
 
-            Turning host access on with empty requirements would leave the checker with nothing
-            to judge by, and a checker with nothing to judge by says yes. So oillamp refuses that
-            with `OIL-CONFIG-004`, naming `host_access.requirements`, rather than start a lamp
-            whose checker allows everything. It also refuses a relative path in
-            `host_access.roots`, the folders the agent may reach.
+            Each request passes the lamp's guards first. With the checker among them, a separate
+            call to a model judges the request against `host_access.checker_instructions`: the
+            user's own words for what the agent may and may not do there. A checker with nothing
+            to judge by says yes, so oillamp refuses empty instructions with `OIL-CONFIG-004`,
+            naming `host_access.checker_instructions`, rather than start a lamp whose checker
+            allows everything. A lamp whose `guards` are only `"allowlists"` asks no checker, and
+            needs no instructions.
+
+            The allowlists, `host_access.read_allowlist` and `host_access.change_allowlist`, are
+            the folders the agent may reach. A folder in them is `~`, starts with `~/`, or is
+            absolute; a relative one would mean whatever directory oillamp happened to start in,
+            so it is refused with `OIL-CONFIG-004` too, naming its list.
 
             `host_access.checker_model` is not required. Without it, the checker uses the model
             the agent answers with, which is only known once a session starts with one.
         """
-        given: 'a lamp that turns host access on, with empty requirements and a relative path in `roots`'
+        given: 'a lamp that lets the agent read, with the checker, empty checker instructions, and a relative folder in each allowlist'
             var lamp = host.lampPath()
             host.givenConfig(lamp, """
                 schema_version = 1
 
                 [host_access]
-                enabled = true
-                requirements = ""
-                roots = ["relative/path"]
+                may = "read"
+                guards = "allowlists_checker"
+                checker_instructions = ""
+                read_allowlist = ["relative/path"]
+                change_allowlist = ["~/Documents", "also/relative"]
             """.stripIndent())
 
         when: '`oillamp config <dir> check` runs'
             var outcome = host.oillamp.run('config', lamp.toString(), 'check')
 
-        then: 'it reports two `OIL-CONFIG-004` errors, for `host_access.requirements` and `host_access.roots`, and none for `host_access.checker_model`'
+        then: 'it reports three `OIL-CONFIG-004` errors, for the checker instructions and both allowlists, and none for `host_access.checker_model`'
             outcome.status() == LampExitStatus.USAGE
-            outcome.errors().size() == 2
-            outcome.reported('OIL-CONFIG-004')
-            outcome.console().contains('host_access.requirements')
-            outcome.console().contains('host_access.roots')
+            outcome.errors().size() == 3
+            outcome.errors().every { it.code().value() == 'OIL-CONFIG-004' }
+            outcome.console().contains('host_access.checker_instructions')
+            outcome.console().contains('host_access.read_allowlist = "relative/path"')
+            outcome.console().contains('host_access.change_allowlist = "also/relative"')
             !outcome.console().contains('host_access.checker_model')
+
+        and: 'with the allowlists as the only guard and absolute folders, the same empty instructions pass'
+            host.givenConfig(lamp, """
+                schema_version = 1
+
+                [host_access]
+                may = "read"
+                guards = "allowlists"
+                checker_instructions = ""
+                read_allowlist = ["/srv/data"]
+            """.stripIndent())
+            host.oillamp.run('config', lamp.toString(), 'check').status() == LampExitStatus.SUCCESS
 
         and: 'a file without a `[host_access]` table passes, because host access is then off'
             host.givenConfig(lamp, 'schema_version = 1' + System.lineSeparator())
             host.oillamp.run('config', lamp.toString(), 'check').status() == LampExitStatus.SUCCESS
     }
 
-    def '`host_access.requirements` is one piece of text, which may span several lines'() {
+    def '`host_access.checker_instructions` is one piece of text, which may span several lines'() {
         reportInfo """
-            With host access on, a checker, a separate call to a model, judges each request that
-            the agent makes of the user's computer against `host_access.requirements`. The
-            requirements are the user's own words, not a checklist, so they are a single string,
-            usually over several lines. Both of TOML's multi-line strings work. The literal one,
-            between `'''`, keeps a backslash as a backslash, so it is the one to use for paths and
-            regular expressions.
+            With host access on and the checker among the lamp's guards, a separate call to a
+            model judges each request that the agent makes of the user's computer against
+            `host_access.checker_instructions`. The instructions are the user's own words, not a
+            checklist, so they are a single string, usually over several lines. Both of TOML's
+            multi-line strings work. The literal one, between `'''`, keeps a backslash as a
+            backslash, so it is the one to use for paths and regular expressions.
         """
-        given: 'host access on, with requirements over two lines in a literal string, one of them with a backslash'
+        given: 'host access on, with checker instructions over two lines in a literal string, one of them with a backslash'
             var lamp = host.lampPath()
             host.givenConfig(lamp, """
                 schema_version = 1
 
                 [host_access]
-                enabled = true
-                requirements = '''
+                may = "read"
+                checker_instructions = '''
                 You may read ~/Documents.
                 Never read ~/.ssh, nor anything under ~/\\.gnupg.
                 '''
@@ -902,60 +922,353 @@ class Configuring_A_Lamp_Spec extends Specification {
             outcome.console().contains("checker the agent's model")
     }
 
-    def 'The agent may run commands on the host only when `host_access.commands` says "ask" or "checker"'() {
+    def '`host_access.may` says what the agent may do on the host, and `host_access.guards` what each request passes first: #may, #guards'() {
         reportInfo """
-            With host access on, the agent may reach the user's computer through tools that a
-            checker, a separate call to a model, judges first. One of them, `host_bash`, runs a
-            command there, which can do anything the user can. Whether it exists in a lamp, and
-            who allows each command, is the setting `host_access.commands`, one of three words:
+            With host access on, the agent may reach the user's computer through tools. Two words
+            in the lamp's `oillamp.toml` say how far:
 
-            - `"off"`, the default: there is no `host_bash`.
-            - `"ask"`: the checker judges each command, and then the user is asked before it runs.
-            - `"checker"`: the checker's allow is enough.
+            - `host_access.may`, a ladder in which each step allows what the one before it does:
+              `"nothing"` (the default: no tools at all), `"read"`, `"read_change"` (also write
+              files, copy them out, open pages, notify) and `"read_change_run"` (also run
+              commands with `host_bash`, which can do anything the user can).
+            - `host_access.guards`, the chain each request passes, always in the same order:
+              `"allowlists"` (only the folders), `"allowlists_checker"` (the default: then a
+              checker model) and `"allowlists_checker_user"` (then the person too, for every
+              command and for a folder outside the allowlists).
 
-            Any other word is refused with `OIL-CONFIG-004`, naming the key: a typo must not open
-            the way to running commands.
-
-            The setting replaced `host_access.executables`, a list of programs. Every lamp created
-            before that change has `executables = []` in its file, written there by oillamp's
-            template, and an empty list meant no programs, which is what `"off"` says. So that
-            line is accepted, and such a lamp starts as it did. A list that names programs is refused with
-            `OIL-CONFIG-004`, naming `host_access.commands`: `"ask"` or `"checker"` would let the
-            agent run any command, not only the programs listed, so oillamp does not choose one
-            on the user's behalf.
-
-            The scenario checks a lamp's file with `oillamp config <dir> check`, and reads what a
-            valid one means with `oillamp config <dir> show-effective`.
+            Any other word is refused with `OIL-CONFIG-004`, naming the key: a typo must not open a
+            tier, nor take a guard away. The scenario checks a lamp's file with
+            `oillamp config <dir> check`, and reads what a valid one means with
+            `oillamp config <dir> show-effective`.
         """
-        given: 'a lamp with host access on, whose file sets `host_access.commands`, the old `executables`, or neither'
+        given: 'a lamp whose file sets `may` and `guards`, or leaves them out'
             var lamp = host.lampPath()
             host.givenConfig(lamp, """
                 schema_version = 1
 
                 [host_access]
-                enabled = true
-                requirements = "Build ~/project, and nothing else."
-                ${setting}
+                ${may == null ? '' : "may = \"${may}\""}
+                ${guards == null ? '' : "guards = \"${guards}\""}
+                checker_instructions = "Build ~/project, and nothing else."
             """.stripIndent())
 
         when: '`oillamp config <dir> check` and `oillamp config <dir> show-effective` run'
             var checked = host.oillamp.run('config', lamp.toString(), 'check')
             var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
 
-        then: 'a valid setting passes, and `show-effective` says who allows a command; any other is refused with `OIL-CONFIG-004`, naming `host_access.commands`'
+        then: 'valid words pass, and `show-effective` says what they mean; any other is refused with `OIL-CONFIG-004`, naming the key'
             (checked.status() == LampExitStatus.SUCCESS) == (code == null)
             code == null ? shown.console().contains(means) : checked.reported(code)
             code == null || checked.console().contains(means)
 
         where:
-            setting                         | code             | means
-            ''                              | null             | 'no commands'
-            'commands = "off"'              | null             | 'no commands'
-            'commands = "ask"'              | null             | 'commands, each one asked of you first'
-            'commands = "checker"'          | null             | 'commands, judged by the checker alone'
-            'commands = "always"'           | 'OIL-CONFIG-004' | 'host_access.commands'
-            'executables = []'              | null             | 'no commands'
-            'executables = ["inkscape"]'    | 'OIL-CONFIG-004' | 'host_access.commands'
+            may                 | guards                     || code             | means
+            null                | null                       || null             | 'host access  off'
+            'read'              | null                       || null             | 'may read, guards allowlists_checker'
+            'read_change'       | 'allowlists_checker'       || null             | 'may read_change, guards allowlists_checker'
+            'read_change_run'   | 'allowlists_checker_user'  || null             | 'may read_change_run, guards allowlists_checker_user'
+            'read'              | 'allowlists'               || null             | 'no checker: the allowlists are the only guard'
+            'everything'        | null                       || 'OIL-CONFIG-004' | 'host_access.may'
+            'read'              | 'checker'                  || 'OIL-CONFIG-004' | 'host_access.guards'
+    }
+
+    def 'A new lamp\'s `oillamp.toml` lets the agent do nothing on the host, and says next to each allowlist that a folder includes everything below it'() {
+        reportInfo """
+            A new lamp's `oillamp.toml` has the `[host_access]` table written out with its default
+            values and a comment next to each key, because most users read that file as the
+            documentation of the settings. By default the agent may do nothing on the host,
+            `may = "nothing"`; the guards are the allowlists and then the checker,
+            `guards = "allowlists_checker"`, for the day the user lets it do more; and both
+            allowlists hold `~`, the user's home. The comments next to the allowlists say what a
+            folder in them means: it includes everything below it, and links are followed, so a
+            link cannot lead out of it.
+        """
+        given: 'a new lamp'
+            var lamp = host.lampPath()
+            host.oillamp.run('at', lamp.toString())
+
+        when: 'the user reads its `oillamp.toml`, and `oillamp config <dir> show-effective` runs'
+            var file = Files.readString(lamp.resolve('oillamp.toml'))
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'the file lets the agent do nothing, behind the allowlists and the checker, with `~` in both allowlists and no checker instructions yet'
+            file.contains('may                  = "nothing"                   # what the agent may do here: "nothing",\n')
+            file.contains('guards               = "allowlists_checker"        # what each request passes first:\n')
+            file.contains('read_allowlist       = ["~"]                       # folders it may read: "~", "~/…" or\n')
+            file.contains('change_allowlist     = ["~"]                       # folders it may read and change, and run\n')
+            file.contains("checker_instructions = '''\n'''\n")
+
+        and: 'the comments next to both allowlists say that a folder includes everything below it, and that a link cannot lead out'
+            file.count('Each includes everything\n' + ' ' * 51 + '# below it') == 2
+            file.count('link cannot lead out') == 2
+
+        and: '`show-effective` says host access is off'
+            shown.console().contains('host access  off')
+    }
+
+    def 'oillamp rewrites the `[host_access]` table an older oillamp wrote into a lamp\'s file, keeps the rest of the file, and the lamp starts'() {
+        reportInfo """
+            Let's consider a lamp made by an older oillamp, such as one of Genies' lamps. Its
+            `oillamp.toml` says what the agent may do on the host in keys that no longer exist:
+            `enabled`, `requirements`, `roots`, `commands`, `allow_additive` and `ask_the_user`.
+            oillamp refuses a key it does not know, so without help such a lamp would no longer
+            start.
+
+            So whenever oillamp reads a lamp's `oillamp.toml` and finds one of those keys, it
+            rewrites the table in the keys that replaced them, keeping what the old ones meant,
+            and goes on with the rewritten file, without a word. The old keys go, with the comment
+            lines below them that carry on their comments. `may`, `guards` and the two allowlists
+            take the place of the first old key, with the comments a new lamp's file has.
+            `requirements` becomes `checker_instructions` where it is, its value as it was written.
+            Every other line stays as it was: the other tables, the user's own comments, and the
+            keys of `[host_access]` that did not change.
+
+            This lamp turned host access on and had the person approve each command
+            (`commands = "ask"`), with no `roots`, which meant the user's home. That is
+            `may = "read_change_run"`, `guards = "allowlists_checker_user"`, and `~` in both
+            allowlists.
+        """
+        given: 'a lamp whose file an older oillamp wrote, with a comment and a table of the user\'s around `[host_access]`'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, '''\
+                schema_version = 1
+                # my own note about this lamp
+
+                [display]
+                width  = 2560
+
+                [host_access]
+                enabled = true
+                # Your own words. This is the only thing the checker judges by, and the agent never
+                # sees it.
+                requirements = \'\'\'
+                {
+                  "commands" : "The person approves every command themselves."
+                }\'\'\'
+                checker_model     = ""       # the model that judges; empty: the one the agent answers with
+                roots             = []       # absolute paths the file tools, and a command's directory,
+                                             # may name; empty means your home directory
+                max_read_bytes    = 65536    # how much of one file the agent may be handed
+                commands          = "ask"    # shell commands here: "off", "ask" (the checker, then you,
+                                             # for every one) or "checker" (the checker alone)
+                allow_additive    = true     # writing and copying files out, opening pages, notifications
+                ask_the_user      = false    # ask you, rather than refuse, a request outside roots
+
+                # my saves
+                [autosave]
+                startup = true
+                '''.stripIndent())
+
+        when: '`oillamp config <dir> check` reads the lamp'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'it finds nothing wrong, and says nothing about the rewrite'
+            checked.status() == LampExitStatus.SUCCESS
+            checked.problems().isEmpty()
+
+        and: 'the file has the new keys in place of the old ones, and every other line as it was'
+            Files.readString(lamp.resolve('oillamp.toml')) == '''\
+                schema_version = 1
+                # my own note about this lamp
+
+                [display]
+                width  = 2560
+
+                [host_access]
+                may                  = "read_change_run"           # what the agent may do here: "nothing",
+                                                                   # "read", "read_change" (also write files,
+                                                                   # copy them out, open pages, notify) or
+                                                                   # "read_change_run" (also run commands)
+                guards               = "allowlists_checker_user"   # what each request passes first:
+                                                                   # "allowlists", "allowlists_checker" (then
+                                                                   # the checker model) or
+                                                                   # "allowlists_checker_user" (then you too,
+                                                                   # for every command, and for a folder
+                                                                   # outside the allowlists, else refused)
+                read_allowlist       = ["~"]                       # folders it may read: "~", "~/…" or
+                                                                   # absolute paths. Each includes everything
+                                                                   # below it, and links are followed, so a
+                                                                   # link cannot lead out
+                change_allowlist     = ["~"]                       # folders it may read and change, and run
+                                                                   # commands in. Each includes everything
+                                                                   # below it, and links are followed, so a
+                                                                   # link cannot lead out
+                # Your own words. This is the only thing the checker judges by, and the agent never
+                # sees it.
+                checker_instructions = \'\'\'
+                {
+                  "commands" : "The person approves every command themselves."
+                }\'\'\'
+                checker_model     = ""       # the model that judges; empty: the one the agent answers with
+                max_read_bytes    = 65536    # how much of one file the agent may be handed
+
+                # my saves
+                [autosave]
+                startup = true
+                '''.stripIndent()
+
+        when: 'a session starts in the lamp, with a model for the checker'
+            var started = host.oillamp.run('at', lamp.toString(), '--model', 'azure/gpt-6.1-sol')
+
+        then: 'it starts, and gives the agent the host tools, `host_bash` among them'
+            started.succeeded()
+            (started.events().find { it instanceof LampEvent.HostAccessEnabled } as LampEvent.HostAccessEnabled)
+                    .tools().contains('host_bash')
+    }
+
+    def 'oillamp reads an older `[host_access]` table as the same settings in the new keys: #meaning'() {
+        reportInfo """
+            Let's consider the ways a lamp made by an older oillamp may have said what the agent
+            may do on the host. oillamp rewrites each into the keys that replaced the old ones, so
+            that the lamp does what it did:
+
+            - `may` is `"nothing"` unless `enabled` was true. Then it is `"read_change_run"` when
+              `commands` was `"ask"` or `"checker"`, else `"read"` when `allow_additive` was false,
+              else `"read_change"`. A lamp that ran commands without the additive tier gets
+              `"read_change_run"`: there is no step for running without changing, and taking the
+              commands away would break what it was set up for.
+            - `guards` is `"allowlists_checker_user"` when `commands` was `"ask"` or `ask_the_user`
+              was true, else `"allowlists_checker"`.
+            - both allowlists are what `roots` listed, or `["~"]` when it listed nothing, which
+              meant the user's home.
+            - `checker_instructions` is what `requirements` was.
+
+            `executables`, from lamps older still, goes: it was empty in any lamp that started.
+            A key the table already has in the new form is kept as it is.
+        """
+        given: 'a lamp whose `[host_access]` table has old keys'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, "schema_version = 1\n[host_access]\n${old}\nrequirements = 'Be careful.'\n")
+
+        when: '`oillamp config <dir> check` reads the lamp'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'the lamp is valid, and its table has exactly the new keys'
+            checked.status() == LampExitStatus.SUCCESS
+            var table = new com.fasterxml.jackson.dataformat.toml.TomlMapper()
+                    .readValue(Files.readString(lamp.resolve('oillamp.toml')), Map).host_access
+            table == [may: may, guards: guards, read_allowlist: folders, change_allowlist: folders,
+                      checker_instructions: 'Be careful.']
+
+        where:
+            meaning                                      | old                                                      || may               | guards                    | folders
+            'off'                                        | 'enabled = false\ncommands = "checker"'                  || 'nothing'         | 'allowlists_checker'      | ['~']
+            'on'                                         | 'enabled = true'                                         || 'read_change'     | 'allowlists_checker'      | ['~']
+            'on, read only'                              | 'enabled = true\nallow_additive = false'                 || 'read'            | 'allowlists_checker'      | ['~']
+            'commands, the checker alone'                | 'enabled = true\ncommands = "checker"'                   || 'read_change_run' | 'allowlists_checker'      | ['~']
+            'commands, asking the person'                | 'enabled = true\ncommands = "ask"'                       || 'read_change_run' | 'allowlists_checker_user' | ['~']
+            'commands without the additive tier'         | 'enabled = true\ncommands = "checker"\nallow_additive = false' || 'read_change_run' | 'allowlists_checker' | ['~']
+            'asking the person past the roots'           | 'enabled = true\nask_the_user = true'                    || 'read_change'     | 'allowlists_checker_user' | ['~']
+            'two roots'                                  | 'enabled = true\nroots = ["/srv/a", "/srv/b"]'           || 'read_change'     | 'allowlists_checker'      | ['/srv/a', '/srv/b']
+            'the empty executables of an older lamp'     | 'enabled = true\nexecutables = []'                       || 'read_change'     | 'allowlists_checker'      | ['~']
+            'a new key beside the old ones'              | 'enabled = true\nmay = "read"'                           || 'read'            | 'allowlists_checker'      | ['~']
+    }
+
+    def 'oillamp reads old `[host_access]` keys in `~/.config/oillamp/config.toml` as the new ones, and never rewrites that file'() {
+        reportInfo """
+            Settings in `~/.config/oillamp/config.toml` apply to every lamp of the user, beneath
+            each lamp's own `oillamp.toml`. That file may still say what the agent may do on the
+            host in the keys of an older oillamp. oillamp reads them as the keys that replaced
+            them, as it does a lamp's own file, but it never rewrites the user-wide file: it is
+            the user's, outside any lamp, and the same file may be read by an older oillamp too.
+        """
+        given: 'a user-wide file that turns host access on in the old keys, with one root'
+            var global = '[host_access]\nenabled = true\nrequirements = "Only the shared folder."\nroots = ["/srv/shared"]\n'
+            host.givenGlobalConfig(global)
+
+        and: 'a lamp whose own file says nothing about host access'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+
+        when: '`oillamp config <dir> show-effective` reads the lamp\'s settings'
+            var shown = host.oillamp.run('config', lamp.toString(), 'show-effective')
+
+        then: 'the lamp has the user-wide settings, in the new keys'
+            shown.status() == LampExitStatus.SUCCESS
+            shown.console().contains('may read_change, guards allowlists_checker')
+            shown.console().contains('read /srv/shared; read and change /srv/shared')
+            shown.console().contains('| Only the shared folder.')
+
+        and: 'neither file was rewritten'
+            Files.readString(host.home.resolve('.config/oillamp/config.toml')) == global
+            Files.readString(lamp.resolve('oillamp.toml')) == 'schema_version = 1\n'
+    }
+
+    def 'oillamp reads an older lamp file as the new keys and leaves the file as it was, #when'() {
+        reportInfo """
+            oillamp rewrites a lamp's `oillamp.toml` that still has `[host_access]` keys of an
+            older oillamp into the keys that replaced them. A dry run promises to change nothing,
+            and a lamp directory oillamp may not write in cannot take a new file. In both cases
+            oillamp reads the old keys as the new ones all the same, every time it reads the
+            file, and the lamp is as valid as it would be rewritten.
+        """
+        given: 'a lamp whose file has old keys'
+            var lamp = host.lampPath()
+            var old = 'schema_version = 1\n[host_access]\nenabled = true\nrequirements = "Be careful."\n'
+            host.givenConfig(lamp, old)
+            if (readOnly) Files.setPosixFilePermissions(lamp, java.nio.file.attribute.PosixFilePermissions.fromString('r-x------'))
+
+        when: '`oillamp config <dir> check` reads the lamp'
+            var checked = host.oillamp.run(*(['config', lamp.toString(), 'check'] + options))
+
+        then: 'the lamp is valid, and its file is as it was'
+            checked.status() == LampExitStatus.SUCCESS
+            Files.readString(lamp.resolve('oillamp.toml')) == old
+
+        and: '`oillamp config <dir> show-effective` reads the old keys as the agent may read and change'
+            host.oillamp.run(*(['config', lamp.toString(), 'show-effective'] + options)).console()
+                    .contains('may read_change, guards allowlists_checker')
+
+        cleanup:
+            Files.setPosixFilePermissions(lamp, java.nio.file.attribute.PosixFilePermissions.fromString('rwx------'))
+
+        where:
+            when                                   | options       | readOnly
+            'in a dry run'                         | ['--dry-run'] | false
+            'when oillamp may not write next to it'| []            | true
+    }
+
+    def 'oillamp leaves an older lamp file as it is while the lamp\'s session runs, reads it as the new keys, and rewrites it once the session has ended'() {
+        reportInfo """
+            oillamp changes a lamp's `oillamp.toml` only while it holds the lamp's lock, which a
+            running session holds the whole time, and `oillamp host-access` while it writes. The
+            rewrite of older `[host_access]` keys follows the same rule: otherwise a late rewrite
+            of the old settings could write over a change made a moment earlier. So while a
+            session runs, a command that reads the file, such as `oillamp config <dir> check`,
+            leaves it as it is and reads the old keys as the new ones. The next read once the
+            session has ended rewrites the file.
+
+            Here the lamp's file is given old keys while its session runs, as an older program
+            might write them.
+        """
+        given: 'a lamp whose session runs'
+            var lamp = host.lampPath()
+            host.givenConfig(lamp, 'schema_version = 1\n')
+            var running = Lamp.at(lamp).launchedBy(host.launcher).start()
+            assert running.awaitRunning(Duration.ofSeconds(30))
+
+        and: 'its file then gets host access in the old keys'
+            var old = 'schema_version = 1\n[host_access]\nenabled = true\nrequirements = "Be careful."\n'
+            host.givenConfig(lamp, old)
+
+        when: '`oillamp config <dir> check` reads the lamp while the session runs'
+            var checked = host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'the lamp is valid, and its file is as it was'
+            checked.status() == LampExitStatus.SUCCESS
+            Files.readString(lamp.resolve('oillamp.toml')) == old
+
+        when: 'the session ends, and `oillamp config <dir> check` reads the lamp again'
+            running.close()
+            host.oillamp.run('config', lamp.toString(), 'check')
+
+        then: 'the file has the new keys'
+            var file = Files.readString(lamp.resolve('oillamp.toml'))
+            file.contains('may                  = "read_change"')
+            !file.contains('enabled')
+
+        cleanup:
+            running?.close()
     }
 
     def '`oillamp config check` #verdict `schedule.max_delay_minutes = #value`'() {

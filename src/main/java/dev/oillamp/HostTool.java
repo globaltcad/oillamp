@@ -6,7 +6,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostRisk;
 import dev.lamp.LampHostVerdict;
 
@@ -19,7 +19,7 @@ import sprouts.Tuple;
 ///
 /// Every request has a fixed shape, read from the call's JSON arguments by [#read] before
 /// anything else looks at it. The one tool that takes a command string, `host_bash`, is the
-/// executing tier, which the lamp keeps closed unless its `host_access.commands` opens it.
+/// executing tier, which the lamp keeps closed unless its `host_access.may` is `read_change_run`.
 ///
 /// Everything here decides and nothing does. [HostAccess] carries the decisions out, after the
 /// checks in [HostPaths] and the checker's [Verdict][dev.lamp.LampHostVerdict]. What each tool is
@@ -152,20 +152,23 @@ sealed interface HostTool {
     /// Why a tool cannot be offered by this lamp, or empty when it can.
     ///
     /// Kept apart from the checker on purpose: whether a whole tier is open is the user's
-    /// setting, and must not depend on a model's opinion.
+    /// setting, `host_access.may`, and must not depend on a model's opinion.
     static Optional<String> closedBecause(HostToolKind kind, LampConfig.HostAccess access) {
+        String may = "host_access.may is \"" + access.may().configName() + "\"";
         return switch (kind) {
             // Not built yet: offering them would only teach the agent a tool that always refuses.
             case CLIPBOARD_READ, CLIPBOARD_WRITE -> Optional.of(kind.toolName + " is not built yet");
-            case OPEN_URL, WRITE_FILE, EDIT_FILE, NOTIFY, COPY_OUT ->
-                    access.allowAdditive() ? Optional.empty()
-                    : Optional.of("this lamp's host_access.allow_additive is false, so nothing on the host may be changed");
-            case BASH -> switch (access.commands()) {
-                case OFF -> Optional.of("this lamp does not let the agent run commands on the host "
-                                      + "(host_access.commands is \"off\")");
-                case ASK, CHECKER -> Optional.empty();
+            case OPEN_URL, WRITE_FILE, EDIT_FILE, NOTIFY, COPY_OUT -> switch (access.may()) {
+                case NOTHING, MAY_READ -> Optional.of("this lamp's " + may + ", so nothing on the host may be changed");
+                case MAY_READ_CHANGE, MAY_READ_CHANGE_RUN -> Optional.empty();
             };
-            case LIST_DIR, STAT, READ_FILE, COPY_IN, SHOW -> Optional.empty();
+            case BASH -> switch (access.may()) {
+                case NOTHING, MAY_READ, MAY_READ_CHANGE -> Optional.of("this lamp does not let the agent run commands on the host ("
+                                                                     + may + ")");
+                case MAY_READ_CHANGE_RUN -> Optional.empty();
+            };
+            case LIST_DIR, STAT, READ_FILE, COPY_IN, SHOW -> access.may() == LampHostAccess.NOTHING
+                    ? Optional.of("this lamp's " + may + ", so nothing on the host may be reached") : Optional.empty();
         };
     }
 
@@ -178,11 +181,22 @@ sealed interface HostTool {
         return offered;
     }
 
-    /// Whether the person must allow a request too, after the checker did. A command does in a
-    /// lamp whose `host_access.commands` is `ask`; a path past the roots does separately, in
-    /// [HostAccess].
+    /// Whether the person must allow a request too, after the checker did: a command does in a
+    /// lamp whose `host_access.guards` end with the user. A path outside the allowlists does too,
+    /// in such a lamp, which [HostAccess] decides.
     static boolean needsThePerson(HostTool tool, LampConfig.HostAccess access) {
-        return tool instanceof Bash && access.commands() == LampHostCommandApproval.ASK;
+        return tool instanceof Bash && access.guards().asksTheUser();
+    }
+
+    /// What the request does with the host paths [#pathsOf] names, which decides the allowlist
+    /// they must be in. A command's directory must be one the agent may change: a command can
+    /// change anything there.
+    static HostPaths.Use useOf(HostTool tool) {
+        return switch (tool) {
+            case WriteFile _, EditFile _, CopyOut _, Bash _ -> HostPaths.Use.CHANGE;
+            case ListDir _, Stat _, ReadFile _, Show _, CopyIn _,
+                 ClipboardRead _, OpenUrl _, ClipboardWrite _, Notify _ -> HostPaths.Use.READ;
+        };
     }
 
     // ─── reading a request ────────────────────────────────────────────────────────────────
@@ -281,8 +295,9 @@ sealed interface HostTool {
     /// The host paths a tool will touch, as the agent wrote them, before they are resolved. The
     /// clipboard, a URL and a notification touch none; `host_copy_out` names its destination
     /// here, and its source is a path in the sandbox, which [HostAccessTools] reads in the
-    /// agent's home; `host_copy_in` names its source, and writes in the agent's home. `host_bash` names the directory it starts in, and only that: what the
-    /// command touches from there, the roots do not bound.
+    /// agent's home; `host_copy_in` names its source, and writes in the agent's home. `host_bash`
+    /// names the directory it starts in, and only that: what the command touches from there, the
+    /// allowlists do not bound.
     static Tuple<String> pathsOf(HostTool tool) {
         return switch (tool) {
             case ListDir dir -> Tuple.of(String.class, dir.path());

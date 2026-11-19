@@ -209,7 +209,7 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
             not a number. The checker is not asked, and nothing happens on the host.
         """
         given: 'a lamp that lets the checker alone allow commands'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             start()
 
         when: 'the agent calls the tool with arguments that do not fit it'
@@ -260,13 +260,14 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
     def 'Two calls on one connection are answered each by its id, the second while the first waits for the person'() {
         reportInfo """
             Each call is judged on its own, on a thread of its own, so one waiting does not hold
-            up another on the same connection. Here the lamp's `host_access.commands = "ask"`
-            makes a command wait for the person, and meanwhile the agent reads a file. The read
+            up another on the same connection. Here the lamp's
+            `host_access.guards = "allowlists_checker_user"` makes a command wait for the person,
+            and meanwhile the agent reads a file. The read
             is answered at once, under its own `id`; the command is answered once the person
             said yes.
         """
         given: 'a lamp that asks the person about every command'
-            givenHostAccess(commands: 'ask')
+            givenHostAccess(may: 'read_change_run', guards: 'allowlists_checker_user')
             checker.verdict = '{"decision":"allow","risk":"executing","reason":"Fine."}'
             start()
             var client = McpClient.initialized(hostAccessSocket())
@@ -300,7 +301,7 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
             runs, even when an answer comes in afterwards.
         """
         given: 'a lamp that asks the person about every command'
-            givenHostAccess(commands: 'ask')
+            givenHostAccess(may: 'read_change_run', guards: 'allowlists_checker_user')
             checker.verdict = '{"decision":"allow","risk":"executing","reason":"Fine."}'
             start()
             var client = McpClient.initialized(hostAccessSocket())
@@ -353,10 +354,11 @@ class Serving_The_Host_Tools_Over_Mcp_Spec extends Specification {
             schema_version = 1
 
             [host_access]
-            enabled = true
-            roots = ["${project}"]
-            commands = "${options.commands ?: 'off'}"
-            requirements = '''
+            may = "${options.may ?: 'read_change'}"
+            guards = "${options.guards ?: 'allowlists_checker'}"
+            read_allowlist = ["${project}"]
+            change_allowlist = ["${project}"]
+            checker_instructions = '''
             You may read and build ~/project.
             '''
         """.stripIndent())

@@ -42,6 +42,8 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     /// files it has no permission to delete.
     static Path stateDirOf(Path root) { return root.resolve(".oillamp"); }
     static Path configOf(Path root)   { return root.resolve("oillamp.toml"); }
+    /// The lock a session holds while it runs, and a command while it changes the lamp.
+    static Path lockFileOf(Path root) { return stateDirOf(root).resolve("lock"); }
     static Path readmeOf(Path root)   { return root.resolve("README.txt"); }
     /// The prefix of every agent directory's name, so it can be found in a lamp without `lamp.json`.
     static final String AGENT_DIR_PREFIX = "agent-lamp-";
@@ -62,7 +64,7 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
 
     public Path stateDir()      { return stateDirOf(root); }
     public Path lampMeta()      { return stateDir().resolve("lamp.json"); }
-    public Path lockFile()      { return stateDir().resolve("lock"); }
+    public Path lockFile()      { return lockFileOf(root); }
     public Path sessionMeta()   { return stateDir().resolve("session.json"); }
     /// When each run of the agent's own jobs began, over the last day, for
     /// `schedule.max_agent_runs_per_day`. Not in the snapshots: a run costs model tokens whatever
@@ -159,7 +161,7 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
         return piDir().resolve("extensions").resolve("oillamp-schedule.js");
     }
     /// The pi extension that gives the agent its host tools. Written while
-    /// `host_access.enabled` is on, removed while it is off.
+    /// `host_access.may` is not `nothing`, removed while it is.
     public Path hostAccessTools() {
         return piDir().resolve("extensions").resolve("oillamp-host-access.js");
     }
@@ -184,7 +186,7 @@ record LampLayout(Path root, AgentId agentId, Path xdgRuntimeDir) {
     public Path modelSocket()       { return shortSockets().resolve("host").resolve("model.sock"); }
     /// Where the agent reads and changes the lamp's schedule, through the session.
     public Path scheduleSocket()    { return shortSockets().resolve("host").resolve("schedule.sock"); }
-    /// The agent's way to ask the host for something, served only while `host_access.enabled`.
+    /// The agent's way to ask the host for something, served only while `host_access.may` is not `nothing`.
     public Path hostAccessSocket()  { return shortSockets().resolve("host").resolve("host-access.sock"); }
     /// Where the agent asks the user to look at its desktop, through the session.
     public Path desktopSocket()     { return shortSockets().resolve("host").resolve("desktop.sock"); }

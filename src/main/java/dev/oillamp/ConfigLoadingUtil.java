@@ -5,7 +5,8 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 import java.util.Optional;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
 
@@ -46,6 +47,9 @@ final class ConfigLoadingUtil {
                         ProblemCatalogUtil.configUnparseable(source.origin(), firstLineOf(e.getOriginalMessage())));
                 continue;
             }
+            // A [host_access] table in the keys it had before `may` and `guards` is read as the
+            // same settings in those keys, so that an older lamp keeps starting.
+            parsed = HostAccessUpgradeUtil.upgraded(parsed);
             if (source.kind() == ConfigSource.Kind.LAMP)
                 parseProblems = parseProblems.addAll(checkSchemaVersion(source, parsed));
             merged = Optional.of(merged.isEmpty()
@@ -539,65 +543,53 @@ final class ConfigLoadingUtil {
     }
 
     private static LampConfig.HostAccess readHostAccess(ConfigSection s, LampConfig.HostAccess fallback) {
-        s.allowOnly("enabled", "requirements", "checker_model", "roots", "max_read_bytes",
-                    "commands", "allow_additive", "ask_the_user", "executables");
-        // Lamps made before `commands` existed have `executables = []` in their file, from the
-        // template: no programs, which is what `commands = "off"` says. A list that names
-        // programs cannot be carried over, because `commands` lets any command run, not only
-        // those programs. So it is refused, with the setting that replaced it.
-        if (!s.strings("executables", Tuple.of(String.class)).isEmpty())
-            s.invalid("executables", "a list of programs",
-                    "nothing: host_access.executables was replaced by host_access.commands = \"off\", \"ask\" or \"checker\", "
-                  + "which lets the agent run any command, judged by the checker; remove the line and set commands");
-        boolean enabled = s.bool("enabled", fallback.enabled());
-        String requirements = s.string("requirements", fallback.requirements());
-        Tuple<String> roots = s.strings("roots", fallback.roots());
-        LampHostCommandApproval commands = readCommands(s, fallback.commands());
+        s.allowOnly("may", "guards", "read_allowlist", "change_allowlist", "checker_instructions",
+                    "checker_model", "max_read_bytes");
+        // A word that is not one of these is reported, and the lamp keeps the fallback, which for
+        // a new lamp is `nothing`: a typo must not open the host, nor take a guard away.
+        LampHostAccess may = s.oneOf("may", fallback.may(), LampHostAccess::named,
+                "\"nothing\", \"read\", \"read_change\" or \"read_change_run\"");
+        LampHostAccessGuards guards = s.oneOf("guards", fallback.guards(), LampHostAccessGuards::named,
+                "\"allowlists\", \"allowlists_checker\" or \"allowlists_checker_user\"");
+        Tuple<String> readAllowlist = allowlist(s, "read_allowlist", fallback.readAllowlist());
+        Tuple<String> changeAllowlist = allowlist(s, "change_allowlist", fallback.changeAllowlist());
+        String instructions = s.string("checker_instructions", fallback.checkerInstructions());
         int maxReadBytes = bounded(s, "max_read_bytes", fallback.maxReadBytes(), 1, 16 * 1024 * 1024,
                 "a number of bytes from 1 to 16777216");
-        boolean allowAdditive = s.bool("allow_additive", fallback.allowAdditive());
-        boolean askTheUser = s.bool("ask_the_user", fallback.askTheUser());
 
         // A request judged against nothing would be allowed on the checker's own judgement, which
-        // is exactly what this feature must not do. So the two go together. Every missing piece is
-        // reported, not only the first: a user fixing the table should need one edit, not three.
-        boolean complete = true;
-        if (enabled && requirements.isBlank()) {
-            s.invalid("requirements", "(empty)",
-                    "the requirements the checker judges against; a lamp with host access on must say in its own words what the agent may not do");
-            complete = false;
-        }
-        for (String root : roots)
-            if (!root.startsWith("/"))
-                s.invalid("roots", "\"" + root + "\"", "an absolute path, such as \"/home/me/Documents\"");
-        Tuple<String> absoluteRoots = roots.retainIf(root -> root.startsWith("/"));
+        // is exactly what this feature must not do. So a checker needs instructions. Every missing
+        // piece is reported, not only the first: a user fixing the table should need one edit,
+        // not three.
+        boolean checks = may != LampHostAccess.NOTHING && guards.checks();
+        if (checks && instructions.isBlank())
+            s.invalid("checker_instructions", "(empty)",
+                    "the instructions the checker judges against; a lamp whose guards include the checker must say "
+                  + "in its own words what the agent may not do (or set guards = \"allowlists\", for no checker)");
 
         // The checker gets its own conversation, on the model the agent answers with unless the
         // lamp names another one here. Whether the session has a model at all is known only when
         // it starts; see LampPhase.
         String checkerModel = s.string("checker_model", fallback.checkerModel());
-        if (!checkerModel.isBlank() && Context.ModelOverride.idProblem(checkerModel).isPresent()) {
+        if (!checkerModel.isBlank() && Context.ModelOverride.idProblem(checkerModel).isPresent())
             s.invalid("checker_model", "\"" + checkerModel + "\"", "a model as the service names it, such as \"azure/gpt-6.1-sol\"");
-            complete = false;
-        }
-        enabled = enabled && complete;
-        return new LampConfig.HostAccess(enabled, requirements, checkerModel, absoluteRoots,
-                                         maxReadBytes, commands, allowAdditive, askTheUser);
+
+        LampConfig.HostAccess access = new LampConfig.HostAccess(may, guards, readAllowlist, changeAllowlist,
+                instructions, checkerModel, maxReadBytes);
+        if (access.runsCommandsUnchecked()) s.report(HostAccessProblems.commandsUnchecked());
+        return access;
     }
 
-    /// `host_access.commands`, one of three words. Anything else is reported, and the lamp keeps
-    /// the fallback, which for a new lamp is `off`: a typo must not open the executing tier.
-    private static LampHostCommandApproval readCommands(ConfigSection s, LampHostCommandApproval fallback) {
-        String text = s.string("commands", fallback.name().toLowerCase(java.util.Locale.ROOT));
-        return switch (text) {
-            case "off" -> LampHostCommandApproval.OFF;
-            case "ask" -> LampHostCommandApproval.ASK;
-            case "checker" -> LampHostCommandApproval.CHECKER;
-            default -> {
-                s.invalid("commands", "\"" + text + "\"", "\"off\", \"ask\" (the checker, then you, for every command) or \"checker\" (the checker alone)");
-                yield fallback;
-            }
-        };
+    /// `host_access.read_allowlist` or `change_allowlist`: folders, each `~`, under `~/`, or
+    /// absolute. Any other is reported and left out, so the list never reaches further than the
+    /// file says.
+    private static Tuple<String> allowlist(ConfigSection s, String key, Tuple<String> fallback) {
+        Tuple<String> folders = s.strings(key, fallback);
+        for (String folder : folders)
+            if (!LampConfig.HostAccess.isAllowlistFolder(folder))
+                s.invalid(key, "\"" + folder + "\"", "a folder written as \"~\", \"~/Documents\" or an absolute path "
+                        + "such as \"/srv/data\"");
+        return folders.retainIf(LampConfig.HostAccess::isAllowlistFolder);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────

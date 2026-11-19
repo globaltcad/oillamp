@@ -21,6 +21,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import sprouts.Tuple;
+
 /// A lamp's session, as an application holds it after [LampDirectory#start] or
 /// [LampDirectory#join], until it closes it.
 ///
@@ -74,9 +76,10 @@ public final class Lamp implements AutoCloseable {
     /// The variable in the engine's environment that holds instructions given with
     /// [LampDirectory#instructions(String)].
     static final String INSTRUCTIONS_VARIABLE = "OILLAMP_INSTRUCTIONS";
-    /// The variable in the engine's environment that holds the host-access requirements given
-    /// with [LampDirectory#security(String)].
-    static final String SECURITY_REQUIREMENTS_VARIABLE = "OILLAMP_SECURITY_REQUIREMENTS";
+    /// The variable in the engine's environment that holds the checker instructions given with
+    /// [LampDirectory#checkerInstructions(String)], or written with
+    /// [LampDirectory#hostAccess(HostAccess)].
+    static final String CHECKER_INSTRUCTIONS_VARIABLE = "OILLAMP_CHECKER_INSTRUCTIONS";
     /// The longest instructions, in bytes of UTF-8. The engine checks the same.
     static final int LONGEST_INSTRUCTIONS = 64 * 1024;
     /// What a model's id may be: printable ASCII without spaces, as every service names its
@@ -208,9 +211,9 @@ public final class Lamp implements AutoCloseable {
     static HostAccess hostAccessOf(Ran ran) throws LampFailedException {
         ran.orThrow();
         for (LampEvent event : ran.events())
-            if (event instanceof LampEvent.HostAccessSettings(boolean enabled, String requirements,
-                                                              LampHostCommandApproval commands, boolean askTheUser))
-                return new HostAccess(enabled, requirements, commands, askTheUser);
+            if (event instanceof LampEvent.HostAccessSettings settings)
+                return new HostAccess(settings.may(), settings.guards(), settings.readAllowlist(),
+                                      settings.changeAllowlist(), settings.checkerInstructions());
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no host access settings"));
     }
 
@@ -271,19 +274,39 @@ public final class Lamp implements AutoCloseable {
     /// on, as [LampDirectory#hostAccess()] reads them and [LampDirectory#hostAccess(HostAccess)]
     /// writes them.
     ///
-    /// The checker is the fast path: it judges every request against `requirements`, and asks
-    /// nobody. The person is the slow one, and only in two cases, each after the checker allowed
-    /// the request: a command, when `commands` is [LampHostCommandApproval#ASK], and a request
-    /// past the lamp's roots, when `askTheUser` is on. A session tells a program about either with
-    /// a [LampEvent.HostAccessAsked], and the program answers with [Lamp#decidePermission].
+    /// `may` says what the agent may do on the host at all. `guards` says what each request
+    /// passes through first, in this order: the allowlists, which oillamp checks itself; then
+    /// the checker, a model that judges the request against `checkerInstructions`; then the
+    /// person, asked about every command and about a path outside the allowlists. A session
+    /// tells a program about such a question with a [LampEvent.HostAccessAsked], and the program
+    /// answers with [Lamp#decidePermission].
     ///
-    /// @param enabled      whether a session gives the agent the host tools
-    /// @param requirements the text the checker model judges every host request against
-    /// @param commands     who approves a shell command the agent wants to run on the host
-    /// @param askTheUser   whether a request the checker allows that reaches past the lamp's
-    ///                     roots goes to the person, rather than being refused
-    public record HostAccess(boolean enabled, String requirements, LampHostCommandApproval commands,
-                             boolean askTheUser) {}
+    /// Each folder in an allowlist includes everything below it, and links are followed before
+    /// a path is compared with it, so a link cannot lead out. A folder is `~`, starts with `~/`
+    /// (the user's home on the host), or is absolute. Reading needs a path inside either list,
+    /// changing one or running a command in it a path inside `changeAllowlist`.
+    ///
+    /// @param may                 what the agent may do on the host
+    /// @param guards              what each request passes through before it happens
+    /// @param readAllowlist       the folders the agent may read
+    /// @param changeAllowlist     the folders the agent may read and change, and run commands in
+    /// @param checkerInstructions the text the checker model judges every host request against;
+    ///                            unused with [LampHostAccessGuards#ALLOWLISTS]
+    public record HostAccess(LampHostAccess may, LampHostAccessGuards guards, Tuple<String> readAllowlist,
+                             Tuple<String> changeAllowlist, String checkerInstructions) {
+        public HostAccess {
+            for (String folder : readAllowlist.addAll(changeAllowlist))
+                if (folder.contains(":") || folder.contains("\n"))
+                    throw new IllegalArgumentException("an allowlist folder cannot hold a colon or a line break: " + folder);
+        }
+
+        /// Whether commands would run with nothing but the allowlists in their way: no checker,
+        /// and nobody asked. Allowed, because it is the user's machine; oillamp warns loudly
+        /// whenever a lamp is set up so, with the problem `OIL-HOSTACCESS-016`.
+        public boolean runsCommandsUnchecked() {
+            return may == LampHostAccess.MAY_READ_CHANGE_RUN && !guards.checks();
+        }
+    }
 
     /// When oillamp saves a lamp by itself, so that it can go back there: the `[autosave]` table
     /// of its `oillamp.toml`, as [LampDirectory#autosave()] reads it and [LampDirectory#autosave(Autosave)]

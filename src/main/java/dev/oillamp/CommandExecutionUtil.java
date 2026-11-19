@@ -416,7 +416,7 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
-        Result<LampConfig> loaded = loadConfig(machine, layout.root());
+        Result<LampConfig> loaded = loadConfig(machine, context, layout.root());
         if (loaded instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -882,7 +882,7 @@ final class CommandExecutionUtil {
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
         // Holding the lamp's lock while saving also keeps a session from starting halfway through.
-        Result<LampConfig> config = loadConfig(machine, layout.root());
+        Result<LampConfig> config = loadConfig(machine, context, layout.root());
         if (config instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1140,12 +1140,12 @@ final class CommandExecutionUtil {
     }
 
     private static Result<History> historyWriter(Machine machine, Context context, LampLayout layout) {
-        return loadConfig(machine, layout.root()).map(config -> new History(layout, config.history(), context.sink(), true));
+        return loadConfig(machine, context, layout.root()).map(config -> new History(layout, config.history(), context.sink(), true));
     }
 
     /// A broken current config must not prevent restoring a saved, valid config.
     private static History recoveryWriter(Machine machine, Context context, LampLayout layout) {
-        Result<LampConfig> loaded = loadConfig(machine, layout.root());
+        Result<LampConfig> loaded = loadConfig(machine, context, layout.root());
         if (loaded instanceof Result.Ok<LampConfig> ok)
             return new History(layout, ok.value().history(), context.sink(), true);
         context.sink().accept(new LampEvent.Warning(ProblemCatalogUtil.historyPruningFailed(layout.root(),
@@ -1166,7 +1166,7 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
-        Result<LampConfig> config = loadConfig(machine, layout.root());
+        Result<LampConfig> config = loadConfig(machine, context, layout.root());
         if (config instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1374,51 +1374,58 @@ final class CommandExecutionUtil {
                         "the agent follows the new instructions from its next run on")));
     }
 
-    /// `oillamp host-access <dir> [on|off] [--requirements-env <name>] [--commands <who>]
-    /// [--ask-the-user on|off]`: what the lamp's file says about host access, after writing what
-    /// was given into it.
+    /// `oillamp host-access <dir> [--may <what>] [--guards <which>] [--read-allowlist <folders>]
+    /// [--change-allowlist <folders>] [--checker-instructions-env <name>]`: what the lamp's file
+    /// says about host access, after writing what was given into it.
     ///
     /// Only the keys given under `[host_access]` change; see [ConfigFileEditUtil] and
-    /// [#changeConfig].
+    /// [#changeConfig]. A lamp that lets commands run unchecked is warned about each time, read
+    /// or written.
     private static LampExitStatus hostAccess(Machine machine, Context context, Command.HostAccess asked) {
-        Optional<String> requirementsEnv = asked.requirementsEnv();
+        Optional<String> instructionsEnv = asked.checkerInstructionsEnv();
         Result<LampLayout> found = layoutOf(machine, asked.lamp());
         if (found instanceof Result.Err<LampLayout> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
-        Result<LampConfig> before = loadConfig(machine, layout.root());
+        Result<LampConfig> before = loadConfig(machine, context, layout.root());
         if (before instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
         }
         LampConfig.HostAccess now = ((Result.Ok<LampConfig>) before).value().hostAccess();
         if (asked.onlyReads()) {
-            context.sink().accept(hostAccessSettings(now));
+            reportHostAccess(context, now);
             return LampExitStatus.SUCCESS;
         }
 
-        Optional<String> requirements = requirementsEnv.map(name -> machine.environmentVariable(name).orElse(""));
-        if (requirements.isPresent() && requirements.get().getBytes(StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS) {
-            Tuple<LampProblem> tooLong = Tuple.of(LampProblem.class, ProblemCatalogUtil.usage("--requirements-env "
-                    + requirementsEnv.get() + ": more than " + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024
-                    + " KiB, far more than any useful rules", Command.usageOf("host-access")));
+        Optional<String> instructions = instructionsEnv.map(name -> machine.environmentVariable(name).orElse(""));
+        if (instructions.isPresent() && instructions.get().getBytes(StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS) {
+            Tuple<LampProblem> tooLong = Tuple.of(LampProblem.class, ProblemCatalogUtil.usage("--checker-instructions-env "
+                    + instructionsEnv.get() + ": more than " + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024
+                    + " KiB, far more than any useful instructions", Command.usageOf("host-access")));
             context.sinkAcceptProblems(tooLong);
             return exitStatusFor(tooLong);
         }
-        LampConfig.HostAccess wanted = new LampConfig.HostAccess(asked.enabled().orElse(now.enabled()),
-                requirements.orElse(now.requirements()), now.checkerModel(), now.roots(), now.maxReadBytes(),
-                asked.commands().orElse(now.commands()), now.allowAdditive(), asked.askTheUser().orElse(now.askTheUser()));
+        LampConfig.HostAccess wanted = new LampConfig.HostAccess(asked.may().orElse(now.may()),
+                asked.guards().orElse(now.guards()), asked.readAllowlist().orElse(now.readAllowlist()),
+                asked.changeAllowlist().orElse(now.changeAllowlist()), instructions.orElse(now.checkerInstructions()),
+                now.checkerModel(), now.maxReadBytes());
         return changeConfig(machine, context, layout, "[host_access]",
-                file -> ConfigFileEditUtil.withHostAccess(file, asked.enabled(), requirements, asked.commands(), asked.askTheUser()),
+                file -> ConfigFileEditUtil.withHostAccess(file, asked.may(), asked.guards(), asked.readAllowlist(),
+                                                          asked.changeAllowlist(), instructions),
                 ((Result.Ok<LampConfig>) before).value().withHostAccess(wanted),
-                () -> context.sink().accept(hostAccessSettings(wanted)));
+                () -> reportHostAccess(context, wanted));
     }
 
-    /// What a person decides on in `[host_access]`, as `oillamp host-access` reports it.
-    private static LampEvent.HostAccessSettings hostAccessSettings(LampConfig.HostAccess access) {
-        return new LampEvent.HostAccessSettings(access.enabled(), access.requirements(), access.commands(), access.askTheUser());
+    /// What a person decides on in `[host_access]`, as `oillamp host-access` reports it, after
+    /// the warning when the agent may run commands unchecked.
+    private static void reportHostAccess(Context context, LampConfig.HostAccess access) {
+        if (access.runsCommandsUnchecked())
+            context.sink().accept(new LampEvent.Warning(HostAccessProblems.commandsUnchecked()));
+        context.sink().accept(new LampEvent.HostAccessSettings(access.may(), access.guards(), access.readAllowlist(),
+                access.changeAllowlist(), access.checkerInstructions()));
     }
 
     /// `oillamp history <dir> autosave [<moment> on|off]...`: when the lamp's file says oillamp
@@ -1432,7 +1439,7 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
-        Result<LampConfig> before = loadConfig(machine, layout.root());
+        Result<LampConfig> before = loadConfig(machine, context, layout.root());
         if (before instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1469,7 +1476,7 @@ final class CommandExecutionUtil {
             return exitStatusFor(failure.problems());
         }
         LampLayout layout = ((Result.Ok<LampLayout>) found).value();
-        Result<LampConfig> before = loadConfig(machine, layout.root());
+        Result<LampConfig> before = loadConfig(machine, context, layout.root());
         if (before instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1625,7 +1632,7 @@ final class CommandExecutionUtil {
         context.sink().accept(new LampEvent.Answer(describeRecordings(existing, layout)));
         if (!prune) return LampExitStatus.SUCCESS;
 
-        Result<LampConfig> loaded = loadConfig(machine, lampPath);
+        Result<LampConfig> loaded = loadConfig(machine, context, lampPath);
         if (loaded instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return exitStatusFor(failure.problems());
@@ -1797,7 +1804,7 @@ final class CommandExecutionUtil {
     /// `oillamp config <dir> show-effective`: print a summary of the validated configuration,
     /// the global file and the lamp's merged, as `at` would use it.
     private static LampExitStatus showEffectiveConfig(Machine machine, Context context, Path lampPath) {
-        Result<LampConfig> loaded = loadConfig(machine, lampPath);
+        Result<LampConfig> loaded = loadConfig(machine, context, lampPath);
         if (loaded instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return LampExitStatus.USAGE;
@@ -1810,7 +1817,7 @@ final class CommandExecutionUtil {
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
     private static LampExitStatus checkConfiguration(Machine machine, Context context, Path lampPath, boolean quiet) {
-        Result<LampConfig> loaded = loadConfig(machine, lampPath);
+        Result<LampConfig> loaded = loadConfig(machine, context, lampPath);
         if (loaded instanceof Result.Err<LampConfig> failure) {
             context.sinkAcceptProblems(failure.problems());
             return LampExitStatus.USAGE;
@@ -1821,12 +1828,15 @@ final class CommandExecutionUtil {
         return LampExitStatus.SUCCESS;
     }
 
-    /// The lamp's configuration merged over the global one, exactly as `at` reads it.
-    private static Result<LampConfig> loadConfig(Machine machine, Path lampPath) {
+    /// The lamp's configuration merged over the global one, exactly as `at` reads it. A lamp
+    /// file in the `[host_access]` keys of an older oillamp is rewritten in the new ones first,
+    /// as `at` does, except in a dry run, which changes nothing.
+    private static Result<LampConfig> loadConfig(Machine machine, Context context, Path lampPath) {
         Path lampConfig = lampPath.resolve("oillamp.toml");
         if (!FilesystemUtil.exists(lampConfig))
             return Result.err(ProblemCatalogUtil.lampNotWritable(lampPath,
                     "there is no oillamp.toml here — run `oillamp at " + lampPath + "` to create one"));
+        if (!context.options().dryRun()) LampPhase.upgradeLampFile(lampConfig);
         return ConfigLoadingUtil.load(LampPhase.configurationFiles(home(machine), lampConfig));
     }
 
@@ -1870,24 +1880,26 @@ final class CommandExecutionUtil {
         };
     }
 
-    /// What the sandbox may reach on the host, and what it is judged by. The requirements are the
-    /// user's own text and are printed as written: this is the command they use to check it.
+    /// What the sandbox may reach on the host, and what it is judged by. The checker instructions
+    /// are the user's own text and are printed as written: this is the command they use to check
+    /// them.
     private static String describeHostAccess(LampConfig.HostAccess access) {
         if (!access.enabled()) return "off";
-        String roots = access.roots().isEmpty() ? "your home directory" : String.join(", ", access.roots());
-        return (access.requirements().isBlank() ? "(no requirements!)" : "on") + "\n"
-             + "               checker " + (access.checkerModel().isBlank() ? "the agent's model" : access.checkerModel())
-             + ", roots " + roots
-             + ", " + (access.allowAdditive() ? "writing and opening pages allowed" : "read only")
-             + (access.askTheUser() ? ", asks you past the roots" : "")
-             + ", " + (switch (access.commands()) {
-                   case OFF -> "no commands";
-                   case ASK -> "commands, each one asked of you first";
-                   case CHECKER -> "commands, judged by the checker alone";
-               })
-             + "\n"
-             + "               requirements, as the checker sees them:\n"
-             + access.requirements().lines().map(line -> "                 | " + line).reduce("", (a, b) -> a + (a.isEmpty() ? "" : "\n") + b);
+        return "may " + access.may().configName() + ", guards " + access.guards().configName()
+             + (access.checks() && access.checkerInstructions().isBlank() ? " (no checker instructions!)" : "") + "\n"
+             + "               read " + folders(access.readAllowlist())
+             + "; read and change " + folders(access.changeAllowlist()) + "\n"
+             + (access.checks()
+                ? "               checker " + (access.checkerModel().isBlank() ? "the agent's model" : access.checkerModel())
+                  + ", judging against:\n"
+                  + access.checkerInstructions().lines().map(line -> "                 | " + line)
+                          .reduce("", (a, b) -> a + (a.isEmpty() ? "" : "\n") + b)
+                : "               no checker: the allowlists are the only guard");
+    }
+
+    /// An allowlist as `show-effective` prints it.
+    private static String folders(Tuple<String> allowlist) {
+        return allowlist.isEmpty() ? "no folder" : String.join(", ", allowlist);
     }
 
     /// As [#busyProblem(LampLayout)], for the prepared lamp.

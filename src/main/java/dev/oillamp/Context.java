@@ -55,10 +55,10 @@ record Context(Consumer<LampEvent> sink, Options options, String version) {
                           Optional<String> background) {
 
         /// What an application asked for through the `Lamp` API, in front of the lamp's file: the
-        /// name of the variable that holds the requirements. The text itself reaches the engine in
-        /// its environment, never on its command line, because it is long and it is nobody else's
-        /// business.
-        public record HostAccessGrant(String requirementsEnv) {}
+        /// name of the variable that holds the checker instructions. The text itself reaches the
+        /// engine in its environment, never on its command line, because it is long and it is
+        /// nobody else's business.
+        public record HostAccessGrant(String checkerInstructionsEnv) {}
 
         public static Options defaults() {
             return new Options(false, false, false, true, false, true, true, false, ModelOverride.NONE, false,

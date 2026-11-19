@@ -1,7 +1,8 @@
 # Reaching the host: supervised host access
 
 This document specifies a way for the agent inside a lamp to ask for things on the host machine,
-with every request first judged by a separate model call against requirements the user wrote. It
+with every request first held to folders the user listed and judged by a separate model call
+against instructions the user wrote. It
 was written before the code, so that the shape was agreed before anything was built. Most of it is
 built now: where it sits in the code is in [ARCHITECTURE.md](ARCHITECTURE.md#supervised-host-access),
 and what is still missing is in [STATUS.md](STATUS.md#host-access-still-missing). When the rest is
@@ -21,8 +22,8 @@ allows everything on the first day or turns the feature off.
 
 oillamp takes a different route. The agent may ask for anything the feature offers, at any time.
 A second model call, with its own system prompt and **without the agent's conversation**, decides
-whether each request is allowed. The requirements it judges against are a piece of text the user
-wrote. The metaphor is a manager who cannot see the agent's screen but can see what it is about to
+whether each request is allowed. The checker instructions it judges against are a piece of text
+the user wrote. Folders the user lists bound where the agent may reach before any model is asked. The metaphor is a manager who cannot see the agent's screen but can see what it is about to
 do, and knows what the user asked for.
 
 This is a trade, not a guarantee. It is described under [What it does not
@@ -36,7 +37,9 @@ guarantee](#what-it-does-not-guarantee).
 |---|---|
 | **host access** | The feature: host tools the agent can call, each request judged before it runs. |
 | **MCP** | The Model Context Protocol: how an agent harness such as pi finds tools it does not have built in, and calls them. The host tools are an MCP server. |
-| **requirements** | The user's text that every request is judged against. One `String`, and nothing else. |
+| **checker instructions** | The user's text that every request is judged against. One `String`, and nothing else. |
+| **allowlists** | The folders the agent may reach: `read_allowlist` to read, `change_allowlist` to read, change and run commands in. Each folder includes everything below it. |
+| **guards** | What every request passes before it happens, in order: the allowlists, the checker, the person. |
 | **checker** | The model call that reads a request and answers with a verdict. Separate from the agent's conversation. |
 | **request** | One call of one host tool: the tool's name, its arguments, and the run it came from. |
 | **tier** | A class of tools with the same ceiling: passive, additive, executing. The checker may tighten a tier's ceiling, never widen it. |
@@ -79,57 +82,98 @@ nothing. All judgement and all effect happen on the host.
 
 ## Configuration
 
-Off by default, and entirely optional. It is on only when the lamp's `oillamp.toml` turns it on,
-or an application starts the session with its own requirements in its environment.
+Off by default, and entirely optional. It is on only when the lamp's `oillamp.toml` sets `may`
+to something other than `"nothing"`.
 
 ```toml
 [host_access]
-enabled = true
+may                  = "read_change"
+guards               = "allowlists_checker"
+read_allowlist       = ["~/Documents", "~/Notes"]
+change_allowlist     = ["~/Downloads/oillamp"]
 
 # What the agent may do on this machine, in your own words. This text goes to the checker with
 # every request, and nowhere else. The agent never sees it. Write what must not happen; that is
 # what a checker can act on.
-requirements = """
-You may read anything under ~/Documents and ~/Notes.
-Never write outside ~/Downloads/oillamp/.
-Never read ~/.ssh, ~/.gnupg, ~/.config, or any file whose name contains "password" or "secret".
+checker_instructions = '''
+Never read any file whose name contains "password" or "secret".
 Do not open web pages unless I asked for one in this conversation.
-"""
+'''
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
-| `host_access.enabled` | `false` | Turn the feature on. Off means no socket, no extension, no tools. |
-| `host_access.requirements` | `""` | The user's text. Cannot be empty while `enabled` is true. Multi-line TOML strings work. |
-| `host_access.checker_model` | `""` | The model that judges, as the service names it. Empty means the model the agent answers with, followed when it changes; a session with host access on and neither does not start (`OIL-HOSTACCESS-015`). See [The checker uses the agent's model](#the-checker-uses-the-agents-model). |
-| `host_access.roots` | `[]` | Absolute host paths the `host_*` file tools, and the directory a command runs in, may mention at all. Empty means the whole home directory, and nothing else. |
+| `host_access.may` | `"nothing"` | What the agent may do, a ladder: `"nothing"` (off: no socket, no extension, no tools), `"read"` (the passive tier), `"read_change"` (also the additive tier) or `"read_change_run"` (also the executing tier, `host_bash`). |
+| `host_access.guards` | `"allowlists_checker"` | What every request passes before it happens, a chain in this order: `"allowlists"` (only the folders), `"allowlists_checker"` (then the checker) or `"allowlists_checker_user"` (then the person too, for every command and for a path outside the allowlists). |
+| `host_access.read_allowlist` | `["~"]` | Folders the agent may read. Each includes everything below it. `~`, `~/…` or absolute; any other entry is refused. |
+| `host_access.change_allowlist` | `["~"]` | Folders the agent may read and change, and the folders a command may run in. Written the same way. |
+| `host_access.checker_instructions` | `""` | The user's text. Cannot be empty while `may` is not `"nothing"` and the guards include the checker. Multi-line TOML strings work. |
+| `host_access.checker_model` | `""` | The model that judges, as the service names it. Empty means the model the agent answers with, followed when it changes; a session with a checker among its guards and neither does not start (`OIL-HOSTACCESS-015`). See [The checker uses the agent's model](#the-checker-uses-the-agents-model). |
 | `host_access.max_read_bytes` | `65536` | How much of one file is handed to the agent. More is cut, and the agent is told. |
-| `host_access.commands` | `"off"` | Whether the agent may run commands on the host with `host_bash`: `"off"` (no such tool), `"ask"` (the checker judges each command, then the person is asked before it runs) or `"checker"` (the checker alone). |
-| `host_access.allow_additive` | `true` | Allow the additive tier (writing and copying files out, opening pages, notifications) at all. |
-| `host_access.ask_the_user` | `false` | For requests the checker allows that touch a path outside `roots`, ask the user instead of refusing. Needs someone to answer (see [Talking to the user](#talking-to-the-user)). |
 
-`roots` is the one setting that is not left to the checker alone. It is enforced before the model
-is asked, because a path outside it is a mistake or an attack, not a judgement call. The checker
-may only make the set smaller; only the person, with `ask_the_user`, may let one request past it.
+The allowlists are the one setting that is not left to a model. They are enforced before the
+checker is asked, because a path outside them is a mistake or an attack, not a judgement call. A
+path that is read must be inside a folder of either list (a folder the agent may change is one it
+may read); a path that is changed, and the directory a command runs in, inside a folder of
+`change_allowlist`. A path is compared folder by folder, after its links are followed, and so is
+each folder in the lists: `/a/workspace2` is not inside `/a/workspace`, and a link cannot lead a
+request out of a folder. The checker may only make the set smaller; only the person, with
+`guards = "allowlists_checker_user"`, may let one request past it.
+
+`may = "read_change_run"` with `guards = "allowlists"` lets commands run with no model judging
+them and nobody asked. That is allowed, because the machine is the user's, and warned about
+loudly: the warning `OIL-HOSTACCESS-016`, framed and red, whenever such a lamp starts, and
+whenever `oillamp config <dir> check` or `oillamp host-access <dir>` reads or writes it. An
+application gets it as a `LampEvent.Warning`, and `Lamp.HostAccess.runsCommandsUnchecked()` says
+the same of settings it is about to write.
 
 The configuration is in the lamp's file, which the agent cannot read or change, exactly like
 `[network]`. It is merged with `~/.config/oillamp/config.toml` as every other setting is.
 
-### Multi-line requirements
+### Lamps made before these keys
+
+Lamps made by an older oillamp, Genies' among them, say the same things with other keys:
+`enabled`, `requirements`, `roots`, `commands`, `allow_additive`, `ask_the_user`, and in the
+oldest `executables`. oillamp refuses a key it does not know, so it converts these instead. The
+first time it reads such a lamp's `oillamp.toml`, it rewrites the old lines in the new keys,
+without a word, and changes nothing else in the file. It rewrites the file only while it holds the
+lamp's lock, as every change to the file is made, so not while a session runs; a file it cannot
+write, a lamp whose lock someone else holds, or a dry run, is converted as it is read, every time. The user's `~/.config/oillamp/config.toml` is converted as it
+is read and never rewritten.
+
+| Old | New |
+|---|---|
+| `enabled = false`, or no `enabled` | `may = "nothing"`, whatever the other keys say |
+| `enabled = true`, `commands = "ask"` or `"checker"` | `may = "read_change_run"` |
+| `enabled = true`, `allow_additive = false` | `may = "read"` |
+| `enabled = true`, otherwise | `may = "read_change"` |
+| `commands = "ask"`, or `ask_the_user = true` | `guards = "allowlists_checker_user"` |
+| otherwise | `guards = "allowlists_checker"` |
+| `roots = []`, or no `roots` | `read_allowlist` and `change_allowlist` both `["~"]` |
+| `roots = [...]` | both allowlists the same folders |
+| `requirements` | `checker_instructions`, the value as it was written |
+| `executables` | dropped: it was empty in any lamp that started |
+
+A lamp that ran commands with the additive tier closed has no exact equivalent, and gets
+`read_change_run`. A lamp with `commands = "ask"` and `ask_the_user = false` is now asked about a
+path outside its allowlists, where it used to refuse it. A key in the new form that the table
+already has is kept.
+
+### Multi-line checker instructions
 
 Both spellings work with the TOML parser oillamp uses (`jackson-dataformat-toml`):
 
 ```toml
-requirements = """
+checker_instructions = """
 a "basic" string: \n is a newline, so backslashes must be doubled
 """
-requirements = '''
+checker_instructions = '''
 a literal string: \n is two characters, so paths and regular expressions are written as they are
 '''
 ```
 
-The first line break right after the opening `"""` or `'''` is dropped. The lamp template should
-recommend the literal form for people who write paths.
+The first line break right after the opening `"""` or `'''` is dropped. The lamp template
+recommends the literal form for people who write paths.
 
 ---
 
@@ -163,23 +207,24 @@ shows the model each tool as `mcp__oillamp__<name>`.
 | `host_clipboard_write` | `text` | Replaces the clipboard. *Not built; not offered.* |
 | `host_notify` | `title`, `text` | A desktop notification. |
 
-### Executing tier: closed unless `commands` opens it
+### Executing tier: closed unless `may` is `read_change_run`
 
 | Tool | Arguments | Does |
 |---|---|---|
 | `host_bash` | `command`, `cwd`, `timeout_seconds` | Runs `bash -c <command>` as the user, in the directory `cwd`, with no input, for at most `timeout_seconds` (1 to 600, 120 when left out). Returns the exit status, then stdout and stderr, each cut to their last 32 KiB. A command that runs out of time is stopped with every process it started. |
 
 The executing tier is the one that makes this feature dangerous: a command can do anything the
-user can. It is off by default. With `commands = "ask"`, every command the checker allows is shown
-to the user before it runs, whole, with the directory it runs in. With `commands = "checker"`, the
-checker's allow is enough; that is what lets the agent work on the host as it would if pi ran
-there, and it is the user's choice to make.
+user can. It is off by default. With `guards = "allowlists_checker_user"`, every command the
+checker allows is shown to the user before it runs, whole, with the directory it runs in. With
+`guards = "allowlists_checker"`, the checker's allow is enough; that is what lets the agent work on
+the host as it would if pi ran there, and it is the user's choice to make. With
+`guards = "allowlists"`, nothing judges a command at all, and oillamp warns about it loudly.
 
 A command is judged as a whole, at the moment it is asked for. The checker is shown all of it; a
 command longer than 16 KiB is refused rather than shown in part. Once it runs, what it touches is
-not checked again: `roots` bound the directory it starts in, not where it reads or writes from
-there. A command gets the environment oillamp was started with, without the variables that hold
-oillamp's model key or an application's requirements and instructions.
+not checked again: `change_allowlist` bounds the directory it starts in, not where it reads or
+writes from there. A command gets the environment oillamp was started with, without the variables
+that hold oillamp's model key or an application's checker instructions and instructions.
 
 A non-zero exit status is an answer, not an error: the agent reads it as it would read a failed
 build in its own terminal. A refusal, a failure on the host, and a call that could not be read are
@@ -205,20 +250,24 @@ and the tools do not exist. A model that tries to call one gets pi's own "no suc
    (`-32602`), without a model call and without writing it to the log.
 3. **Deterministic checks**, in this order. A refusal here is final and costs nothing:
    - the tool exists, and its arguments fit the shape;
-   - the tier is open (`allow_additive`, `commands`);
+   - the tier is open (`may`);
    - every path is absolute or starts with `~/` (the user's home on the host), and has no `.` or
      `..` in it;
-   - every path resolves on the host, with its links followed, to something inside `roots` — or,
-     with `ask_the_user`, is marked for the person;
+   - every path resolves on the host, with its links followed, to something inside the allowlist
+     it needs: either list for a read, `change_allowlist` for a change or a command's directory —
+     or, with `guards = "allowlists_checker_user"`, is marked for the person;
    - no request names a path inside the lamp or its state, compared with links followed on both
      sides, so a lamp opened through a link is no way in;
    - `host_show` is not of a file the desktop would run, `host_copy_out` reads from the
      sandbox's home, `host_copy_in` writes to it, and a command, or the text a file is written or
      edited with, is no longer than the checker is shown whole.
-4. **The checker call.** One model request, built entirely on the host, with the user's
-   requirements as its system prompt and the request plus the run's activity as its message. The
-   agent's conversation text never enters it.
-5. **Verdict handling.** Deny ends the request. Allow runs it, after a second deterministic pass
+4. **The checker call**, unless `guards = "allowlists"`. One model request, built entirely on the
+   host, with the user's checker instructions and the request plus the run's activity as its
+   message. The agent's conversation text never enters it. Without a checker, a request that
+   passed the deterministic checks goes straight on.
+5. **Verdict handling.** Deny ends the request. Allow goes to the person when the guards end with
+   the user and the request is a command or lies outside the allowlists. Then it runs, after a
+   second deterministic pass
    for the write/open tools: the path is re-resolved immediately before the effect, so that a
    symlink swapped in while the model was thinking does not redirect it.
 6. The result, or the refusal with the checker's reason, goes back to the agent as the tool
@@ -236,7 +285,7 @@ The system prompt is fixed, written by oillamp, and never comes from the sandbox
 checker is, what the tiers are, that the user's text is the only authority, that anything it
 cannot place must be denied, and that it must answer in the JSON below.
 
-The user's requirements are a separate, clearly delimited block. A request, an activity entry or a
+The user's checker instructions are a separate, clearly delimited block. A request, an activity entry or a
 file name that contains text trying to give the checker instructions is **evidence**, not an
 instruction; the system prompt says so in as many words, and gives one example.
 
@@ -244,7 +293,7 @@ The message holds, as a JSON object:
 
 ```json
 {
-  "requirements": "<the user's text, verbatim>",
+  "checker_instructions": {"authority": "the person who owns this computer", "text": "<the user's text, verbatim>"},
   "run": {
     "id": "run-12",
     "instruction": "<what the user asked, the run's prompt>",
@@ -295,10 +344,10 @@ offered — is a denial with a problem code, never an allow.
 ## Talking to the user
 
 The checker is the fast path. The user is the slow one, and only for the few things worth
-interrupting for:
+interrupting for, and only when the lamp's `guards` are `"allowlists_checker_user"`:
 
-- a command, when the lamp's `commands` is `"ask"`;
-- an allowed request outside `roots`, when `ask_the_user` is on.
+- a command;
+- an allowed request outside the allowlists.
 
 The session reports `LampEvent.HostAccessAsked`, the terminal prints it, and an application shows
 it. The answer comes back on the session's control socket, as `{"op":"answer",
@@ -318,27 +367,29 @@ for the same reasons: the text can be long, and it is nobody else's business.
 ```java
 try (Lamp lamp = Lamp.at(dir)
         .model("azure/gpt-6.1-sol")
-        .security("Do not read ~/.ssh. Ask me before writing anything.")
+        .checkerInstructions("Do not read ~/.ssh. Ask me before writing anything.")
         .onEvent(ui::show)
         .start()) { … }
 ```
 
-- `LampDirectory.security(String requirements)`. A blank text, or one longer than 64 KiB, is refused
-  in the constructor, like `instructions`.
-- The engine receives the text in its environment (`OILLAMP_SECURITY_REQUIREMENTS`, named by
-  `--security-requirements-env`), exactly like the instructions.
+- `LampDirectory.checkerInstructions(String text)`. A blank text, or one longer than 64 KiB, is
+  refused in the constructor, like `instructions`.
+- The engine receives the text in its environment (`OILLAMP_CHECKER_INSTRUCTIONS`, named by
+  `--checker-instructions-env`), exactly like the instructions.
 - The model that judges is the one the application gives the agent, with `LampDirectory.model` and
   later `Lamp.useModel`, unless the lamp's file names a `checker_model`. An application that turns
   the feature on in its own settings screen therefore needs no second model setting.
-- **The file still decides whether the door exists.** `security(...)` replaces the rules of a lamp
-  whose `oillamp.toml` already has `host_access.enabled = true`, and does nothing for one that does
-  not. An application gives the rules; it does not open a door the user never asked for.
-- The roots, `commands`, `allow_additive` and `ask_the_user` stay as the file has
-  them. An application changes the judgement, not the outer bounds, which are the ones the user
-  set once and does not want renegotiated per session.
-- There is **no CLI flag for a person**, on purpose: a person who wants the feature writes it in
-  `oillamp.toml`. The environment path exists for applications, and keeps the text off the process
-  list.
+- **The file still decides whether the door exists.** `checkerInstructions(...)` replaces the
+  instructions of a lamp whose `oillamp.toml` already sets `may` to something other than
+  `"nothing"`, and does nothing for one that does not, but warn (`OIL-HOSTACCESS-014`). An
+  application gives the instructions; it does not open a door the user never asked for. In a lamp
+  whose guards are `"allowlists"` there is no checker to read them.
+- `may`, `guards` and the allowlists stay as the file has them. An application changes the
+  judgement, not the outer bounds, which are the ones the user set once and does not want
+  renegotiated per session.
+- There is **no flag for a person** on `oillamp at`, on purpose: a person who wants the feature
+  writes it in `oillamp.toml`, or with `oillamp host-access`. The environment path exists for
+  applications, and keeps the text off the process list.
 
 ### Writing the file, for a settings page
 
@@ -347,35 +398,41 @@ lamp's file instead, so the file stays what decides:
 
 ```java
 LampDirectory lamp = Lamp.at(dir);
-Lamp.HostAccess now = lamp.hostAccess();   // enabled, requirements, commands, askTheUser
-lamp.hostAccess(new Lamp.HostAccess(true, requirementsText,
-        LampHostCommandApproval.ASK, true));   // all four, only while the lamp sleeps
-lamp.hostAccess(true, requirementsText);       // the first two; the others stay as they are
+Lamp.HostAccess now = lamp.hostAccess();   // may, guards, read and change allowlists, instructions
+lamp.hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+        Tuple.of(String.class, "~/Documents"), Tuple.of(String.class, "~/Downloads/oillamp"),
+        instructionsText));                // all five, only while the lamp sleeps
 ```
 
-- Only the keys given under `[host_access]` change: `enabled`, `requirements`, `commands` and
-  `ask_the_user`, the four a person decides on. Each line is replaced where it is, and a value
-  with a comment after it keeps the comment's column; every other line of the file, the user's
-  comments too, stays as it was. `roots`, `checker_model`, `max_read_bytes` and `allow_additive`
-  are left to the file.
+- `LampHostAccess` and `LampHostAccessGuards` have a constant for each word the file takes, such as
+  `MAY_READ_CHANGE_RUN` for `"read_change_run"`. `Lamp.HostAccess.runsCommandsUnchecked()` says
+  whether the values would let commands run with nothing but the allowlists in their way, so a
+  settings page can warn before it writes them.
+- Only the five keys a person decides on under `[host_access]` change: `may`, `guards`,
+  `read_allowlist`, `change_allowlist` and `checker_instructions`. Each line is replaced where it
+  is, and a value with a comment after it keeps the comment's column; a key the table lacks goes
+  right under its header. Every other line of the file, the user's comments too, stays as it was.
+  `checker_model` and `max_read_bytes` are left to the file.
 - The changed file is read back as `at` reads it, and written only when it is valid and says
-  exactly what was asked. On with no requirements is refused, as it would be in the file.
+  exactly what was asked. A checker with no instructions is refused, as it would be in the file.
 - A lamp whose sandbox runs is refused with `LAMP_BUSY` (OIL-LOCK-001): the session read the file
   as it started.
-- The requirements stay free text. Genies writes the JSON its page builds there, and the checker
-  reads it like any other words.
-- The same from a terminal: `oillamp host-access <dir> [on|off] [--requirements-env <name>]
-  [--commands off|ask|checker] [--ask-the-user on|off]`.
+- The checker instructions stay free text. Genies writes the JSON its page builds there, and the
+  checker reads it like any other words.
+- The same from a terminal: `oillamp host-access <dir> [--may <what>] [--guards <which>]
+  [--read-allowlist <folders>] [--change-allowlist <folders>] [--checker-instructions-env <name>]`,
+  with the folders of an allowlist separated by colons, as in `PATH`.
 
 ### Events
 
 | Event | When |
 |---|---|
-| `HostAccessEnabled(Tuple<String> tools, Optional<String> checker)` | The session has the socket and the extension. |
-| `HostAccessRequested(String run, String tool, String said)` | A request arrived and passed the deterministic checks; the checker is asked next. |
+| `HostAccessEnabled(Tuple<String> tools, Optional<String> checker)` | The session has the socket and the extension. `checker` is empty when the guards are `"allowlists"`. |
+| `HostAccessRequested(String run, String tool, String said)` | A request arrived and passed the deterministic checks; the checker, if the lamp has one, is asked next. |
 | `HostAccessDecided(String run, String tool, Verdict verdict, Duration took)` | The checker answered: allowed or refused, its risk tier, and its reason. |
 | `HostAccessRefused(String run, String tool, String why)` | A request that was refused other than by the checker's own decision: by the deterministic checks, an unusable verdict, the person, or a failure on the host. |
 | `HostAccessAsked(String run, String tool, String what)` | The user is being asked, and needs to look. |
+| `HostAccessSettings(LampHostAccess may, LampHostAccessGuards guards, Tuple<String> readAllowlist, Tuple<String> changeAllowlist, String checkerInstructions)` | What `oillamp host-access` read or wrote. |
 
 `run` is empty for a request made outside a run, such as from a shell in the sandbox.
 
@@ -400,7 +457,7 @@ Genies can show them without a second channel. They are one line of JSON each, a
 Arguments are cut after 200 characters, except a `host_bash` command, which is logged whole: it
 is the record of what ran on the host, and is at most 16 KiB.
 
-The requirements text and the agent's reasoning trace are **not** in the log: the first is the
+The checker instructions and the agent's reasoning trace are **not** in the log: the first is the
 user's, the second is the agent's, and both are large. A denial records which rule or which
 deterministic check refused it.
 
@@ -410,11 +467,12 @@ deterministic check refused it.
 
 - **The checker is the same class of thing as the agent.** It can be talked into an allow, and a
   prompt injection written to fool a checker is the attack this design is weakest against. The
-  tiers, `roots`, and the user confirmation for executing exist to bound how much that costs.
+  tiers, the allowlists, and the user confirmation for executing exist to bound how much that
+  costs.
 - **The checker sees the request, not the mechanism.** A call that is innocuous on its face — a
-  read of a file with an innocent name — is allowed unless the requirements name the risk.
+  read of a file with an innocent name — is allowed unless the checker instructions name the risk.
 - **While it is on, the checker's input goes to your model service.** That is the
-  requirements, the run's instruction, the path names, and a file's contents when it is being
+  checker instructions, the run's instruction, the path names, and a file's contents when it is being
   judged. Eden AI's EU endpoint is the default. State this where the feature is turned on: a user
   turning it on is deciding that their model service may see these things.
 - **A file copied in is in the lamp.** What `host_copy_in` copies lands in the agent's home,
@@ -428,7 +486,7 @@ deterministic check refused it.
 - **`host_bash` is never safe.** It is the reason the tier exists and the reason it is off. If it
   is turned on, the user has accepted that a command the checker was talked into allowing runs on
   their machine, as them.
-- **A command is judged once, as a whole.** Nothing checks what it does while it runs. `roots`
+- **A command is judged once, as a whole.** Nothing checks what it does while it runs. The allowlists
   bound the directory it starts in, not the files it touches from there. A script it runs is
   judged by its name and by what the run did before, not by its content, which may have been
   written a moment earlier by the agent itself: the checker sees the earlier `host_write_file`
@@ -450,7 +508,7 @@ be pointed at the same socket, and would get the same checks.
 
 ### The checker gets its own conversation, never the agent's
 
-The checker sees the requirements, the request, the resolved paths, the run's instruction, the
+The checker sees the checker instructions, the request, the resolved paths, the run's instruction, the
 recent tool calls and the reasoning trace. It does not see the agent's messages. This is the whole
 point: the agent's context is what an injection poisons.
 
@@ -459,16 +517,17 @@ That direction is the one that fails safe.
 
 ### The tiers bound the model, and deterministic checks bound the tiers
 
-The model may tighten. It may never widen. `roots`, the tier switches and the path resolution run
+The model may tighten. It may never widen. The allowlists, `may` and the path resolution run
 before and after the model call, and do not depend on it.
 
 *Given up:* some legitimate requests that only a person would understand can be refused with no
-path forward except editing the requirements. That is a text field, not a permission matrix; that
+path forward except editing the checker instructions. That is a text field, not a permission matrix; that
 is the point.
 
 ### Off by default, and no command-line flag
 
-A lamp that does not set `host_access.enabled = true` behaves exactly as it does today, down to the
+A lamp whose `host_access.may` is `"nothing"`, as a new lamp's is, behaves exactly as one without
+the feature, down to the
 absence of the socket. The first version is turned on in the file, or by an application through
 the `Lamp` API.
 

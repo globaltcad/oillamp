@@ -269,11 +269,12 @@ public sealed interface LampEvent {
     /// @param tools   the tool names the agent is offered, such as `["host_read_file", …]`
     /// @param checker the model that judges requests as the session starts: the lamp's
     ///                `checker_model`, or else the model the agent answers with, which the
-    ///                checker then follows when it changes
+    ///                checker then follows when it changes. Empty when the lamp's `guards` are
+    ///                `allowlists`, and no model judges anything
     record HostAccessEnabled(Tuple<String> tools, Optional<String> checker) implements LampEvent {}
 
     /// The agent asked the host for something, and the request passed the checks that need no
-    /// model; the checker is asked next.
+    /// model, the allowlists among them; the checker is asked next, in a lamp that has one.
     ///
     /// @param run  the run the request came from, such as `run-12`; empty when the agent asked
     ///             outside a run, such as from a shell
@@ -289,7 +290,7 @@ public sealed interface LampEvent {
     record HostAccessDecided(String run, String tool, LampHostVerdict verdict, Duration took) implements LampEvent {}
 
     /// A request was refused other than by the checker's own decision: before the checker was
-    /// asked, because it broke a rule that needs no judgement (a path outside the lamp's roots, a
+    /// asked, because it broke a rule that needs no judgement (a path outside the lamp's allowlists, a
     /// closed tier, a tool it does not have); because the checker could not be asked or answered
     /// beyond the tool's tier; because the person said no; or because the host could not do it.
     record HostAccessRefused(String run, String tool, String why) implements LampEvent {}
@@ -300,18 +301,18 @@ public sealed interface LampEvent {
     /// @param what what is about to happen, in words, and where
     record HostAccessAsked(String run, String tool, String what) implements LampEvent {}
 
-    /// The values of `enabled`, `requirements`, `commands` and `ask_the_user` in the
-    /// `[host_access]` table of a lamp's `oillamp.toml`. Reported by `oillamp host-access`, after
-    /// reading them or after writing them.
+    /// The values a person decides on in the `[host_access]` table of a lamp's `oillamp.toml`.
+    /// Reported by `oillamp host-access`, after reading them or after writing them.
     ///
-    /// @param enabled      the value of `enabled`: whether a session gives the agent the host tools
-    /// @param requirements the value of `requirements`: the text the checker model judges every
-    ///                     host request against
-    /// @param commands     the value of `commands`: who approves a shell command on the host
-    /// @param askTheUser   the value of `ask_the_user`: whether a request the checker allows that
-    ///                     reaches past the lamp's roots goes to the person, rather than being refused
-    record HostAccessSettings(boolean enabled, String requirements, LampHostCommandApproval commands,
-                              boolean askTheUser) implements LampEvent {}
+    /// @param may                 the value of `may`: what the agent may do on the host
+    /// @param guards              the value of `guards`: what each request passes through first
+    /// @param readAllowlist       the value of `read_allowlist`: the folders the agent may read
+    /// @param changeAllowlist     the value of `change_allowlist`: the folders the agent may
+    ///                            read and change, and run commands in
+    /// @param checkerInstructions the value of `checker_instructions`: the text the checker
+    ///                            model judges every host request against
+    record HostAccessSettings(LampHostAccess may, LampHostAccessGuards guards, Tuple<String> readAllowlist,
+                              Tuple<String> changeAllowlist, String checkerInstructions) implements LampEvent {}
 
     /// The values under `[autosave]` in a lamp's `oillamp.toml`: when oillamp saves the lamp by
     /// itself. Reported by `oillamp history <dir> autosave`, after reading them or after

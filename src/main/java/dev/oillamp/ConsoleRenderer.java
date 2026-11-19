@@ -344,7 +344,8 @@ final class ConsoleRenderer {
             case LampEvent.HostAccessEnabled enabled -> printLine(area("host access")
                     + colour(GREEN, "✓ ") + "the agent may reach this machine through "
                     + enabled.tools().size() + (enabled.tools().size() == 1 ? " tool" : " tools")
-                    + ", each request judged by " + enabled.checker().orElse("the agent's model"));
+                    + enabled.checker().map(model -> ", each request judged by " + model)
+                             .orElse(", bounded by the allowlists alone, with no checker"));
             case LampEvent.HostAccessRequested requested -> printLine(area("host access")
                     + dim("· " + (requested.run().isEmpty() ? "" : requested.run() + " ") + requested.tool() + " "
                           + shortened(NOT_PRINTABLE.matcher(requested.said()).replaceAll(" "), 90)));
@@ -365,15 +366,13 @@ final class ConsoleRenderer {
                     + colour(YELLOW, "◉ ") + "the agent listens on port " + asked.sandboxPort() + ": "
                     + asked.what() + "? `oillamp answer <dir> yes|no -- \"" + asked.what() + "\"`");
             case LampEvent.HostAccessSettings settings -> printLine(area("host access")
-                    + (settings.enabled() ? "on" : "off")
-                    + ", commands " + switch (settings.commands()) {
-                        case OFF -> "off";
-                        case ASK -> "approved by the checker, then you";
-                        case CHECKER -> "approved by the checker alone";
-                    }
-                    + (settings.askTheUser() ? ", asks you about a request past the roots" : "")
-                    + ", judged against:\n"
-                    + settings.requirements().lines().map(line -> "  | " + line).reduce((a, b) -> a + "\n" + b).orElse("  (nothing)"));
+                    + "may " + settings.may().configName() + ", guards " + settings.guards().configName()
+                    + ", read " + folders(settings.readAllowlist())
+                    + ", read and change " + folders(settings.changeAllowlist())
+                    + (settings.guards().checks() ? ", the checker judging against:\n"
+                       + settings.checkerInstructions().lines().map(line -> "  | " + line)
+                               .reduce((a, b) -> a + "\n" + b).orElse("  (nothing)")
+                       : ", no checker"));
             case LampEvent.AutosaveSettings settings -> printLine(area("autosave")
                     + "startup " + onOff(settings.startup()) + ", shutdown " + onOff(settings.shutdown())
                     + ", before a job's run " + onOff(settings.beforeRun()) + ", after a job's run " + onOff(settings.afterRun())
@@ -386,6 +385,11 @@ final class ConsoleRenderer {
             case LampEvent.Warning warning -> problem(warning.problem());
             case LampEvent.Failure failure -> problem(failure.problem());
         }
+    }
+
+    /// An allowlist as `oillamp host-access` prints it.
+    private static String folders(Tuple<String> allowlist) {
+        return allowlist.isEmpty() ? "no folder" : String.join(":", allowlist);
     }
 
     /// The conversations `oillamp conversations` lists, the most recent first.
@@ -557,8 +561,15 @@ final class ConsoleRenderer {
             printLine(area("note") + dim("· " + problem.whatHappened()));
             return;
         }
+        // The agent running commands here unchecked is the one setting the user must never miss
+        // in a screen of startup lines: it is framed, and red where the terminal shows colour.
+        boolean loud = problem.code().value().equals(HostAccessProblems.COMMANDS_UNCHECKED);
+        String frame = colour(RED, "!".repeat(78));
         printLine("");
-        printLine(marker + "  " + problem.code() + "  " + problem.title());
+        if (loud) printLine(frame);
+        printLine(loud ? colour(RED, "!!  " + problem.code() + "  " + problem.title().toUpperCase(Locale.ROOT))
+                       : marker + "  " + problem.code() + "  " + problem.title());
+        if (loud) printLine(frame);
         field("What happened", problem.whatHappened());
         field("Why it matters", problem.whyItMatters());
 
@@ -575,6 +586,7 @@ final class ConsoleRenderer {
             index++;
         }
         problem.logFile().ifPresent(log -> field("Full log", log.toString()));
+        if (loud) printLine(frame);
         printLine("");
     }
 

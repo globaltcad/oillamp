@@ -4,7 +4,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampWallpaper;
 
 import sprouts.Association;
@@ -372,37 +373,53 @@ record LampConfig(
         return llm.flatMap(config -> forwardNamed(config.forward()));
     }
 
-    /// `[host_access]`: whether the agent may reach the host through oillamp, and what it is
-    /// allowed to do there.
+    /// `[host_access]`: whether the agent may reach the host through oillamp, what it may do
+    /// there, and what each request passes through first.
     ///
-    /// Off unless `enabled` is true. The requirements are the user's own words; they are the
-    /// only authority the checker has, and the agent never sees them.
+    /// Off unless `may` is other than `nothing`. The checker instructions are the user's own
+    /// words; they are the only authority the checker has, and the agent never sees them.
     ///
-    /// @param enabled         whether a session serves the host tools at all
-    /// @param requirements    the user's text, given to the checker with every request
-    /// @param checkerModel    the model that judges, as the service names it; empty to judge
-    ///                        with the model the agent answers with
-    /// @param roots           absolute host paths the tools may mention at all; empty means the
-    ///                        user's home directory
-    /// @param maxReadBytes    how much of one file the agent may be handed
-    /// @param commands        whether the agent may run shell commands on the host, and who
-    ///                        must allow each one
-    /// @param allowAdditive   whether writing, copying out, opening pages and notifications are
-    ///                        offered at all
-    /// @param askTheUser      whether a request outside `roots` goes to a person once the checker
-    ///                        allows it, rather than being refused
-    public record HostAccess(boolean enabled, String requirements, String checkerModel,
-                             Tuple<String> roots, int maxReadBytes, LampHostCommandApproval commands,
-                             boolean allowAdditive, boolean askTheUser) {
+    /// @param may                 what the agent may do on the host; `nothing` serves no tools
+    /// @param guards              what each request passes through before it happens
+    /// @param readAllowlist       the folders the agent may read, each as `~`, `~/…` or an
+    ///                            absolute path
+    /// @param changeAllowlist     the folders the agent may read and change, and run commands
+    ///                            in, written the same way
+    /// @param checkerInstructions the user's text, given to the checker with every request
+    /// @param checkerModel        the model that judges, as the service names it; empty to judge
+    ///                            with the model the agent answers with
+    /// @param maxReadBytes        how much of one file the agent may be handed
+    public record HostAccess(LampHostAccess may, LampHostAccessGuards guards, Tuple<String> readAllowlist,
+                             Tuple<String> changeAllowlist, String checkerInstructions,
+                             String checkerModel, int maxReadBytes) {
         public HostAccess {
             if (maxReadBytes < 1) throw new IllegalArgumentException("host_access.max_read_bytes");
-            for (String root : roots)
-                if (!root.startsWith("/"))
-                    throw new IllegalArgumentException("host_access.roots entries must be absolute paths: " + root);
+            for (String folder : readAllowlist.addAll(changeAllowlist))
+                if (!isAllowlistFolder(folder))
+                    throw new IllegalArgumentException("host_access allowlist entries must be ~, start with ~/, "
+                            + "or be absolute paths: " + folder);
         }
-        public HostAccess switchedOn() {
-            return new HostAccess(true, requirements, checkerModel, roots, maxReadBytes, commands,
-                                  allowAdditive, askTheUser);
+
+        /// Whether a session serves the host tools at all.
+        public boolean enabled() { return may != LampHostAccess.NOTHING; }
+
+        /// Whether a model judges each request, before it happens.
+        public boolean checks() { return enabled() && guards.checks(); }
+
+        /// Whether commands run with nothing but the allowlists in their way: no checker, and
+        /// nobody asked. Allowed, and warned about loudly.
+        public boolean runsCommandsUnchecked() {
+            return may == LampHostAccess.MAY_READ_CHANGE_RUN && !guards.checks();
+        }
+
+        public HostAccess withCheckerInstructions(String changed) {
+            return new HostAccess(may, guards, readAllowlist, changeAllowlist, changed, checkerModel, maxReadBytes);
+        }
+
+        /// Whether `folder` can be an allowlist entry: `~`, a path starting with `~/`, or an
+        /// absolute path.
+        static boolean isAllowlistFolder(String folder) {
+            return folder.equals("~") || folder.startsWith("~/") || folder.startsWith("/");
         }
     }
 }

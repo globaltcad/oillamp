@@ -26,7 +26,7 @@ import sprouts.Tuple;
 /// Carries out an allowed host request. Every effect the feature can have on this machine is in
 /// this class, and nowhere else.
 ///
-/// Only [HostAccess] calls it, and only after the tier, the roots and the checker allowed it.
+/// Only [HostAccess] calls it, and only after the tier, the allowlists and the guards after them allowed it.
 /// Everything here is bounded: a file read is cut at the lamp's `max_read_bytes`, a command is
 /// given a timeout and stopped with everything it started, and a copy out never runs what it
 /// copies.
@@ -158,7 +158,7 @@ final class HostAccessTools {
         try (var entries = Files.list(path)) {
             List<Path> sorted = entries.sorted().limit(LISTED).toList();
             for (Path entry : sorted) {
-                // A link is described as itself: its target may be outside the roots, and a
+                // A link is described as itself: its target may be outside the allowlists, and a
                 // broken one must not fail the whole listing.
                 BasicFileAttributes attributes;
                 try {

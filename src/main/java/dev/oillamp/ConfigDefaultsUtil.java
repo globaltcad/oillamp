@@ -3,7 +3,8 @@ package dev.oillamp;
 import java.net.URI;
 import java.util.Optional;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampWallpaper;
 
 import sprouts.Association;
@@ -41,8 +42,8 @@ final class ConfigDefaultsUtil {
             new LampConfig.Host(true),
             new LampConfig.Timeouts(60, 60, 15),
             new LampConfig.Schedule(false, 10, 15, 14, 48, 30, 8, 30),
-            new LampConfig.HostAccess(false, "", "",
-                    Tuple.of(String.class), 65536, LampHostCommandApproval.OFF, true, false),
+            new LampConfig.HostAccess(LampHostAccess.NOTHING, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String.class, "~"), Tuple.of(String.class, "~"), "", "", 65536),
              new LampConfig.Autosave(false, false, true, true, 10),
              new LampConfig.History(2),
              // opencode's web interface, `opencode serve --port 4096`, which the user starts.

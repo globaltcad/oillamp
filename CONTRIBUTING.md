@@ -125,7 +125,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 |---|---|
 | `Checking_The_Machine_Spec` | `doctor` and host prerequisites |
 | `Setting_Up_A_Lamp_Spec` | creating, reusing, refusing and removing lamps; recordings |
-| `Configuring_A_Lamp_Spec` | the configuration file and its validation |
+| `Configuring_A_Lamp_Spec` | the configuration file and its validation, and how the `[host_access]` keys of an older lamp are rewritten |
 | `Starting_The_Sandbox_Spec` | readiness and socket checks |
 | `Supervising_A_Session_Spec` | a whole session: windows, shutdown, failures, published web servers |
 | `The_Session_Commands_Spec` | `status`, `stop`, `shell`, `view`, `list` |
@@ -139,8 +139,8 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |
 | `The_Shape_Of_The_Code_Spec` | the public types, `dev.lamp` staying apart from the engine, and the deciding/doing split |
 | `Keeping_The_Model_Key_On_The_Host_Spec` | the model relay: the sandbox sends a placeholder, the host adds the real key |
-| `Reaching_The_Host_Spec` | host access: every request judged by a stand-in checker before it happens; tiers, roots, the person, the log |
-| `Working_On_The_Host_Spec` | `host_edit_file` and `host_bash` on the host, with `host_access.commands`, timeouts and cancellation |
+| `Reaching_The_Host_Spec` | host access: every request judged by a stand-in checker before it happens; `may`, the read and change allowlists, the guards, the person, the log |
+| `Working_On_The_Host_Spec` | `host_edit_file` and `host_bash` on the host, with `host_access.may` and `guards`, timeouts and cancellation |
 | `Serving_The_Host_Tools_Over_Mcp_Spec` | the host tools as an MCP server: initialize, tools/list, JSON-RPC errors, connections |
 | `Showing_The_User_The_Desktop_Spec` | `lamp show` telling the host there is something to look at |
 | `Keeping_Windows_On_The_Desktop_Spec` | floating windows kept in reach when the desktop changes size |

@@ -1828,7 +1828,7 @@ instead, explaining that it may take a while.
 | Image and container | `SandboxPhase`, `SandboxImageFilesUtil`, `ImageTag`, `ContainerName`, `RuntimeEnvFileUtil`, `ReadyInfo`, `AgentGuideUtil`, `DesktopRendererUtil` |
 | Session | `Supervisor`, `SessionMachine`, `SessionState`, `SessionEvent`, `SessionAction`, `Relay`, `Control`, `SandboxSshUtil`, `TerminalEmulatorUtil`, `VncViewerUtil` |
 | Network | `Egress`, `NetworkPolicyUtil`, `NetworkPolicy`, `Rule`, `Decision`, `HostPattern`, `Cidr`, `IpAddress`, `PortRange`, `HostAndPort`, `Forward` |
-| Host access | `HostAccess` (the socket and the order of a request), `HostTool` (the tools, their tiers, and how a request and a verdict are read), `HostPaths` (resolving a path against the roots), `HostAccessChecker` (the model call), `HostAccessTools` (the effects on the host), `HostAccessProblems` |
+| Host access | `HostAccess` (the socket and the order of a request), `HostTool` (the tools, their tiers, and how a request and a verdict are read), `HostPaths` (resolving a path against the allowlists), `HostAccessChecker` (the model call), `HostAccessTools` (the effects on the host), `HostAccessProblems`, `HostAccessUpgradeUtil` (the keys of older lamp files) |
 
 ---
 
@@ -1837,7 +1837,7 @@ instead, explaining that it may take a while.
 Built as described in [HOST-ACCESS.md](HOST-ACCESS.md); this is where it sits in the running
 session.
 
-The session serves `sockets/host/host-access.sock` only while `host_access.enabled` is on. It is an
+The session serves `sockets/host/host-access.sock` only while `host_access.may` is not `"nothing"`. It is an
 MCP server (the Model Context Protocol, which agent harnesses use to find and call tools they do
 not have built in). The pi extension `oillamp-host-access.js` only registers it with pi
 (`pi.registerMcpServer("oillamp", …)`): pi starts `socat STDIO UNIX-CONNECT:/oillamp/sockets/host/host-access.sock`
@@ -1865,29 +1865,32 @@ returns an `Answer`: `Done`, `Refused` or `Failed`. `HostMcp` writes each as a t
 
 1. `HostTool.read` turns the call's JSON arguments into a tool request, or the call is refused
    before anything else, as a JSON-RPC error. A call that is not a request is not logged.
-2. `HostTool.closedBecause` refuses a request in a tier the lamp closed: no commands, no writing,
-   no pages opened.
+2. `HostTool.closedBecause` refuses a request in a tier `host_access.may` closes: no commands, no
+   writing, no pages opened.
 3. `HostPaths.locate` resolves every path it names on the host (`~` is the probed user's home;
    `.` and `..` are refused), then anything inside the lamp or its state is refused, compared
-   with links followed on both sides. `HostPaths.within` checks the roots: a path outside them is
-   refused, or with `ask_the_user` marked for the person. For `host_bash` that path is the
-   directory it runs in, and only that.
+   with links followed on both sides. `HostPaths.within` checks the allowlists, compared name by
+   name with links followed on both sides: a path a request reads (`HostPaths.Use.READ`) must be in
+   `read_allowlist` or `change_allowlist`, and one it changes (`CHANGE`) in `change_allowlist`.
+   A path outside them is refused, or, when `host_access.guards` end with the user, marked for the
+   person. For `host_bash` that path is the directory it runs in, and only that, and it counts as
+   changed.
 4. What the tool rules out by itself: `host_show` of a file the desktop would run
    (`HostAccessTools.whyNotShown`), `host_copy_out` from outside the sandbox's home,
    `host_copy_in` to outside it (`HostAccessTools.inAgentHome`), and a command
    longer than the checker is shown whole (`HostTool.LONGEST_COMMAND_TEXT`).
-5. `HostAccessChecker.check` asks the model, in a conversation of its own, and `HostTool.verdict`
-   reads the answer; anything unreadable, untimed, or unreachable is a refusal.
-6. A command in a lamp whose `host_access.commands` is `ask`, or (with `ask_the_user`) an allowed
-   request outside the roots, goes to the person as a `Question.HostRequest` (see "Asking the
-   person" below).
+5. Unless `host_access.guards` is `"allowlists"`, `HostAccessChecker.check` asks the model, in a
+   conversation of its own, and `HostTool.verdict` reads the answer; anything unreadable, untimed,
+   or unreachable is a refusal. With `"allowlists"` no model is asked at all.
+6. When the guards are `"allowlists_checker_user"`, a command, and an allowed request outside the
+   allowlists, goes to the person as a `Question.HostRequest` (see "Asking the person" below).
 7. `HostAccessTools.perform` does the work, after the paths are resolved once more.
    `host_copy_in` writes into the agent's home with `FilesystemUtil.replaceInAgentHome`, one
    directory at a time through handles that refuse links, as oillamp writes its own files
    there; a link at the file itself is replaced, not written through. A command runs
    as `env -u <secret> … bash -c <command>` in its directory, with oillamp's environment minus
    the variables `HostAccess.secretVariables` names (the model key, and the variables an
-   application named for its requirements and instructions).
+   application named for its checker instructions and the agent's instructions).
 
 A call is withdrawn when pi sends `notifications/cancelled` for it, or its connection closes:
 `HostMcp` completes the call's `withdrawn` future. The gate looks at it after the checker, after
@@ -1913,8 +1916,19 @@ The checker reaches the model service as `Egress` does, with the same key read o
 sandbox holds neither. Its model is the lamp's `checker_model` when the file names one, and
 otherwise the model the agent answers with, read from the session's runner for every request
 (`HostAccessChecker.forSession`, `AgentRunner.model`), so it follows `oillamp model`. A session
-with the feature on and neither is refused as it starts (`LampPhase.hostAccessInForce`,
-`OIL-HOSTACCESS-015`).
+with a checker among its guards and neither is refused as it starts (`LampPhase.hostAccessInForce`,
+`OIL-HOSTACCESS-015`); one whose guards are `"allowlists"` needs no model.
+
+A lamp whose `oillamp.toml` still has the `[host_access]` keys of an older oillamp (`enabled`,
+`requirements`, `roots`, `commands`, `allow_additive`, `ask_the_user`, `executables`) is
+converted as it is read: `HostAccessUpgradeUtil.upgraded` turns the parsed table of every
+configuration file into the new keys inside `ConfigLoadingUtil.load`, and
+`LampPhase.upgradeLampFile` rewrites the lamp's own file once with
+`HostAccessUpgradeUtil.upgradedText`, which changes only those lines, except in a dry run, and
+only while it holds the lamp's lock (`.oillamp/lock`): a rewrite of the old settings must not land
+after a change `oillamp host-access` made, and a running session holds the lock anyway. The
+user's `~/.config/oillamp/config.toml` is never rewritten. The mapping is in the class's comment
+and in [HOST-ACCESS.md](HOST-ACCESS.md#configuration).
 
 ### Asking the person
 
@@ -2042,14 +2056,13 @@ checked but have no effect yet; they are listed under "Known gaps" in STATUS.md.
 | `schedule.max_run_minutes` | 30 | any run, yours too, is stopped after this (1–1440) | yes |
 | `schedule.notes_max_kb` | 8 | how large the agent's `HANDOVER.md` may be; the prompt shows no more (1–1024) | yes |
 | `schedule.max_delay_minutes` | 30 | a job's run found later than this after its time is missed, not made, and reported as `RunMissed`; 0 = no limit (0–10080) | yes |
-| `host_access.enabled` | false | let the agent reach the host through oillamp, every request judged first; off unless set ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
-| `host_access.requirements` | `""` | the user's own words, the only thing the checker judges by; required when it is enabled | yes |
+| `host_access.may` | `"nothing"` | what the agent may do on the host through oillamp: `"nothing"` (off: no socket, no tools), `"read"`, `"read_change"` (also write files, copy them out, open pages, notify) or `"read_change_run"` (also run commands) ([HOST-ACCESS.md](HOST-ACCESS.md)) | yes |
+| `host_access.guards` | `"allowlists_checker"` | what each request passes first, in order: `"allowlists"`, `"allowlists_checker"` (then the checker model) or `"allowlists_checker_user"` (then the user too, for every command and for a path outside the allowlists) | yes |
+| `host_access.read_allowlist` | `["~"]` | folders the agent may read; each includes everything below it, links followed; `~`, `~/…` or absolute | yes |
+| `host_access.change_allowlist` | `["~"]` | folders the agent may read and change, and run commands in; written the same way | yes |
+| `host_access.checker_instructions` | `""` | the user's own words, the only thing the checker judges by; required when the guards include the checker and `may` is not `"nothing"` | yes |
 | `host_access.checker_model` | `""` | the model that judges, as the service names it; empty means the model the agent answers with | yes |
-| `host_access.roots` | `[]` | absolute host paths the file tools, and a command's working directory, may name; empty means the user's home directory | yes |
 | `host_access.max_read_bytes` | 65536 | how much of one host file the agent may be handed (1–16777216) | yes |
-| `host_access.commands` | `"off"` | `host_bash`, shell commands on the host: `"off"`, `"ask"` (the checker, then the user, for every command) or `"checker"` (the checker alone) | yes |
-| `host_access.allow_additive` | true | offer writing, copying out, opening pages and notifications at all | yes |
-| `host_access.ask_the_user` | false | ask the user, rather than refuse, about an allowed request outside `roots` | yes |
 | `autosave.startup` | false | save the lamp as a session starts, before the sandbox runs | yes |
 | `autosave.shutdown` | false | save the lamp as a session ends, after the sandbox has stopped | yes |
 | `autosave.before_run` | true | save the lamp just before a run wakes the agent | yes |
@@ -2163,7 +2176,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-USAGE-001` | Invalid command line. |
 | `OIL-HOSTACCESS-001` | The agent asked for a host tool this lamp does not offer. |
 | `OIL-HOSTACCESS-002` | A host tool was called without the arguments it reads. |
-| `OIL-HOSTACCESS-003` | A host path is outside the lamp's `host_access.roots`. |
+| `OIL-HOSTACCESS-003` | A host path is outside the lamp's `host_access.read_allowlist` and `change_allowlist`, or outside the one a change needs. |
 | `OIL-HOSTACCESS-004` | The checker refused a host request. |
 | `OIL-HOSTACCESS-005` | The checker's answer was not a verdict. |
 | `OIL-HOSTACCESS-006` | The checker could not be asked. |
@@ -2174,7 +2187,8 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-HOSTACCESS-011` | The host tools socket received something that is not a request. |
 | `OIL-HOSTACCESS-012` | Host access is on, but the checker has no key. |
 | `OIL-HOSTACCESS-013` | A request needed the user, and the user could not be asked. |
-| `OIL-HOSTACCESS-014` | An application gave host-access rules for a lamp whose file has the feature off. |
-| `OIL-HOSTACCESS-015` | Host access is on, but no model judges: no `checker_model`, and no model for the session. |
+| `OIL-HOSTACCESS-014` | An application gave checker instructions for a lamp whose file has host access off. |
+| `OIL-HOSTACCESS-015` | Host access is on with a checker among its guards, but no model judges: no `checker_model`, and no model for the session. |
+| `OIL-HOSTACCESS-016` | A warning: the agent may run commands on the host with the allowlists as the only guard (`may = "read_change_run"`, `guards = "allowlists"`). Framed, and red where the terminal shows colour. |
 | `OIL-INTERNAL-001` | A bug in oillamp. |
 | `OIL-ENGINE-001` | The engine's process ended without reporting a problem, such as a Java runtime that could not start; reported by `Lamp`, with the engine's exit code and the end of its error output. |

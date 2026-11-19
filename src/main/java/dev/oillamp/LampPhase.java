@@ -68,8 +68,8 @@ final class LampPhase {
         // Model settings given on the command line replace the lamp's own, for this session, and
         // so does --enable-scheduling.
         LampConfig configured = ((Result.Ok<LampConfig>) configuration).value();
-        // The requirements an application gave are read now, before anything changes, so a
-        // missing variable stops the session instead of starting it without a gate.
+        // The checker instructions an application gave are read now, before anything changes, so
+        // a missing variable stops the session instead of starting it without a gate.
         Result<LampConfig.HostAccess> access = hostAccessInForce(configured.hostAccess());
         if (access instanceof Result.Err<LampConfig.HostAccess> refused) return Result.err(refused.problems());
         LampConfig config = configured
@@ -151,37 +151,36 @@ final class LampPhase {
         return found;
     }
 
-    /// The `[host_access]` settings in force. Requirements an application gave win over the
-    /// file's, as `--model` does over `[model]`: it is the user picking in the application's own
-    /// settings screen. A lamp that did not turn the feature on stays off, whatever an
+    /// The `[host_access]` settings in force. Checker instructions an application gave win over
+    /// the file's, as `--model` does over `[model]`: it is the user picking in the application's
+    /// own settings screen. A lamp that did not turn the feature on stays off, whatever an
     /// application puts in its environment.
     ///
     /// The model that judges is the file's `checker_model`, or else the one the agent answers
     /// with, which the session must then have been given: a gate with no model to ask stays shut.
+    /// A lamp whose guards have no checker needs no model.
     private Result<LampConfig.HostAccess> hostAccessInForce(LampConfig.HostAccess configured) {
-        if (configured.enabled() && configured.checkerModel().isBlank() && context.options().model().id().isEmpty())
+        if (configured.checks() && configured.checkerModel().isBlank() && context.options().model().id().isEmpty())
             return Result.err(HostAccessProblems.noModelToJudgeWith());
         Optional<Context.Options.HostAccessGrant> given = context.options().hostAccess();
         if (given.isEmpty()) return Result.ok(configured);
         if (!configured.enabled()) {
-            // Said, so that an application that gave rules knows they guard nothing.
+            // Said, so that an application that gave instructions knows they guard nothing.
             context.sink().accept(new LampEvent.Warning(HostAccessProblems.grantIgnored()));
             return Result.ok(configured);
         }
-        String variable = given.get().requirementsEnv();
+        String variable = given.get().checkerInstructionsEnv();
         Optional<String> text = machine.environmentVariable(variable);
         if (text.isEmpty() || text.get().isBlank())
             return Result.err(ProblemCatalogUtil.usage(
-                    "--security-requirements-env " + variable + ": the variable is not set, or empty",
+                    "--checker-instructions-env " + variable + ": the variable is not set, or empty",
                     Command.usageOf("at")));
         if (text.get().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > PiSetupUtil.LONGEST_INSTRUCTIONS)
             return Result.err(ProblemCatalogUtil.usage(
-                    "--security-requirements-env " + variable + ": more than "
-                  + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024 + " KiB, far more than any useful rules",
+                    "--checker-instructions-env " + variable + ": more than "
+                  + PiSetupUtil.LONGEST_INSTRUCTIONS / 1024 + " KiB, far more than any useful instructions",
                     Command.usageOf("at")));
-        return Result.ok(new LampConfig.HostAccess(true, text.get(), configured.checkerModel(),
-                configured.roots(), configured.maxReadBytes(), configured.commands(),
-                configured.allowAdditive(), configured.askTheUser()));
+        return Result.ok(configured.withCheckerInstructions(text.get()));
     }
 
     /// Renders the per-session files. Separate from the skeleton because it needs the keys that
@@ -257,7 +256,44 @@ final class LampPhase {
     /// created from the shipped template, and the built-in defaults describe exactly what that
     /// template says.
     private Result<LampConfig> loadConfiguration(LampLayout layout, HostFacts host) {
+        if (!context.options().dryRun()) upgradeLampFile(layout.config());
         return ConfigLoadingUtil.load(configurationFiles(host.user().home(), layout.config()));
+    }
+
+    /// Rewrites a lamp's `oillamp.toml` whose `[host_access]` table still has the keys an older
+    /// oillamp wrote, such as `enabled` and `roots`, in the keys that replaced them, and changes
+    /// nothing else in it; see [HostAccessUpgradeUtil#upgradedText]. Silent, because the lamp
+    /// does what it did before. A file that cannot be written is left as it is: it is converted
+    /// as it is read, every time. Only the lamp's own file is rewritten, never the user's global
+    /// `~/.config/oillamp/config.toml`, which other programs and the user's own notes may share.
+    ///
+    /// The file is read, converted and written only while this holds the lamp's lock, as every
+    /// other change to the file is made. A late write of the old settings, converted, would
+    /// otherwise undo a change `oillamp host-access` made in between, and a running session holds
+    /// the lock anyway. When someone else holds it, the file is left for the next time. A
+    /// directory with no `.oillamp` yet has no lock to take, and nothing that changes the file.
+    static void upgradeLampFile(Path lampConfig) {
+        Path root = lampConfig.toAbsolutePath().getParent();
+        if (root == null) return;
+        Optional<LampLock> lock = Optional.empty();
+        try {
+            if (FilesystemUtil.exists(LampLayout.stateDirOf(root))) {
+                lock = LampLock.tryAcquire(LampLayout.lockFileOf(root));
+                if (lock.isEmpty()) return;
+            }
+            Optional<String> upgraded = FilesystemUtil.readString(lampConfig).flatMap(HostAccessUpgradeUtil::upgradedText);
+            if (upgraded.isPresent()) FilesystemUtil.writeFile(lampConfig, upgraded.get(), PosixMode.PRIVATE_FILE);
+        } catch (IOException unwritable) {
+            // Converted as it is read instead; see ConfigLoadingUtil.load.
+        } finally {
+            if (lock.isPresent()) {
+                try {
+                    lock.get().close();
+                } catch (IOException ignored) {
+                    // The kernel releases it when this process ends.
+                }
+            }
+        }
     }
 
     /// The configuration files that apply to a lamp, in the order they are merged: the user's

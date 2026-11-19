@@ -25,7 +25,7 @@ import sprouts.Tuple;
 ///
 /// The call is made here, on the host, straight to the model service that [Egress] already sends
 /// the sandbox's requests to, with the same key. Nothing about it passes through the sandbox: the
-/// requirements and the run's activity go in from the host, and come from the host.
+/// checker instructions and the run's activity go in from the host, and come from the host.
 ///
 /// It gets its own conversation every time. That is the point of the feature: the checker must
 /// not see the agent's messages, because the agent's messages are what an injection poisons. It
@@ -47,18 +47,18 @@ final class HostAccessChecker {
     private final LampConfig.Model service;
     private final Optional<String> key;
     private final Supplier<String> model;
-    private final String requirements;
+    private final String instructions;
 
     /// @param service      where the model service is, as `[model]` says
     /// @param key          the key to use, already read on the host; empty when there is none
     /// @param model        the model that judges, as the service names it, asked anew for every
     ///                     request so that it can follow the agent's
-    /// @param requirements the user's text, verbatim
-    HostAccessChecker(LampConfig.Model service, Optional<String> key, Supplier<String> model, String requirements) {
+    /// @param instructions the user's checker instructions, verbatim
+    HostAccessChecker(LampConfig.Model service, Optional<String> key, Supplier<String> model, String instructions) {
         this.service = service;
         this.key = key;
         this.model = model;
-        this.requirements = requirements;
+        this.instructions = instructions;
     }
 
     /// What the checker is told it is, before anything the sandbox touched. It is fixed text in
@@ -115,8 +115,7 @@ final class HostAccessChecker {
                                         Supplier<Optional<String>> agentsModel) {
         String named = config.hostAccess().checkerModel();
         Supplier<String> model = named.isBlank() ? () -> agentsModel.get().orElse("") : () -> named;
-        return new HostAccessChecker(service, key, model,
-                                     config.hostAccess().requirements());
+        return new HostAccessChecker(service, key, model, config.hostAccess().checkerInstructions());
     }
 
     /// The model that judges the next request, as the service names it.
@@ -173,9 +172,9 @@ final class HostAccessChecker {
         user.put("role", "user");
         ObjectNode seen = JsonUtil.object();
 
-        ObjectNode rules = seen.putObject("requirements");
+        ObjectNode rules = seen.putObject("checker_instructions");
         rules.put("authority", "the person who owns this computer");
-        rules.put("text", requirements);
+        rules.put("text", instructions);
 
         ObjectNode run = seen.putObject("run");
         run.put("id", activity.run());

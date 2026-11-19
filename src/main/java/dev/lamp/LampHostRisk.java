@@ -8,9 +8,10 @@ public enum LampHostRisk {
     /// Reads, and returns what it read. It cannot change anything.
     PASSIVE,
     /// Changes something on the host, in a way the user can see and undo, or sends something
-    /// out, as opening a page does. Closed unless the lamp's `host_access.allow_additive` is on.
+    /// out, as opening a page does. Closed unless the lamp's `host_access.may` is `read_change`
+    /// or `read_change_run`.
     ADDITIVE,
     /// Runs a command on the host, which can do anything the user can. Closed unless the lamp's
-    /// `host_access.commands` is `ask`, in which the user is asked every time, or `checker`.
+    /// `host_access.may` is `read_change_run`.
     EXECUTING
 }

@@ -38,13 +38,16 @@ import sprouts.Tuple;
 /// 1. [HostMcp] reads one `tools/call` from the sandbox into a [HostTool], and calls [#answer]
 ///    on that call's own thread. A call it cannot read is refused there, and not logged: it is
 ///    not a request.
-/// 2. The tier is checked against the lamp's settings, without a model: a closed tier is a
-///    refusal even if the checker would allow it.
+/// 2. The tier is checked against the lamp's `may`, without a model: a closed tier is a refusal
+///    even if the checker would allow it.
 /// 3. Every path the tool names is resolved on the host. One inside the lamp is refused; one
-///    outside the lamp's roots is refused too, unless `ask_the_user` lets the person decide.
-/// 4. The checker is asked, with the requirements, the run's instruction, its recent tool calls,
-///    its last reasoning, and the request. It has its own conversation and never sees the
-///    agent's messages. Which run that is, the session knows: the sandbox does not get to say.
+///    outside the lamp's allowlists is refused too, unless the lamp's guards end with the user,
+///    who then decides. A path that is read must be in `read_allowlist` or `change_allowlist`;
+///    one that is changed, or a command's directory, in `change_allowlist`.
+/// 4. The checker is asked, unless the lamp's guards are the allowlists alone, with the checker
+///    instructions, the run's instruction, its recent tool calls, its last reasoning, and the
+///    request. It has its own conversation and never sees the agent's messages. Which run that
+///    is, the session knows: the sandbox does not get to say.
 /// 5. A refusal is the answer. An allow goes to the person when it must, and is then carried out
 ///    here, with the paths resolved again at the moment of the effect, because a link can be
 ///    swapped in while a model is thinking. A call the sandbox cancelled while it waited is not
@@ -54,7 +57,7 @@ import sprouts.Tuple;
 /// server: it has nothing to fake, because it has no capability of its own.
 ///
 /// All of it is written to `logs/host-access-<session>.jsonl`, as one object per request. The
-/// requirements and the reasoning are not in the log: they belong to the user and to the agent,
+/// checker instructions and the reasoning are not in the log: they belong to the user and to the agent,
 /// and the log is a record of what happened, not a copy of what was said.
 final class HostAccess implements AutoCloseable {
 
@@ -84,8 +87,8 @@ final class HostAccess implements AutoCloseable {
     private final LampLayout layout;
     private final LampConfig config;
     private final SessionId session;
-    /// The user's home on the host, as the host was probed: what `~` means in a request, and the
-    /// one root when the lamp names none. Never the sandbox's `/home/agent`.
+    /// The user's home on the host, as the host was probed: what `~` means in a request and in
+    /// the allowlists. Never the sandbox's `/home/agent`.
     private final Path home;
     private final HostAccessChecker checker;
     private final Consumer<LampEvent> sink;
@@ -125,13 +128,14 @@ final class HostAccess implements AutoCloseable {
     }
 
     /// The variables of oillamp's own environment that hold its secrets: the model key, the
-    /// application's requirements and instructions. A command the agent runs on the host gets
-    /// oillamp's environment without them. The requirements are the checker's and the
-    /// instructions the application's; neither is the agent's to read.
+    /// application's checker instructions and its instructions for the agent. A command the
+    /// agent runs on the host gets oillamp's environment without them. The checker instructions
+    /// are the checker's and the agent's instructions the application's; neither is the agent's
+    /// to read.
     static Tuple<String> secretVariables(LampConfig config, LampConfig.Model service, Context.Options options) {
         Tuple<String> all = Tuple.of(String.class, service.keyEnv())
                 .addAll(config.llm().map(LampConfig.Llm::apiKeyEnv).stream().toList())
-                .addAll(options.hostAccess().map(Context.Options.HostAccessGrant::requirementsEnv).stream().toList())
+                .addAll(options.hostAccess().map(Context.Options.HostAccessGrant::checkerInstructionsEnv).stream().toList())
                 .addAll(options.instructionsEnv().stream().toList());
         Tuple<String> names = Tuple.of(String.class);
         for (String name : all) if (!name.isBlank() && !names.contains(name)) names = names.add(name);
@@ -142,11 +146,12 @@ final class HostAccess implements AutoCloseable {
     void announce() {
         sink.accept(new LampEvent.HostAccessEnabled(
                 HostTool.offeredBy(config.hostAccess()).mapTo(String.class, kind -> kind.toolName),
-                Optional.of(checkerModelName())));
+                config.hostAccess().checks() ? Optional.of(checkerModelName()) : Optional.empty()));
     }
 
+    /// The model that judges the next request, or empty text in a lamp without a checker.
     String checkerModelName() {
-        return checker.model();
+        return config.hostAccess().checks() ? checker.model() : "";
     }
 
     // ─── what each run did, as values ──────────────────────────────────────────────────────
@@ -231,6 +236,7 @@ final class HostAccess implements AutoCloseable {
 
         // 2. The paths, before anything else looks at them.
         Tuple<HostPaths.ResolvedPath> resolved = Tuple.of(HostPaths.ResolvedPath.class);
+        HostPaths.Use use = HostTool.useOf(tool);
         boolean outside = false;
         for (String asked : HostTool.pathsOf(tool)) {
             Result<HostPaths.ResolvedPath> path = HostPaths.locate(asked, home);
@@ -242,11 +248,13 @@ final class HostAccess implements AutoCloseable {
             // not the agent's to read through this door or any other.
             if (insideTheLamp(good.hostPath()))
                 return refuse(attempt, resolved, good.asked() + " is inside the lamp's own state, which no host request may reach");
-            if (!HostPaths.within(good.hostPath(), home, config.hostAccess().roots())) {
-                // The roots are the outer bound. Only the person may let a request past them.
-                if (!config.hostAccess().askTheUser())
-                    return refuse(attempt, resolved, HostAccessProblems.outsideTheRoots(asked,
-                            "it is not under the lamp's host_access.roots").whatHappened());
+            if (!HostPaths.within(good.hostPath(), home, use.allowedBy(config.hostAccess()))) {
+                // The allowlists are the outer bound. Only the person may let a request past them.
+                if (!config.hostAccess().guards().asksTheUser())
+                    return refuse(attempt, resolved, HostAccessProblems.outsideTheAllowlists(asked, switch (use) {
+                        case READ -> "it is not in the lamp's host_access.read_allowlist or change_allowlist";
+                        case CHANGE -> "it is not in the lamp's host_access.change_allowlist, the folders the agent may change";
+                    }).whatHappened());
                 outside = true;
             }
         }
@@ -255,35 +263,40 @@ final class HostAccess implements AutoCloseable {
         if (unfit.isPresent()) return refuse(attempt, resolved, unfit.get());
         sink.accept(new LampEvent.HostAccessRequested(run, attempt.tool(), HostTool.describe(tool)));
 
-        // 4. The checker.
-        Result<LampHostVerdict> verdict;
-        try {
-            verdict = checker.check(tool, activityOf(working), resolved);
-        } catch (RuntimeException bug) {
-            verdict = Result.err(HostAccessProblems.checkerUnreachable(ProblemCatalogUtil.reason(bug)));
+        // 4. The checker, in a lamp that has one. Without it, the allowlists were the last word.
+        String risk = HostTool.tierOf(tool).name().toLowerCase(Locale.ROOT);
+        String reason = "allowed by the lamp's allowlists; its guards have no checker";
+        if (config.hostAccess().checks()) {
+            Result<LampHostVerdict> verdict;
+            try {
+                verdict = checker.check(tool, activityOf(working), resolved);
+            } catch (RuntimeException bug) {
+                verdict = Result.err(HostAccessProblems.checkerUnreachable(ProblemCatalogUtil.reason(bug)));
+            }
+            if (verdict instanceof Result.Err<LampHostVerdict> noVerdict)
+                return refuse(attempt, resolved, noVerdict.problems().first().whatHappened());
+            LampHostVerdict decided = ((Result.Ok<LampHostVerdict>) verdict).value();
+            risk = decided.risk().name().toLowerCase(Locale.ROOT);
+            reason = decided.reason();
+            // The checker's own refusal is reported once, as its decision; it is not a second event.
+            sink.accept(new LampEvent.HostAccessDecided(run, attempt.tool(), decided,
+                    Duration.between(started, machine.now())));
+            if (!decided.allowed()) {
+                log(attempt, resolved, "refused", risk, decided.reason(), 0);
+                return new Answer.Refused("refused: " + decided.reason());
+            }
+            // The checker may put a request lower than its tool's tier; it may not put it higher.
+            if (decided.risk().compareTo(HostTool.tierOf(tool)) > 0)
+                return refuse(attempt, resolved, "the checker called this " + risk + ", which is more than "
+                        + attempt.tool() + " can do; nothing was done");
         }
-        if (verdict instanceof Result.Err<LampHostVerdict> noVerdict)
-            return refuse(attempt, resolved, noVerdict.problems().first().whatHappened());
-        LampHostVerdict decided = ((Result.Ok<LampHostVerdict>) verdict).value();
-        String risk = decided.risk().name().toLowerCase(Locale.ROOT);
-        // The checker's own refusal is reported once, as its decision; it is not a second event.
-        sink.accept(new LampEvent.HostAccessDecided(run, attempt.tool(), decided,
-                Duration.between(started, machine.now())));
-        if (!decided.allowed()) {
-            log(attempt, resolved, "refused", risk, decided.reason(), 0);
-            return new Answer.Refused("refused: " + decided.reason());
-        }
-        // The checker may put a request lower than its tool's tier; it may not put it higher.
-        if (decided.risk().compareTo(HostTool.tierOf(tool)) > 0)
-            return refuse(attempt, resolved, "the checker called this " + risk + ", which is more than "
-                    + attempt.tool() + " can do; nothing was done");
         if (withdrawn.isDone()) return refuse(attempt, resolved, CANCELLED);
 
-        // 5. The person's permission first, for a command when the lamp says so, and for a path
-        // past the roots.
+        // 5. The person's permission next, for a command and for a path outside the allowlists,
+        // in a lamp whose guards end with the user.
         if (HostTool.needsThePerson(tool, config.hostAccess()) || outside) {
             Optional<String> no = askTheUser(new Question.HostRequest(run, attempt.tool(), HostTool.describe(tool)
-                    + (outside ? " (outside the lamp's roots)" : "")), withdrawn);
+                    + (outside ? " (outside the lamp's allowlists)" : "")), withdrawn);
             if (no.isPresent()) return refuse(attempt, resolved, no.get());
         }
 
@@ -309,7 +322,7 @@ final class HostAccess implements AutoCloseable {
             return new Answer.Failed(problem.whatHappened());
         }
         String answer = ((Result.Ok<String>) done).value();
-        log(attempt, resolved, "done", risk, decided.reason(), answer.length());
+        log(attempt, resolved, "done", risk, reason, answer.length());
         return new Answer.Done(answer.length() <= ANSWER_SENT
                 ? answer : answer.substring(0, ANSWER_SENT) + "\n[…] (the rest was cut)");
     }
@@ -388,7 +401,7 @@ final class HostAccess implements AutoCloseable {
                 return Optional.of(bad.problems().first());
             Path now = ((Result.Ok<HostPaths.ResolvedPath>) path).value().hostPath();
             if (!now.equals(before.get(i).hostPath()) || insideTheLamp(now))
-                return Optional.of(HostAccessProblems.outsideTheRoots(asked.get(i),
+                return Optional.of(HostAccessProblems.outsideTheAllowlists(asked.get(i),
                         "it changed while the request was being judged, which is never a good sign"));
         }
         return Optional.empty();
@@ -405,9 +418,10 @@ final class HostAccess implements AutoCloseable {
     /// Asks the person through the session, and waits for an answer.
     ///
     /// A person is the slowest and most careful checker there is, so this is reserved for the
-    /// requests worth an interruption: a command, in a lamp whose `host_access.commands` is
-    /// `ask`, and (with `ask_the_user`) a path past the roots. The session refuses at once when it has nobody to ask, and the request
-    /// times out on its own, so this never waits longer than [Question#PATIENCE].
+    /// requests worth an interruption, in a lamp whose `host_access.guards` end with the user: a
+    /// command, and a path outside the allowlists. The session refuses at once when it has
+    /// nobody to ask, and the request times out on its own, so this never waits longer than
+    /// [Question#PATIENCE].
     /// A request the sandbox withdraws while the person is asked is withdrawn from the person
     /// too: the question is closed, and the next one can be asked.
     ///

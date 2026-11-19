@@ -5,7 +5,9 @@ import dev.lamp.LampDirectory
 import dev.lamp.LampPrompt
 import dev.lamp.LampEvent
 import dev.lamp.LampFailedException
-import dev.lamp.LampHostCommandApproval
+import dev.lamp.LampHostAccess
+import dev.lamp.LampHostAccessGuards
+import sprouts.Tuple
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
@@ -45,16 +47,17 @@ judges first and then carries out, or refuses.
                                    ├ 2. the tier: closed is closed
                                    ├ 3. the paths: ~ is the user's home,
                                    │    no "..", never inside the lamp,
-                                   │    under host_access.roots
+                                   │    in the allowlists
                                    ├ 4. what the tool rules out by itself
                                    │
                                    ├ 5. the checker ─────────────────────▶ the model service
-                                   │    the requirements, the run, the      (its own
-                                   │    request; never the agent's          conversation)
+                                   │    the checker instructions, the run,  (its own
+                                   │    the request; never the agent's      conversation)
                                    │    messages                     ◀──── a verdict
                                    │
-                                   ├ 6. the person, for a command when the
-                                   │    lamp says so, or a path past the roots
+                                   ├ 6. the person, for a command or a path
+                                   │    outside the allowlists, when the
+                                   │    guards end with the user
                                    │
                                    ├ 7. the paths once more, then ────────▶ ~/Documents/q3.md
                                    │    the effect
@@ -62,16 +65,22 @@ judges first and then carries out, or refuses.
         ◀──────────────────────────  the tool's result, or isError and why
 ```
 
+What the agent may do at all is `host_access.may` in the lamp's `oillamp.toml`: `nothing`,
+`read`, `read_change` or `read_change_run`. Which of steps 3, 5 and 6 a request passes is
+`host_access.guards`: always the allowlists, then the checker unless it is `allowlists`, then the
+person only with `allowlists_checker_user`. A path that is read must be in `read_allowlist` or
+`change_allowlist`; one that is changed, in `change_allowlist`.
+
 Steps 1 to 4 need no model and cost nothing, so a refusal there never reaches the checker. The
-checker is a separate model call with the user's requirements as its only authority. It is
+checker is a separate model call with the user's checker instructions as its only authority. It is
 made on the model the agent answers with, and follows it when the program changes it, unless
 the lamp's file names a `checker_model` of its own. Which run a request belongs to is something
 the engine knows, not something the request says, so the checker always reads the instruction of
 the run the agent is really in.
 
 The feature is off unless the lamp's `oillamp.toml` turns it on under `[host_access]`. A
-program built on oillamp may give its own requirements with `LampDirectory.security`, but only for a lamp
-whose file already turned it on.
+program built on oillamp may give its own checker instructions with
+`LampDirectory.checkerInstructions`, but only for a lamp whose file already turned it on.
 
 ## How the scenarios see it
 
@@ -88,7 +97,7 @@ class Reaching_The_Host_Spec extends Specification {
 
     /** The model the agent answers with, and so the one that judges, unless the file names another. */
     static final String MODEL = 'azure/gpt-6.1-sol'
-    static final String REQUIREMENTS = 'You may read ~/Documents. Never read ~/.ssh.'
+    static final String INSTRUCTIONS = 'You may read ~/Documents. Never read ~/.ssh.'
 
     @TempDir Path tmp
     ScenarioHost host
@@ -122,19 +131,19 @@ class Reaching_The_Host_Spec extends Specification {
             sees as `mcp__oillamp__host_read_file`.
 
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. A file read is the simplest request there
+            checker instructions before oillamp carries it out. A file read is the simplest request there
             is: the agent names a path the way a person would, from the home directory, oillamp
             resolves it on the host, asks the checker, and only then hands back what the file
             holds.
 
             The checker is asked in a conversation of its own. What it is shown has exactly three
-            parts: the user's requirements, the run, and the request. There is no place in it for
+            parts: the user's checker instructions, the run, and the request. There is no place in it for
             the agent's messages, because those are what a prompt injection, instructions hidden
             in something the agent read, would have changed.
         """
         given: 'a lamp that lets the agent read its Documents, and a file there'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3\nRevenue is up.\n')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
 
         when: 'the program starts the lamp, with a model service it can reach'
             start()
@@ -171,11 +180,11 @@ class Reaching_The_Host_Spec extends Specification {
             !reply.isError
             McpClient.text(reply).contains('Revenue is up.')
 
-        and: 'the checker was asked once, with the requirements and the resolved request, and nothing else'
+        and: 'the checker was asked once, with the checker instructions and the resolved request, and nothing else'
             checker.checked.size() == 1
             var seen = StandInChecker.judged(checker.checked.first())
-            seen.keySet() == ['requirements', 'run', 'request'] as Set
-            seen.requirements.text.contains(REQUIREMENTS)
+            seen.keySet() == ['checker_instructions', 'run', 'request'] as Set
+            seen.checker_instructions.text.contains(INSTRUCTIONS)
             seen.request.tool == 'host_read_file'
             seen.request.resolved_paths*.host == [host.home.resolve('Documents/q3.md').toRealPath().toString()]
             events.any { it instanceof LampEvent.HostAccessDecided }
@@ -192,7 +201,7 @@ class Reaching_The_Host_Spec extends Specification {
     def 'The checker reads what the run was asked, and the sandbox cannot say which run it is'() {
         reportInfo """
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. Intent is what the checker judges best, so
+            checker instructions before oillamp carries it out. Intent is what the checker judges best, so
             it is shown the instruction of the run the request comes from. Which run that is, the
             session knows: it is the one the agent is working on. The request itself does not get
             a say, because a request that could name another run could borrow that run's
@@ -201,7 +210,7 @@ class Reaching_The_Host_Spec extends Specification {
         """
         given: 'an agent that reads a document while it works on a question'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             Map answered = [:]
             host.machine { it.agent { String prompt ->
                 answered.putAll(ask('host_read_file', [path: '~/Documents/q3.md'], [run: 'run-999']))
@@ -243,7 +252,7 @@ class Reaching_The_Host_Spec extends Specification {
         """
         given: 'a lamp that lets the agent read its Documents, and an agent that works for a while before it reads on the host'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             Map answered = [:]
             host.machine { it.agentAtWork { String prompt, pi ->
                 (1..14).each { pi.toolCall('bash', "ls step-${it}") }
@@ -280,11 +289,11 @@ class Reaching_The_Host_Spec extends Specification {
             going: for example from a shell the user opened there, or from a program the agent left
             running. Such a request has no instruction behind it, and the checker is shown exactly
             that: a run with an empty `id`, an empty `instruction`, no tool calls and no thinking.
-            It judges the request against the user's requirements alone.
+            It judges the request against the user's checker instructions alone.
         """
         given: 'a lamp that lets the agent read its Documents, and no run going'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'something in the sandbox reads the document outside a run'
@@ -299,14 +308,14 @@ class Reaching_The_Host_Spec extends Specification {
     def 'When the checker refuses a read, oillamp does not read the file and gives the agent the reason'() {
         reportInfo """
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. A refusal is the feature working. The
+            checker instructions before oillamp carries it out. A refusal is the feature working. The
             checker said no, so oillamp did not touch the file, and the agent is told the
             checker's reason, word for word: it is the one thing that helps the agent do something
             else instead.
         """
         given: 'a lamp whose checker refuses'
             Files.writeString(host.home.resolve('Documents/passwords.md'), 'hunter2')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             checker.verdict = '{"decision":"deny","risk":"passive","reason":"The file looks like it holds passwords."}'
 
         when: 'the session starts, and the agent reads the file'
@@ -323,7 +332,7 @@ class Reaching_The_Host_Spec extends Specification {
     def 'Oillamp treats an answer from the checker that is not a verdict, or claims more than the tool can do, as a refusal'() {
         reportInfo """
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. When in doubt, oillamp refuses. A checker
+            checker instructions before oillamp carries it out. When in doubt, oillamp refuses. A checker
             that answers in prose instead of one JSON verdict, or that allows a read while rating
             it as running a program (`"risk":"executing"`), has not given a verdict oillamp can
             rely on, so oillamp refuses the request and does nothing. The same goes for a verdict
@@ -334,7 +343,7 @@ class Reaching_The_Host_Spec extends Specification {
         """
         given: 'a lamp that lets the agent read its Documents, and a document there'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'the checker gives an answer it may not give, and the agent reads the document'
@@ -366,7 +375,7 @@ class Reaching_The_Host_Spec extends Specification {
             tier: the tiers are a ceiling, so lower is allowed, and only higher is refused.
         """
         given: 'a lamp that lets the agent write in its Documents'
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'the checker allows a write in a code fence, rating it passive'
@@ -389,7 +398,7 @@ class Reaching_The_Host_Spec extends Specification {
         """
         given: 'a lamp whose checker refuses in French, in two pieces'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             checker.verdict = '{"decision":"deny","risk":"passive","reason":"Lecture refusée — hors de ~/Documents/public"}'
             checker.splitAt = 'é'
             start()
@@ -402,22 +411,23 @@ class Reaching_The_Host_Spec extends Specification {
             McpClient.text(reply).contains('Lecture refusée — hors de ~/Documents/public')
     }
 
-    def 'Oillamp refuses paths outside the roots, inside the lamp, or with .. in them, without asking the checker'() {
+    def 'Oillamp refuses paths outside the allowlists, inside the lamp, or with .. in them, without asking the checker'() {
         reportInfo """
-            The roots, `host_access.roots` in the lamp's `oillamp.toml`, are the folders on the
-            host the agent may reach. They are the outer bound, and they are the one thing no
-            model, not even the checker that judges each request, is asked about. A path outside
-            them is a mistake or an attempt, not a judgement call. The lamp's own state — its
-            keys, its history, the agent's home — is never reachable, also when the lamp was
-            opened through a link. And a path with `..` or `.` in it is refused before it is
-            resolved, so the path judged is the path used; so is one that is not absolute and does
-            not start with `~/`. A link is judged by where it points: `~/Documents/escape` here is
-            a link to a directory outside the home, and what is under it is outside the roots.
-            Without `roots`, the lamp reaches the user's home and nothing beside it, also not a
-            directory whose name only begins like the home's, such as `/home/dev-other` next to
+            The allowlists, `host_access.read_allowlist` and `host_access.change_allowlist` in the
+            lamp's `oillamp.toml`, are the folders on the host the agent may reach. They are the
+            outer bound, and they are the one thing no model, not even the checker that judges
+            each request, is asked about. A path outside them is a mistake or an attempt, not a
+            judgement call. The lamp's own state — its keys, its history, the agent's home — is
+            never reachable, also when the lamp was opened through a link and lies inside an
+            allowlist folder. And a path with `..` or `.` in it is refused before it is resolved,
+            so the path judged is the path used; so is one that is not absolute and does not start
+            with `~/`. A link is judged by where it points: `~/Documents/escape` here is a link to
+            a directory outside the home, and what is under it is outside the allowlists. A lamp
+            whose allowlists hold only `~` reaches the user's home and nothing beside it, also not
+            a directory whose name only begins like the home's, such as `/home/dev-other` next to
             `/home/dev`.
         """
-        given: 'a lamp opened through a link to the lamps directory, reaching the whole home'
+        given: 'a lamp opened through a link to the lamps directory, whose allowlists hold only `~`'
             Files.createSymbolicLink(host.home.resolve('linked'), Files.createDirectories(host.home.resolve('lamps')))
             givenHostAccess([:], host.home.resolve('linked/feature-x'))
             start(host.home.resolve('linked/feature-x'))
@@ -442,26 +452,26 @@ class Reaching_The_Host_Spec extends Specification {
 
         where:
             asked                                        | why
-            '/etc/hostname'                              | 'not under'
+            '/etc/hostname'                              | 'not in the lamp\'s host_access.read_allowlist'
             '~/lamps/feature-x/.oillamp/keys/client'     | 'inside the lamp'
             '~/lamps/feature-x/oillamp.toml'             | 'inside the lamp'
             '~/Documents/new/../../.ssh/id_ed25519'      | 'contains ".."'
             '~/Documents/./q3.md'                        | 'contains "."'
             'Documents/q3.md'                            | 'not an absolute path'
-            '~/Documents/escape/secret.txt'              | 'not under'
-            'HOME-other/secret.txt'                      | 'not under'
+            '~/Documents/escape/secret.txt'              | 'not in the lamp\'s host_access.read_allowlist'
+            'HOME-other/secret.txt'                      | 'not in the lamp\'s host_access.read_allowlist'
     }
 
-    def 'A lamp that names no roots reaches anything in the user\'s home, the home itself too'() {
+    def 'A lamp whose allowlists hold `~` reaches anything in the user\'s home, the home itself too'() {
         reportInfo """
-            An empty `host_access.roots` in the lamp's `oillamp.toml` means the user's home
-            directory, which is what the lamp template and Genies leave it as. The home itself
-            is inside, and so is anything under it, so the agent may list `~` and read a file
-            below it, each judged by the checker.
+            `~` in `host_access.read_allowlist` or `change_allowlist` is the user's home directory
+            on the host, and it is what a new lamp's `oillamp.toml` has in both. A folder in an
+            allowlist includes everything below it, and itself: so the agent may list `~` and
+            read a file below it, each judged by the checker.
         """
-        given: 'a lamp with host access on and no roots'
+        given: 'a lamp with host access on, and `~` in both allowlists'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
-            givenHostAccess([:])
+            givenHostAccess(folders: ['~'])
             start()
 
         when: 'the agent lists its home, and reads a document in it'
@@ -473,20 +483,20 @@ class Reaching_The_Host_Spec extends Specification {
             !read.isError && McpClient.text(read).contains('# Q3')
     }
 
-    def 'A root named through a link is the directory the link points to'() {
+    def 'An allowlist folder named through a link is the directory the link points to'() {
         reportInfo """
             Let's consider a user whose `~/Documents` is a link to a directory on another disk,
-            and who writes `~/Documents`, as they know it, into `host_access.roots`. oillamp
-            follows the links of every path a request names before it compares it with the roots,
-            so it follows the roots' links too: a file on the other disk, reached through
-            `~/Documents`, is inside the roots.
+            and who writes `~/Documents`, as they know it, into `host_access.read_allowlist` and
+            `change_allowlist`. oillamp follows the links of every path a request names before it
+            compares it with the allowlists, so it follows the links of the allowlists' folders
+            too: a file on the other disk, reached through `~/Documents`, is inside them.
         """
-        given: 'a Documents that is a link to another disk, named as the root'
+        given: 'a Documents that is a link to another disk, written as `~/Documents` in both allowlists'
             Files.delete(host.home.resolve('Documents'))
             var disk = Files.createDirectories(tmp.resolve('disk'))
             Files.writeString(disk.resolve('q3.md'), '# Q3')
             Files.createSymbolicLink(host.home.resolve('Documents'), disk)
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: ['~/Documents'])
             start()
 
         when: 'the agent reads a document in the linked Documents'
@@ -497,15 +507,100 @@ class Reaching_The_Host_Spec extends Specification {
             McpClient.text(reply).contains('# Q3')
     }
 
+    def 'Oillamp lets the agent read in either allowlist, but change only in `change_allowlist`, before it asks the checker: #what'() {
+        reportInfo """
+            Let's consider a user who lets the agent read their `~/Documents` but change only
+            their `~/Drafts`: `host_access.read_allowlist = ["~/Documents"]` and
+            `host_access.change_allowlist = ["~/Drafts"]`. A folder the agent may change is one it
+            may read as well, so a read is allowed in either list, and a write, or a command's
+            working directory, only in `change_allowlist`. oillamp checks this itself, before the
+            checker is asked: a request outside the list it needs is refused, naming that list,
+            and the checker never hears of it.
+
+            A folder includes what is below it, compared name by name: `~/Drafts2` is a folder
+            beside `~/Drafts`, not under it. And a path is compared once its links are followed,
+            so `~/Drafts/to-documents`, a link to `~/Documents`, does not let a write reach a
+            folder the agent may only read.
+        """
+        given: 'a lamp whose agent may read in ~/Documents and change in ~/Drafts, and may run commands'
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
+            var drafts = Files.createDirectories(host.home.resolve('Drafts'))
+            Files.writeString(drafts.resolve('plan.md'), '# Plan')
+            Files.createDirectories(host.home.resolve('Drafts2'))
+            Files.createSymbolicLink(drafts.resolve('to-documents'), host.home.resolve('Documents'))
+            givenHostAccess(read: ['~/Documents'], change: ['~/Drafts'], may: 'read_change_run')
+            start()
+
+        when: 'the agent makes the request'
+            var reply = ask(tool, arguments)
+
+        then: 'a request in the list it needs goes to the checker and is done; any other is refused, naming the list, and the checker was not asked'
+            reply.isError == (refused != null)
+            refused == null || McpClient.text(reply).contains(refused)
+            checker.checked.size() == (refused == null ? 1 : 0)
+
+        where:
+            what                                              | tool              | arguments                                                     || refused
+            'a read in `read_allowlist`'                      | 'host_read_file'  | [path: '~/Documents/q3.md']                                   || null
+            'a read in `change_allowlist`'                    | 'host_read_file'  | [path: '~/Drafts/plan.md']                                    || null
+            'a write in `change_allowlist`'                   | 'host_write_file' | [path: '~/Drafts/plan.md', text: 'x']                         || null
+            'a write in `read_allowlist` only'                | 'host_write_file' | [path: '~/Documents/q3.md', text: 'x']                        || 'not in the lamp\'s host_access.change_allowlist'
+            'a write in a folder beside `~/Drafts`'           | 'host_write_file' | [path: '~/Drafts2/plan.md', text: 'x']                        || 'not in the lamp\'s host_access.change_allowlist'
+            'a write through a link to `~/Documents`'         | 'host_write_file' | [path: '~/Drafts/to-documents/q3.md', text: 'x']              || 'not in the lamp\'s host_access.change_allowlist'
+            'a command in `read_allowlist` only'              | 'host_bash'       | [command: 'rm q3.md', cwd: '~/Documents']                     || 'not in the lamp\'s host_access.change_allowlist'
+            'a read in neither list'                          | 'host_read_file'  | [path: '~/.bashrc']                                           || 'not in the lamp\'s host_access.read_allowlist or change_allowlist'
+    }
+
+    def 'With the allowlists as the only guard, oillamp asks no checker, and the lamp starts without a model for one'() {
+        reportInfo """
+            Let's consider a user who wants no model judging the agent's requests to their
+            computer, only fixed folders: `host_access.guards = "allowlists"` in the lamp's
+            `oillamp.toml`. Then a request in the allowlists is carried out as soon as oillamp has
+            checked its path, and the checker is never asked, so the lamp needs no
+            `checker_instructions` and no model to judge with: a program may start it without
+            giving the agent a model. The session's `HostAccessEnabled` event names no checker.
+            A request outside the allowlists is refused as in any lamp.
+        """
+        given: 'a lamp whose agent may read its Documents, with the allowlists as the only guard and no checker instructions'
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
+            host.givenConfig(host.lampPath(), """
+                schema_version = 1
+
+                [host_access]
+                may = "read"
+                guards = "allowlists"
+                read_allowlist = ["~/Documents"]
+                change_allowlist = []
+                checker_instructions = ''
+            """.stripIndent())
+
+        when: 'a program starts the lamp without a model, and the agent reads a document in the allowlist and a file outside it'
+            lamp = Lamp.at(host.lampPath()).onEvent { events << it }
+                       .modelService(checker.address()).modelKey('sk-0123456789')
+                       .launchedBy(host.launcher).start()
+            var started = lamp.awaitRunning(Duration.ofSeconds(30))
+            var inside = ask('host_read_file', [path: '~/Documents/q3.md'])
+            var outside = ask('host_read_file', [path: '~/.bashrc'])
+
+        then: 'the lamp started, and its session said that no checker judges'
+            started
+            (events.find { it instanceof LampEvent.HostAccessEnabled } as LampEvent.HostAccessEnabled).checker() == Optional.empty()
+
+        and: 'the document was read, the file outside was refused, and the checker was never asked'
+            !inside.isError && McpClient.text(inside).contains('# Q3')
+            outside.isError && McpClient.text(outside).contains('not in the lamp\'s host_access.read_allowlist')
+            checker.checked.isEmpty()
+    }
+
     def 'The agent writes a file on the host, and it is never left executable'() {
         reportInfo """
             Host access sorts what a tool does into tiers. Writing is the additive tier, which
-            `allow_additive` in `[host_access]` opens or closes: it changes the host, in a way the
-            user can see and undo. The file and the directories on the way are made, the file is
+            `may = "read_change"` in `[host_access]` opens: it changes the host, in a way the user
+            can see and undo. The file and the directories on the way are made, the file is
             written atomically, and whatever was there before, the result is plain data.
         """
         given: 'a lamp that lets the agent write in its Documents, and an executable file there'
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             checker.verdict = '{"decision":"allow","risk":"additive","reason":"The user asked for notes in Documents."}'
             var old = Files.writeString(host.home.resolve('Documents/run-me.md'), 'old')
             Files.setPosixFilePermissions(old, PosixFilePermissions.fromString('rwxr-xr-x'))
@@ -529,7 +624,7 @@ class Reaching_The_Host_Spec extends Specification {
             without following one: a link to the user's keys copies nothing.
         """
         given: 'a lamp that lets the agent write in its Documents, a report in the agent\'s home, and a link there to the user\'s key'
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             checker.verdict = '{"decision":"allow","risk":"additive","reason":"A report the user asked for."}'
             start()
             var agentHome = Lamp.agentHome(host.lampPath()).orElseThrow()
@@ -560,8 +655,8 @@ class Reaching_The_Host_Spec extends Specification {
             the sandbox, where pi's own `read` shows the model an image. It is in the passive
             tier, like a read: on the host it changes nothing, and what it hands the agent is
             what a read would. So it is offered whenever host access is on, and the host path
-            goes through the same checks as `host_read_file`: the roots, the lamp's own files, and
-            the checker.
+            goes through the same checks as `host_read_file`: the allowlists, the lamp's own
+            files, and the checker.
 
             The checker is shown both paths, `path` on the host and `to` in the sandbox, and so is
             the session's log, `.oillamp/logs/host-access-<session>.jsonl`. The copy arrives byte
@@ -571,7 +666,7 @@ class Reaching_The_Host_Spec extends Specification {
             byte[] picture = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff] as byte[]
             var cat = Files.write(host.home.resolve('Documents/cat.png'), picture)
             Files.setPosixFilePermissions(cat, PosixFilePermissions.fromString('rwxr-xr-x'))
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'the agent copies the picture into its workspace'
@@ -611,7 +706,7 @@ class Reaching_The_Host_Spec extends Specification {
             Files.write(host.home.resolve('Documents/cat.png'), [0x89, 0x50, 0x00] as byte[])
             var precious = Files.writeString(host.home.resolve('Documents/precious.txt'), 'keep me')
             var notes = Files.createDirectories(host.home.resolve('Notes'))
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         and: 'links the agent planted in its home, one at a file and one at a directory'
@@ -638,15 +733,16 @@ class Reaching_The_Host_Spec extends Specification {
     def 'Oillamp does not copy a file into the sandbox that #why'() {
         reportInfo """
             `host_copy_in` hands a host file to the agent, so the file goes through the same
-            checks as a read with `host_read_file`. A file outside `host_access.roots` is refused
-            before the checker is asked; a file the checker refuses is not read. Either way
-            nothing arrives in the agent's home.
+            checks as a read with `host_read_file`. A file outside the lamp's allowlists,
+            `host_access.read_allowlist` and `change_allowlist`, is refused before the checker is
+            asked; a file the checker refuses is not read. Either way nothing arrives in the
+            agent's home.
         """
         given: 'a lamp that lets the agent read its Documents, and a picture in it and outside it'
             Files.createDirectories(host.home.resolve('Notes'))
             Files.write(host.home.resolve('Notes/secret.png'), [0x89, 0x50] as byte[])
             Files.write(host.home.resolve('Documents/cat.png'), [0x89, 0x50] as byte[])
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             checker.verdict = answer
             start()
 
@@ -660,23 +756,23 @@ class Reaching_The_Host_Spec extends Specification {
 
         where:
             why                             | asked                  | answer                                                                       | said
-            'is outside the roots'          | '~/Notes/secret.png'   | StandInChecker.ALLOW_PASSIVE                                                 | 'not under'
+            'is outside the allowlists'     | '~/Notes/secret.png'   | StandInChecker.ALLOW_PASSIVE                                                 | 'not in the lamp\'s host_access.read_allowlist'
             'the checker refuses'           | '~/Documents/cat.png'  | '{"decision":"deny","risk":"passive","reason":"Not a picture the user named."}' | 'Not a picture the user named.'
     }
 
     def 'Oillamp refuses a tool of a closed tier, and a file the desktop would run, before it asks the checker'() {
         reportInfo """
-            Host access sorts what a tool does into tiers, and the lamp's `oillamp.toml` opens or
-            closes each. Whether the host may be changed at all is the user's setting, not a
-            model's opinion: with `allow_additive = false`, oillamp refuses a write, and opening a
-            web page, by that setting's name, without asking the checker, the model that judges
-            each request. And "show" is for documents: a launcher shown with the user's default
+            Host access sorts what a tool does into tiers, and `host_access.may` in the lamp's
+            `oillamp.toml` opens them one after the other. Whether the host may be changed at all
+            is the user's setting, not a model's opinion: with `may = "read"`, oillamp refuses a
+            write, and opening a web page, by that setting's name, without asking the checker, the
+            model that judges each request. And "show" is for documents: a launcher shown with the user's default
             application would be run by it, which would be a way to run a program while running
             programs is closed.
         """
-        given: 'a lamp that keeps the additive tier closed, and a launcher in Documents'
+        given: 'a lamp whose agent may only read, and a launcher in Documents'
             Files.writeString(host.home.resolve('Documents/Report.desktop'), '[Desktop Entry]\nExec=sh -c id\n')
-            givenHostAccess(roots: [host.home.resolve('Documents')], allowAdditive: false)
+            givenHostAccess(folders: [host.home.resolve('Documents')], may: 'read')
             start()
 
         when: 'the agent writes a file, shows the launcher, and opens a page'
@@ -685,9 +781,9 @@ class Reaching_The_Host_Spec extends Specification {
             var opened = ask('host_open_url', [url: 'https://example.org/?notes=secret'])
 
         then: 'all three are refused by the setting or by what the file is, and the checker was not asked'
-            written.isError && McpClient.text(written).contains('allow_additive is false')
+            written.isError && McpClient.text(written).contains('host_access.may is "read"')
             shown.isError && McpClient.text(shown).contains('runs rather than shows')
-            opened.isError && McpClient.text(opened).contains('allow_additive is false')
+            opened.isError && McpClient.text(opened).contains('host_access.may is "read"')
             checker.checked.isEmpty()
 
         and: 'pi is offered only the tools that read: nothing that writes, opens or runs, and no clipboard'
@@ -709,7 +805,7 @@ class Reaching_The_Host_Spec extends Specification {
             Files.writeString(host.home.resolve('Documents/Report.desktop'), '[Desktop Entry]\nExec=sh -c id\n')
             var script = Files.writeString(host.home.resolve('Documents/notes'), '#!/bin/sh\nid\n')
             Files.setPosixFilePermissions(script, PosixFilePermissions.fromString('rwxr--r--'))
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'the agent asks to show the file'
@@ -738,7 +834,7 @@ class Reaching_The_Host_Spec extends Specification {
             host file anywhere, a read and a write the checker never judged as such.
         """
         given: 'a lamp that lets the agent write in its Documents, and a report in the agent\'s home'
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
             Files.writeString(Lamp.agentHome(host.lampPath()).orElseThrow().resolve('workspace/report.pdf'), '%PDF')
 
@@ -759,29 +855,44 @@ class Reaching_The_Host_Spec extends Specification {
             'a path with . in it'             | '~/workspace/./report.pdf'
     }
 
-    def 'With `ask_the_user`, the user decides on a read outside the roots, and is asked again for the next one'() {
+    def 'With the user as the last guard, the person decides on a read outside the allowlists, but is not asked about requests inside them'() {
         reportInfo """
-            The roots, `host_access.roots`, are the folders on the host the agent may reach. With
-            `ask_the_user = true`, a request the checker allows that reaches past the roots goes
-            to the user instead of being refused. The session sends the question as a
-            `HostAccessAsked` event, and the program built on oillamp that holds the lamp
-            gives the user's decision with `Lamp.decidePermission`. Each question is its own: a
-            yes once is not a yes for the next one.
+            The allowlists, `host_access.read_allowlist` and `change_allowlist`, are the folders on
+            the host the agent may reach. With `host_access.guards = "allowlists_checker_user"`,
+            a request the checker allows that reaches outside them goes to the person instead of
+            being refused. The session sends the question as a `HostAccessAsked` event, and the
+            program built on oillamp that holds the lamp gives the person's decision with
+            `Lamp.decidePermission`. Each question is its own: a yes once is not a yes for the
+            next one.
+
+            Besides such a request, the person is asked only about commands. A read or a write
+            inside the allowlists is judged by the checker alone, so the person is not interrupted
+            for the work the user already allowed.
         """
-        given: 'a lamp that asks the user about a read outside its roots, and a note outside them'
+        given: 'a lamp whose guards end with the user, which lets the agent reach its Documents, and a note outside them'
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
             Files.createDirectories(host.home.resolve('Notes'))
             Files.writeString(host.home.resolve('Notes/today.md'), 'Call the bank.')
-            givenHostAccess(roots: [host.home.resolve('Documents')], askTheUser: true)
+            givenHostAccess(folders: [host.home.resolve('Documents')], guards: 'allowlists_checker_user')
             start()
 
-        when: 'the agent reads a note outside the roots, and the person says yes'
+        when: 'the agent reads a document in the allowlists, and writes one there'
+            var read = ask('host_read_file', [path: '~/Documents/q3.md'])
+            var written = ask('host_write_file', [path: '~/Documents/note.md', text: 'hello'])
+
+        then: 'both are done after the checker allowed them, and the person was not asked'
+            !read.isError && !written.isError
+            checker.checked.size() == 2
+            !events.any { it instanceof LampEvent.HostAccessAsked }
+
+        when: 'the agent reads a note outside the allowlists, and the person says yes'
             var first = CompletableFuture.supplyAsync { ask('host_read_file', [path: '~/Notes/today.md']) }
             var asked = waitFor(LampEvent.HostAccessAsked) { true }
             answer(asked.what(), true)
 
-        then: 'the person was told what, and the read happened'
+        then: 'the person was told what, and that it lies outside the allowlists, and the read happened'
             asked.tool() == 'host_read_file'
-            asked.what().contains('outside the lamp\'s roots')
+            asked.what().contains('outside the lamp\'s allowlists')
             !first.get(30, TimeUnit.SECONDS).isError
 
         when: 'it reads it again, and this time the person says no'
@@ -795,32 +906,34 @@ class Reaching_The_Host_Spec extends Specification {
             McpClient.text(refused).contains('said no')
     }
 
-    def '`LampDirectory.security` gives the checker\'s requirements, but only for a lamp whose file turns host access on'() {
+    def '`LampDirectory.checkerInstructions` gives the checker its instructions, but only for a lamp whose file turns host access on'() {
         reportInfo """
-            A program built on oillamp with its own settings screen hands over the user's rules for the checker with `LampDirectory.security`, exactly as
-            it hands over the model key. The text goes to the engine in its environment, not on
-            its command line, and it wins over the file. The model that judges is the one the
-            program gave the agent.
+            A program built on oillamp with its own settings screen hands over the user's
+            instructions for the checker with `LampDirectory.checkerInstructions`, exactly as it
+            hands over the model key. The text goes to the engine in its environment, not on its
+            command line, and it wins over `checker_instructions` in the file. The model that
+            judges is the one the program gave the agent.
 
-            What the program cannot do is turn the feature on: a lamp whose file says no stays
-            closed — no socket, no extension, no tools — and the session warns the program
-            with `OIL-HOSTACCESS-014` that its rules are not used.
+            What the program cannot do is turn the feature on: a lamp whose file says
+            `may = "nothing"`, as a new lamp's does, stays closed — no socket, no extension, no
+            tools — and the session warns the program with `OIL-HOSTACCESS-014` that its
+            instructions are not used.
         """
-        given: 'a lamp with the feature turned on, but its own placeholder rules'
+        given: 'a lamp with the feature turned on, but its own placeholder instructions'
             Files.writeString(host.home.resolve('Documents/today.md'), 'today')
-            givenHostAccess(roots: [host.home.resolve('Documents')], requirements: "the file's rules")
+            givenHostAccess(folders: [host.home.resolve('Documents')], instructions: "the file's rules")
 
-        when: 'the program starts the lamp with its own requirements, and the agent reads a document'
+        when: 'the program starts the lamp with its own instructions, and the agent reads a document'
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
                        .modelService(checker.address()).modelKey('sk-0123456789').model(MODEL)
-                       .security('Only ~/Documents, and nothing private.')
+                       .checkerInstructions('Only ~/Documents, and nothing private.')
                        .launchedBy(host.launcher).start()
             lamp.awaitRunning(Duration.ofSeconds(30))
             var reply = ask('host_read_file', [path: '~/Documents/today.md'])
 
-        then: 'the program\'s rules are the ones the checker saw, on the agent\'s model'
+        then: 'the program\'s instructions are the ones the checker saw, on the agent\'s model'
             !reply.isError
-            StandInChecker.judged(checker.checked.first()).requirements.text == 'Only ~/Documents, and nothing private.'
+            StandInChecker.judged(checker.checked.first()).checker_instructions.text == 'Only ~/Documents, and nothing private.'
             StandInChecker.modelOf(checker.checked.first()) == MODEL
 
         when: 'a program asks for host access on a lamp whose file has it off'
@@ -829,11 +942,11 @@ class Reaching_The_Host_Spec extends Specification {
             List<LampEvent> heard = new CopyOnWriteArrayList<>()
             var second = Lamp.at(closed).onEvent { heard << it }
                             .modelService(checker.address()).modelKey('sk-0123456789').model(MODEL)
-                            .security('Read anything.')
+                            .checkerInstructions('Read anything.')
                             .launchedBy(host.launcher).start()
             second.awaitRunning(Duration.ofSeconds(30))
 
-        then: 'the lamp stays closed, and the program hears that its rules are unused'
+        then: 'the lamp stays closed, and the program hears that its instructions are unused'
             !Files.exists(Lamp.agentHome(closed).orElseThrow().resolve('.pi/agent/extensions/oillamp-host-access.js'))
             !Files.readString(Lamp.agentHome(closed).orElseThrow().resolve('AGENTS.md')).contains("## Reaching the user's computer")
             !heard.any { it instanceof LampEvent.HostAccessEnabled }
@@ -845,54 +958,70 @@ class Reaching_The_Host_Spec extends Specification {
             second?.close()
     }
 
-    def '`LampDirectory.hostAccess` writes the host access switch and requirements into the lamp\'s file while no session runs'() {
+    def '`LampDirectory.hostAccess` writes what the agent may do on the host into the lamp\'s file while no session runs'() {
         reportInfo """
             A program built on oillamp with a settings page for this, such as the desktop app
-            Genies, writes the user's choices into the lamp's own
-            `oillamp.toml` with `LampDirectory.hostAccess`, so the file stays what decides. Only
-            `enabled` and `requirements` under `[host_access]` change; the rest of the file, the
-            user's comments too, stays as it was. The requirements are free text: Genies puts the
-            JSON its page builds there, and the checker reads it as it would any words.
+            Genies, writes the user's choices into the lamp's own `oillamp.toml` with
+            `LampDirectory.hostAccess(Lamp.HostAccess)`, so the file stays what decides. It writes
+            the five keys under `[host_access]` that a person decides on: `may`, `guards`,
+            `read_allowlist`, `change_allowlist` and `checker_instructions`. A key the table has is
+            replaced where it is, and one it lacks goes right under the table's header; the rest
+            of the file, the user's comments too, stays as it was. The checker instructions are
+            free text: Genies puts the JSON its page builds there, and the checker reads it as it
+            would any words.
 
             A running session read the file as it started and would not see a change, so
             `hostAccess` throws `LampFailedException` with the status `LAMP_BUSY` while a session
-            runs. It also refuses to turn host access on with no requirements, as `oillamp.toml`
-            itself would be refused.
+            runs. It also refuses a checker with no instructions, as `oillamp.toml` itself would be
+            refused.
         """
-        given: 'a lamp with host access off, and a comment of the user\'s'
+        given: 'a lamp with host access off, two of the five keys, and a comment of the user\'s'
             Files.writeString(host.home.resolve('Documents/today.md'), 'today')
             host.givenConfig(host.lampPath(), """\
                 schema_version = 1
                 # my own note
                 [host_access]
-                enabled = false
-                requirements = \'\'\'
+                may = "nothing"
+                checker_instructions = \'\'\'
                 \'\'\'
-                roots = ["${host.home.resolve('Documents')}"]
                 """.stripIndent())
             var settings = Lamp.at(host.lampPath()).launchedBy(host.launcher)
-            var rules = '{\n  "may_read": ["~/Documents"],\n  "never": "anything with \'\'\' in it"\n}'
+            var rules = '{\n  "may_read": ["~/Documents"]\n}'
+            var wanted = new Lamp.HostAccess(LampHostAccess.MAY_READ, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String, '~/Documents'), Tuple.of(String), rules)
             start()
 
         when: 'the program writes while a session runs'
-            settings.hostAccess(true, rules)
+            settings.hostAccess(wanted)
 
         then: 'the lamp refuses, and the file is as it was'
             var busy = thrown(LampFailedException)
             busy.status() == dev.lamp.LampExitStatus.LAMP_BUSY
-            !settings.hostAccess().enabled()
+            settings.hostAccess().may() == LampHostAccess.NOTHING
 
         when: 'the session ends, and the program writes again'
             lamp.close()
             lamp = null
-            var written = settings.hostAccess(true, rules)
+            var written = settings.hostAccess(wanted)
 
-        then: 'the file says it, and nothing else in it changed'
-            written == new Lamp.HostAccess(true, rules, LampHostCommandApproval.OFF, false)
+        then: 'reading the settings back gives what was written'
+            written == wanted
             settings.hostAccess() == written
-            var file = Files.readString(host.lampPath().resolve('oillamp.toml'))
-            file.startsWith('schema_version = 1\n# my own note\n[host_access]\nenabled = true\n')
-            file.contains("roots = [\"${host.home.resolve('Documents')}\"]")
+
+        and: 'the two keys the table had changed in their places, and the three it lacked are right under the header'
+            Files.readString(host.lampPath().resolve('oillamp.toml')) == """\
+                schema_version = 1
+                # my own note
+                [host_access]
+                guards = "allowlists_checker"
+                read_allowlist = ["~/Documents"]
+                change_allowlist = []
+                may = "read"
+                checker_instructions = \'\'\'
+                {
+                  "may_read": ["~/Documents"]
+                }\'\'\'
+                """.stripIndent()
 
         when: 'a new session starts, and the agent reads a document'
             start()
@@ -900,28 +1029,30 @@ class Reaching_The_Host_Spec extends Specification {
 
         then: 'the checker judged it against what the program wrote'
             !reply.isError
-            StandInChecker.judged(checker.checked.first()).requirements.text == rules
+            StandInChecker.judged(checker.checked.first()).checker_instructions.text == rules
 
-        when: 'the session ends, and the program turns host access on with no requirements'
+        when: 'the session ends, and the program asks for a checker with no instructions'
             lamp.close()
             lamp = null
-            settings.hostAccess(true, '')
+            settings.hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String, '~/Documents'), Tuple.of(String), ''))
 
-        then: 'the lamp refuses that as it would refuse the file, and the file keeps its rules'
+        then: 'the lamp refuses that as it would refuse the file, and the file keeps its instructions'
             thrown(LampFailedException)
             settings.hostAccess() == written
     }
 
-    def 'Oillamp writes new requirements over old ones that held a line like a table header, and leaves the other tables as they were'() {
+    def 'Oillamp writes new checker instructions over old ones that held a line like a table header, and leaves the other tables as they were'() {
         reportInfo """
-            `LampDirectory.hostAccess(enabled, requirements)`, which runs `oillamp host-access`,
-            changes two lines of the lamp's `oillamp.toml`: `enabled` and `requirements` under
-            `[host_access]`. The requirements are free text over several lines, so the old text
-            may hold a line that looks like a table header, such as `[schedule]`. Oillamp replaces
-            the whole old value, that line with it, and nothing else: the other tables, the
-            user's comments and the line order stay as they were.
+            `LampDirectory.hostAccess(Lamp.HostAccess)`, which runs `oillamp host-access`, writes
+            the five keys under `[host_access]` that a person decides on. The checker instructions
+            are free text over several lines, so the old text may hold a line that looks like a
+            table header, such as `[schedule]`. Oillamp replaces the whole old value, that line
+            with it, and nothing else: here only `may` and `checker_instructions` change, since
+            the other three already say what is written, and the other tables, the user's
+            comments and the line order stay as they were.
         """
-        given: 'a lamp whose file\'s old requirements hold a line "[schedule]", between two tables of the user'
+        given: 'a lamp whose file\'s old checker instructions hold a line "[schedule]", between two tables of the user'
             aLampThatHasRun(host.lampPath())
             host.givenConfig(host.lampPath(), '''\
                 schema_version = 1
@@ -930,23 +1061,27 @@ class Reaching_The_Host_Spec extends Specification {
                 width = 2560
 
                 [host_access]
-                enabled = false
+                may = "nothing"
+                guards = "allowlists_checker"
                 # what the checker judges by
-                requirements = \'\'\'
+                checker_instructions = \'\'\'
                 old rules
                 [schedule]
                 \'\'\'
-                roots = ["/home/me/Documents"]
+                read_allowlist = ["/home/me/Documents"]
+                change_allowlist = []
 
                 # my schedule
                 [schedule]
                 enabled = true
                 '''.stripIndent())
 
-        when: 'a program turns host access on with new requirements'
-            Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(true, '{"may_read": ["~/Documents"]}')
+        when: 'a program lets the agent read, with new checker instructions'
+            Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ,
+                    LampHostAccessGuards.ALLOWLISTS_CHECKER, Tuple.of(String, '/home/me/Documents'), Tuple.of(String),
+                    '{"may_read": ["~/Documents"]}'))
 
-        then: 'only the two values changed, the old line "[schedule]" went with the old text'
+        then: 'only the two values changed, and the old line "[schedule]" went with the old text'
             Files.readString(host.lampPath().resolve('oillamp.toml')) == '''\
                 schema_version = 1
                 # my display
@@ -954,11 +1089,13 @@ class Reaching_The_Host_Spec extends Specification {
                 width = 2560
 
                 [host_access]
-                enabled = true
+                may = "read"
+                guards = "allowlists_checker"
                 # what the checker judges by
-                requirements = \'\'\'
+                checker_instructions = \'\'\'
                 {"may_read": ["~/Documents"]}\'\'\'
-                roots = ["/home/me/Documents"]
+                read_allowlist = ["/home/me/Documents"]
+                change_allowlist = []
 
                 # my schedule
                 [schedule]
@@ -966,60 +1103,66 @@ class Reaching_The_Host_Spec extends Specification {
                 '''.stripIndent()
     }
 
-    def 'A lamp file without [host_access] gets the table, and one without the switch gets it under the header'() {
+    def 'A lamp file without [host_access] gets the table, and a key the table lacks goes right under its header'() {
         reportInfo """
-            A new lamp's file may have no `[host_access]` table at all. Writing the switch adds the
-            table at the end, with `enabled` and the `requirements`. A file that has the table but
-            not the key, here one whose requirements a person wrote by hand, gets the key right
-            under the header, as `oillamp host-access <dir> on` writes it, and keeps the rest.
+            A lamp's file may have no `[host_access]` table at all. Writing the settings with
+            `LampDirectory.hostAccess(Lamp.HostAccess)` adds the table at the end, with the five
+            keys a person decides on. A file that has the table but not the key being written,
+            here one whose checker instructions a person wrote by hand, gets the key right under
+            the header when a person runs `oillamp host-access <dir> --may read`, and keeps the
+            rest.
         """
         given: 'a lamp whose file has no such table'
             aLampThatHasRun(host.lampPath())
             host.givenConfig(host.lampPath(), 'schema_version = 1\n')
 
-        when: 'a program writes the switch, off, with requirements'
-            Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(false, 'x')
+        when: 'a program writes the settings: nothing, the usual guards, `~` in both allowlists, and instructions'
+            Lamp.at(host.lampPath()).launchedBy(host.launcher).hostAccess(new Lamp.HostAccess(LampHostAccess.NOTHING,
+                    LampHostAccessGuards.ALLOWLISTS_CHECKER, Tuple.of(String, '~'), Tuple.of(String, '~'), 'x'))
 
-        then: 'the table is at the end'
+        then: 'the table is at the end, with the five keys'
             Files.readString(host.lampPath().resolve('oillamp.toml')) ==
-                    'schema_version = 1\n\n[host_access]\nenabled = false\nrequirements = \'\'\'\nx\'\'\'\n'
+                    'schema_version = 1\n\n[host_access]\nmay = "nothing"\nguards = "allowlists_checker"\n' +
+                    'read_allowlist = ["~"]\nchange_allowlist = ["~"]\nchecker_instructions = \'\'\'\nx\'\'\'\n'
 
-        when: 'a lamp file has the table and its requirements, but no switch, and a person turns it on'
+        when: 'a lamp file has the table and its checker instructions, but no `may`, and a person lets the agent read'
             var other = host.lampPath('other')
             aLampThatHasRun(other)
-            host.givenConfig(other, 'schema_version = 1\n[host_access]\nrequirements = "x"\nroots = []\n')
-            var on = host.oillamp.run('host-access', other.toString(), 'on')
+            host.givenConfig(other, 'schema_version = 1\n[host_access]\nchecker_instructions = "x"\nread_allowlist = []\n')
+            var read = host.oillamp.run('host-access', other.toString(), '--may', 'read')
 
-        then: 'the switch is right under the header'
-            on.succeeded()
+        then: '`may` is right under the header'
+            read.succeeded()
             Files.readString(other.resolve('oillamp.toml')) ==
-                    'schema_version = 1\n[host_access]\nenabled = true\nrequirements = "x"\nroots = []\n'
+                    'schema_version = 1\n[host_access]\nmay = "read"\nchecker_instructions = "x"\nread_allowlist = []\n'
     }
 
-    def 'Requirements written into the lamp file come back exactly: #what'() {
+    def 'Checker instructions written into the lamp file come back exactly: #what'() {
         reportInfo """
-            The requirements are the user's own words, and oillamp writes them into `oillamp.toml`
-            as a TOML string over several lines. Whatever they hold, reading the file back gives
-            the same text: empty, JSON as Genies writes it, three quotes, a quote at the end, tabs
-            and carriage returns, backslashes and double quotes. Writing them over themselves
-            gives them again.
+            The checker instructions are the user's own words, and oillamp writes them into
+            `oillamp.toml` as a TOML string over several lines. Whatever they hold, reading the
+            file back gives the same text: empty, JSON as Genies writes it, three quotes, a quote
+            at the end, tabs and carriage returns, backslashes and double quotes. Writing them
+            over themselves gives them again.
         """
         given: 'a lamp whose file has no such table'
             aLampThatHasRun(host.lampPath())
             host.givenConfig(host.lampPath(), 'schema_version = 1\n')
             var lamp = Lamp.at(host.lampPath()).launchedBy(host.launcher)
+            var settings = new Lamp.HostAccess(LampHostAccess.NOTHING, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String, '~'), Tuple.of(String, '~'), instructions)
 
-        when: 'a program writes the requirements, twice'
-            lamp.hostAccess(false, requirements)
-            var first = lamp.hostAccess().requirements()
-            lamp.hostAccess(false, requirements)
+        when: 'a program writes the checker instructions, twice'
+            lamp.hostAccess(settings)
+            var first = lamp.hostAccess().checkerInstructions()
+            lamp.hostAccess(settings)
 
-        then: 'both times the file gives back the requirements as they were written'
-            first == requirements
-            lamp.hostAccess().requirements() == requirements
+        then: 'both times the file gives back the instructions as they were written'
+            first == instructions
+            lamp.hostAccess().checkerInstructions() == instructions
 
         where:
-            what                        | requirements
+            what                        | instructions
             'empty'                     | ''
             'JSON'                      | '{\n  "may_read": ["~/Documents"],\n  "anything_else": "Don\'t touch my taxes."\n}\n'
             'three quotes'              | 'Three quotes \'\'\' are fine too.'
@@ -1028,103 +1171,83 @@ class Reaching_The_Host_Spec extends Specification {
             'backslash and quotes'      | 'Back\\slash and "quotes".'
     }
 
-    def 'A program reads and writes when the person is asked, besides the checker, and the comments in the file stay'() {
+    def 'A program reads and writes what the agent may do and what guards it, and in a new lamp\'s file each value keeps its column and its comment'() {
         reportInfo """
-            Let's consider what the checker leaves to the person. The checker is the fast path: it
-            judges every request against the requirements, and asks nobody. The person is the slow
-            path, and only in two cases, each after the checker already said yes:
+            Let's consider a program with a settings page for host access, such as Genies, and the
+            five values a person decides on in `[host_access]`, as `Lamp.HostAccess` holds them:
 
-            | key in `[host_access]` | `Lamp.HostAccess`      | the person is asked about                          |
-            |------------------------|------------------------|----------------------------------------------------|
-            | `commands`             | `commands()`           | each shell command, when it is `ASK`               |
-            | `ask_the_user`         | `askTheUser()`         | a request that reaches past the lamp's `roots`     |
+            | key in `[host_access]`  | `Lamp.HostAccess`         | what it says                                                    |
+            |-------------------------|---------------------------|-----------------------------------------------------------------|
+            | `may`                   | `may()`                   | what the agent may do: nothing, read, read and change, or also run commands |
+            | `guards`                | `guards()`                | what each request passes first: the allowlists, then the checker, then the person |
+            | `read_allowlist`        | `readAllowlist()`         | the folders it may read                                         |
+            | `change_allowlist`      | `changeAllowlist()`       | the folders it may read and change, and run commands in         |
+            | `checker_instructions`  | `checkerInstructions()`   | what the checker judges each request against                    |
 
-            Why two settings, and not one? `commands` decides whether the agent may run shell
-            commands on the host at all, and who approves them: nobody (`OFF`, there is no such
-            tool), the checker and then the person (`ASK`), or the checker alone (`CHECKER`). A
-            command names no path oillamp could check before it runs, so this is the most
-            dangerous tier there is, and it is closed unless the user opens it. `ask_the_user` is
-            about the file tools instead: the roots are a fence the checker cannot widen, and with
-            `ask_the_user` on, a request past them goes to the person rather than being refused.
-
-            A program with a settings page, such as Genies, reads all four values the person
-            decides on with `LampDirectory.hostAccess()`, and writes them with
-            `LampDirectory.hostAccess(Lamp.HostAccess)`. Like the older
-            `hostAccess(enabled, requirements)`, which writes only the first two and leaves the
-            others as they are, it changes those lines and nothing else: in a file oillamp wrote,
-            each value keeps its place in the column and the comment that explains it.
+            A new lamp lets the agent do nothing on the host (`LampHostAccess.NOTHING`), with the
+            allowlists and the checker as its guards for the day it does, and `~`, the user's
+            home, in both allowlists. The program reads the values with
+            `LampDirectory.hostAccess()`, and writes them with
+            `LampDirectory.hostAccess(Lamp.HostAccess)`, which changes those lines and nothing
+            else: in the file oillamp wrote for the new lamp, each value keeps its place in the
+            column and the comment that explains it.
         """
-        given: 'a lamp whose file has the [host_access] table as oillamp writes it for a new lamp'
-            aLampThatHasRun(host.lampPath())
-            host.givenConfig(host.lampPath(), """\
-                schema_version = 1
-
-                [host_access]
-                enabled = false
-                requirements = \'\'\'
-                \'\'\'
-                roots             = ["${host.home.resolve('Documents')}"]
-                commands          = "off"    # shell commands here: "off", "ask" (the checker, then you,
-                                             # for every one) or "checker" (the checker alone)
-                allow_additive    = true     # writing and copying files out, opening pages, notifications
-                ask_the_user      = false    # ask you, rather than refuse, a request outside roots
-                """.stripIndent())
+        given: 'a new lamp, whose `oillamp.toml` oillamp wrote, and which has run once'
+            start()
+            lamp.close()
+            lamp = null
             var settings = Lamp.at(host.lampPath()).launchedBy(host.launcher)
 
-        expect: 'a new lamp asks the person nothing: no commands at all, and no way past the roots'
-            settings.hostAccess() == new Lamp.HostAccess(false, '', LampHostCommandApproval.OFF, false)
+        expect: 'the new lamp lets the agent do nothing, behind the allowlists and the checker, with `~` in both allowlists'
+            settings.hostAccess() == new Lamp.HostAccess(LampHostAccess.NOTHING, LampHostAccessGuards.ALLOWLISTS_CHECKER,
+                    Tuple.of(String, '~'), Tuple.of(String, '~'), '')
 
-        when: 'the program lets the agent run commands, each approved by the checker and then the person, and lets the person decide about the roots'
-            var written = settings.hostAccess(new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true))
+        when: 'the program lets the agent run commands, asks the person too, and names other folders'
+            var wanted = new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE_RUN, LampHostAccessGuards.ALLOWLISTS_CHECKER_USER,
+                    Tuple.of(String, '~/Documents', '/srv/data'), Tuple.of(String, '~/Documents/drafts'), INSTRUCTIONS)
+            var written = settings.hostAccess(wanted)
 
         then: 'reading the file back gives what was written'
-            written == new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true)
+            written == wanted
             settings.hostAccess() == written
 
-        and: 'each value changed where it was, and kept its column and its comment'
+        and: 'each value changed where it was, and kept its column and its comment; a list too long for the column pushes its comment along'
             var file = Files.readString(host.lampPath().resolve('oillamp.toml'))
-            file.contains('commands          = "ask"    # shell commands here: "off", "ask" (the checker, then you,\n'
-                        + '                             # for every one) or "checker" (the checker alone)\n')
-            file.contains('ask_the_user      = true     # ask you, rather than refuse, a request outside roots\n')
-            file.contains('allow_additive    = true     # writing and copying files out, opening pages, notifications\n')
-
-        when: 'later, the program writes only the switch and the requirements, the older way'
-            var switchedOff = settings.hostAccess(false, REQUIREMENTS)
-
-        then: 'host access is off, and the person\'s two choices are still in the file for the day it is on again'
-            switchedOff == new Lamp.HostAccess(false, REQUIREMENTS, LampHostCommandApproval.ASK, true)
+            file.contains('may                  = "read_change_run"           # what the agent may do here: "nothing",\n'
+                        + ' ' * 51 + '# "read", "read_change" (also write files,\n')
+            file.contains('guards               = "allowlists_checker_user"   # what each request passes first:\n')
+            file.contains('read_allowlist       = ["~/Documents", "/srv/data"] # folders it may read: "~", "~/…" or\n')
+            file.contains('change_allowlist     = ["~/Documents/drafts"]      # folders it may read and change, and run\n')
     }
 
-    def 'What a program wrote is what the next session does: it asks the person about a command and about a read past the roots'() {
+    def 'What a program wrote is what the next session does: it asks the person about a command and about a read outside the allowlists'() {
         reportInfo """
-            Let's consider a program that turned both kinds of asking on through the Lamp API, and
-            then starts the lamp. Settings in a file are only worth something if a session acts on
-            them, so let's follow two requests through it.
+            Let's consider a program that lets the agent run commands and puts the person last
+            among the guards through the Lamp API, and then starts the lamp. Settings in a file
+            are only worth something if a session acts on them, so let's follow two requests
+            through it.
 
             First the agent wants to run `rm -rf build` on the host. The checker allows it, but
-            with `commands` at `ASK` that is not enough: the session sends a `HostAccessAsked`
-            event that names the command and where it would run, and waits. The person says no,
-            so the command never runs and the agent hears why.
+            with `guards` at `ALLOWLISTS_CHECKER_USER` that is not enough: the session sends a
+            `HostAccessAsked` event that names the command and where it would run, and waits. The
+            person says no, so the command never runs and the agent hears why.
 
-            Then the agent wants to read a note in `~/Notes`, which is not under the lamp's roots.
-            Without `ask_the_user` that would be refused before the checker even hears of it. With
-            it, the checker judges it, and the person is asked. This time they say yes, and the
-            agent gets the note.
+            Then the agent wants to read a note in `~/Notes`, which is in neither allowlist.
+            Without the person among the guards that would be refused before the checker even
+            hears of it. With them, the checker judges it, and the person is asked. This time they
+            say yes, and the agent gets the note.
 
             Both answers go back the same way, with `Lamp.decidePermission`, naming the question
             by the words the event gave.
         """
-        given: 'a lamp whose program let the person decide about commands and about the roots'
+        given: 'a lamp whose program let the agent run commands in its Documents, with the person as the last guard'
             Files.createDirectories(host.home.resolve('Notes'))
             Files.writeString(host.home.resolve('Notes/today.md'), 'Call the bank.')
             aLampThatHasRun(host.lampPath())
-            host.givenConfig(host.lampPath(), """\
-                schema_version = 1
-                [host_access]
-                roots = ["${host.home.resolve('Documents')}"]
-                """.stripIndent())
             Lamp.at(host.lampPath()).launchedBy(host.launcher)
-                .hostAccess(new Lamp.HostAccess(true, REQUIREMENTS, LampHostCommandApproval.ASK, true))
+                .hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE_RUN, LampHostAccessGuards.ALLOWLISTS_CHECKER_USER,
+                        Tuple.of(String, host.home.resolve('Documents').toString()),
+                        Tuple.of(String, host.home.resolve('Documents').toString()), INSTRUCTIONS))
             checker.verdict = '{"decision":"allow","risk":"executing","reason":"The user asked for a clean build."}'
             start()
 
@@ -1139,52 +1262,54 @@ class Reaching_The_Host_Spec extends Specification {
             refused.isError
             McpClient.text(refused).contains('said no')
 
-        when: 'the agent reads a note past the roots, and the person says yes'
+        when: 'the agent reads a note outside the allowlists, and the person says yes'
             checker.verdict = StandInChecker.ALLOW_PASSIVE
             var read = CompletableFuture.supplyAsync { ask('host_read_file', [path: '~/Notes/today.md']) }
             var askedAboutTheNote = waitFor(LampEvent.HostAccessAsked) { it.tool() == 'host_read_file' }
             answer(askedAboutTheNote.what(), true)
 
-        then: 'the person was told the note lies outside the roots, and the agent got it'
-            askedAboutTheNote.what().contains('outside the lamp\'s roots')
+        then: 'the person was told the note lies outside the allowlists, and the agent got it'
+            askedAboutTheNote.what().contains('outside the lamp\'s allowlists')
             var allowed = read.get(30, TimeUnit.SECONDS)
             !allowed.isError
             McpClient.text(allowed).contains('Call the bank.')
     }
 
-    def 'Oillamp refuses to write `--commands #commands --ask-the-user #askTheUser`, and the file stays as it was'() {
+    def 'Oillamp refuses to write `#option #value`, and the file stays as it was'() {
         reportInfo """
-            The Lamp API can only name values that exist: `LampHostCommandApproval` has three, and
-            `askTheUser` is a boolean. A person at the terminal can type anything, though, so
-            `oillamp host-access` checks each word before it touches the file. A word it does not
-            know is refused with the words it would take, because a typo must never open the
-            executing tier, nor close it by surprise.
+            The Lamp API can only name values that exist: `LampHostAccess` and `LampHostAccessGuards` are
+            enums. A person at the terminal can type anything, though, so `oillamp host-access`
+            checks each word before it touches the file. A word it does not know is refused with
+            the words it would take, because a typo must never open a tier, nor take a guard away.
+            A folder for an allowlist must be `~`, start with `~/`, or be absolute: a relative
+            folder would mean whatever directory oillamp happened to start in.
         """
-        given: 'a lamp whose file runs commands only after the person said yes'
+        given: 'a lamp whose agent may read'
             aLampThatHasRun(host.lampPath())
-            host.givenConfig(host.lampPath(), 'schema_version = 1\n[host_access]\ncommands = "ask"\n')
+            host.givenConfig(host.lampPath(), 'schema_version = 1\n[host_access]\nmay = "read"\nchecker_instructions = "x"\n')
             var before = Files.readString(host.lampPath().resolve('oillamp.toml'))
 
-        when: 'a person types the options with a word oillamp does not take'
-            var typed = host.oillamp.run('host-access', host.lampPath().toString(),
-                    '--commands', commands, '--ask-the-user', askTheUser)
+        when: 'a person types the option with a value oillamp does not take'
+            var typed = host.oillamp.run('host-access', host.lampPath().toString(), option, value)
 
-        then: 'oillamp says which words it takes, and the file is as it was'
+        then: 'oillamp says what it takes, and the file is as it was'
             !typed.succeeded()
             typed.errors().any { it.whatHappened().contains(expected) }
             Files.readString(host.lampPath().resolve('oillamp.toml')) == before
 
         where:
-            commands     | askTheUser || expected
-            'always'     | 'on'       || 'expected off, ask (the checker, then you, for every command) or checker (the checker alone)'
-            'ASK'        | 'on'       || 'expected off, ask (the checker, then you, for every command) or checker (the checker alone)'
-            'ask'        | 'yes'      || 'expected on or off'
+            option               | value                || expected
+            '--may'              | 'everything'         || 'expected nothing, read, read_change'
+            '--may'              | 'READ'               || 'expected nothing, read, read_change'
+            '--guards'           | 'checker'            || 'expected allowlists, allowlists_checker'
+            '--read-allowlist'   | 'Documents'          || 'expected folders separated by colons'
+            '--change-allowlist' | '~/Documents:build' || 'expected folders separated by colons'
     }
 
     def 'The checker judges with the model the agent answers with, and follows it when it changes'() {
         reportInfo """
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. The user picked one model for the lamp,
+            checker instructions before oillamp carries it out. The user picked one model for the lamp,
             and that is the model they trust with it. So the checker judges a request with the
             model the agent answers with: the one the program built on oillamp started the lamp
             with, and, once the program changes it, the new one, from the next request on. A lamp whose file
@@ -1192,7 +1317,7 @@ class Reaching_The_Host_Spec extends Specification {
         """
         given: 'a lamp that lets the agent read its Documents, started with the agent\'s model'
             Files.writeString(host.home.resolve('Documents/today.md'), 'today')
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+            givenHostAccess(folders: [host.home.resolve('Documents')])
             start()
 
         when: 'the agent reads a document'
@@ -1216,7 +1341,7 @@ class Reaching_The_Host_Spec extends Specification {
             lamp.close()
             lamp = null
             checker.checked.clear()
-            givenHostAccess(roots: [host.home.resolve('Documents')], checker: 'azure/gpt-6.1-guard')
+            givenHostAccess(folders: [host.home.resolve('Documents')], checker: 'azure/gpt-6.1-guard')
             start()
             ask('host_read_file', [path: '~/Documents/today.md'])
             lamp.useModel('mistral/mistral-large-3')
@@ -1226,16 +1351,17 @@ class Reaching_The_Host_Spec extends Specification {
             checker.checked.collect { StandInChecker.modelOf(it) } == ['azure/gpt-6.1-guard', 'azure/gpt-6.1-guard']
     }
 
-    def 'Oillamp refuses to start a lamp with host access on but no model for the checker'() {
+    def 'Oillamp refuses to start a lamp with a checker among its guards but no model for the checker'() {
         reportInfo """
             The checker is a separate model call that judges each request against the user's
-            requirements before oillamp carries it out. A lamp whose file turns host access on and
-            names no `checker_model`, started without a model for the agent, has no model for the
-            checker. Oillamp reports `OIL-HOSTACCESS-015` rather than start a session in which no
-            request to the host could ever be allowed.
+            checker instructions before oillamp carries it out. A lamp whose file turns host
+            access on with the checker among its `guards`, and names no `checker_model`, started
+            without a model for the agent, has no model for the checker. Oillamp reports
+            `OIL-HOSTACCESS-015` rather than start a session in which no request to the host could
+            ever be allowed.
         """
-        given: 'a lamp with host access on and no checker_model'
-            givenHostAccess(roots: [host.home.resolve('Documents')])
+        given: 'a lamp with host access on, the checker among its guards, and no checker_model'
+            givenHostAccess(folders: [host.home.resolve('Documents')])
 
         when: 'a program starts it without a model for the agent'
             lamp = Lamp.at(host.lampPath()).onEvent { events << it }
@@ -1250,19 +1376,26 @@ class Reaching_The_Host_Spec extends Specification {
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Host access as the lamp's file sets it. {@code folders} are both allowlists, {@code read}
+     * and {@code change} each one of them; a list not given is {@code ["~"]}. The agent may read
+     * and change unless {@code may} says otherwise, behind the allowlists and the checker unless
+     * {@code guards} says otherwise.
+     */
     private void givenHostAccess(Map options, Path lampDir = host.lampPath()) {
-        String roots = (options.roots ?: []).collect { "\"$it\"" }.join(', ')
+        Closure<String> list = { List folders -> '[' + folders.collect { "\"$it\"" }.join(', ') + ']' }
+        List both = options.containsKey('folders') ? options.folders : ['~']
         host.givenConfig(lampDir, """
             schema_version = 1
 
             [host_access]
-            enabled = true
+            may = "${options.may ?: 'read_change'}"
+            guards = "${options.guards ?: 'allowlists_checker'}"
             ${options.checker ? "checker_model = \"${options.checker}\"" : ''}
-            roots = [${roots}]
-            allow_additive = ${options.allowAdditive ?: options.allowAdditive == null}
-            ask_the_user = ${options.askTheUser ?: false}
-            requirements = '''
-            ${options.requirements ?: REQUIREMENTS}
+            read_allowlist = ${list(options.containsKey('read') ? options.read : both)}
+            change_allowlist = ${list(options.containsKey('change') ? options.change : both)}
+            checker_instructions = '''
+            ${options.instructions ?: INSTRUCTIONS}
             '''
         """.stripIndent())
     }

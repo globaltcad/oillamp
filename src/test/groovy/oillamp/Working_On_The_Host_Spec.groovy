@@ -21,27 +21,30 @@ import java.util.concurrent.TimeUnit
 @Narrative('''
 An agent in a lamp can be let work on the user's own computer much as pi would if it ran there:
 read a file, edit it, and run a command such as a build or a test, with the output coming back.
-Each of those is one tool call, and oillamp judges every call before it happens. A separate
-model call, the checker, reads the user's requirements, the instruction of the run the agent is
-in, and the call itself, and allows it or refuses it.
+Each of those is one tool call, and oillamp judges every call before it happens. The path it
+names must be in the lamp's allowlists; then a separate model call, the checker, reads the
+user's checker instructions, the instruction of the run the agent is in, and the call itself, and
+allows it or refuses it.
 
 ```
  pi in the sandbox                         oillamp on the host
  ─────────────────                         ───────────────────
  mcp__oillamp__host_edit_file  ──MCP──▶   the path checks, the checker  ──▶  the file, replaced
  mcp__oillamp__host_bash       ──MCP──▶   the cwd checks, the checker,  ──▶  env -u <secrets>
-                                          the person if the lamp asks         bash -c '<command>'
+                                          the person if the guards say        bash -c '<command>'
                                ◀────────  exit status, stdout, stderr
 ```
 
-Running commands is the executing tier, and it is off unless the lamp's `oillamp.toml` says
-otherwise with `host_access.commands`:
+Running commands is the executing tier, and it is off unless the lamp's `oillamp.toml` sets
+`host_access.may = "read_change_run"`. Who allows a command then is `host_access.guards`, and a
+command's directory must be in `host_access.change_allowlist`:
 
-| `commands` | `host_bash` |
-|---|---|
-| `"off"` (the default) | not offered; a call is refused before the checker is asked |
-| `"ask"` | the checker judges, then the person is asked before each command |
-| `"checker"` | the checker's allow is enough |
+| `may` | `guards` | `host_bash` |
+|---|---|---|
+| `"read_change"` or less | any | not offered; a call is refused before the checker is asked |
+| `"read_change_run"` | `"allowlists_checker_user"` | the checker judges, then the person is asked before each command |
+| `"read_change_run"` | `"allowlists_checker"` | the checker's allow is enough |
+| `"read_change_run"` | `"allowlists"` | nothing but the allowlists: it runs unchecked, and oillamp warns loudly |
 
 A command is judged at the moment it is asked for, as a whole. Once allowed, it runs as the
 user, and what it touches from its working directory is not checked again, file by file. That
@@ -61,7 +64,7 @@ class Working_On_The_Host_Spec extends Specification {
     static final String MODEL = 'azure/gpt-6.1-sol'
     /** The key a program built on oillamp gives the lamp, which oillamp keeps in `OILLAMP_MODEL_KEY`. */
     static final String KEY = 'sk-0123456789'
-    static final String REQUIREMENTS = 'You may work in ~/project: read, change and build it. Nothing else.'
+    static final String INSTRUCTIONS = 'You may work in ~/project: read, change and build it. Nothing else.'
     static final String ALLOW_ADDITIVE = '{"decision":"allow","risk":"additive","reason":"An edit in the project."}'
     static final String ALLOW_EXECUTING = '{"decision":"allow","risk":"executing","reason":"A build in the project."}'
 
@@ -89,7 +92,8 @@ class Working_On_The_Host_Spec extends Specification {
             Let's consider an agent asked to fix a typo in a file in the user's project. It calls
             `host_edit_file` with the file's `path`, the `old_text` as it is in the file, and the
             `new_text` it becomes. Editing is in the additive tier, like writing a file, so it is
-            open while `host_access.allow_additive` is true, and the checker judges each edit.
+            open while `host_access.may` is `"read_change"` or more, and the checker judges each
+            edit.
 
             The old text must occur in the file exactly once. When it does not occur at all, or
             occurs twice, the file stays as it was and the agent is told which: a replacement in
@@ -98,7 +102,7 @@ class Working_On_The_Host_Spec extends Specification {
         """
         given: 'a project file on the host with a typo, and a line that occurs twice'
             var readme = Files.writeString(project.resolve('README.md'), 'Teh build.\nSee below.\nSee below.\n')
-            givenHostAccess(commands: 'off')
+            givenHostAccess(may: 'read_change')
             checker.verdict = ALLOW_ADDITIVE
             start()
 
@@ -138,7 +142,7 @@ class Working_On_The_Host_Spec extends Specification {
         given: 'a file `.env` in the project that only the user may read and write'
             var secrets = Files.writeString(project.resolve('.env'), 'TOKEN=old\nMODE=test\n')
             Files.setPosixFilePermissions(secrets, PosixFilePermissions.fromString('rw-------'))
-            givenHostAccess(commands: 'off')
+            givenHostAccess(may: 'read_change')
             checker.verdict = ALLOW_ADDITIVE
             start()
 
@@ -159,10 +163,11 @@ class Working_On_The_Host_Spec extends Specification {
             PosixFilePermissions.toString(Files.getPosixFilePermissions(secrets)) == 'rw-------'
     }
 
-    def 'With `commands = "checker"`, the agent runs a command in a project on the host and gets its exit status and output'() {
+    def 'With the checker as the last guard, the agent runs a command in a project on the host and gets its exit status and output'() {
         reportInfo """
-            Let's consider a lamp whose `oillamp.toml` sets `host_access.commands = "checker"`: the
-            user lets the agent run commands on their computer, judged by the checker alone. The
+            Let's consider a lamp whose `oillamp.toml` sets `host_access.may = "read_change_run"`
+            and `host_access.guards = "allowlists_checker"`: the user lets the agent run commands
+            on their computer, in the folders of `change_allowlist`, judged by the checker alone. The
             agent calls `host_bash` with the `command`, as it would type it into bash, and `cwd`,
             the directory it runs in. Oillamp runs it there with `bash -c`, as the user, and hands
             back the exit status, then what the command printed to stdout and to stderr.
@@ -176,7 +181,7 @@ class Working_On_The_Host_Spec extends Specification {
             timeout.
         """
         given: 'a lamp that lets the checker alone allow commands'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -197,16 +202,17 @@ class Working_On_The_Host_Spec extends Specification {
 
     def 'A command the checker refuses never runs'() {
         reportInfo """
-            Let's consider a lamp whose `oillamp.toml` sets `host_access.commands = "checker"`, so
-            that a command needs only the checker's allow. The checker is a separate model call
-            that judges each request against the user's requirements before oillamp carries it
+            Let's consider a lamp whose `oillamp.toml` sets `host_access.may = "read_change_run"`
+            and `host_access.guards = "allowlists_checker"`, so that a command needs only the
+            checker's allow. The checker is a separate model call that judges each request
+            against the user's checker instructions before oillamp carries it
             out. Here it refuses a command. The session reports the refusal as a
             `HostAccessDecided` event, and oillamp does not start bash at all, so the file the
             command would have made does not exist. The agent gets the checker's reason as the
             tool's error: a result with MCP's `isError` set.
         """
         given: 'a lamp that lets the checker alone allow commands, and a checker that refuses'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = '{"decision":"deny","risk":"executing","reason":"Deleting files is not building."}'
             start()
 
@@ -224,17 +230,17 @@ class Working_On_The_Host_Spec extends Specification {
             !Files.exists(project.resolve('ran-anyway'))
     }
 
-    def 'With `commands = "ask"`, the person is asked before each command, and a no means it does not run'() {
+    def 'With the user as the last guard, the person is asked before each command, and a no means it does not run'() {
         reportInfo """
-            With `host_access.commands = "ask"` in the lamp's `oillamp.toml`, a command the checker
-            allows still waits for the person. The session sends a `HostAccessAsked` event whose
+            With `host_access.guards = "allowlists_checker_user"` in the lamp's `oillamp.toml`, a
+            command the checker allows still waits for the person. The session sends a `HostAccessAsked` event whose
             text holds the whole command and where it runs, and the program built on oillamp that
             holds the lamp gives the person's decision with `Lamp.decidePermission`. A yes runs the command. A no, or no answer
             within 60 seconds, refuses it, and nothing runs. Each command is asked about on its
             own: a yes for one is not a yes for the next.
         """
         given: 'a lamp that asks the person about every command'
-            givenHostAccess(commands: 'ask')
+            givenHostAccess(may: 'read_change_run', guards: 'allowlists_checker_user')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -263,15 +269,15 @@ class Working_On_The_Host_Spec extends Specification {
 
     def 'The person is asked one question at a time, and a second one meanwhile is declined at once'() {
         reportInfo """
-            With `host_access.commands = "ask"`, every command the checker allows waits for the
-            person. A running session shows the person one question at a time, as a
+            With `host_access.guards = "allowlists_checker_user"`, every command the checker allows
+            waits for the person. A running session shows the person one question at a time, as a
             `HostAccessAsked` event. A second command arriving while the first question is open
             is not left waiting out its minute for a person who never sees it: it is refused at
             once, with the reason, and its command does not run. Once the first question is
             answered, the next command is asked about as usual.
         """
         given: 'a lamp that asks the person about every command'
-            givenHostAccess(commands: 'ask')
+            givenHostAccess(may: 'read_change_run', guards: 'allowlists_checker_user')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -303,16 +309,17 @@ class Working_On_The_Host_Spec extends Specification {
             third?.get(30, TimeUnit.SECONDS)
     }
 
-    def 'With `commands = "off"`, the agent has no tool to run a command, and a call is refused without asking the checker'() {
+    def 'With `may = "read_change"`, the agent has no tool to run a command, and a call is refused without asking the checker'() {
         reportInfo """
-            `host_access.commands` is `"off"` unless the lamp's `oillamp.toml` says otherwise. Then
-            the session does not list `host_bash` when pi asks for its tools with `tools/list`, so
-            the model never sees it. A client that calls it anyway, by name, is refused by the
-            setting's name, before the checker is asked: whether commands may run at all is the
-            user's setting, not a model's opinion.
+            Let's consider a lamp whose `oillamp.toml` sets `host_access.may = "read_change"`: the
+            agent may read and change files on the host, but not run commands, which only
+            `"read_change_run"` allows. The session does not list `host_bash` when pi asks for its
+            tools with `tools/list`, so the model never sees it. A client that calls it anyway, by
+            name, is refused by the setting's name, before the checker is asked: whether commands
+            may run at all is the user's setting, not a model's opinion.
         """
-        given: 'a lamp with host access on and commands off'
-            givenHostAccess(commands: 'off')
+        given: 'a lamp whose agent may read and change, but not run commands'
+            givenHostAccess(may: 'read_change')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -327,9 +334,54 @@ class Working_On_The_Host_Spec extends Specification {
         then: '`host_bash` is not listed, the call is refused by the setting, and the checker was not asked'
             !(listed.result.tools as List<Map>)*.name.contains('host_bash')
             called.isError
-            McpClient.text(called).contains('host_access.commands is "off"')
+            McpClient.text(called).contains('host_access.may is "read_change"')
             checker.checked.isEmpty()
             !Files.exists(project.resolve('ran-anyway'))
+    }
+
+    def 'With the allowlists as the only guard, a command runs unchecked, and oillamp warns about it each time the setting is read'() {
+        reportInfo """
+            Let's consider a user who lets the agent run commands on their computer with no
+            checker and without being asked: `host_access.may = "read_change_run"` with
+            `host_access.guards = "allowlists"`. A command can do anything the user can, and the
+            allowlists only bound the folder it starts in, so nothing judges what it does. oillamp
+            allows this, because the computer is the user's, but it says so as loudly as it says
+            anything: with the warning `OIL-HOSTACCESS-016`, framed by a line of `!` above and
+            below, and red where the terminal shows colour. A program that starts the lamp gets
+            the warning as a `LampEvent.Warning`, and `oillamp config <dir> check` and
+            `oillamp host-access <dir>` print it whenever they read or write the setting.
+        """
+        given: 'a lamp whose only guards are the allowlists, and which lets the agent run commands'
+            givenHostAccess(may: 'read_change_run', guards: 'allowlists')
+
+        when: 'a program starts the lamp, and the agent runs a command in the project'
+            start()
+            var ran = useTool('host_bash', [command: 'touch unchecked', cwd: '~/project'])
+
+        then: 'the program was warned, and told that no model judges the agent\'s requests'
+            events.any { it instanceof LampEvent.Warning && it.problem().code().value() == 'OIL-HOSTACCESS-016' }
+            (events.find { it instanceof LampEvent.HostAccessEnabled } as LampEvent.HostAccessEnabled).checker() == Optional.empty()
+
+        and: 'the command ran, without the checker being asked and without the person being asked'
+            !ran.isError
+            Files.exists(project.resolve('unchecked'))
+            checker.checked.isEmpty()
+            !events.any { it instanceof LampEvent.HostAccessAsked }
+
+        when: 'the session ends, and a person checks the file, reads the settings, and writes them again'
+            lamp.close()
+            lamp = null
+            var checked = host.oillamp.run('config', host.lampPath().toString(), 'check')
+            var read = host.oillamp.run('host-access', host.lampPath().toString())
+            var written = host.oillamp.run('host-access', host.lampPath().toString(), '--guards', 'allowlists')
+
+        then: 'all three succeed, and each one warns with `OIL-HOSTACCESS-016`'
+            [checked, read, written].every { it.succeeded() && it.reported('OIL-HOSTACCESS-016') }
+
+        and: 'the console frames the warning, with its title in capitals, in red'
+            read.console().replaceAll('\u001B\\[[0-9;]*m', '').contains(
+                    '!' * 78 + '\n!!  OIL-HOSTACCESS-016  THE AGENT MAY RUN ANY COMMAND ON THIS MACHINE, UNCHECKED\n' + '!' * 78)
+            read.console().contains('\u001B[31m!!  OIL-HOSTACCESS-016')
     }
 
     def 'The checker is shown the whole command, and oillamp refuses a command too long to show whole without asking it'() {
@@ -342,7 +394,7 @@ class Working_On_The_Host_Spec extends Specification {
             where it cuts other arguments after 200 characters: it is the record of what ran.
         """
         given: 'a lamp that lets the checker alone allow commands'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -389,7 +441,7 @@ class Working_On_The_Host_Spec extends Specification {
             the checker is asked, rather than shown in part, and the file is not touched.
         """
         given: 'a lamp that lets the agent change files in the project'
-            givenHostAccess(commands: 'off')
+            givenHostAccess(may: 'read_change')
             checker.verdict = ALLOW_ADDITIVE
             start()
 
@@ -425,7 +477,7 @@ class Working_On_The_Host_Spec extends Specification {
             with what it printed so far.
         """
         given: 'a lamp that lets the checker alone allow commands'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -453,7 +505,7 @@ class Working_On_The_Host_Spec extends Specification {
             checker allows it a moment later. The cancelled call is not answered, as MCP asks.
         """
         given: 'a lamp that lets the checker alone allow commands, and a checker that takes two seconds'
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = ALLOW_EXECUTING
             checker.thinking = Duration.ofSeconds(2)
             start()
@@ -482,7 +534,8 @@ class Working_On_The_Host_Spec extends Specification {
             would, so that `PATH` and the user's other settings are there. Oillamp's own secrets
             are not: the variable holding the model key, here `OILLAMP_MODEL_KEY`, in which the key
             from a program built on oillamp reaches the engine, is removed with `env -u` before bash starts. So
-            are the variables such a program names for its requirements and instructions. The
+            are the variables such a program names for its checker instructions and the agent's
+            instructions. The
             checker is the only part of oillamp that uses the key, and the agent is not the
             checker.
 
@@ -491,7 +544,7 @@ class Working_On_The_Host_Spec extends Specification {
         """
         given: 'oillamp\'s environment holds the model key, and the lamp lets the checker alone allow commands'
             assert System.getenv('OILLAMP_MODEL_KEY') == KEY
-            givenHostAccess(commands: 'checker')
+            givenHostAccess(may: 'read_change_run')
             checker.verdict = ALLOW_EXECUTING
             start()
 
@@ -507,16 +560,18 @@ class Working_On_The_Host_Spec extends Specification {
 
     // ─── helpers ───────────────────────────────────────────────────────────────────────────
 
+    /** Host access as the lamp's file sets it, with the project as the one folder of both allowlists. */
     private void givenHostAccess(Map options) {
         host.givenConfig(host.lampPath(), """
             schema_version = 1
 
             [host_access]
-            enabled = true
-            roots = ["${project}"]
-            commands = "${options.commands}"
-            requirements = '''
-            ${REQUIREMENTS}
+            may = "${options.may}"
+            guards = "${options.guards ?: 'allowlists_checker'}"
+            read_allowlist = ["${project}"]
+            change_allowlist = ["${project}"]
+            checker_instructions = '''
+            ${INSTRUCTIONS}
             '''
         """.stripIndent())
     }

@@ -567,7 +567,7 @@ from talking to the internet.
 | know why it was built this way | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | know what is verified, and what is still missing | [docs/STATUS.md](docs/STATUS.md) |
 | build, test and change oillamp | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| let the agent reach the host, read and edit files and run commands there, every call judged by a model against your own requirements | [docs/HOST-ACCESS.md](docs/HOST-ACCESS.md) |
+| let the agent reach the host, read and edit files and run commands there, every call held to folders you list and judged by a model against your own instructions | [docs/HOST-ACCESS.md](docs/HOST-ACCESS.md) |
 
 ## ⚖️ License
 

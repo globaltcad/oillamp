@@ -65,7 +65,7 @@ The fast test suite passes. The spikes pass on the development machine.
 | `oillamp cancel <dir> [<run>]` | Works in the scenarios. |
 | `oillamp model <dir> <id>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useModel`. Not yet tried in a real session; that real pi starts the next new conversation on a default changed while it runs was checked against real pi 1.3.0 (see "Runs and the schedule"). |
 | `oillamp instructions <dir> --instructions-env <name>` | Works in the scenarios, against a stand-in pi. Also `Lamp.useInstructions`. Not yet tried in a real session; that real pi reads `APPEND_SYSTEM.md` again on `new_session` and `switch_session` was read from pi's source (`AgentSessionRuntime` rebuilds its resources), not tried. |
-| `oillamp host-access <dir> [on\|off] [--requirements-env <name>] [--commands <who>] [--ask-the-user on\|off]` | Works in the scenarios: writes `enabled`, `requirements`, `commands` and `ask_the_user` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.hostAccess`. |
+| `oillamp host-access <dir> [--may <what>] [--guards <which>] [--read-allowlist <folders>] [--change-allowlist <folders>] [--checker-instructions-env <name>]` | Works in the scenarios: writes `may`, `guards`, `read_allowlist`, `change_allowlist` and `checker_instructions` under `[host_access]`, nothing else, and only while the lamp sleeps. Also `LampDirectory.hostAccess`. |
 | `oillamp answer <dir> yes\|no "<question>"` | Works in the scenarios: answers a host-access question of a running session. Also `Lamp.decidePermission`. |
 | `oillamp conversations <dir> [<conversation>]` | Works in the scenarios, on session files written in pi's format. |
 | `oillamp config <dir> check \| show-effective \| path` | Works. Reads the global file and the lamp's, as `at` does. |
@@ -358,8 +358,8 @@ tools are an MCP server in the engine, which the sandbox's pi reaches through `s
 
 | What | Checked how |
 |---|---|
-| the gate: tiers, roots, the lamp's own files, the checker, the person, the log; `host_copy_in` byte for byte, not through links the agent planted, not past the roots or the checker | `Reaching_The_Host_Spec`, against the simulated machine and a stand-in checker |
-| `host_edit_file` and `host_bash`: exit status and output, refusal, `commands = "off"`/`"ask"`/`"checker"`, the whole command shown to the checker, timeouts that stop what a command started, a call cancelled before it runs, the model key kept out of a command's environment | `Working_On_The_Host_Spec`, with `env` and `bash` really running on the test machine |
+| the gate: `may`, the read and change allowlists, the lamp's own files, the checker (or none, with `guards = "allowlists"`), the person, the log; `host_copy_in` byte for byte, not through links the agent planted, not past the allowlists or the checker | `Reaching_The_Host_Spec`, against the simulated machine and a stand-in checker |
+| `host_edit_file` and `host_bash`: exit status and output, refusal, `may` without commands, `guards` with and without the person, commands with the allowlists as the only guard and its warning, the whole command shown to the checker, timeouts that stop what a command started, a call cancelled before it runs, the model key kept out of a command's environment | `Working_On_The_Host_Spec`, with `env` and `bash` really running on the test machine |
 | MCP: `initialize` and version negotiation, `tools/list` with schemas, JSON-RPC errors, two calls on one connection, a closed connection withdrawing its calls, the socket gone when the session ends | `Serving_The_Host_Tools_Over_Mcp_Spec` |
 | a real pi 1.4.0 (`pi mcp list --json`, with the same `socat` registration the extension makes) connecting to a session's socket and listing the tools | tried by hand on 2026-10-26, against a session in a scenario, outside a sandbox |
 | the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`) through `socat`: initialize, list, a `host_bash` call with a non-zero exit (`isError` false), a refusal (`isError` true), an unknown tool (`-32602`) | tried by hand on 2026-10-26, the same way |
@@ -413,10 +413,13 @@ suggests. Each is a decision for the team: implement it, or remove the option.
   builds a new image.
 - There are no long-running processes on the host: a command runs for at most 600 seconds, and
   its input is empty. No progress is reported while it runs.
-- An application's `.security(...)` replaces the file's rules, but the file still has to carry
-  requirements of its own while `enabled = true`, or it does not load.
-- The checker has not been tried against Eden AI with real requirements, only against a stand-in
+- An application's `.checkerInstructions(...)` replaces the file's instructions, but the file still
+  has to carry instructions of its own while `may` is not `"nothing"` and the guards include the
+  checker, or it does not load.
+- The checker has not been tried against Eden AI with real instructions, only against a stand-in
   answering fixed JSON.
+- Converting an older lamp's `[host_access]` keys was tried on copies of two real Genies lamps
+  (`oillamp config <dir> check`), not on the lamps themselves, and not yet with Genies running.
 
 ### Things that are described but do not exist
 

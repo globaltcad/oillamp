@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
-import dev.lamp.LampHostCommandApproval;
 
 import sprouts.Tuple;
 
@@ -457,23 +456,34 @@ final class AgentGuideUtil {
             `curl` or a socket of your own. Only these tools reach it.
 
             oillamp, on the user's computer, judges every call before it happens: it checks the
-            path, then asks a model whether the user's rules allow it. You cannot see those rules.
-            A refusal comes back as the tool's error, with the reason; tell the user what was
-            refused and why, rather than trying another way. Paths are absolute or start with
+            path%s. A refusal comes back as the tool's error, with the reason; tell the user what
+            was refused and why, rather than trying another way. Paths are absolute or start with
             `~/`, the user's home there, not yours here, and never contain `.` or `..`.
-            """);
-        if (access.roots().isEmpty()) out.append("Only paths in the user's home directory can be reached.\n");
-        else {
-            out.append("Only paths under these folders can be reached:");
-            for (String root : access.roots()) out.append(" `").append(root).append('`');
+            """.formatted(access.checks() ? ", then asks a model whether the user's rules allow it. You cannot see those rules" : ""));
+        Tuple<String> readable = Tuple.of(String.class);
+        for (String folder : HostPaths.Use.READ.allowedBy(access))
+            if (!readable.contains(folder)) readable = readable.add(folder);
+        out.append(access.guards().asksTheUser()
+                ? "Paths under these folders can be reached; for any other, the user is asked:"
+                : "Only paths under these folders can be reached:");
+        if (readable.isEmpty()) out.append(" none");
+        for (String folder : readable) out.append(" `").append(folder).append('`');
+        out.append(".\n");
+        if (HostTool.offeredBy(access).contains(HostToolKind.WRITE_FILE)) {
+            out.append("Of those, only paths under these may be changed").append(
+                    HostTool.offeredBy(access).contains(HostToolKind.BASH) ? ", or run a command in:" : ":");
+            if (access.changeAllowlist().isEmpty()) out.append(" none");
+            for (String folder : access.changeAllowlist()) out.append(" `").append(folder).append('`');
             out.append(".\n");
         }
         if (HostTool.offeredBy(access).contains(HostToolKind.BASH))
             out.append("""
 
                 A command run with `%shost_bash` runs as the user, on their computer, in the
-                directory you name; the model that judges it is shown the whole command. %s
-                """.formatted(PI_TOOL_PREFIX, access.commands() == LampHostCommandApproval.ASK
+                directory you name%s. %s
+                """.formatted(PI_TOOL_PREFIX,
+                        access.checks() ? "; the model that judges it is shown the whole command" : "",
+                        access.guards().asksTheUser()
                         ? "The user is asked before each one runs, so tell them what you are about to do and why."
                         : "Say what a command is for, in your own words, before you call it."));
         out.append("""

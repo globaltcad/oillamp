@@ -20,7 +20,7 @@ enum HostToolKind {
 
     LIST_DIR("host_list_dir", LampHostRisk.PASSIVE,
             "List the files in a directory on the user's own computer, outside the sandbox. "
-          + "oillamp checks the path and asks its checker before you see anything, and may refuse.",
+          + "oillamp checks the request before you see anything, and may refuse.",
             "list a directory",
             Parameter.text("path", "An absolute path, or one starting with ~/, such as ~/Documents.")),
     STAT("host_stat", LampHostRisk.PASSIVE,
@@ -29,7 +29,7 @@ enum HostToolKind {
             Parameter.text("path", "An absolute path, or one starting with ~/.")),
     READ_FILE("host_read_file", LampHostRisk.PASSIVE,
             "Read a text file on the user's own computer. Large files are cut; ask again with offset to read on. "
-          + "Binary files are refused. oillamp checks the path and asks its checker first.",
+          + "Binary files are refused. oillamp checks the request first.",
             "read a text file; large files are cut, ask again with `offset`",
             Parameter.text("path", "An absolute path, or one starting with ~/."),
             Parameter.optionalNumber("offset", "Byte to start at. Omit for the beginning."),
@@ -42,7 +42,7 @@ enum HostToolKind {
     COPY_IN("host_copy_in", LampHostRisk.PASSIVE,
             "Copy a file from the user's own computer into your home in the sandbox, any kind of file, up to 64 MiB, "
           + "such as a picture or a PDF that host_read_file refuses as not text. After copying, use your own "
-          + "read on the copy to see an image. The copy is never executable. oillamp checks the path and asks its checker first.",
+          + "read on the copy to see an image. The copy is never executable. oillamp checks the request first.",
             "copy a file from the user's computer into your home here, to look at it with your own `read`",
             Parameter.text("path", "The file on the user's machine: an absolute path, or one starting with ~/."),
             Parameter.text("to", "Where to put it in the sandbox, such as ~/workspace/cat.png.")),
@@ -55,12 +55,12 @@ enum HostToolKind {
     // for anything the agent has read, not a read.
     OPEN_URL("host_open_url", LampHostRisk.ADDITIVE,
             "Open an http or https page in the browser on the user's own desktop. This is a visible action: "
-          + "the user will see the window, and the page's server sees the address. oillamp asks its checker first.",
+          + "the user will see the window, and the page's server sees the address. oillamp checks the request first.",
             "open an http or https page in the user's browser",
             Parameter.text("url", "An http:// or https:// address.")),
     WRITE_FILE("host_write_file", LampHostRisk.ADDITIVE,
             "Write a text file on the user's own computer, creating it or replacing it, as rw-r--r--. "
-          + "oillamp asks its checker first, and refuses paths outside the lamp's roots.",
+          + "oillamp checks the request first, and refuses paths outside the lamp's allowlists.",
             "write a text file, creating or replacing it",
             Parameter.text("path", "An absolute path, or one starting with ~/."),
             Parameter.textOrEmpty("text", "The whole content of the file.")),
@@ -68,7 +68,7 @@ enum HostToolKind {
             "Edit a text file on the user's own computer: replace one exact piece of its text with another. "
           + "old_text must occur exactly once; include enough of the lines around it to make it unique. "
           + "The file is written as rw-r--r--, so an executable file, such as a script, is no longer "
-          + "executable afterwards; with host_bash, chmod +x makes it so again. oillamp asks its checker first.",
+          + "executable afterwards; with host_bash, chmod +x makes it so again. oillamp checks the request first.",
             "replace one exact piece of a text file with another",
             Parameter.text("path", "An absolute path, or one starting with ~/."),
             Parameter.text("old_text", "The text to replace, exactly as it is in the file, once."),
@@ -84,14 +84,14 @@ enum HostToolKind {
             Parameter.textOrEmpty("text", "The rest of the message.")),
     COPY_OUT("host_copy_out", LampHostRisk.ADDITIVE,
             "Copy a file from your home in the sandbox to the user's own computer, any kind of file, up to 64 MiB. "
-          + "The copy is never made executable or run. oillamp asks its checker first.",
+          + "The copy is never made executable or run. oillamp checks the request first.",
             "copy a file from your home here to the user's computer",
             Parameter.text("from", "The file in the sandbox, such as ~/workspace/report.pdf."),
             Parameter.text("path", "Where to put it on the user's machine, such as ~/Downloads/report.pdf.")),
     BASH("host_bash", LampHostRisk.EXECUTING,
             "Run a bash command on the user's own computer, not in the sandbox, and return its exit status "
           + "and output. It runs as the user, in the directory cwd, with no input. "
-          + "oillamp shows its checker the whole command first, and may refuse it.",
+          + "oillamp checks the whole command first, and may refuse it.",
             "run a bash command on the user's computer, in a directory you name",
             Parameter.text("command", "The command, as you would type it into bash."),
             Parameter.text("cwd", "The directory it runs in: an absolute path, or one starting with ~/."),

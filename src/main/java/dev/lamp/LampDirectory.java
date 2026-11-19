@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 ///
 /// - [#onEvent] and [#launchedBy] apply to everything this directory does: the session that
 ///   [#start] or [#join] opens, and every command below.
-/// - [#modelService], [#modelKey], [#model], [#instructions], [#security],
+/// - [#modelService], [#modelKey], [#model], [#instructions], [#checkerInstructions],
 ///   [#enableScheduling] and [#wallpaper] only say how [#start] starts a session. Nothing is
 ///   written to the lamp before then, and [#join] ignores them: the session it joins keeps the
 ///   settings it was started with.
@@ -50,20 +50,20 @@ public final class LampDirectory {
     private final Optional<String> model;
     private final Optional<String> instructions;
     private final boolean scheduling;
-    private final Optional<Security> security;
+    private final Optional<CheckerInstructions> checkerInstructions;
     private final Optional<LampWallpaper> wallpaper;
     private final Optional<String> background;
 
-    /// What the agent may do on the host, and what it is judged against.
+    /// What the checker judges the agent's host requests against.
     ///
-    /// @param requirements the user's own words: what the agent may not see, change or run.
-    ///                     Handed to the checking model with every request, and to no one else
-    public record Security(String requirements) {
-        public Security {
-            if (requirements == null || requirements.isBlank())
-                throw new IllegalArgumentException("the host-access requirements cannot be blank");
-            if (requirements.getBytes(StandardCharsets.UTF_8).length > Lamp.LONGEST_INSTRUCTIONS)
-                throw new IllegalArgumentException("the host-access requirements cannot be longer than "
+    /// @param text the user's own words: what the agent may not see, change or run. Handed to
+    ///             the checker model with every request, and to no one else
+    public record CheckerInstructions(String text) {
+        public CheckerInstructions {
+            if (text == null || text.isBlank())
+                throw new IllegalArgumentException("the checker instructions cannot be blank");
+            if (text.getBytes(StandardCharsets.UTF_8).length > Lamp.LONGEST_INSTRUCTIONS)
+                throw new IllegalArgumentException("the checker instructions cannot be longer than "
                         + Lamp.LONGEST_INSTRUCTIONS / 1024 + " KiB");
         }
     }
@@ -77,7 +77,7 @@ public final class LampDirectory {
             final Optional<String> model,
             final Optional<String> instructions,
             final boolean scheduling,
-            final Optional<Security> security,
+            final Optional<CheckerInstructions> checkerInstructions,
             final Optional<LampWallpaper> wallpaper,
             final Optional<String> background
     ) {
@@ -89,7 +89,7 @@ public final class LampDirectory {
         this.model = model;
         this.instructions = instructions;
         this.scheduling = scheduling;
-        this.security = security;
+        this.checkerInstructions = checkerInstructions;
         this.wallpaper = wallpaper;
         this.background = background;
     }
@@ -105,14 +105,14 @@ public final class LampDirectory {
     public LampDirectory onEvent(Consumer<LampEvent> listener) {
         List<Consumer<LampEvent>> more = new ArrayList<>(listeners);
         more.add(listener);
-        return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, List.copyOf(more), launcher, modelService, modelKey, model, instructions, scheduling, checkerInstructions, wallpaper, background);
     }
 
     /// Starts the engine with `launcher` instead of the default, which runs `java` from this
     /// JVM with this application's classpath, and runs [Lamp#exec]'s commands with it. For
     /// tests, or for an application that runs the engine some other way.
     public LampDirectory launchedBy(LampLauncher launcher) {
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, scheduling, checkerInstructions, wallpaper, background);
     }
 
     /// Sends the sandbox's model requests to `service`, in place of the lamp's `model.service`:
@@ -123,7 +123,7 @@ public final class LampDirectory {
     /// Only Eden AI's models are filtered to those served in the EU. Any other service's
     /// models are all offered, since its model list names no regions.
     public LampDirectory modelService(URI service) {
-        return new LampDirectory(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, Optional.of(service), modelKey, model, instructions, scheduling, checkerInstructions, wallpaper, background);
     }
 
     /// Uses `key` for the sandbox's model requests, in place of the one in the variable the
@@ -132,14 +132,14 @@ public final class LampDirectory {
     /// @throws IllegalArgumentException when `key` is blank, which would only fail later
     public LampDirectory modelKey(String key) {
         if (key.isBlank()) throw new IllegalArgumentException("a model key cannot be blank");
-        return new LampDirectory(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, modelService, Optional.of(key.strip()), model, instructions, scheduling, checkerInstructions, wallpaper, background);
     }
 
     /// Lets jobs on the schedule wake the agent in the session [#start] starts, as
     /// `enabled = true` under `[schedule]` in the lamp's oillamp.toml would. The file is not
     /// changed.
     public LampDirectory enableScheduling() {
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, true, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, instructions, true, checkerInstructions, wallpaper, background);
     }
 
     /// Has the agent answer every question with `id`, a model as the service names it, such
@@ -161,7 +161,7 @@ public final class LampDirectory {
     public LampDirectory model(String id) {
         if (!id.matches(Lamp.MODEL_ID))
             throw new IllegalArgumentException("not a model as a service names it: \"" + id + "\"");
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, Optional.of(id), instructions, scheduling, checkerInstructions, wallpaper, background);
     }
 
     /// Tells the agent `text` in addition to pi's own instructions, for the whole session:
@@ -180,33 +180,34 @@ public final class LampDirectory {
     ///                                  than any useful instructions
     public LampDirectory instructions(String text) {
         Lamp.checkInstructions(text);
-        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, security, wallpaper, background);
+        return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model, Optional.of(text), scheduling, checkerInstructions, wallpaper, background);
     }
 
-    /// Lets the agent reach the host machine through oillamp, as `[host_access]` in the lamp's
-    /// file would, and says what it is judged against.
+    /// Says, for the session [#start] starts, what the checker judges the agent's requests to the
+    /// host against, in place of `checker_instructions` under `[host_access]` in the lamp's file.
     ///
     /// Every request from the sandbox to the host is first judged by a model, in a
-    /// conversation of its own that never sees the agent's messages: it sees the requirements,
+    /// conversation of its own that never sees the agent's messages: it sees these instructions,
     /// the request, and what the run was asked to do and did just before. A refusal is final
-    /// for that request. The gate judges by your text and nothing else, so it is the text that
+    /// for that request. The checker judges by your text and nothing else, so it is the text that
     /// matters: say what must not happen.
     ///
-    /// The feature must be on in the lamp's `oillamp.toml` already: an application gives the
-    /// rules, it does not open a door the user never asked for. The roots, the executable
-    /// allowlist and the rest stay as the file has them.
+    /// Host access must be on in the lamp's `oillamp.toml` already, with `may` other than
+    /// `nothing`: an application gives the instructions, it does not open a door the user never
+    /// asked for. What the agent may do, the guards and the allowlists stay as the file has them.
+    /// A lamp whose `guards` are `allowlists` has no checker, so the instructions are not used.
     ///
     /// The model that judges is the one the agent answers with, from [#model] and later
-    /// [Lamp#useModel], unless the lamp's file names a `checker_model` of its own. A lamp with
-    /// neither does not start: there is no model to judge with.
+    /// [Lamp#useModel], unless the lamp's file names a `checker_model` of its own. A lamp with a
+    /// checker and neither does not start: there is no model to judge with.
     ///
-    /// The requirements go to the engine in its environment, like [LampDirectory#instructions], so
-    /// that they are not on a command line any user of the machine can read.
+    /// The instructions go to the engine in its environment, like [LampDirectory#instructions],
+    /// so that they are not on a command line any user of the machine can read.
     ///
-    /// @throws IllegalArgumentException when the requirements are blank or longer than 64 KiB
-    public LampDirectory security(String requirements) {
+    /// @throws IllegalArgumentException when the instructions are blank or longer than 64 KiB
+    public LampDirectory checkerInstructions(String text) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
-                instructions, scheduling, Optional.of(new Security(requirements)), wallpaper, background);
+                instructions, scheduling, Optional.of(new CheckerInstructions(text)), wallpaper, background);
     }
 
     /// Gives a new lamp `wallpaper`, the picture behind the sandbox desktop's windows, in place
@@ -218,7 +219,7 @@ public final class LampDirectory {
     /// edit; a [LampEvent.Info] then says so.
     public LampDirectory wallpaper(LampWallpaper wallpaper) {
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
-                instructions, scheduling, security, Optional.of(wallpaper), background);
+                instructions, scheduling, checkerInstructions, Optional.of(wallpaper), background);
     }
 
     /// Gives a new lamp `colour`, such as `#15121c`, as the background colour its wallpaper is
@@ -235,7 +236,7 @@ public final class LampDirectory {
         if (!LampWallpaper.isColour(colour))
             throw new IllegalArgumentException("not a colour such as \"#15121c\": " + colour);
         return new LampDirectory(directory, listeners, launcher, modelService, modelKey, model,
-                instructions, scheduling, security, wallpaper, Optional.of(colour));
+                instructions, scheduling, checkerInstructions, wallpaper, Optional.of(colour));
     }
 
     /// Starts the engine, and returns at once. The sandbox is running when
@@ -248,15 +249,15 @@ public final class LampDirectory {
         modelKey.ifPresent(_ -> arguments.addAll(List.of("--model-key-env", Lamp.MODEL_KEY_VARIABLE)));
         model.ifPresent(id -> arguments.addAll(List.of("--model", id)));
         instructions.ifPresent(_ -> arguments.addAll(List.of("--instructions-env", Lamp.INSTRUCTIONS_VARIABLE)));
-        security.ifPresent(_ -> arguments.addAll(List.of("--security-requirements-env",
-                Lamp.SECURITY_REQUIREMENTS_VARIABLE)));
+        checkerInstructions.ifPresent(_ -> arguments.addAll(List.of("--checker-instructions-env",
+                Lamp.CHECKER_INSTRUCTIONS_VARIABLE)));
         if (scheduling) arguments.add("--enable-scheduling");
         wallpaper.ifPresent(chosen -> arguments.addAll(List.of("--wallpaper", chosen.configName())));
         background.ifPresent(colour -> arguments.addAll(List.of("--background", colour)));
         Map<String, String> environment = new HashMap<>();
         modelKey.ifPresent(key -> environment.put(Lamp.MODEL_KEY_VARIABLE, key));
         instructions.ifPresent(text -> environment.put(Lamp.INSTRUCTIONS_VARIABLE, text));
-        security.ifPresent(rules -> environment.put(Lamp.SECURITY_REQUIREMENTS_VARIABLE, rules.requirements()));
+        checkerInstructions.ifPresent(given -> environment.put(Lamp.CHECKER_INSTRUCTIONS_VARIABLE, given.text()));
         Process engine = launcher.launch(List.copyOf(arguments), Map.copyOf(environment));
         Lamp lamp = new Lamp(directory, launcher, engine, listeners, true);
         Thread.ofVirtual().name("lamp-events-" + directory.getFileName()).start(lamp::readEvents);
@@ -516,12 +517,14 @@ public final class LampDirectory {
                 LampEvent.ResetDone.class);
     }
 
-    /// Reads the values of `enabled`, `requirements`, `commands` and `ask_the_user` in the
-    /// `[host_access]` table of this lamp's `oillamp.toml`, merged over
-    /// `~/.config/oillamp/config.toml` as a session reads them.
+    /// Reads what a person decides on in the `[host_access]` table of this lamp's
+    /// `oillamp.toml`: `may`, `guards`, `read_allowlist`, `change_allowlist` and
+    /// `checker_instructions`, merged over `~/.config/oillamp/config.toml` as a session reads
+    /// them.
     ///
     /// Runs `oillamp host-access <dir>` as a short-lived engine process. It only reads the
-    /// file, so it works whether or not a session is running.
+    /// settings, so it works whether or not a session is running. A file written before these
+    /// keys existed is first rewritten in them, as every engine command that reads it does.
     ///
     /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
     ///                     valid; the problem says which
@@ -530,62 +533,37 @@ public final class LampDirectory {
         return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners, Map.of(), "host-access", directory.toString()));
     }
 
-    /// Sets the values of `enabled` and `requirements` in the `[host_access]` table of this
-    /// lamp's `oillamp.toml`, and returns the values [#hostAccess()] reads as the file now has
-    /// them. `commands` and `ask_the_user` stay as they are; [#hostAccess(Lamp.HostAccess)]
-    /// sets all four.
+    /// Sets the five values of [Lamp.HostAccess] in the `[host_access]` table of this lamp's
+    /// `oillamp.toml`: `may`, `guards`, `read_allowlist`, `change_allowlist` and
+    /// `checker_instructions`. Returns them as the file now has them.
     ///
-    /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS`
-    /// as a short-lived engine process. The requirements are passed in that environment
-    /// variable, so that they do not appear in the process list. The engine replaces only
-    /// those two keys and keeps every other line of the file, comments included. It writes
-    /// the file only when the result is a valid configuration.
-    ///
-    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
-    /// reads the file only when it starts.
-    ///
-    /// @param enabled      the new value of `enabled`: whether the next session gives the
-    ///                     agent the host tools
-    /// @param requirements the new value of `requirements`: the text the checker model judges
-    ///                     every host request against. May be empty only when `enabled` is
-    ///                     false. Plain text in the user's own words, or anything else the
-    ///                     checker model can read, such as JSON from a settings form
-    /// @return the values as the file now has them
-    /// @throws LampFailedException when the sandbox is running, or the settings are not valid, such
-    ///                     as on with no requirements; the problem says which
-    /// @throws IOException when the engine's process could not be started at all
-    public Lamp.HostAccess hostAccess(boolean enabled, String requirements)
-            throws IOException, InterruptedException, LampFailedException {
-        return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners, Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, requirements),
-                "host-access", directory.toString(), enabled ? "on" : "off",
-                "--requirements-env", Lamp.SECURITY_REQUIREMENTS_VARIABLE));
-    }
-
-    /// Sets all four values of [Lamp.HostAccess] in the `[host_access]` table of this lamp's
-    /// `oillamp.toml`: `enabled`, `requirements`, `commands` and `ask_the_user`. Returns them as
-    /// the file now has them.
-    ///
-    /// Runs `oillamp host-access <dir> on|off --requirements-env OILLAMP_SECURITY_REQUIREMENTS
-    /// --commands off|ask|checker --ask-the-user on|off` as a short-lived engine process, which
-    /// changes only those keys, as [#hostAccess(boolean, String)] does with its two. It writes the
-    /// file only when the result is a valid configuration.
+    /// Runs `oillamp host-access <dir> --may <may> --guards <guards> --read-allowlist <folders>
+    /// --change-allowlist <folders> --checker-instructions-env OILLAMP_CHECKER_INSTRUCTIONS` as a
+    /// short-lived engine process. The instructions are passed in that environment variable, so
+    /// that they do not appear in the process list. The engine replaces only those keys and
+    /// keeps every other line of the file, comments included, and `checker_model` and
+    /// `max_read_bytes` as they are. It writes the file only when the result is a valid
+    /// configuration.
     ///
     /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
     /// reads the file only when it starts.
     ///
-    /// @param wanted the values to write; `requirements` may be empty only when `enabled` is false
+    /// @param wanted the values to write. The instructions may be empty only when `may` is
+    ///               [LampHostAccess#NOTHING] or `guards` is [LampHostAccessGuards#ALLOWLISTS]
     /// @return the values as the file now has them
     /// @throws LampFailedException when the sandbox is running, or the settings are not valid, such
-    ///                     as on with no requirements; the problem says which
+    ///                     as a checker with no instructions; the problem says which
     /// @throws IOException when the engine's process could not be started at all
     public Lamp.HostAccess hostAccess(Lamp.HostAccess wanted)
             throws IOException, InterruptedException, LampFailedException {
         return Lamp.hostAccessOf(InternalLampUtil.runToEnd(launcher, listeners,
-                Map.of(Lamp.SECURITY_REQUIREMENTS_VARIABLE, wanted.requirements()),
-                "host-access", directory.toString(), Lamp.onOff(wanted.enabled()),
-                "--requirements-env", Lamp.SECURITY_REQUIREMENTS_VARIABLE,
-                "--commands", wanted.commands().name().toLowerCase(Locale.ROOT),
-                "--ask-the-user", Lamp.onOff(wanted.askTheUser())));
+                Map.of(Lamp.CHECKER_INSTRUCTIONS_VARIABLE, wanted.checkerInstructions()),
+                "host-access", directory.toString(),
+                "--may", wanted.may().configName(),
+                "--guards", wanted.guards().configName(),
+                "--read-allowlist", String.join(":", wanted.readAllowlist()),
+                "--change-allowlist", String.join(":", wanted.changeAllowlist()),
+                "--checker-instructions-env", Lamp.CHECKER_INSTRUCTIONS_VARIABLE));
     }
 
     /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of

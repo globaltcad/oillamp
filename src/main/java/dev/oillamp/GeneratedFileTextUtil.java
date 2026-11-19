@@ -1,6 +1,11 @@
 package dev.oillamp;
 
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampWallpaper;
+
+import sprouts.Association;
+import sprouts.Tuple;
 
 /// The text of files oillamp generates: the commented `oillamp.toml`, the lamp's
 /// `README.txt`, the agent's `.bashrc` and the bash completion script.
@@ -23,6 +28,7 @@ final class GeneratedFileTextUtil {
     /// The same, with the wallpaper `oillamp at <dir> --wallpaper` chose for the new lamp, and the
     /// background colour `--background` chose, or empty for the wallpaper's own.
     public static String defaultConfig(LampWallpaper wallpaper, String background) {
+        LampConfig.HostAccess defaults = ConfigDefaultsUtil.lampConfig().hostAccess();
         return """
             # oillamp lamp configuration. Edited by you, never visible to the agent.
             # Changes take effect at the next `oillamp at`. Arrays, and web.ports, replace (not merge
@@ -207,32 +213,89 @@ final class GeneratedFileTextUtil {
             chat_quiet_minutes = 10
 
             # Let the agent reach this machine - read a document, edit a file, open a page, run a
-            # command if you let it - always through oillamp, which asks a model about every
-            # request first. That model sees your requirements below, the request, and what the agent was
-            # asked to do and did just before; it does not see the agent's own conversation.
-            # Turning this on means your model service sees your requirements, the agent's
-            # instruction, and the names and contents of the files it touches. Off unless you
-            # turn it on.
+            # command if you let it - always through oillamp. Every request passes the guards first:
+            # the allowlists below, which oillamp checks itself, then a checker model, then you if
+            # you want. The checker sees your checker_instructions, the request, and what the agent
+            # was asked to do and did just before; it does not see the agent's own conversation.
+            # A checker means your model service sees your instructions, the agent's instruction,
+            # and the names and contents of the files it touches. Off unless you set may.
             [host_access]
-            enabled = false
+            %s
             # Your own words. This is the only thing the checker judges by, and the agent never
             # sees it. Say what must not happen. Use triple single quotes for paths and regular
             # expressions, so that a backslash is a backslash.
-            requirements = '''
+            checker_instructions = '''
             '''
-            checker_model     = ""       # the model that judges; empty: the one the agent answers with
-            roots             = []       # absolute paths the file tools, and a command's directory,
-                                         # may name; empty means your home directory
-            max_read_bytes    = 65536    # how much of one file the agent may be handed
-            commands          = "off"    # shell commands here: "off", "ask" (the checker, then you,
-                                         # for every one) or "checker" (the checker alone)
-            allow_additive    = true     # writing and copying files out, opening pages, notifications
-            ask_the_user      = false    # ask you, rather than refuse, a request outside roots
+            checker_model        = ""                          # the model that judges; empty: the one
+                                                               # the agent answers with
+            max_read_bytes       = 65536                       # how much of one file the agent may be
+                                                               # handed
             """.formatted(wallpaper.configName(),
                           // the comments line up with those of the other [display] settings
                           " ".repeat(Math.max(1, 12 - wallpaper.configName().length())),
                           background,
-                          " ".repeat(Math.max(1, 11 - background.length())));
+                          " ".repeat(Math.max(1, 11 - background.length())),
+                          hostAccessSwitches(defaults.may(), defaults.guards(),
+                                             defaults.readAllowlist(), defaults.changeAllowlist()));
+    }
+
+    /// The column the comments of `[host_access]` start in, in the lamp template: the longest
+    /// value, `"allowlists_checker_user"`, still leaves three spaces before its comment.
+    private static final int HOST_ACCESS_COMMENT_COLUMN = 51;
+
+    /// What the template says next to each of the keys that decide what the agent may do on the
+    /// host. The converter of old lamp files writes the same, so a converted file reads like a
+    /// new one.
+    private static final Association<String, String> HOST_ACCESS_COMMENTS =
+            Association.between(String.class, String.class)
+                .put("may", """
+                    what the agent may do here: "nothing",
+                    "read", "read_change" (also write files,
+                    copy them out, open pages, notify) or
+                    "read_change_run" (also run commands)""")
+                .put("guards", """
+                    what each request passes first:
+                    "allowlists", "allowlists_checker" (then
+                    the checker model) or
+                    "allowlists_checker_user" (then you too,
+                    for every command, and for a folder
+                    outside the allowlists, else refused)""")
+                .put("read_allowlist", """
+                    folders it may read: "~", "~/…" or
+                    absolute paths. Each includes everything
+                    below it, and links are followed, so a
+                    link cannot lead out""")
+                .put("change_allowlist", """
+                    folders it may read and change, and run
+                    commands in. Each includes everything
+                    below it, and links are followed, so a
+                    link cannot lead out""");
+
+    /// The lines that set `may`, `guards`, `read_allowlist` and `change_allowlist` under
+    /// `[host_access]`, each with the comment that explains it, as the lamp template has them.
+    static String hostAccessSwitches(LampHostAccess may, LampHostAccessGuards guards,
+                                     Tuple<String> readAllowlist, Tuple<String> changeAllowlist) {
+        return String.join("\n",
+                hostAccessLine("may", "\"" + may.configName() + "\""),
+                hostAccessLine("guards", "\"" + guards.configName() + "\""),
+                hostAccessLine("read_allowlist", ConfigFileEditUtil.list(readAllowlist)),
+                hostAccessLine("change_allowlist", ConfigFileEditUtil.list(changeAllowlist)));
+    }
+
+    /// One of the keys of [#hostAccessSwitches] set to `value`, already written as TOML, with its
+    /// comment in the template's column. A value too long for the column pushes the first line of
+    /// the comment along.
+    static String hostAccessLine(String key, String value) {
+        String set = String.format("%-20s = %s", key, value);
+        String padding = " ".repeat(HOST_ACCESS_COMMENT_COLUMN);
+        StringBuilder out = new StringBuilder(set);
+        boolean first = true;
+        for (String line : HOST_ACCESS_COMMENTS.get(key).orElse("").lines().toList()) {
+            out.append(first ? " ".repeat(Math.max(1, HOST_ACCESS_COMMENT_COLUMN - set.length())) : "\n" + padding)
+               .append("# ").append(line);
+            first = false;
+        }
+        return out.toString();
     }
 
     /// The bash completion script, printed by `oillamp completion bash`.
@@ -260,13 +323,13 @@ final class GeneratedFileTextUtil {
                     COMPREPLY=($(compgen -W 'lamp waves waves-light waves-dark' -- "$current"))
                     return
                 fi
-                # `oillamp host-access <dir> --commands ask --ask-the-user on`: the options' values.
-                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --commands ]; then
-                    COMPREPLY=($(compgen -W 'off ask checker' -- "$current"))
+                # `oillamp host-access <dir> --may read --guards allowlists_checker`: the options' values.
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --may ]; then
+                    COMPREPLY=($(compgen -W 'nothing read read_change read_change_run' -- "$current"))
                     return
                 fi
-                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --ask-the-user ]; then
-                    COMPREPLY=($(compgen -W 'on off' -- "$current"))
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --guards ]; then
+                    COMPREPLY=($(compgen -W 'allowlists allowlists_checker allowlists_checker_user' -- "$current"))
                     return
                 fi
                 # `--background "#15121c"`: a colour, which nothing here can guess.
@@ -311,7 +374,7 @@ final class GeneratedFileTextUtil {
                             schedule)      options="$options --cron --at --expires" ;;
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
                             instructions)  options="$options --instructions-env" ;;
-                            host-access)   options="$options --requirements-env --commands --ask-the-user" ;;
+                            host-access)   options="$options --may --guards --read-allowlist --change-allowlist --checker-instructions-env" ;;
                             recordings)    options="$options --open --prune --dry-run" ;;
                             doctor|config) options="$options --dry-run --no-install" ;;
                             update)        options="$options --system --dry-run --no-install" ;;

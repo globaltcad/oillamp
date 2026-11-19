@@ -16,6 +16,9 @@ final class HostAccessProblems {
 
     private HostAccessProblems() {}
 
+    /// The code of [#commandsUnchecked], which the console prints louder than any other warning.
+    static final String COMMANDS_UNCHECKED = "OIL-HOSTACCESS-016";
+
     /// The agent asked for a tool this lamp does not have.
     static LampProblem noSuchTool(String tool) {
         return refusal("OIL-HOSTACCESS-001", "No such host tool",
@@ -34,20 +37,21 @@ final class HostAccessProblems {
             .withEvidence(new LampProblem.Evidence.Value("expected", expected));
     }
 
-    /// A path the tool names is outside the lamp's roots.
-    static LampProblem outsideTheRoots(String asked, String why) {
+    /// A path the tool names is outside the lamp's allowlists, or not one oillamp can judge.
+    static LampProblem outsideTheAllowlists(String asked, String why) {
         return refusal("OIL-HOSTACCESS-003", "Path outside what this lamp may reach",
                 "\"" + asked + "\" cannot be touched: " + why,
-                "host_access.roots is the outer bound, and oillamp checks it before any model is "
-              + "asked, so a bad path is a mistake rather than something to judge")
-            .withFix(LampProblem.Fix.of("use a path under the lamp's roots, or ask the user to add it to host_access.roots"));
+                "host_access.read_allowlist and change_allowlist are the outer bound, and oillamp checks them "
+              + "before any model is asked, so a bad path is a mistake rather than something to judge")
+            .withFix(LampProblem.Fix.of("use a path in the lamp's allowlists, or ask the user to add its folder to "
+                    + "host_access.read_allowlist or change_allowlist"));
     }
 
     /// The checker said no.
     static LampProblem denied(String tool, String reason) {
         return refusal("OIL-HOSTACCESS-004", "The checker refused a host request",
                 tool + " was refused: " + reason,
-                "every request outside the sandbox is judged against the user's requirements, "
+                "every request outside the sandbox is judged against the user's checker instructions, "
               + "and a refusal is final for that request");
     }
 
@@ -118,10 +122,10 @@ final class HostAccessProblems {
     static LampProblem grantIgnored() {
         return new LampProblem(new LampProblem.Code("OIL-HOSTACCESS-014"), LampProblem.Severity.WARNING,
                 "Host access is off in this lamp",
-                "the application gave requirements for host access, but this lamp's oillamp.toml does not turn it on, so they were not used",
+                "the application gave checker instructions for host access, but this lamp's oillamp.toml does not turn it on, so they were not used",
                 "an application sets the rules; only the lamp's own file opens the way to the host",
                 Tuple.of(LampProblem.Evidence.class),
-                Tuple.of(LampProblem.Fix.of("set enabled = true under [host_access] in the lamp's oillamp.toml, with its own requirements")),
+                Tuple.of(LampProblem.Fix.of("set may under [host_access] in the lamp's oillamp.toml to what the agent may do, such as \"read\"")),
                 Optional.empty());
     }
 
@@ -130,11 +134,29 @@ final class HostAccessProblems {
     static LampProblem noModelToJudgeWith() {
         return new LampProblem(new LampProblem.Code("OIL-HOSTACCESS-015"), LampProblem.Severity.ERROR,
                 "Host access has no model to judge with",
-                "this lamp's oillamp.toml turns host access on, but names no checker_model, and the session was started without --model",
+                "this lamp's oillamp.toml turns host access on with a checker among its guards, but names no checker_model, and the session was started without --model",
                 "every request to the host is judged by a model before it happens; without one, the way to the host stays closed",
                 Tuple.of(LampProblem.Evidence.class),
                 Tuple.of(LampProblem.Fix.of("start the session with --model <id>, so that requests are judged by the model the agent answers with"),
                          LampProblem.Fix.of("or set checker_model under [host_access] in the lamp's oillamp.toml")),
+                Optional.empty());
+    }
+
+    /// The lamp lets the agent run commands on the host with nothing but the allowlists in the
+    /// way: `may = "read_change_run"` with `guards = "allowlists"`. It is allowed, because the
+    /// machine is the user's, and said as loudly as anything oillamp says, every time the lamp's
+    /// settings are read for a session, checked or written.
+    static LampProblem commandsUnchecked() {
+        return new LampProblem(new LampProblem.Code(COMMANDS_UNCHECKED), LampProblem.Severity.WARNING,
+                "The agent may run any command on this machine, unchecked",
+                "host_access.may is \"read_change_run\" and host_access.guards is \"allowlists\": every command the "
+              + "agent asks for runs on this machine, as you, with no checker model judging it and nobody asked first",
+                "a command can do anything you can, anywhere: read your keys and send them away, change or delete your "
+              + "files. The allowlists bound only the folder a command starts in, not what it does from there",
+                Tuple.of(LampProblem.Evidence.class),
+                Tuple.of(LampProblem.Fix.of("set guards = \"allowlists_checker\" under [host_access], so that a checker model "
+                                + "judges every command first, or \"allowlists_checker_user\" to be asked too"),
+                         LampProblem.Fix.of("or set may = \"read_change\", so that the agent runs no commands here")),
                 Optional.empty());
     }
 

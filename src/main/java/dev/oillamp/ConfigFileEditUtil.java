@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedMap;
@@ -12,11 +11,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dev.lamp.LampHostCommandApproval;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
+
+import sprouts.Tuple;
 
 /// Changes a few keys of one table in the text of a lamp's `oillamp.toml`, and nothing else:
 /// every other line, the user's comments among them, stays as it was. What
-/// `oillamp host-access <dir> on|off ...`, `oillamp history <dir> autosave ...` and
+/// `oillamp host-access <dir> --may ...`, `oillamp history <dir> autosave ...` and
 /// `oillamp history <dir> max-growth <gb>` write, for an application's settings page.
 ///
 /// This edits lines, it does not parse TOML. So the caller reads the result back with
@@ -27,21 +29,25 @@ final class ConfigFileEditUtil {
     private ConfigFileEditUtil() {}
 
     /// A table's header, such as `[host_access]` or `[[network.rules]]`, with an optional comment.
-    private static final Pattern TABLE = Pattern.compile("\\s*\\[\\[?[^\\]\\[]+\\]\\]?\\s*(#.*)?");
-    /// A key set to a bare value or a short string, such as `startup    = false   # as a session
-    /// starts` or `commands = "off"    # shell commands`. Only its value is replaced, so the
+    static final Pattern TABLE = Pattern.compile("\\s*\\[\\[?[^\\]\\[]+\\]\\]?\\s*(#.*)?");
+    /// A key set to a bare value, a short string or a one-line list of short strings, such as
+    /// `startup    = false   # as a session starts`, `may = "read"    # what the agent may do`
+    /// or `read_allowlist = ["~"]   # folders it may read`. Only its value is replaced, so the
     /// alignment and the comment stay. A string with an escape in it is not short.
-    private static final Pattern BARE = Pattern.compile("(\\s*[A-Za-z0-9_-]+\\s*=\\s*)(true|false|[-+0-9_.]+|\"[^\"\\\\]*\")(\\s*(#.*)?)");
+    static final Pattern BARE = Pattern.compile("(\\s*[A-Za-z0-9_-]+\\s*=\\s*)"
+            + "(true|false|[-+0-9_.]+|\"[^\"\\\\]*\"|\\[(?:\\s*\"[^\"\\\\]*\"\\s*,?)*\\s*\\])(\\s*(#.*)?)");
 
-    /// `file` with `enabled`, `requirements`, `commands` and `ask_the_user` under `[host_access]`
-    /// set to what is given.
-    static String withHostAccess(String file, Optional<Boolean> enabled, Optional<String> requirements,
-                                 Optional<LampHostCommandApproval> commands, Optional<Boolean> askTheUser) {
+    /// `file` with `may`, `guards`, `read_allowlist`, `change_allowlist` and
+    /// `checker_instructions` under `[host_access]` set to what is given.
+    static String withHostAccess(String file, Optional<LampHostAccess> may, Optional<LampHostAccessGuards> guards,
+                                 Optional<Tuple<String>> readAllowlist, Optional<Tuple<String>> changeAllowlist,
+                                 Optional<String> checkerInstructions) {
         SequencedMap<String, String> values = new LinkedHashMap<>();
-        enabled.ifPresent(on -> values.put("enabled", on.toString()));
-        requirements.ifPresent(text -> values.put("requirements", text(text)));
-        commands.ifPresent(who -> values.put("commands", "\"" + who.name().toLowerCase(Locale.ROOT) + "\""));
-        askTheUser.ifPresent(on -> values.put("ask_the_user", on.toString()));
+        may.ifPresent(chosen -> values.put("may", "\"" + chosen.configName() + "\""));
+        guards.ifPresent(chosen -> values.put("guards", "\"" + chosen.configName() + "\""));
+        readAllowlist.ifPresent(folders -> values.put("read_allowlist", list(folders)));
+        changeAllowlist.ifPresent(folders -> values.put("change_allowlist", list(folders)));
+        checkerInstructions.ifPresent(text -> values.put("checker_instructions", text(text)));
         return withValues(file, "host_access", values);
     }
 
@@ -112,7 +118,7 @@ final class ConfigFileEditUtil {
     }
 
     /// The bare key a line sets, such as `enabled` in `enabled = true`.
-    private static Optional<String> keyOf(String line) {
+    static Optional<String> keyOf(String line) {
         int equals = line.indexOf('=');
         if (equals < 0) return Optional.empty();
         String key = line.substring(0, equals).strip();
@@ -121,7 +127,7 @@ final class ConfigFileEditUtil {
 
     /// The delimiter of the multi-line string still open at the end of `line`, given the one open
     /// at its start; empty when none is.
-    private static String stillOpen(String line, String open) {
+    static String stillOpen(String line, String open) {
         int at = 0;
         while (true) {
             if (!open.isEmpty()) {
@@ -146,6 +152,16 @@ final class ConfigFileEditUtil {
         boolean literal = !text.contains("'''") && !text.endsWith("'")
                 && text.chars().noneMatch(c -> (c < 0x20 && c != '\n' && c != '\t') || c == 0x7F);
         if (literal) return "'''\n" + text + "'''";
+        return basic(text);
+    }
+
+    /// `items` as a TOML list of strings on one line, such as `["~", "/srv/data"]`.
+    static String list(Tuple<String> items) {
+        return "[" + String.join(", ", items.mapTo(String.class, ConfigFileEditUtil::basic)) + "]";
+    }
+
+    /// `text` as a TOML basic string, between double quotes, with anything that needs it escaped.
+    private static String basic(String text) {
         StringBuilder escaped = new StringBuilder("\"");
         text.chars().forEach(c -> escaped.append(switch (c) {
             case '\\' -> "\\\\";

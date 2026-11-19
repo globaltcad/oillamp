@@ -570,7 +570,7 @@ final class Supervisor {
     /// @param desktopDesk    the socket through which the agent asks the user to look at its
     ///                       desktop; failing to open it is only a warning
     /// @param hostAccessDesk the socket of supervised access to the host; only with
-    ///                       `host_access.enabled`
+    ///                       host access on, `host_access.may` other than `nothing`
     /// @param published      the web servers in the sandbox the browser can open, one relay each;
     ///                       a port the session could not listen for is missing, with a warning
     private record Served(Relay<OnUnixSocket> primary, Relay<OnUnixSocket> extras,
@@ -695,13 +695,13 @@ final class Supervisor {
 
             Tuple<LampProblem> warnings = Tuple.of(LampProblem.class);
 
-            // The way out to the host. Every request on it is judged by a model, and its effect
+            // The way out to the host. Every request on it passes the lamp's guards, and its effect
             // happens here. A lamp that did not ask for it has no socket at all.
             Optional<HostMcp.Server> hostAccessDesk = Optional.empty();
             if (prepared.config().hostAccess().enabled()) {
                 LampConfig.Model service = prepared.config().model();
                 Optional<String> key = machine.environmentVariable(service.keyEnv());
-                if (key.isEmpty())
+                if (key.isEmpty() && prepared.config().hostAccess().checks())
                     warnings = warnings.add(HostAccessProblems.checkerHasNoKey(service.keyEnv()));
                 HostAccess granted = new HostAccess(machine, layout, prepared.config(), prepared.session(), host.user().home(),
                         HostAccessChecker.forSession(prepared.config(), service, key, runs::model),
