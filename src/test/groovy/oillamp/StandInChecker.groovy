@@ -78,6 +78,11 @@ class StandInChecker implements AutoCloseable {
         new JsonSlurper().parseText(content.substring(content.indexOf('{'))) as Map
     }
 
+    /** The system prompt the checker was given, as oillamp wrote it. */
+    static String systemPromptOf(String body) {
+        (new JsonSlurper().parseText(body) as Map).messages.find { it.role == 'system' }.content
+    }
+
     /** The model a checker request asked for. */
     static String modelOf(String body) {
         (new JsonSlurper().parseText(body) as Map).model

@@ -45,9 +45,10 @@ import sprouts.Tuple;
 ///    who then decides. A path that is read must be in `read_allowlist` or `change_allowlist`;
 ///    one that is changed, or a command's directory, in `change_allowlist`.
 /// 4. The checker is asked, unless the lamp's guards are the allowlists alone, with the checker
-///    instructions, the run's instruction, its recent tool calls, its last reasoning, and the
-///    request. It has its own conversation and never sees the agent's messages. Which run that
-///    is, the session knows: the sandbox does not get to say.
+///    instructions, the lamp's settings, whether the person decides after it, the run's
+///    instruction, its recent tool calls, its last reasoning, and the request. It has its own
+///    conversation and never sees the agent's messages. Which run that is, the session knows:
+///    the sandbox does not get to say.
 /// 5. A refusal is the answer. An allow goes to the person when it must, and is then carried out
 ///    here, with the paths resolved again at the moment of the effect, because a link can be
 ///    swapped in while a model is thinking. A call the sandbox cancelled while it waited is not
@@ -262,6 +263,9 @@ final class HostAccess implements AutoCloseable {
         Optional<String> unfit = unfit(tool, resolved);
         if (unfit.isPresent()) return refuse(attempt, resolved, unfit.get());
         sink.accept(new LampEvent.HostAccessRequested(run, attempt.tool(), HostTool.describe(tool)));
+        // The person decides after the checker for a command, and for a path outside the
+        // allowlists, in a lamp whose guards end with the user. The checker is told so.
+        boolean personDecides = HostTool.needsThePerson(tool, config.hostAccess()) || outside;
 
         // 4. The checker, in a lamp that has one. Without it, the allowlists were the last word.
         String risk = HostTool.tierOf(tool).name().toLowerCase(Locale.ROOT);
@@ -269,7 +273,7 @@ final class HostAccess implements AutoCloseable {
         if (config.hostAccess().checks()) {
             Result<LampHostVerdict> verdict;
             try {
-                verdict = checker.check(tool, activityOf(working), resolved);
+                verdict = checker.check(tool, activityOf(working), resolved, personDecides);
             } catch (RuntimeException bug) {
                 verdict = Result.err(HostAccessProblems.checkerUnreachable(ProblemCatalogUtil.reason(bug)));
             }
@@ -292,9 +296,8 @@ final class HostAccess implements AutoCloseable {
         }
         if (withdrawn.isDone()) return refuse(attempt, resolved, CANCELLED);
 
-        // 5. The person's permission next, for a command and for a path outside the allowlists,
-        // in a lamp whose guards end with the user.
-        if (HostTool.needsThePerson(tool, config.hostAccess()) || outside) {
+        // 5. The person's permission next, when they decide after the checker.
+        if (personDecides) {
             Optional<String> no = askTheUser(new Question.HostRequest(run, attempt.tool(), HostTool.describe(tool)
                     + (outside ? " (outside the lamp's allowlists)" : "")), withdrawn);
             if (no.isPresent()) return refuse(attempt, resolved, no.get());

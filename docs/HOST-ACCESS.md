@@ -262,8 +262,8 @@ and the tools do not exist. A model that tries to call one gets pi's own "no suc
      sandbox's home, `host_copy_in` writes to it, and a command, or the text a file is written or
      edited with, is no longer than the checker is shown whole.
 4. **The checker call**, unless `guards = "allowlists"`. One model request, built entirely on the
-   host, with the user's checker instructions and the request plus the run's activity as its
-   message. The agent's conversation text never enters it. Without a checker, a request that
+   host, with the user's checker instructions, the lamp's settings, whether the person decides
+   after the checker, and the request plus the run's activity as its message. The agent's conversation text never enters it. Without a checker, a request that
    passed the deterministic checks goes straight on.
 5. **Verdict handling.** Deny ends the request. Allow goes to the person when the guards end with
    the user and the request is a command or lies outside the allowlists. Then it runs, after a
@@ -282,8 +282,17 @@ it started. A withdrawn call is not answered, as MCP asks.
 ### The checker's prompt
 
 The system prompt is fixed, written by oillamp, and never comes from the sandbox. It says what the
-checker is, what the tiers are, that the user's text is the only authority, that anything it
-cannot place must be denied, and that it must answer in the JSON below.
+checker is, what the tiers are, that the user's text is the only authority, which role it has,
+and that it must answer in the JSON below.
+
+The role depends on whether the person decides after the checker on this request. That is true
+exactly when the person will be asked once the checker allows: with `guards =
+"allowlists_checker_user"`, for a command and for a path outside the allowlists. Then the checker
+is the **first filter**: it denies only a request that clearly breaks the person's rules, allows
+every other one so that it reaches the person, who sees it whole and decides, and says what
+worries it in `concerns`. Otherwise it is the **last guard**: what it cannot place, such as a
+command that runs a script it was not shown, it denies. Without the first rule, a checker in
+front of the person would refuse everything borderline, and the person would never be asked.
 
 The user's checker instructions are a separate, clearly delimited block. A request, an activity entry or a
 file name that contains text trying to give the checker instructions is **evidence**, not an
@@ -294,6 +303,17 @@ The message holds, as a JSON object:
 ```json
 {
   "checker_instructions": {"authority": "the person who owns this computer", "text": "<the user's text, verbatim>"},
+  "lamp_settings": {
+    "written_by": "oillamp, from the settings the person chose for this lamp; never the agent",
+    "may": {"setting": "read_change_run", "means": "read, change, and run commands with host_bash, which can do anything the person can"},
+    "guards": {"setting": "allowlists_checker_user",
+               "in_order": ["the allowlists, which oillamp checks", "you, the checker",
+                            "the person, for every command and for a path outside the allowlists"]},
+    "read_allowlist": ["~"],
+    "change_allowlist": ["~/projects"],
+    "allowlists_checked": "oillamp checked the request's paths against these folders before you were asked: … For a command that covers only the folder it starts in, not what it touches from there. …",
+    "person_decides_after_you": false
+  },
   "run": {
     "id": "run-12",
     "instruction": "<what the user asked, the run's prompt>",
@@ -308,6 +328,12 @@ The message holds, as a JSON object:
   }
 }
 ```
+
+`lamp_settings` is written by oillamp from the lamp's `[host_access]`, as the session read it,
+and never from anything the sandbox sent. The allowlists are as the file writes them, with `~`.
+The checker instructions are the person's own words and need not describe the setup, so oillamp
+tells the checker the setup itself, for every lamp. `person_decides_after_you` is worked out for
+each request by the same test that decides whether the person is asked.
 
 `run` is the run the session knows the agent is working on. The request does not name it: a
 request that could would choose whose instruction the checker reads.
@@ -417,8 +443,8 @@ lamp.hostAccess(new Lamp.HostAccess(LampHostAccess.MAY_READ_CHANGE, LampHostAcce
   exactly what was asked. A checker with no instructions is refused, as it would be in the file.
 - A lamp whose sandbox runs is refused with `LAMP_BUSY` (OIL-LOCK-001): the session read the file
   as it started.
-- The checker instructions stay free text. Genies writes the JSON its page builds there, and the
-  checker reads it like any other words.
+- The checker instructions stay free text, the person's own words. What the lamp allows, its
+  guards and its allowlists the checker is told by oillamp, so the text need not repeat them.
 - The same from a terminal: `oillamp host-access <dir> [--may <what>] [--guards <which>]
   [--read-allowlist <folders>] [--change-allowlist <folders>] [--checker-instructions-env <name>]`,
   with the folders of an allowlist separated by colons, as in `PATH`.
@@ -508,8 +534,8 @@ be pointed at the same socket, and would get the same checks.
 
 ### The checker gets its own conversation, never the agent's
 
-The checker sees the checker instructions, the request, the resolved paths, the run's instruction, the
-recent tool calls and the reasoning trace. It does not see the agent's messages. This is the whole
+The checker sees the checker instructions, the lamp's settings, the request, the resolved paths,
+the run's instruction, the recent tool calls and the reasoning trace. It does not see the agent's messages. This is the whole
 point: the agent's context is what an injection poisons.
 
 *Given up:* the checker sometimes lacks a detail that would have made an allow obvious, and denies.

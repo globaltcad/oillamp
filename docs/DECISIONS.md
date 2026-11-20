@@ -696,7 +696,7 @@ needs a change in `InternalPiSessionFileUtil`. *(added on 2026-09-30)*
 
 See [HOST-ACCESS.md](HOST-ACCESS.md). The agent gets typed tools whose implementation is on the
 host. Each request is judged by a separate model call that sees the user's checker instructions,
-the request and the run's activity, but never the agent's conversation. The tools are in tiers,
+the lamp's settings, the request and the run's activity, but never the agent's conversation. The tools are in tiers,
 deterministic checks enforce the outermost one, and the feature is off by default with no
 command-line switch.
 
@@ -705,6 +705,25 @@ per request, bounded by checks that do not depend on the model, and off unless a
 smallest thing that can work. The threat is a prompt injection, so the judge must not share the
 poisoned context, and the judge may only ever tighten what the checks allow. *(added on
 2026-10-18)*
+
+### oillamp tells the checker the lamp's settings, and the checker is the first filter when the person decides after it
+
+Every checker call carries `lamp_settings`, written by oillamp from the lamp's `[host_access]`:
+`may` and what it means, the guards in order, both allowlists, a note that oillamp checked the
+paths against them, and `person_decides_after_you` for this one request. The fixed system prompt
+says that when the person decides after it, the checker is the first filter: it denies only a
+request that clearly breaks the person's rules, and lets every other one through to the person.
+Otherwise it is the last guard, and denies what it cannot place.
+
+*Why:* the checker instructions are the person's own words, and a person does not describe the
+setup in them; an application that wrote the facts there for them only made them look like
+rules, and every application would have to. The settings are oillamp's to know, and only
+oillamp knows, per request, whether the person is asked next. A checker that does not know it
+judges as the last guard, and in front of the person it then refuses every borderline command,
+which the person never gets to see.
+
+*Given up:* in front of the person, the checker allows more than it would alone, so the person
+sees more questions. That is what asking the person is for. *(added on 2026-11-20)*
 
 ### The host tools are an MCP server in the engine, and the sandbox only registers it
 

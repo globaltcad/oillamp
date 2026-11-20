@@ -136,10 +136,11 @@ class Reaching_The_Host_Spec extends Specification {
             resolves it on the host, asks the checker, and only then hands back what the file
             holds.
 
-            The checker is asked in a conversation of its own. What it is shown has exactly three
-            parts: the user's checker instructions, the run, and the request. There is no place in it for
-            the agent's messages, because those are what a prompt injection, instructions hidden
-            in something the agent read, would have changed.
+            The checker is asked in a conversation of its own. What it is shown has exactly four
+            parts: the user's checker instructions, the lamp's settings as oillamp read them, the
+            run, and the request. There is no place in it for the agent's messages, because those
+            are what a prompt injection, instructions hidden in something the agent read, would
+            have changed.
         """
         given: 'a lamp that lets the agent read its Documents, and a file there'
             Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3\nRevenue is up.\n')
@@ -180,10 +181,10 @@ class Reaching_The_Host_Spec extends Specification {
             !reply.isError
             McpClient.text(reply).contains('Revenue is up.')
 
-        and: 'the checker was asked once, with the checker instructions and the resolved request, and nothing else'
+        and: 'the checker was asked once, with the checker instructions, the lamp\'s settings, the run and the resolved request, and nothing else'
             checker.checked.size() == 1
             var seen = StandInChecker.judged(checker.checked.first())
-            seen.keySet() == ['checker_instructions', 'run', 'request'] as Set
+            seen.keySet() == ['checker_instructions', 'lamp_settings', 'run', 'request'] as Set
             seen.checker_instructions.text.contains(INSTRUCTIONS)
             seen.request.tool == 'host_read_file'
             seen.request.resolved_paths*.host == [host.home.resolve('Documents/q3.md').toRealPath().toString()]
@@ -303,6 +304,157 @@ class Reaching_The_Host_Spec extends Specification {
             !reply.isError
             var seen = StandInChecker.judged(checker.checked.first())
             seen.run == [id: '', instruction: '', recent_tool_calls: []]
+    }
+
+    def 'The checker is told what the lamp lets the agent do, the guards every request passes, and the folders in each allowlist'() {
+        reportInfo """
+            The checker is a separate model call that judges each request against the user's
+            checker instructions. Those are the person's own words, and need not say how the lamp
+            is set up. oillamp tells the checker that itself, under `lamp_settings`, from the
+            lamp's `[host_access]` as the session read it: the value of `may` and what it lets the
+            agent do, the value of `guards` and the guards it names in the order a request passes
+            them, and `read_allowlist` and `change_allowlist` as the lamp's file writes them. It
+            adds that oillamp checked the request's paths against the allowlists before the
+            checker was asked, and that for a command this covers only the folder the command
+            starts in. Nothing under `lamp_settings` comes from the sandbox.
+
+            Let's consider a lamp whose agent may read and change files, may read in `~/Documents`
+            and `~/Pictures` but change only in `~/Documents`, and has the checker as the last of
+            its guards. The agent reads a document.
+        """
+        given: 'a lamp with `may = "read_change"`, `guards = "allowlists_checker"`, two folders to read and one to change'
+            Files.createDirectories(host.home.resolve('Pictures'))
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
+            givenHostAccess(may: 'read_change', guards: 'allowlists_checker',
+                    read: ['~/Documents', '~/Pictures'], change: ['~/Documents'])
+            start()
+
+        when: 'the agent reads a document in `~/Documents`'
+            var reply = ask('host_read_file', [path: '~/Documents/q3.md'])
+
+        then: 'the checker was told that oillamp wrote `lamp_settings`, and what `may` lets the agent do'
+            !reply.isError
+            var settings = StandInChecker.judged(checker.checked.first()).lamp_settings
+            settings.written_by == 'oillamp, from the settings the person chose for this lamp; never the agent'
+            settings.may == [setting: 'read_change',
+                             means  : 'read, and change: write and edit files, copy files out of the sandbox, '
+                                    + 'open web pages, show notifications; run no commands']
+
+        and: 'which guards a request passes, in order'
+            settings.guards == [setting : 'allowlists_checker',
+                                in_order: ['the allowlists, which oillamp checks', 'you, the checker']]
+
+        and: 'both allowlists as the lamp\'s file writes them, and that oillamp checked the paths against them first'
+            settings.read_allowlist == ['~/Documents', '~/Pictures']
+            settings.change_allowlist == ['~/Documents']
+            settings.allowlists_checked.startsWith(
+                    "oillamp checked the request's paths against these folders before you were asked")
+            settings.allowlists_checked.contains(
+                    'For a command that covers only the folder it starts in, not what it touches from there.')
+    }
+
+    def 'The checker is told whether the person decides on a command after it: #guards'() {
+        reportInfo """
+            With `host_access.guards = "allowlists_checker_user"`, every command the checker allows
+            goes to the person, who sees it whole and decides whether it runs. With
+            `"allowlists_checker"`, the checker's allow is enough, and the command runs. The
+            checker should judge differently in the two lamps: in front of the person it is the
+            first filter, and lets through what the person should see; with nobody after it, it is
+            the last guard, and refuses a command it cannot place. So oillamp tells the checker
+            which it is, for each request, as `person_decides_after_you` under `lamp_settings`.
+
+            Let's consider an agent that may run commands and asks to run `make test` in
+            `~/Documents`. The stand-in checker refuses it, so the command does not run and nobody
+            is asked; what this scenario looks at is what the checker was told.
+        """
+        given: 'a lamp whose agent may run commands in `~/Documents`, with `guards = "#guards"`'
+            givenHostAccess(may: 'read_change_run', guards: guards, folders: ['~/Documents'])
+            checker.verdict = '{"decision":"deny","risk":"executing","reason":"Not now."}'
+            start()
+
+        when: 'the agent asks to run `make test` in `~/Documents`'
+            var reply = ask('host_bash', [command: 'make test', cwd: '~/Documents'])
+
+        then: 'the checker refused it, and nobody was asked'
+            reply.isError
+            !events.any { it instanceof LampEvent.HostAccessAsked }
+
+        and: 'the checker was told the guards in order, and whether the person decides after it'
+            var settings = StandInChecker.judged(checker.checked.first()).lamp_settings
+            settings.guards.in_order == order
+            settings.person_decides_after_you == decides
+
+        where:
+            guards                    | decides | order
+            'allowlists_checker_user' | true    | ['the allowlists, which oillamp checks', 'you, the checker',
+                                                   'the person, for every command and for a path outside the allowlists']
+            'allowlists_checker'      | false   | ['the allowlists, which oillamp checks', 'you, the checker']
+    }
+
+    def 'With the user as the last guard, the checker is told nobody decides after it on a read inside the allowlists, and the person does on a read outside them'() {
+        reportInfo """
+            With `host_access.guards = "allowlists_checker_user"`, the person is asked about every
+            command, and about a request outside the allowlists, which is then not refused before
+            the checker. A read inside the allowlists goes no further than the checker: its allow
+            is final. So in one lamp the checker is the last guard for one request and the first
+            filter for the next, and `person_decides_after_you` under `lamp_settings` tells it
+            which, request by request.
+
+            Let's consider an agent in such a lamp that reads a document in `~/Documents`, inside
+            the allowlists, and then a note in `~/Notes`, outside them.
+        """
+        given: 'a lamp whose guards end with the user, which lets the agent reach `~/Documents`, and a note outside it'
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
+            Files.createDirectories(host.home.resolve('Notes'))
+            Files.writeString(host.home.resolve('Notes/today.md'), 'Call the bank.')
+            givenHostAccess(folders: ['~/Documents'], guards: 'allowlists_checker_user')
+            start()
+
+        when: 'the agent reads the document inside the allowlists'
+            var inside = ask('host_read_file', [path: '~/Documents/q3.md'])
+
+        then: 'the checker was told nobody decides after it, and the read happened without asking the person'
+            !inside.isError
+            StandInChecker.judged(checker.checked[0]).lamp_settings.person_decides_after_you == false
+            !events.any { it instanceof LampEvent.HostAccessAsked }
+
+        when: 'the agent reads the note outside the allowlists, and the person says yes'
+            var outside = CompletableFuture.supplyAsync { ask('host_read_file', [path: '~/Notes/today.md']) }
+            answer(waitFor(LampEvent.HostAccessAsked) { true }.what(), true)
+
+        then: 'the checker was told the person decides after it, and the read happened once they said yes'
+            StandInChecker.judged(checker.checked[1]).lamp_settings.person_decides_after_you == true
+            !outside.get(30, TimeUnit.SECONDS).isError
+    }
+
+    def 'The checker\'s system prompt makes it the first filter when the person decides after it, and the last guard otherwise'() {
+        reportInfo """
+            The checker's system prompt is fixed text in oillamp, sent before the message about
+            the request. It tells the checker how to read `person_decides_after_you` under
+            `lamp_settings`. When the person decides after it, the checker is the first filter: it
+            denies only a request that clearly breaks the person's rules, and allows every other
+            one, so that the person sees it whole and decides. When nobody does, it is the last
+            guard, and denies what it cannot tell is covered by the rules. Without the first rule,
+            a checker in front of the person would refuse whatever it cannot place, and the person
+            would never be asked about it.
+        """
+        given: 'a lamp that lets the agent read its Documents, and a document there'
+            Files.writeString(host.home.resolve('Documents/q3.md'), '# Q3')
+            givenHostAccess(folders: ['~/Documents'])
+            start()
+
+        when: 'the agent reads the document'
+            ask('host_read_file', [path: '~/Documents/q3.md'])
+
+        then: 'the system prompt the checker was given states the first-filter rule'
+            var prompt = StandInChecker.systemPromptOf(checker.checked.first()).replaceAll(/\s+/, ' ')
+            prompt.contains('If the person decides after you, you are the first filter. Deny only a request '
+                    + 'that clearly breaks the person\'s rules. Allow every other one, so that it reaches the '
+                    + 'person, who sees it whole and decides; say what worries you in "concerns".')
+
+        and: 'it states the last-guard rule'
+            prompt.contains('If nobody decides after you, you are the last guard.')
+            prompt.contains('As the last guard, if you cannot tell whether the request is covered by the rules, deny it.')
     }
 
     def 'When the checker refuses a read, oillamp does not read the file and gives the agent the reason'() {
