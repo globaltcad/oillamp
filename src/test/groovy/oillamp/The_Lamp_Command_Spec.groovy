@@ -1,5 +1,6 @@
 package oillamp
 
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import spock.lang.Narrative
 import spock.lang.Specification
@@ -9,17 +10,29 @@ import spock.lang.Title
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 @Title('The lamp command')
 @Narrative('''
 `lamp` is the command the agent uses to drive its desktop: it takes screenshots, clicks, types,
 presses keys, and puts buttons on the dock. It is a shell script in the sandbox image,
 `/usr/local/bin/lamp`, and a thin wrapper over grim, wtype, `lamp-pointer` and a few other tools.
+With `lamp search`, the agent also searches the web, through SearXNG, a meta search engine
+installed in the image.
 
 These scenarios run the real script, with stand-ins for those tools on the `PATH` that write down
 how they were called. So they check the command lines `lamp` builds, where a shell script usually
 goes wrong (an argument list built wrongly, a quoting mistake, an option in the wrong place),
 without a compositor or a container. They therefore run in the fast suite, not among the spikes.
+
+For `lamp search`, a stand-in takes SearXNG's place in a directory of its own, which the scenarios
+name to `lamp` in `LAMP_SEARXNG_HOME`. It is a small Python HTTP server on the Unix socket that
+`lamp search` names in `SEARXNG_BIND_ADDRESS`, as SearXNG is. It answers every search with the
+JSON a scenario gives it, in the shape of SearXNG's answer: `results`, each with `title`, `url`
+and `content`, and `unresponsive_engines`, each an engine's name and why it failed. It writes
+down each time it is started, and each search it was asked. Whether the real SearXNG answers
+real searches, only the real image shows: see `docs/WEB-SEARCH.md`.
 ''')
 class The_Lamp_Command_Spec extends Specification {
 
@@ -28,12 +41,21 @@ class The_Lamp_Command_Spec extends Specification {
     Path lamp
     Path stubs
     Path calls
+    /** The stand-in SearXNG's directory; see [#standInSearxng]. */
+    Path searxng
 
     def setup() {
         lamp = Path.of('src/main/resources/image/rootfs/usr/local/bin/lamp').toAbsolutePath()
         stubs = Files.createDirectories(temporary.resolve('bin'))
         calls = temporary.resolve('calls.txt')
         ['grim', 'wtype', 'wlrctl', 'slurp', 'swaymsg', 'lamp-pointer'].each { stub(it) }
+    }
+
+    def cleanup() {
+        // The stand-in SearXNG runs on after `lamp search` ends, as the real one does.
+        if (searxng == null) return
+        startsOfSearxng().each { ProcessHandle.of(it.pid as long).ifPresent { it.destroyForcibly() } }
+        searxng.toFile().deleteDir()
     }
 
     /**
@@ -460,5 +482,412 @@ class The_Lamp_Command_Spec extends Specification {
             'screenshot --out'     | '--out takes the file to write'
             'wait-stable soon'     | 'wait-stable takes a whole number of seconds'
             'wait-stable 2.5'      | 'wait-stable takes a whole number of seconds'
+            'search'               | 'search takes what to search for'
+            'search -n'            | '-n takes how many results to print'
+            'search -n 0 sqlite'   | '-n takes how many results to print'
+    }
+
+    def '`lamp search` prints the top five results, each with a number, its title, its link and a snippet'() {
+        reportInfo """
+            Let's consider the agent running `lamp search "sqlite write ahead log"`. `lamp search`
+            asks SearXNG for the results as JSON, with `format=json`, and prints them as plain
+            text: for each result a number and the title, then the link on a line of its own, then
+            the snippet SearXNG gives as `content`, the words around the match on the page.
+            SearXNG merges what several engines found, often twenty results or more, so
+            `lamp search` prints the first five unless `-n COUNT` asks for another number. Here the
+            stand-in SearXNG answers with seven results.
+        """
+        given: 'a stand-in SearXNG that answers with seven results'
+            standInSearxng()
+            answer((1..7).collect { [title: "Result $it", url: "https://example.org/$it", content: "About $it."] }, [])
+
+        when: '`lamp search "sqlite write ahead log"` is run, and then `lamp search -n 2 "sqlite write ahead log"`'
+            var five = search('sqlite write ahead log')
+            var two = search('-n', '2', 'sqlite write ahead log')
+
+        then: 'SearXNG was asked for the query as JSON'
+            searchesAsked().first() == '/search?q=sqlite+write+ahead+log&format=json'
+
+        and: 'the first prints results 1 to 5, the second results 1 and 2, each as number and title, link, snippet, and a blank line'
+            five.status == 0
+            five.output == (1..5).collect { "${it}. Result $it\n   https://example.org/$it\n   About $it.\n\n" }.join()
+            two.status == 0
+            two.output == (1..2).collect { "${it}. Result $it\n   https://example.org/$it\n   About $it.\n\n" }.join()
+    }
+
+    def 'When every engine failed, `lamp search` names them on stderr and exits with 1, rather than reporting no results'() {
+        reportInfo """
+            Search engines refuse automated searches for a while after a burst of them, with a
+            captcha or HTTP 429, "too many requests". SearXNG then answers with no `results`, and
+            lists the engines that failed in `unresponsive_engines`, each with the reason. Printing
+            "no results" would tell the agent that nothing about its question exists. So
+            `lamp search` prints nothing on stdout, names each failed engine and its reason on
+            stderr, tells the agent to try again in a few minutes, and exits with 1.
+        """
+        given: 'a stand-in SearXNG that answers with no results, and Brave and DuckDuckGo in `unresponsive_engines`'
+            standInSearxng()
+            answer([], [['brave', 'too many requests'], ['duckduckgo', 'CAPTCHA']])
+
+        when: '`lamp search "sqlite write ahead log"` is run'
+            var result = search('sqlite write ahead log')
+
+        then: 'it exits with 1 and prints nothing on stdout'
+            result.status == 1
+            result.output == ''
+
+        and: 'stderr names both engines with their reasons, and says to try again in a few minutes'
+            result.errors.contains('no results, and engines failed: brave (too many requests), duckduckgo (CAPTCHA)\n')
+            result.errors.contains('Try again in a few minutes.')
+    }
+
+    def 'When the engines answered and found nothing, `lamp search` prints `No results for "…".` and exits with 0'() {
+        reportInfo """
+            Let's consider a search for something no page mentions. Every engine answers, and
+            none found anything: SearXNG's answer has no `results` and no `unresponsive_engines`.
+            That is an answer to the search, not a failure, so `lamp search` says so on stdout and
+            exits with 0. Only an empty answer with failed engines is an error.
+        """
+        given: 'a stand-in SearXNG that answers with no results and no failed engines'
+            standInSearxng()
+            answer([], [])
+
+        when: '`lamp search "xyzzy plover frobnicate"` is run'
+            var result = search('xyzzy plover frobnicate')
+
+        then: 'it prints `No results for "xyzzy plover frobnicate".`, nothing on stderr, and exits with 0'
+            result.status == 0
+            result.output == 'No results for "xyzzy plover frobnicate".\n'
+            result.errors == ''
+    }
+
+    def 'When some engines failed, `lamp search` prints what the others found, and names the failed engines on stderr'() {
+        reportInfo """
+            Most days, one engine or another refuses a search, and the others answer. The results
+            are then still worth printing, but there may be fewer than usual, and the agent should
+            know why. So `lamp search` prints the results on stdout and exits with 0, and names the
+            failed engines on stderr, where they stay out of the results.
+        """
+        given: 'a stand-in SearXNG that answers with one result, and Brave in `unresponsive_engines`'
+            standInSearxng()
+            answer([[title: 'Write-Ahead Logging', url: 'https://sqlite.org/wal.html', content: 'WAL mode.']],
+                   [['brave', 'too many requests']])
+
+        when: '`lamp search "sqlite write ahead log"` is run'
+            var result = search('sqlite write ahead log')
+
+        then: 'stdout holds the one result, and the exit status is 0'
+            result.status == 0
+            result.output == '1. Write-Ahead Logging\n   https://sqlite.org/wal.html\n   WAL mode.\n\n'
+
+        and: 'stderr names Brave and its reason'
+            result.errors.trim() == 'lamp: not every engine answered, so these results may be fewer than usual: brave (too many requests)'
+    }
+
+    def 'The first `lamp search` starts SearXNG on a Unix socket with a secret key, and the next search asks the same SearXNG'() {
+        reportInfo """
+            SearXNG is not started with the session: a session that never searches should not pay
+            for it. The first `lamp search` finds nothing answering on SearXNG's socket, and starts
+            SearXNG as `python -m searx.webapp`, with the Python of SearXNG's virtualenv. It passes
+            three variables: `SEARXNG_SETTINGS_PATH`, the settings in the image,
+            `/etc/searxng/settings.yml`; `SEARXNG_BIND_ADDRESS`, the socket `searxng.sock` in the
+            agent's runtime directory, given here in `LAMP_SEARCH_DIR`; and `SEARXNG_SECRET`, a
+            secret key made for this start, which SearXNG needs in order to run at all. A Unix
+            socket rather than a port, because oillamp offers every port the agent listens on to
+            the user, to open in their browser. SearXNG keeps running after the search, and the
+            next search asks it again instead of starting another.
+        """
+        given: 'a stand-in SearXNG that is not running'
+            standInSearxng()
+            answer([[title: 'Write-Ahead Logging', url: 'https://sqlite.org/wal.html', content: 'WAL mode.']], [])
+
+        when: '`lamp search` is run twice'
+            var first = search('sqlite write ahead log')
+            var second = search('sqlite checkpoint')
+
+        then: 'both printed the result'
+            first.status == 0
+            second.status == 0
+            [first, second].every { it.output.startsWith('1. Write-Ahead Logging') }
+
+        and: 'SearXNG was started once, as `python -m searx.webapp`, with the settings in the image, the socket in `LAMP_SEARCH_DIR` and a secret key of 64 hexadecimal digits'
+            var starts = startsOfSearxng()
+            starts.size() == 1
+            starts.first().arguments == '-m searx.webapp'
+            starts.first().settings == '/etc/searxng/settings.yml'
+            starts.first().bindAddress == "unix://${searxng.resolve('run/searxng.sock')}"
+            starts.first().secret ==~ /[0-9a-f]{64}/
+
+        and: 'the one SearXNG was asked both searches'
+            searchesAsked() == ['/search?q=sqlite+write+ahead+log&format=json', '/search?q=sqlite+checkpoint&format=json']
+    }
+
+    def 'Two first searches at once start one SearXNG, and both print its results'() {
+        reportInfo """
+            An agent may run two searches at once, for example in two shells. When neither finds
+            SearXNG answering, both would start one, and the second SearXNG would take over the
+            socket of the first. So the start is done under a lock, the file `start.lock` beside
+            the socket: the second search waits for the lock, then finds SearXNG answering, and
+            starts nothing. Here the stand-in SearXNG takes one second before it listens, so that
+            the second search arrives while the first one is still starting it.
+        """
+        given: 'a stand-in SearXNG that takes one second to start listening'
+            standInSearxng()
+            answer([[title: 'Write-Ahead Logging', url: 'https://sqlite.org/wal.html', content: 'WAL mode.']], [])
+
+        when: 'two `lamp search` commands are started together'
+            var searches = ['sqlite write ahead log', 'sqlite checkpoint'].collect {
+                startSearch([STUB_SEARXNG_DELAY: '1'], it)
+            }
+            var results = searches.collect { finished(it) }
+
+        then: 'both printed the result'
+            results.every { it.status == 0 && it.output.startsWith('1. Write-Ahead Logging') }
+
+        and: 'SearXNG was started once'
+            startsOfSearxng().size() == 1
+    }
+
+    def 'When SearXNG does not answer within `LAMP_SEARCH_START_SECONDS`, `lamp search` stops it, fails, and names its log'() {
+        reportInfo """
+            Let's consider a SearXNG that starts but never answers, for example because it hangs
+            while loading. `lamp search` waits for it for a limited time, 30 seconds unless
+            `LAMP_SEARCH_START_SECONDS` says otherwise, here 2. It then stops that SearXNG, so that
+            the next search starts a new one, and fails with exit status 1. The message names the
+            log `searxng.log`, beside the socket, into which SearXNG writes what went wrong.
+        """
+        given: 'a stand-in SearXNG that starts but never listens'
+            standInSearxng()
+
+        when: '`lamp search` is run with `LAMP_SEARCH_START_SECONDS=2`'
+            var result = search([STUB_SEARXNG_SILENT: '1', LAMP_SEARCH_START_SECONDS: '2'], 'sqlite write ahead log')
+
+        then: 'it exits with 1, and says that SearXNG did not answer within 2 seconds and was stopped'
+            result.status == 1
+            result.errors.contains('did not answer within 2 seconds, and was stopped')
+
+        and: 'the message names the log, which exists'
+            var log = searxng.resolve('run/searxng.log')
+            result.errors.contains("Its log may say why: $log")
+            Files.exists(log)
+
+        and: 'the SearXNG it started no longer runs'
+            endsWithinSeconds(startsOfSearxng().first().pid as long, 5)
+    }
+
+    def 'When SearXNG ended and left its socket behind, the next `lamp search` removes the socket and starts a new SearXNG'() {
+        reportInfo """
+            Let's consider a SearXNG that `lamp search` started, and that ended later, killed or
+            crashed. Its socket file `searxng.sock` is still there, but nothing answers on it. The
+            next `lamp search` finds that nothing answers, removes the socket file, since a new
+            SearXNG could not listen on that path while the file exists, and starts a new SearXNG,
+            which then answers the search.
+        """
+        given: 'a stand-in SearXNG that the first `lamp search` started, then killed, which leaves its socket file behind'
+            standInSearxng()
+            answer([[title: 'Write-Ahead Logging', url: 'https://sqlite.org/wal.html', content: 'WAL mode.']], [])
+            assert search('sqlite write ahead log').status == 0
+            var first = startsOfSearxng().first()
+            ProcessHandle.of(first.pid as long).ifPresent { it.destroyForcibly() }
+            assert endsWithinSeconds(first.pid as long, 5)
+            assert Files.exists(searxng.resolve('run/searxng.sock'))
+
+        when: '`lamp search "sqlite checkpoint"` is run'
+            var result = search('sqlite checkpoint')
+
+        then: 'it printed the result, with exit status 0'
+            result.status == 0
+            result.output.startsWith('1. Write-Ahead Logging')
+
+        and: 'SearXNG was started a second time, and the stand-in was asked the second search'
+            startsOfSearxng().size() == 2
+            searchesAsked().last() == '/search?q=sqlite+checkpoint&format=json'
+    }
+
+    def 'When SearXNG ends while it starts, `lamp search` fails with its exit code and names its log'() {
+        reportInfo """
+            Let's consider a SearXNG that cannot start, for example because its settings do not
+            parse: it writes why into its output and ends. `lamp search` sends that output to the
+            log `searxng.log`, beside the socket. It sees that SearXNG ended before it answered,
+            and fails at once with exit status 1, rather than wait out its 30 seconds. The message
+            gives SearXNG's exit code and names the log. Here the stand-in SearXNG writes one line
+            and ends with exit code 3.
+        """
+        given: 'a stand-in SearXNG that writes "stand-in SearXNG: cannot start" and ends with exit code 3'
+            standInSearxng()
+
+        when: '`lamp search` is run'
+            var result = search([STUB_SEARXNG_EXIT: '3'], 'sqlite write ahead log')
+
+        then: 'it exits with 1, and says on stderr that SearXNG ended while starting, with exit code 3'
+            result.status == 1
+            result.errors.contains('ended while starting (exit code 3)')
+
+        and: 'the message names the log, which holds what SearXNG wrote'
+            var log = searxng.resolve('run/searxng.log')
+            result.errors.contains("Its log says why: $log")
+            Files.readString(log).contains('stand-in SearXNG: cannot start')
+    }
+
+    def 'When an engine fails with a connection error, `lamp search` adds that a network rule of the lamp may refuse its site'() {
+        reportInfo """
+            The lamp's network policy may refuse an engine's site. oillamp's proxy then answers
+            with HTTP 403 and a body that names the rule, and the agent's guide tells it to report
+            that message. But the engine's request is SearXNG's, not the agent's: SearXNG keeps
+            only its own reason, "HTTP connection error", which also stands for a site that is
+            down. So after the failed engines, `lamp search` names each that failed with a
+            connection error, and adds that a network rule of this lamp may refuse its site, and
+            that oillamp shows the human each refusal with its rule. Here Yahoo failed with a
+            connection error and Brave with "too many requests", and there are no results.
+        """
+        given: 'a stand-in SearXNG that answers with no results, Yahoo failed with "HTTP connection error" and Brave with "too many requests"'
+            standInSearxng()
+            answer([], [['brave', 'too many requests'], ['yahoo', 'HTTP connection error']])
+
+        when: '`lamp search "sqlite write ahead log"` is run'
+            var result = search('sqlite write ahead log')
+
+        then: 'it exits with 1, and stderr names both engines with their reasons'
+            result.status == 1
+            result.errors.contains('engines failed: brave (too many requests), yahoo (HTTP connection error)')
+
+        and: 'the next line names Yahoo alone, and says a network rule of this lamp may refuse its site'
+            result.errors.contains("\nyahoo: a connection error may also mean that a network rule of this lamp refuses " +
+                    "that engine's site. oillamp shows the human each refusal, with the rule.\n")
+    }
+
+    def 'Without SearXNG in the image, `lamp search` says that search is not installed'() {
+        reportInfo """
+            SearXNG is installed when the image is built, and a failed install does not fail the
+            build: the image is then without search. Before it starts SearXNG, `lamp search`
+            checks for SearXNG's directory, `/opt/searxng`, and when SearXNG is not there, says
+            that it is not installed, so that the agent can tell the user rather than look for a
+            fault of its own. Here `LAMP_SEARXNG_HOME` names an empty directory in its place.
+        """
+        given: 'an empty directory in place of `/opt/searxng`'
+            standInSearxng()
+            var nowhere = Files.createDirectories(temporary.resolve('no-searxng'))
+
+        when: '`lamp search` is run'
+            var result = search([LAMP_SEARXNG_HOME: nowhere.toString()], 'sqlite write ahead log')
+
+        then: 'it exits with 1, prints nothing on stdout, and says on stderr that SearXNG is not installed in this image'
+            result.status == 1
+            result.output == ''
+            result.errors.contains('SearXNG, which it asks, is not installed in this image')
+
+        and: 'no SearXNG was started'
+            startsOfSearxng().isEmpty()
+    }
+
+    /**
+     * Puts a stand-in for SearXNG in a directory of its own, laid out as `/opt/searxng` is:
+     * `venv/bin/python` and `src/searx/`. Its `python` runs `server.py`, which writes a line into
+     * `starts.txt`; with `STUB_SEARXNG_EXIT` it prints one line and ends with that exit code. It
+     * waits `STUB_SEARXNG_DELAY` seconds, or for ever with `STUB_SEARXNG_SILENT`,
+     * and then serves on the socket `SEARXNG_BIND_ADDRESS` names: `/healthz` answers `OK`, and
+     * every other path is written into `requests.txt` and answered with `answer.json`.
+     *
+     * <p>Not under {@code temporary}: a Unix socket's path may be at most 107 bytes long.
+     */
+    private void standInSearxng() {
+        searxng = Files.createTempDirectory('lamp-search')
+        Files.createDirectories(searxng.resolve('src/searx'))
+        var server = searxng.resolve('server.py')
+        Files.writeString(server, [
+            'import http.server, os, socketserver, sys, time',
+            'here = os.path.dirname(os.path.abspath(__file__))',
+            'with open(os.path.join(here, "starts.txt"), "a") as starts:',
+            '    starts.write("\\t".join([str(os.getpid()), " ".join(sys.argv[1:]), os.environ["SEARXNG_SETTINGS_PATH"],',
+            '                            os.environ["SEARXNG_BIND_ADDRESS"], os.environ["SEARXNG_SECRET"]]) + "\\n")',
+            'if os.environ.get("STUB_SEARXNG_EXIT"):',
+            '    print("stand-in SearXNG: cannot start", flush=True)',
+            '    sys.exit(int(os.environ["STUB_SEARXNG_EXIT"]))',
+            'time.sleep(float(os.environ.get("STUB_SEARXNG_DELAY", "0")))',
+            'while os.environ.get("STUB_SEARXNG_SILENT"):',
+            '    time.sleep(60)',
+            'class Handler(http.server.BaseHTTPRequestHandler):',
+            '    def do_GET(self):',
+            '        if self.path == "/healthz":',
+            '            body = b"OK"',
+            '        else:',
+            '            with open(os.path.join(here, "requests.txt"), "a") as requests:',
+            '                requests.write(self.path + "\\n")',
+            '            with open(os.path.join(here, "answer.json"), "rb") as answer:',
+            '                body = answer.read()',
+            '        self.send_response(200)',
+            '        self.send_header("Content-Length", str(len(body)))',
+            '        self.end_headers()',
+            '        self.wfile.write(body)',
+            '    def log_message(self, *arguments):',
+            '        pass',
+            'class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):',
+            '    daemon_threads = True',
+            'Server(os.environ["SEARXNG_BIND_ADDRESS"][len("unix://"):], Handler).serve_forever()',
+        ].join('\n') + '\n')
+        var python = Files.createDirectories(searxng.resolve('venv/bin')).resolve('python')
+        Files.writeString(python, ['#!/usr/bin/env bash', "exec python3 '$server' \"\$@\""].join('\n') + '\n')
+        Files.setPosixFilePermissions(python, PosixFilePermissions.fromString('rwxr-xr-x'))
+    }
+
+    /** What the stand-in SearXNG answers every search with, in the shape of SearXNG's JSON. */
+    private void answer(List<Map> results, List<List<String>> unresponsiveEngines) {
+        Files.writeString(searxng.resolve('answer.json'), JsonOutput.toJson(
+                [query: '', results: results, answers: [], corrections: [], infoboxes: [],
+                 suggestions: [], unresponsive_engines: unresponsiveEngines]))
+    }
+
+    /** Each start of the stand-in SearXNG: its process id, arguments and the three variables. */
+    private List<Map> startsOfSearxng() {
+        var file = searxng.resolve('starts.txt')
+        if (!Files.exists(file)) return []
+        Files.readAllLines(file).collect { line ->
+            var fields = line.split('\\t', -1)
+            [pid: fields[0], arguments: fields[1], settings: fields[2], bindAddress: fields[3], secret: fields[4]]
+        }
+    }
+
+    /** The paths, with their queries, of the searches the stand-in SearXNG was asked. */
+    private List<String> searchesAsked() {
+        var file = searxng.resolve('requests.txt')
+        Files.exists(file) ? Files.readAllLines(file) : []
+    }
+
+    /** Whether the process ends, or has ended, within that many seconds. */
+    private static boolean endsWithinSeconds(long pid, int seconds) {
+        var process = ProcessHandle.of(pid)
+        if (process.isEmpty()) return true
+        try {
+            process.get().onExit().get(seconds, TimeUnit.SECONDS)
+            return true
+        } catch (TimeoutException ignored) {
+            return false
+        }
+    }
+
+    private Map search(String... arguments) { search([:], arguments) }
+
+    private Map search(Map<String, String> extraEnvironment, String... arguments) {
+        finished(startSearch(extraEnvironment, arguments))
+    }
+
+    /** Starts `lamp search` against the stand-in SearXNG, with stdout and stderr kept apart. */
+    private Map startSearch(Map<String, String> extraEnvironment, String... arguments) {
+        var home = Files.createDirectories(temporary.resolve('home'))
+        var errors = Files.createTempFile(temporary, 'stderr', '.txt')
+        var process = new ProcessBuilder(['bash', lamp.toString(), 'search'] + (arguments as List<String>))
+        process.redirectError(errors.toFile())
+        process.environment().putAll(
+                HOME: home.toString(),
+                LAMP_SEARXNG_HOME: searxng.toString(),
+                LAMP_SEARCH_DIR: searxng.resolve('run').toString())
+        process.environment().putAll(extraEnvironment)
+        [process: process.start(), errors: errors]
+    }
+
+    private static Map finished(Map started) {
+        Process process = started.process
+        var output = process.inputStream.text
+        process.waitFor()
+        [status: process.exitValue(), output: output, errors: Files.readString(started.errors as Path)]
     }
 }

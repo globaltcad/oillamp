@@ -81,6 +81,16 @@ RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
       && /tmp/oillamp-build/install-sdkman.sh ; \
     fi
 
+# SearXNG, the meta search engine behind `lamp search`, into /opt/searxng with a virtualenv of its
+# own. Pinned to one commit, because its engines are scrapers that upstream fixes as the search
+# sites change: moving the pin is how a lamp gets those fixes, and it re-runs only this layer and
+# the harnesses'. A failed install only leaves the image without search; the script explains why.
+# Its settings are /etc/searxng/settings.yml, from rootfs/. See docs/WEB-SEARCH.md.
+ARG SEARXNG_COMMIT=219b63b207c98b85471de5abab773e76432f1961
+RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
+      /tmp/oillamp-build/install-searxng.sh "${SEARXNG_COMMIT}" ; \
+    fi
+
 # The agent harnesses. These arguments are declared here, not at the top, because a changed
 # argument makes podman run again only the layers after its declaration. `oillamp update` passes a
 # new AGENT_TOOLS_REVISION, so this layer runs again and everything above stays cached.

@@ -93,11 +93,12 @@ table lists every part that runs, what it is written in, where it runs and as wh
 | `socat` + `sshd -i` | third-party | container, agent user | The SSH listener; one `sshd` per connection. |
 | `dbus-daemon` | third-party | container, agent user | The session bus GUI applications expect. |
 | `/etc/profile.d/oillamp.sh` | bash | container, agent user | The environment of every shell: proxy, display, library paths, SDKMAN, prompt, banner. |
-| `lamp` (`rootfs/usr/local/bin/`) | bash | container, agent user | The desktop helper: screenshot, click, type, key, wait-stable, show, dock. |
+| `lamp` (`rootfs/usr/local/bin/`) | bash | container, agent user | The desktop helper: screenshot, click, type, key, wait-stable, show, dock; and `lamp search`. |
+| SearXNG (`/opt/searxng`) | third-party, Python | container, agent user | The meta search engine behind `lamp search`, started by the first search, on a Unix socket. See [WEB-SEARCH.md](WEB-SEARCH.md). |
 | `lamp-pointer` (`rootfs/usr/local/lib/oillamp/`) | Python 3, standard library | container, agent user | Sends mouse events through the VNC socket for `lamp click` and friends, and reads the desktop's size for `lamp info`. |
 | `lamp-dock` (`rootfs/usr/local/lib/oillamp/`) | Python 3, GTK 3, gtk-layer-shell | container, agent user | The dock at the bottom of the desktop: a terminal, Firefox where installed, and the agent's buttons from `~/.config/lamp/dock.json`. |
 | `keep-windows-on-screen` (`rootfs/usr/local/lib/oillamp/`) | Python 3, standard library | container, infra user | With floating windows, moves windows back onto the desktop when it gets smaller, and back where they were when it grows. |
-| `install-*.sh`, `write-opencode-config.mjs` (`build/`) | bash, Node.js | container, root, **while the image is built** | Install Node.js, SDKMAN, pi, opencode, and write opencode's config. |
+| `install-*.sh`, `write-opencode-config.mjs` (`build/`) | bash, Node.js | container, root, **while the image is built** | Install Node.js, SDKMAN, SearXNG, pi, opencode, and write opencode's config. |
 | pi, opencode, Firefox, the JDK, … | third-party | container, agent user | What the agent uses. oillamp never starts these itself. |
 
 And the whole picture, while a session runs:
@@ -704,6 +705,7 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `Containerfile` | build recipe | Debian 13 "trixie", everyday shell tools, the desktop stack, developer tools (JDK, Node.js, Python, Firefox), the two users, then the files from `rootfs/`. |
 | `build/install-node.sh` | bash | Installs Node.js from NodeSource (Debian's is too old for the harnesses). |
 | `build/install-sdkman.sh` | bash | Installs SDKMAN into `/usr/local/share/oillamp/sdkman`, with its questions turned off. |
+| `build/install-searxng.sh` | bash | Installs SearXNG, at the commit `SEARXNG_COMMIT` pins, into `/opt/searxng` with a virtualenv of its own, for `lamp search`. A failure leaves the image without search. |
 | `build/install-agent-tools.sh` | bash | Installs bundled harnesses with npm and pi's initial extension into `/usr/local/share/oillamp/pi`. Ordinary builds tolerate failures; explicit updates require success. |
 | `build/write-opencode-config.mjs` | Node.js | Writes `/usr/local/share/oillamp/opencode/opencode.json`: Eden AI through its EU endpoint, with the models that endpoint lists. |
 | `rootfs/usr/local/lib/oillamp/entrypoint` | bash | The container's first process. |
@@ -715,6 +717,7 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `rootfs/etc/oillamp/sway/config` | config | The compositor: includes, window frames, no key binding that runs a command. |
 | `rootfs/etc/xdg/foot/foot.ini` | config | The in-sandbox terminal's font and colours. |
 | `rootfs/etc/ssh/ssh_config.d/50-oillamp-proxy.conf` | config | Sends outbound SSH (`git@github.com:…`) through the egress proxy. |
+| `rootfs/etc/searxng/settings.yml` | config | SearXNG for one local user: a Unix socket, JSON output, no limiter, no plugins, a short list of engines, every request through the egress proxy. |
 | `rootfs/usr/share/oillamp/wallpaper.svg`, `.png` | image | The desktop background, `display.wallpaper = "lamp"`. After editing the SVG, render it with `inkscape wallpaper.svg --export-type=png --export-filename=wallpaper.png`. |
 | `rootfs/usr/share/oillamp/wallpaper-waves.svg`, `.png` | image | The "waves" wallpaper, for `waves`, `waves-light` and `waves-dark` alike: light and shadow only, partly transparent, so it takes on the background colour. Rendered the same way; its lettering is Noto Serif Display Bold, which must be installed where it is rendered. Give inkscape absolute paths: the snap resolves relative ones from your home, and cannot write to `/tmp`. |
 
@@ -1580,6 +1583,7 @@ The agent's environment points at the display with `WAYLAND_DISPLAY=/run/lamp/wa
 | `lamp info` | the size now (and the desktop's own size, when it differs), renderer, output name and screenshot directory |
 | `lamp show "text"` | asks the user to look at the desktop, through the session (see Desktop, above) |
 | `lamp dock [list]`, `lamp dock add [LABEL] COMMAND [--icon ICON]`, `lamp dock remove LABEL_OR_COMMAND` | reads and writes `~/.config/lamp/dock.json` (see The dock, below); says when the dock is not running |
+| `lamp search [-n COUNT] "query"` | asks SearXNG on `/run/agent/searxng/searxng.sock`, starting it first if it does not answer; prints the top 5 results (or COUNT) as title, link and snippet; fails when there are none and engines failed ([WEB-SEARCH.md](WEB-SEARCH.md)) |
 
 There is no window list: that would need sway's control socket, which the agent must not reach.
 
@@ -1693,6 +1697,7 @@ line** by the entrypoint or the supervisor.
 | pi | `~/.pi/agent/` plus `EDENAI_*` from the profile | installed in the image, copied into the home by the entrypoint once |
 | opencode | `/usr/local/share/oillamp/opencode/opencode.json` via `OPENCODE_CONFIG` | written during the image build |
 | SDKMAN | `~/.sdkman/etc/config` (questions off) | installed in the image, copied into the home by the entrypoint once |
+| SearXNG | `/etc/searxng/settings.yml`; socket and secret key from `lamp search` | in the image; started by the first `lamp search` of a session |
 | the agent | `~/AGENTS.md` | every start, `AgentGuideUtil`, from the live configuration |
 | ssh on the host | `.oillamp/ssh_config`, `.oillamp/known_hosts` | every start, `LampPlanUtil` |
 | the terminal emulator | its argument template in `TerminalEmulatorUtil` | chosen each session from `terminal.*` |

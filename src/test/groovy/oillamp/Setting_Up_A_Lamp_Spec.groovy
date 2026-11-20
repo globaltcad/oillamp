@@ -248,6 +248,39 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             ['knowledge', 'skills', 'worktrees'].every { section.contains("`~/.genie/$it/`") }
     }
 
+    def '`~/AGENTS.md` tells the agent to search the web with `lamp search`, what it prints, and that bursts of searches are refused'() {
+        reportInfo """
+            Let's consider an agent that needs to find something out on the web. `curl` reaches
+            any page through the proxy, but a search engine's own page answers a program with
+            captchas, and an agent that does not know better tries that first. The image has a
+            search of its own, `lamp search`, so the guide `~/AGENTS.md`, which `oillamp at`
+            writes into the agent's home, has a section `### Searching the web`. It names the
+            command, says what it prints for each result (title, link, a line or two from the
+            page) and how to ask for more (`-n 10`), says to use it rather than `curl` or Firefox
+            on a search engine, and warns that engines refuse searches for a while after a burst.
+        """
+        given: 'a lamp path where no directory exists yet'
+            var lamp = host.lampPath()
+
+        when: '`oillamp at <dir>` sets up a new lamp'
+            host.oillamp.run('at', lamp.toString())
+
+        then: '`~/AGENTS.md` has the section `### Searching the web`, which names `lamp search` and what it prints'
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+            var section = guide.substring(guide.indexOf('### Searching the web'))
+            section.contains('`lamp search "what to search for"`')
+            section.contains('the top five results,\neach with its title, its link and a line or two from the page; `-n 10` prints ten.')
+
+        and: 'the section says to search with it rather than with `curl` or Firefox on a search engine\'s page'
+            section.contains('rather than with `curl` or Firefox on a search engine\'s page')
+
+        and: 'it warns that the engines refuse a burst of searches, and that `lamp search` then fails and names them'
+            section.contains('Search in bursts, dozens of times a minute, and the engines refuse to answer')
+            section.contains('`lamp search` fails and names the engines that\nfailed')
+    }
+
     def '`oillamp at` does not follow a link the agent put in place of `~/.genie`, and warns with `OIL-LAMP-012` instead'() {
         reportInfo """
             The agent can change anything in its home, and it runs as the user who started

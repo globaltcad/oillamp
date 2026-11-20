@@ -1,0 +1,97 @@
+# SearXNG's settings in the sandbox, for `lamp search`. See docs/WEB-SEARCH.md.
+#
+# One user, the agent, on one machine. Everything SearXNG has for guarding a public instance is
+# off, and only what differs from SearXNG's own defaults is written here: use_default_settings
+# reads SearXNG's settings.yml first and lays these over it.
+#
+# `lamp search` starts SearXNG with this file and sets two values from its environment:
+#   SEARXNG_BIND_ADDRESS  the Unix socket it listens on (see `server` below)
+#   SEARXNG_SECRET        a new random secret_key at each start (see `server` below)
+
+use_default_settings:
+  engines:
+    # A short list of engines that answer automated searches. Each one asked costs a request
+    # through the proxy, and any one of them may be blocking us on a given day; SearXNG merges what
+    # the others found. DuckDuckGo is asked at both of its addresses, which it blocks separately.
+    # Mojeek answers with a small proof-of-work puzzle, which SearXNG solves in about a second;
+    # it sets Mojeek inactive for that, which costs a public instance much, and one agent little.
+    #
+    # Left out: Google, which answers automated searches with captchas; Startpage and Qwant, which
+    # refused every request in trials; Bing, which in trials answered with pages that had nothing
+    # to do with the query, such as a dictionary's entry for its first word; Wikipedia, because
+    # Wikimedia asks every automated client for a contact address, which SearXNG then requires
+    # (general.contact_url), and a sandbox has none to give. Its articles come up among the other
+    # engines' results anyway.
+    #
+    # The names are those of SearXNG's settings.yml at the commit the Containerfile pins.
+    keep_only:
+      - duckduckgo
+      - duckduckgo web
+      - brave
+      - mojeek
+      - yahoo
+
+general:
+  instance_name: "lamp search"
+  # Nobody reads the statistics, and nobody can: the web interface is reachable only by the agent.
+  enable_metrics: false
+
+search:
+  # json is what `lamp search` reads. html stays for a person who opens SearXNG by hand.
+  formats:
+    - html
+    - json
+  # Autocompletion asks an engine at every keystroke in the web interface. `lamp search` never
+  # types, and requests the user did not ask for are not worth spending.
+  autocomplete: ""
+  safe_search: 0
+
+server:
+  # A Unix socket in the agent's runtime directory, not a TCP port. oillamp offers every port the
+  # agent listens on to the user, to open in their browser ([web] publish = "ask" or "any"), and
+  # would offer SearXNG's at the first search. A socket is also reachable only by the agent.
+  # `lamp search` passes the same path in SEARXNG_BIND_ADDRESS; werkzeug, which serves SearXNG
+  # here, reads a "unix://" address as a socket.
+  bind_address: "unix:///run/agent/searxng/searxng.sock"
+  # The limiter guards a public instance against bots, and needs valkey (Redis). Here the bot is
+  # the only user.
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  # No secret_key here. It signs SearXNG's cookies and its image proxy's links, and one written
+  # here would be public, in every image built from this file. `lamp search` makes a new one at
+  # each start instead (SEARXNG_SECRET); nothing signed with it needs to outlive SearXNG, since
+  # the agent keeps no session in it. Started without one, SearXNG has only its default, which it
+  # refuses to run with.
+
+valkey:
+  url: false
+
+# No plugins. The list replaces SearXNG's own, which would otherwise be loaded; marking a plugin
+# inactive is not enough, because SearXNG initializes inactive plugins too. The one that matters
+# is the tracker URL remover: at every start it downloads ClearURLs' rules from cdn.jsdelivr.net
+# or clearurls.xyz, a request the agent never asked for, made before SearXNG has read its proxy
+# settings. The others add answers (a calculator, unit conversion, hashes, the time) or rewrite
+# hosts, which `lamp search` does not print or need. Without plugins, SearXNG's only requests are
+# the engines' searches.
+plugins: {}
+
+outgoing:
+  # There is no DNS in the sandbox. Every request goes through oillamp's proxy, under the lamp's
+  # network policy, like any other request from in here. The port is oillamp's fixed proxy port,
+  # as in /etc/ssh/ssh_config.d/50-oillamp-proxy.conf.
+  proxies:
+    all://:
+      - http://127.0.0.1:3128
+  # The proxy adds a hop to every request; SearXNG's default of 3 seconds lets slow engines miss.
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+
+engines:
+  # Off, or inactive, in SearXNG's defaults.
+  - name: duckduckgo web
+    disabled: false
+  - name: mojeek
+    inactive: false
+  - name: yahoo
+    disabled: false

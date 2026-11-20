@@ -227,6 +227,21 @@ final class AgentGuideUtil {
            .append("\" in oillamp.toml\n```\n\n")
            .append("Report that message verbatim rather than retrying — it tells the human exactly\n")
            .append("which rule to change.\n\n");
+        out.append("""
+            ### Searching the web
+
+            `lamp search "what to search for"` searches the web and prints the top five results,
+            each with its title, its link and a line or two from the page; `-n 10` prints ten.
+            Search with it rather than with `curl` or Firefox on a search engine's page, which
+            answers a program with captchas. It asks a few search engines through SearXNG, which
+            your first search starts, and its requests go through the proxy like any other.
+
+            Search in bursts, dozens of times a minute, and the engines refuse to answer for a
+            while. When that leaves no results, `lamp search` fails and names the engines that
+            failed, rather than reporting that nothing was found. Wait a few minutes, then search
+            again.
+
+            """);
 
         out.append("## JVM toolchains\n\n")
            .append("One JDK is installed system-wide (`")

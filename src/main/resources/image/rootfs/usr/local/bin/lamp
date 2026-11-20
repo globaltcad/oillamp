@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lamp: drive the sandbox desktop from a shell.
+# lamp: drive the sandbox desktop from a shell, and search the web.
 #
 # This is deliberately a shell script and deliberately thin. An agent that needs something this
 # does not do can call the underlying tools directly (grim, wtype, and the pointer helper
@@ -29,6 +29,16 @@ DOCK_FILE="${LAMP_DOCK_FILE:-${HOME}/.config/lamp/dock.json}"
 DOCK_PID_FILE="${LAMP_DOCK_PID_FILE:-/run/agent/lamp-dock.pid}"
 # Milliseconds wtype waits before the first key; see the comment at the top.
 KEY_SETTLE_MS=150
+# `lamp search`: where SearXNG is installed and its settings, and the directory its socket, its
+# log and its caches go in. The agent's runtime directory, /run/agent, is its own (mode 0700) and
+# is emptied with the session, as SearXNG's state should be.
+SEARXNG_HOME="${LAMP_SEARXNG_HOME:-/opt/searxng}"
+SEARXNG_SETTINGS="${LAMP_SEARXNG_SETTINGS:-/etc/searxng/settings.yml}"
+SEARCH_DIR="${LAMP_SEARCH_DIR:-${XDG_RUNTIME_DIR:-/run/agent}/searxng}"
+# How long SearXNG may take to start answering, in seconds.
+SEARCH_START_SECONDS="${LAMP_SEARCH_START_SECONDS:-30}"
+# How many results `lamp search` prints unless asked for more or fewer.
+SEARCH_COUNT=5
 
 die() { printf 'lamp: %s\n' "$*" >&2; exit 1; }
 
@@ -248,6 +258,152 @@ if not dock_running():
 PY
 }
 
+# Searches the web through SearXNG, a meta search engine installed in the image, which asks a few
+# engines (DuckDuckGo, Brave, Mojeek and others, listed in its settings) and merges their results.
+# See docs/WEB-SEARCH.md.
+#
+# SearXNG is started by the first search, not with the session, so a session that never searches
+# pays nothing for it, and is then left running for the next one. It listens on a Unix socket, not
+# a port: oillamp offers every port the agent listens on to the user, to open in their browser.
+# Talking to a socket also means the request cannot go to the proxy by mistake. Two first searches
+# at once take turns at a lock, so the second finds the SearXNG the first one started.
+#
+# When there are no results, the engines may simply have found nothing, or they may have refused
+# to answer: engines block a burst of searches for a while. SearXNG names the engines that failed,
+# so `lamp search` can tell the two apart. Nothing found is an answer (exit 0); no results with
+# engines failing is an error (exit 1), so that the agent does not conclude that nothing exists.
+cmd_search() {
+    local count="$SEARCH_COUNT"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -n|--count) [ $# -ge 2 ] && [[ "$2" =~ ^[1-9][0-9]*$ ]] \
+                            || die "$1 takes how many results to print, a whole number from 1, for example -n 10"
+                        count="$2"; shift 2 ;;
+            --)         shift; break ;;
+            -*)         die "unknown option for search: $1. Usage: lamp search [-n COUNT] \"what to search for\"" ;;
+            *)          break ;;
+        esac
+    done
+    [ $# -ge 1 ] && [ -n "${*// /}" ] || die "search takes what to search for: lamp search [-n COUNT] \"what to search for\""
+    need python3
+    [ -x "$SEARXNG_HOME/venv/bin/python" ] && [ -d "$SEARXNG_HOME/src/searx" ] \
+        || die "search is not available: SearXNG, which it asks, is not installed in this image ($SEARXNG_HOME).
+It is installed when the image is built, and its install may have failed then. Say so; the human
+can rebuild the image."
+    # exec: a signal sent to `lamp` reaches the search itself. SearXNG, in a session of its own,
+    # is not ended by it.
+    exec python3 - "$SEARXNG_HOME" "$SEARXNG_SETTINGS" "$SEARCH_DIR" "$SEARCH_START_SECONDS" "$count" "$*" <<'PY'
+import fcntl, http.client, json, os, re, secrets, socket, subprocess, sys, time, urllib.parse
+home, settings, directory, start_seconds, count, query = sys.argv[1:]
+start_seconds, count = int(start_seconds), int(count)
+sock_path = os.path.join(directory, "searxng.sock")
+log = os.path.join(directory, "searxng.log")
+
+def fail(message):
+    sys.exit("lamp: " + message)
+
+class OverTheSocket(http.client.HTTPConnection):
+    def __init__(self, timeout):
+        super().__init__("localhost", timeout=timeout)
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(sock_path)
+
+def get(path, timeout):
+    connection = OverTheSocket(timeout)
+    try:
+        # A client on a socket has no address, so SearXNG's log says "No remote IP could be
+        # determined" at every request. That is expected, and harmless with the limiter off.
+        connection.request("GET", path)
+        response = connection.getresponse()
+        return response.status, response.read()
+    finally:
+        connection.close()
+
+def answering():
+    try:
+        return get("/healthz", 2)[0] == 200
+    except (OSError, http.client.HTTPException):
+        return False
+
+def start():
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    with open(os.path.join(directory, "start.lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if answering():  # another search started it while this one waited for the lock
+            return
+        # A socket left behind by a SearXNG that ended would stop the new one from listening.
+        try:
+            os.unlink(sock_path)
+        except FileNotFoundError:
+            pass
+        environment = dict(os.environ,
+                           SEARXNG_SETTINGS_PATH=settings,
+                           SEARXNG_BIND_ADDRESS="unix://" + sock_path,
+                           SEARXNG_SECRET=secrets.token_hex(32),
+                           PYTHONPATH=os.path.join(home, "src"),
+                           TMPDIR=directory)
+        with open(log, "ab") as output:
+            output.write(f"--- started by lamp search at {time.strftime('%Y-%m-%d %H:%M:%S')}\n".encode())
+            output.flush()
+            searxng = subprocess.Popen([os.path.join(home, "venv", "bin", "python"), "-m", "searx.webapp"],
+                                       cwd=directory, env=environment, stdin=subprocess.DEVNULL,
+                                       stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+        deadline = time.monotonic() + start_seconds
+        while not answering():
+            if searxng.poll() is not None:
+                fail(f"SearXNG, which lamp search asks, ended while starting (exit code {searxng.returncode}).\n"
+                     f"Its log says why: {log}")
+            if time.monotonic() > deadline:
+                searxng.kill()
+                fail(f"SearXNG, which lamp search asks, did not answer within {start_seconds} seconds, and was "
+                     f"stopped.\nIts log may say why: {log}")
+            time.sleep(0.2)
+
+if not answering():
+    start()
+
+try:
+    status, body = get("/search?" + urllib.parse.urlencode({"q": query, "format": "json"}), 30)
+    answer = json.loads(body) if status == 200 else None
+except (OSError, http.client.HTTPException, ValueError) as broken:
+    fail(f"SearXNG did not answer the search ({broken}). Its log: {log}")
+if answer is None:
+    fail(f"SearXNG answered the search with HTTP {status}. Its log: {log}")
+
+def one_line(text, limit):
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+unresponsive = answer.get("unresponsive_engines", [])
+failed = ", ".join(f"{engine} ({reason})" for engine, reason in unresponsive)
+# A network rule of the lamp that refuses an engine's site answers SearXNG with a 403 naming the
+# rule, but SearXNG passes on only "HTTP connection error" (or "proxy error"). The rule itself is
+# shown to the human by oillamp, so the agent is told where to look.
+cut_off = [engine for engine, reason in unresponsive if "connection error" in reason or "proxy error" in reason]
+if cut_off:
+    failed += (f"\n{', '.join(cut_off)}: a connection error may also mean that a network rule of this lamp "
+               "refuses that engine's site. oillamp shows the human each refusal, with the rule.")
+results = answer.get("results", [])[:count]
+if not results:
+    if failed:
+        fail(f"no results, and engines failed: {failed}\n"
+             "Engines refuse automated searches for a while after a burst of them. Try again in a few minutes.")
+    print(f'No results for "{query}".')
+    sys.exit(0)
+for number, result in enumerate(results, 1):
+    print(f"{number}. {one_line(result.get('title'), 200) or '(no title)'}")
+    print(f"   {result.get('url', '')}")
+    snippet = one_line(result.get("content"), 300)
+    if snippet:
+        print(f"   {snippet}")
+    print()
+if failed:
+    print(f"lamp: not every engine answered, so these results may be fewer than usual: {failed}", file=sys.stderr)
+PY
+}
+
 cmd_info() {
     # The size now, from the desktop itself: the user's viewer may have given the desktop the size
     # of the panel they watch it in. It goes back to its own size when they close that panel.
@@ -267,7 +423,7 @@ cmd_info() {
 
 usage() {
     cat <<'EOF'
-lamp — drive this sandbox's desktop.
+lamp — drive this sandbox's desktop, and search the web.
 
   lamp screenshot [--region X,Y,W,H] [--out FILE]   capture the screen; prints the path
   lamp click X Y [left|right|middle] [double]       click at screen coordinates
@@ -282,12 +438,17 @@ lamp — drive this sandbox's desktop.
   lamp dock                                         list your buttons on the dock
   lamp dock add [LABEL] COMMAND [--icon ICON]       add a button; omit LABEL for an icon-only button
   lamp dock remove LABEL_OR_COMMAND                 remove a button by label, or command if unlabelled
+  lamp search [-n COUNT] "what to search for"       search the web; prints titles, links, snippets
 
 The dock is the bar at the bottom of the desktop. A click on a button runs its command as you, in
 a login shell; hovering over it shows the command. ICON is an icon name, such as firefox-esr, or
 an image file. Icon-only buttons need --icon. Adding the same label (or command for an icon-only
 button) replaces it. Your buttons are kept in ~/.config/lamp/dock.json and stay until you remove them.
 If a label and an icon-only command have the same text, removal takes the labelled button first.
+
+`lamp search` asks a few search engines through SearXNG and prints the top 5 results, or COUNT.
+It fails when there are no results because engines refused to answer: they do that for a while
+after a burst of searches.
 
 Coordinates are screen pixels, as in a screenshot; 0,0 is the top-left corner. This works for
 Wayland and X11 applications (including Java Swing) alike. A click reports no result: take a
@@ -325,6 +486,7 @@ case "$subcommand" in
     info)         cmd_info "$@" ;;
     show)         cmd_show "$@" ;;
     dock)         cmd_dock "$@" ;;
+    search)       cmd_search "$@" ;;
     -h|--help|help) usage ;;
     *)            die "unknown command '$subcommand'. Run 'lamp help'." ;;
 esac

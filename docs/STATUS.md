@@ -191,6 +191,25 @@ From inside a real sandbox, through the real proxy:
 | `curl http://192.168.1.1/` | denied, with the rule quoted, and printed in the supervisor's terminal |
 | `apt-get update` | reaches its mirrors, then cannot write: the root filesystem is read-only |
 
+### Web search
+
+`lamp search` in a real session (checked by hand on 2026-11-20, not with a spike): oillamp built
+from this tree, `oillamp at` on a new lamp whose network policy had one rule refusing
+`search.yahoo.com`, and `podman exec --user agent … bash -lc 'lamp search …'`. Before that, the
+same image with a container run as the sandbox is and a stand-in `CONNECT` proxy. See
+[WEB-SEARCH.md](WEB-SEARCH.md).
+
+| Check | Result |
+|---|---|
+| DNS in the sandbox | none |
+| the first search, which starts SearXNG | five results in 2.1 s (2.2 to 2.8 s with the stand-in proxy) |
+| a later search | five results in 0.8 to 1 s |
+| engines that answered | `duckduckgo web`, Mojeek, and Yahoo where not refused; from this machine's address, Brave answered 429 and DuckDuckGo's HTML address a captcha on every search, which `lamp search` named on stderr |
+| Yahoo, refused by the lamp's rule | `yahoo (HTTP connection error)`, with the line that a network rule of the lamp may refuse its site; the session's terminal printed `denied CONNECT search.yahoo.com:443 … by rule "no Yahoo search in this trial"` |
+| hosts in the session's network log | the engines' only: `duckduckgo.com`, `html.duckduckgo.com`, `links.duckduckgo.com`, `search.brave.com`, `www.mojeek.com`, `search.yahoo.com` (denied) |
+| a TCP port the agent listens on | none: SearXNG is on `/run/agent/searxng/searxng.sock` |
+| the size of SearXNG's layer | 153 MB (its virtualenv 132 MB, of which curl_cffi 41 MB and babel 33 MB; its source 27 MB) |
+
 ### Published web servers
 
 `Verifying_Published_Web_Servers_Spec`, with podman 5.7.0 and the real image, a lamp with

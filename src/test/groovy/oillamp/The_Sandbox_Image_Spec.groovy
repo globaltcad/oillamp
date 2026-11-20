@@ -2,6 +2,7 @@ package oillamp
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import groovy.yaml.YamlSlurper
 import spock.lang.Narrative
 import spock.lang.Requires
 import spock.lang.Specification
@@ -50,6 +51,7 @@ class The_Sandbox_Image_Spec extends Specification {
                 IMAGE.resolve('build/install-node.sh'),
                 IMAGE.resolve('build/install-agent-tools.sh'),
                 IMAGE.resolve('build/install-sdkman.sh'),
+                IMAGE.resolve('build/install-searxng.sh'),
                 IMAGE.resolve('rootfs/etc/profile.d/oillamp.sh'),
             ]
     }
@@ -68,6 +70,8 @@ class The_Sandbox_Image_Spec extends Specification {
             Files.isExecutable(IMAGE.resolve('build/install-node.sh'))
             Files.isExecutable(IMAGE.resolve('build/install-agent-tools.sh'))
             Files.isExecutable(IMAGE.resolve('build/install-sdkman.sh'))
+            Files.isExecutable(IMAGE.resolve('build/install-searxng.sh'))
+            Files.exists(IMAGE.resolve('rootfs/etc/searxng/settings.yml'))
             Files.exists(IMAGE.resolve('rootfs/usr/local/lib/oillamp/entrypoint'))
             Files.exists(IMAGE.resolve('rootfs/usr/local/bin/lamp'))
             Files.exists(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-dock'))
@@ -662,6 +666,103 @@ class The_Sandbox_Image_Spec extends Specification {
 
         and: 'guarded, because sdkman-init.sh is bash and /bin/sh here is not'
             profile.contains('[ -n "${BASH_VERSION:-}" ]')
+    }
+
+    def 'The image installs SearXNG, for `lamp search`, with the toolchain, at the commit `SEARXNG_COMMIT` pins'() {
+        reportInfo """
+            `lamp search` asks SearXNG, a meta search engine, which the image build installs into
+            `/opt/searxng` with `build/install-searxng.sh`. SearXNG's engines are scrapers, which
+            its developers fix whenever a search site changes its pages, so the version matters:
+            the Containerfile pins one commit in the build argument `SEARXNG_COMMIT`, and moving
+            that pin is how a lamp gets newer fixes. The install is part of the developer
+            toolchain, which an image built with `WITH_TOOLCHAIN=false`, as the spikes build it,
+            leaves out.
+        """
+        when: 'the Containerfile is read'
+            var lines = Files.readString(IMAGE.resolve('Containerfile')).readLines()
+
+        then: '`SEARXNG_COMMIT` names one commit, by its 40 hexadecimal digits'
+            lines.any { it ==~ /ARG SEARXNG_COMMIT=[0-9a-f]{40}/ }
+
+        and: 'the line that runs `install-searxng.sh` with that commit is inside `if [ "${WITH_TOOLCHAIN}" = "true" ]`'
+            var install = lines.findIndexOf { it.trim() == '/tmp/oillamp-build/install-searxng.sh "${SEARXNG_COMMIT}" ; \\' }
+            install > 0
+            lines[install - 1] == 'RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \\'
+    }
+
+    def 'When SearXNG cannot be installed, the image still builds, without SearXNG and so without search'() {
+        reportInfo """
+            Search is one tool among many in the sandbox. If GitHub or the Python package index
+            cannot be reached while the image is built, the build must go on, as it does when
+            SDKMAN or a harness fails to install, rather than leave the user with no sandbox at
+            all. `install-searxng.sh` then warns, removes what it had installed, and exits with 0.
+            Without `/opt/searxng`, `lamp search` says that SearXNG is not installed in this image.
+
+            The scenario runs the script with `SEARXNG_DIR` pointing at a temporary directory
+            instead of `/opt/searxng`, and `SEARXNG_REPOSITORY` at a directory that is not a git
+            repository, so that the first step, fetching SearXNG's source, fails.
+        """
+        given: 'a directory to install into, and a repository that does not exist'
+            var directory = temp.resolve('searxng')
+            var nowhere = temp.resolve('not-a-repository')
+
+        when: '`install-searxng.sh` is run'
+            var install = new ProcessBuilder('bash', IMAGE.resolve('build/install-searxng.sh').toString(),
+                    '219b63b207c98b85471de5abab773e76432f1961')
+            install.environment().putAll(SEARXNG_DIR: directory.toString(), SEARXNG_REPOSITORY: nowhere.toString())
+            var process = install.redirectErrorStream(true).start()
+            var output = process.inputStream.text
+            process.waitFor()
+
+        then: 'it exits with 0, and warns that the sandbox has no `lamp search`'
+            process.exitValue() == 0
+            output.contains('WARNING: SearXNG did not install — the sandbox has no lamp search')
+
+        and: 'it leaves no directory behind'
+            !Files.exists(directory)
+    }
+
+    def 'SearXNG\'s settings in the image: a Unix socket, JSON answers, no limiter, every request through the proxy, and no Google'() {
+        reportInfo """
+            SearXNG is made for public instances, and its settings, `etc/searxng/settings.yml` in
+            the image, change that for one local user, the agent:
+
+            - It listens on the Unix socket `/run/agent/searxng/searxng.sock`, not on a port.
+              oillamp offers each port the agent listens on to the user, to open in their
+              browser, and would offer SearXNG's at the first search.
+            - It answers in JSON, which `lamp search` reads. SearXNG's default is HTML only.
+            - Its limiter, which turns away bots, is off, and so is valkey, the database the
+              limiter needs. Here the bot is the only user.
+            - Every request to an engine goes through oillamp's proxy on `127.0.0.1:3128`. The
+              sandbox has no DNS, and the lamp's network policy applies to searches as to any
+              other request.
+            - Google is not among the engines: it answers automated searches with captchas.
+            - No `secret_key` is written in the file, where every image would share it. SearXNG
+              refuses to run with its default key, so `lamp search` passes a new one at each start.
+        """
+        when: 'the settings are read'
+            var settings = new YamlSlurper().parse(IMAGE.resolve('rootfs/etc/searxng/settings.yml'))
+
+        then: 'SearXNG listens on the socket `/run/agent/searxng/searxng.sock`'
+            settings.server.bind_address == 'unix:///run/agent/searxng/searxng.sock'
+
+        and: 'it answers in JSON'
+            'json' in settings.search.formats
+
+        and: 'the limiter and valkey are off'
+            settings.server.limiter == false
+            settings.valkey.url == false
+
+        and: 'every request goes through the proxy on `127.0.0.1:3128`'
+            settings.outgoing.proxies == ['all://': ['http://127.0.0.1:3128']]
+
+        and: 'it keeps some of SearXNG\'s engines, and Google is not among them'
+            List<String> engines = settings.use_default_settings.engines.keep_only
+            !engines.isEmpty()
+            engines.every { !it.contains('google') }
+
+        and: 'there is no `secret_key`'
+            !settings.server.containsKey('secret_key')
     }
 
     private static List<Path> getAllImageFiles() {
