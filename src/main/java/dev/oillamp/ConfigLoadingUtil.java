@@ -9,6 +9,7 @@ import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
+import dev.lamp.LampWebPublishing;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -327,12 +328,13 @@ final class ConfigLoadingUtil {
     /// `[web]`. A lamp without the table publishes what the built-in defaults say. `ports`, when
     /// given, replaces the default list as a whole, so `ports = {}` lists nothing.
     ///
-    /// Anything other than `off`, `listed`, `any` and `ask` is refused, with the four that exist,
-    /// so that a typo is not quietly read as some level.
+    /// Anything other than `off`, `listed`, `ask` and `any` is refused, with the four that exist,
+    /// so that a typo is not quietly read as some level. What makes a port wrong is
+    /// [LampConfig.Web.Port]'s to say.
     private static LampConfig.Web readWeb(ConfigSection s, LampConfig.Web fallback, Tuple<Forward> forwards) {
         s.allowOnly("publish", "ports");
-        LampConfig.Web.Publishing publish = s.oneOf("publish", fallback.publish(),
-                ConfigLoadingUtil::parsePublishing, "\"off\", \"listed\", \"any\" or \"ask\"");
+        LampWebPublishing publish = s.oneOf("publish", fallback.publish(),
+                LampWebPublishing::named, "\"off\", \"listed\", \"any\" or \"ask\"");
         if (!s.has("ports")) return new LampConfig.Web(publish, defaultPortsBeside(s, fallback.ports(), forwards));
 
         Tuple<LampConfig.Web.Port> ports = Tuple.of(LampConfig.Web.Port.class);
@@ -340,12 +342,15 @@ final class ConfigLoadingUtil {
             String name = entry.first();
             int port = entry.second();
             String key = "ports." + name;
-            if (!name.matches("[a-z0-9-]+") || name.length() > LampConfig.Web.Port.LONGEST_NAME) {
-                s.invalid(key, "\"" + name + "\"", "a name of up to " + LampConfig.Web.Port.LONGEST_NAME
-                        + " lowercase letters, digits and dashes");
+            Optional<String> badName = LampConfig.Web.Port.nameProblem(name);
+            if (badName.isPresent()) {
+                s.invalid(key, "\"" + name + "\"", badName.get());
                 continue;
             }
-            Optional<String> wrong = webPortProblem(port, forwards, ports);
+            Tuple<LampConfig.Web.Port> before = ports;
+            Optional<String> wrong = LampConfig.Web.Port.portProblem(port)
+                    .or(() -> LampConfig.Web.Port.forwardProblem(port, forwards))
+                    .or(() -> LampConfig.Web.Port.clash(new LampConfig.Web.Port(name, port), before));
             if (wrong.isPresent()) {
                 s.invalid(key, Integer.toString(port), wrong.get());
                 continue;
@@ -368,33 +373,6 @@ final class ConfigLoadingUtil {
             else kept = kept.add(port);
         }
         return kept;
-    }
-
-    /// Why `port` cannot be published, or empty if it can.
-    private static Optional<String> webPortProblem(int port, Tuple<Forward> forwards,
-                                                   Tuple<LampConfig.Web.Port> before) {
-        if (port < 1024 || port > 65535)
-            return Optional.of("expected a port between 1024 and 65535");
-        if (port == Forward.PROXY_PORT)
-            return Optional.of("port " + Forward.PROXY_PORT + " is the sandbox's egress proxy — it cannot be published");
-        if (port == Forward.MODEL_PORT)
-            return Optional.of("port " + Forward.MODEL_PORT + " is where the sandbox reaches the model service "
-                    + "through oillamp — it cannot be published");
-        for (Forward forward : forwards)
-            if (forward.port() == port)
-                return Optional.of("port " + port + " is the forward \"" + forward.name() + "\"; publishing it would "
-                        + "give your browser the forward's target, which you chose for the sandbox only");
-        for (LampConfig.Web.Port other : before)
-            if (other.port() == port)
-                return Optional.of("web ports must be unique — port " + port + " is already listed as \""
-                        + other.name() + "\"");
-        return Optional.empty();
-    }
-
-    private static Optional<LampConfig.Web.Publishing> parsePublishing(String text) {
-        for (LampConfig.Web.Publishing level : LampConfig.Web.Publishing.values())
-            if (level.configName().equals(text)) return Optional.of(level);
-        return Optional.empty();
     }
 
     private static Optional<LampConfig.Llm> readLlm(ConfigSection s, Tuple<Forward> forwards) {

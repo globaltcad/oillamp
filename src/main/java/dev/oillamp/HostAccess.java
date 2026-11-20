@@ -494,7 +494,7 @@ final class HostAccess implements AutoCloseable {
     }
 
     private static String shorten(String text) {
-        String single = ConsoleRenderer.NOT_PRINTABLE.matcher(text).replaceAll(" ");
+        String single = UntrustedTextUtil.printable(text);
         return single.length() <= 200 ? single : single.substring(0, 200) + "…";
     }
 

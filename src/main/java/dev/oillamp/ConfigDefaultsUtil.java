@@ -6,6 +6,7 @@ import java.util.Optional;
 import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampWallpaper;
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -47,7 +48,7 @@ final class ConfigDefaultsUtil {
              new LampConfig.Autosave(false, false, true, true, 10),
              new LampConfig.History(2),
              // opencode's web interface, `opencode serve --port 4096`, which the user starts.
-             new LampConfig.Web(LampConfig.Web.Publishing.LISTED,
+             new LampConfig.Web(LampWebPublishing.LISTED,
                      Tuple.of(LampConfig.Web.Port.class, new LampConfig.Web.Port("opencode", 4096))));
     }
 }

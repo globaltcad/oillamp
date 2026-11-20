@@ -1421,9 +1421,19 @@ file, like an array, so a lamp's own list replaces the global file's rather than
 (`ConfigTree.WHOLE_TABLES`). A default port that a forward uses is left out with the warning
 `OIL-CONFIG-005`, so a lamp made before `[web]` existed with a forward on 4096 still starts; a port
 the lamp lists itself that clashes is an error. Names are lowercase letters, digits and dashes,
-at most 32 characters. A port must be 1024–65535, not 3128 or 3129, and not the port of a forward,
-because publishing a forward would hand its target, which you chose for the sandbox only, to your
-browser. `ConfigLoadingUtil.readWeb` refuses each of these with `OIL-CONFIG-004`.
+at most 32 characters. A port must be 1024–65535, not 3128, 3129 or 2828, and not the port of a
+forward, because publishing a forward would hand its target, which you chose for the sandbox only,
+to your browser. `ConfigLoadingUtil.readWeb` refuses each of these with `OIL-CONFIG-004`; what makes
+a name or a port wrong is said once, in `LampConfig.Web.Port` (`nameProblem`, `portProblem`,
+`forwardProblem`, `clash`), which `oillamp web` uses too: for its options as it reads them, and for
+the lamp's forwards before it writes anything.
+
+`oillamp web <dir>` reports the two values as `LampEvent.WebSettings`; with `--publish <level>` or
+`--ports <name>=<port>,...` (`""` is none) it writes them first, as `oillamp host-access` does: only
+those keys change (`ConfigFileEditUtil.withWeb`, which keeps a value's comment in its column), the
+changed file is read back and written only when it is valid and says what was asked, and never
+while a session runs (`LAMP_BUSY`). A file without `[web]` gets the table at its end.
+`LampDirectory.web()` and `web(Lamp.Web)` run it for an application.
 
 The data path, for each published port:
 
@@ -1460,6 +1470,16 @@ the forwards, the web bridges). `ListeningPortsUtil.newPorts` then drops ports b
 3129, 2828 (the agent's own, but `lamp fetch`'s Firefox listening for Marionette, not a web
 server), the forwards' ports and every port already published or decided about.
 
+For each new port, once, the supervisor looks up which program listens there
+(`Supervisor.programListeningOn`): `podman exec --user 1000 … sh -c` runs `ss -Hltnp` for the port
+and prints the process's `/proc/<pid>/cmdline`. It runs as the agent's user because only a
+process's owner may see which sockets it holds; the infra user, which reads `/proc/net/tcp`, cannot.
+The agent controls that text, so `UntrustedTextUtil.oneLine` (which also cleans every other text
+of the agent's or a model's that oillamp shows) makes it one line without control or
+format characters, at most 120 characters. It is `LampWebPort.program`, `LampEvent.WebPortAsked.program`
+and part of the question's text, and `oillamp status` shows it after the link; empty when nothing
+was found, and always for a listed port, where nothing need listen as the session starts.
+
 A new port is published as `port-<n>`: `podman exec --detach --user lamp … socat` starts the same
 bridge the entrypoint starts for a listed port, on `web-port-<n>.sock`; then the relay opens as for
 a listed port, `LampEvent.WebPublished` is reported with `openedByTheAgent` true, and `SessionStateChanged` repeats the session's
@@ -1472,7 +1492,7 @@ published or asked about. Under `ask` only the allowed ports count. A port liste
 is outside the limit.
 
 With `ask`, a new port is first a `Question.PublishPort` (see "Asking the person"), shown as
-`LampEvent.WebPortAsked(sandboxPort, what)` and answered like a host request, with
+`LampEvent.WebPortAsked(sandboxPort, what, program)` and answered like a host request, with
 `oillamp answer <dir> yes|no -- <what>` or `Lamp.decidePermission`. A yes publishes it. A no, or no
 answer within the patience, is remembered for the session, and the port is not asked about again.
 A question declined unasked, because another one waits or the session is not running, is no

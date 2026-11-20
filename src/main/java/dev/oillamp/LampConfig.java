@@ -7,6 +7,7 @@ import java.util.Optional;
 import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampWallpaper;
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -44,9 +45,10 @@ record LampConfig(
     public LampConfig {
         // A published forward port would give the host's browser the forward's target, which the
         // user chose for the sandbox only.
-        for (Web.Port port : web.ports())
-            if (forwards.any(forward -> forward.port() == port.port()))
-                throw new IllegalArgumentException("web port " + port.port() + " is also a forward's port");
+        for (Web.Port port : web.ports()) {
+            Optional<String> forward = Web.Port.forwardProblem(port.port(), forwards);
+            if (forward.isPresent()) throw new IllegalArgumentException(forward.get());
+        }
     }
 
     /// The same configuration with other `[display]` settings, such as the wallpaper a new lamp
@@ -104,60 +106,86 @@ record LampConfig(
     /// @param publish which ports are published
     /// @param ports   the ports published from the start with `listed`, `any` and `ask`, each with
     ///                a name; sorted by name
-    public record Web(Publishing publish, Tuple<Port> ports) {
+    public record Web(LampWebPublishing publish, Tuple<Port> ports) {
 
         public Web {
-            for (int i = 0; i < ports.size(); i++)
-                for (int j = i + 1; j < ports.size(); j++) {
-                    if (ports.get(i).name().equals(ports.get(j).name()))
-                        throw new IllegalArgumentException("web port names must be unique: " + ports.get(i).name());
-                    if (ports.get(i).port() == ports.get(j).port())
-                        throw new IllegalArgumentException("web ports must be unique: " + ports.get(i).port());
-                }
+            for (int i = 0; i < ports.size(); i++) {
+                Optional<String> clash = Port.clash(ports.get(i), ports.sliceFirst(i));
+                if (clash.isPresent()) throw new IllegalArgumentException(clash.get());
+            }
         }
 
         /// The ports a session publishes as it opens: none with `off`, the listed ones otherwise.
-        /// With `any` and `ask`, more may follow during the session.
+        /// With `ask` and `any`, more may follow during the session.
         public Tuple<Port> published() {
             return switch (publish) {
                 case OFF -> Tuple.of(Port.class);
-                case LISTED, ANY, ASK -> ports;
+                case LISTED, ASK, ANY -> ports;
             };
         }
 
-        /// `web.publish`.
-        public enum Publishing {
-            /// Nothing is published, whatever `ports` lists.
-            OFF,
-            /// The ports in `ports`, and no others.
-            LISTED,
-            /// The ports in `ports`, and every port the agent starts listening on during the session.
-            ANY,
-            /// The ports in `ports`, and each port the agent starts listening on once the person
-            /// allowed it.
-            ASK;
-
-            public String configName() { return name().toLowerCase(java.util.Locale.ROOT); }
-        }
-
         /// One entry of `web.ports`: a name, and the port inside the sandbox a server listens on.
+        ///
+        /// What makes a name or a port wrong is said here once, by [#nameProblem], [#portProblem],
+        /// [#forwardProblem] and [#clash], for the loader, for `oillamp web` and for the
+        /// constructors alike.
         public record Port(String name, int port) {
             /// The longest name, so that the host's path to `web-<name>.sock` stays well inside the
             /// kernel's 107-byte limit on socket paths.
             public static final int LONGEST_NAME = 32;
 
             public Port {
-                if (!name.matches("[a-z0-9-]+") || name.length() > LONGEST_NAME)
-                    throw new IllegalArgumentException("A web port name is up to " + LONGEST_NAME
-                            + " lowercase letters, digits and dashes: " + name);
-                if (port < 1024 || port > 65535)
-                    throw new IllegalArgumentException("A web port must be in 1024-65535, got: " + port);
-                if (port == Forward.PROXY_PORT || port == Forward.MODEL_PORT)
-                    throw new IllegalArgumentException("Port " + port + " is oillamp's own inside the sandbox");
+                Optional<String> wrong = nameProblem(name).or(() -> portProblem(port));
+                if (wrong.isPresent()) throw new IllegalArgumentException("web port " + name + " = " + port + ": " + wrong.get());
             }
 
             /// `web-<name>.sock` in the infra socket directory, where the sandbox serves this port.
             public String socketFileName() { return "web-" + name + ".sock"; }
+
+            /// Why `name` cannot name a web port, or empty if it can.
+            static Optional<String> nameProblem(String name) {
+                return name.matches("[a-z0-9-]+") && name.length() <= LONGEST_NAME ? Optional.empty()
+                        : Optional.of("expected a name of up to " + LONGEST_NAME + " lowercase letters, digits and dashes");
+            }
+
+            /// Why `port` can never be published, whatever else the lamp has, or empty if it can:
+            /// below 1024, or one of oillamp's own ports inside the sandbox.
+            static Optional<String> portProblem(int port) {
+                if (port < 1024 || port > 65535)
+                    return Optional.of("expected a port between 1024 and 65535");
+                if (port == Forward.PROXY_PORT)
+                    return Optional.of("port " + port + " is the sandbox's egress proxy — it cannot be published");
+                if (port == Forward.MODEL_PORT)
+                    return Optional.of("port " + port + " is where the sandbox reaches the model service "
+                            + "through oillamp — it cannot be published");
+                if (port == Forward.MARIONETTE_PORT)
+                    return Optional.of("port " + port + " is where `lamp fetch` drives its headless Firefox "
+                            + "— it cannot be published");
+                return Optional.empty();
+            }
+
+            /// Why `port` cannot be published beside the lamp's `forwards`, or empty if it can:
+            /// publishing a forward's port would give the browser the forward's target.
+            static Optional<String> forwardProblem(int port, Tuple<Forward> forwards) {
+                for (Forward forward : forwards)
+                    if (forward.port() == port)
+                        return Optional.of("port " + port + " is the forward \"" + forward.name() + "\"; publishing it would "
+                                + "give your browser the forward's target, which you chose for the sandbox only");
+                return Optional.empty();
+            }
+
+            /// Why `candidate` cannot be listed beside `before`, or empty if it can: each name and
+            /// each port is listed once.
+            static Optional<String> clash(Port candidate, Tuple<Port> before) {
+                for (Port other : before) {
+                    if (other.name().equals(candidate.name()))
+                        return Optional.of("web port names must be unique — \"" + candidate.name() + "\" is listed twice");
+                    if (other.port() == candidate.port())
+                        return Optional.of("web ports must be unique — port " + candidate.port()
+                                + " is already listed as \"" + other.name() + "\"");
+                }
+                return Optional.empty();
+            }
         }
     }
 

@@ -192,6 +192,7 @@ final class CommandExecutionUtil {
             case Command.Model model   -> model(machine, context, model.lamp(), model.model());
             case Command.Instructions instructions -> instructions(machine, context, instructions.lamp());
             case Command.HostAccess access -> hostAccess(machine, context, access);
+            case Command.Web web       -> web(machine, context, web);
             case Command.Answer answer -> answer(machine, context, answer.lamp(), answer.yes(), answer.question());
         };
     }
@@ -1426,6 +1427,52 @@ final class CommandExecutionUtil {
             context.sink().accept(new LampEvent.Warning(HostAccessProblems.commandsUnchecked()));
         context.sink().accept(new LampEvent.HostAccessSettings(access.may(), access.guards(), access.readAllowlist(),
                 access.changeAllowlist(), access.checkerInstructions()));
+    }
+
+    /// `oillamp web <dir> [--publish <level>] [--ports <ports>]`: which web servers inside the
+    /// sandbox the lamp's file lets the host's browser open, after writing what was given into
+    /// it. Only `publish` and `ports` under `[web]` change, as with [#hostAccess]. A listed port
+    /// that is one of the lamp's forwards is refused before anything is written, in the words
+    /// `oillamp config check` would use; the options themselves were checked as they were read.
+    private static LampExitStatus web(Machine machine, Context context, Command.Web asked) {
+        Result<LampLayout> found = layoutOf(machine, asked.lamp());
+        if (found instanceof Result.Err<LampLayout> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampLayout layout = ((Result.Ok<LampLayout>) found).value();
+        Result<LampConfig> before = loadConfig(machine, context, layout.root());
+        if (before instanceof Result.Err<LampConfig> failure) {
+            context.sinkAcceptProblems(failure.problems());
+            return exitStatusFor(failure.problems());
+        }
+        LampConfig.Web now = ((Result.Ok<LampConfig>) before).value().web();
+        if (asked.onlyReads()) {
+            context.sink().accept(webSettings(now));
+            return LampExitStatus.SUCCESS;
+        }
+
+        LampConfig config = ((Result.Ok<LampConfig>) before).value();
+        LampConfig.Web wanted = new LampConfig.Web(asked.publish().orElse(now.publish()), asked.ports().orElse(now.ports()));
+        Tuple<LampProblem> forwards = Tuple.of(LampProblem.class);
+        for (LampConfig.Web.Port port : wanted.ports()) {
+            Optional<String> problem = LampConfig.Web.Port.forwardProblem(port.port(), config.forwards());
+            if (problem.isPresent())
+                forwards = forwards.add(ProblemCatalogUtil.configInvalidValue(layout.config(), "web.ports." + port.name(),
+                        Integer.toString(port.port()), problem.get()));
+        }
+        if (!forwards.isEmpty()) {
+            context.sinkAcceptProblems(forwards);
+            return exitStatusFor(forwards);
+        }
+        return changeConfig(machine, context, layout, "[web]",
+                file -> ConfigFileEditUtil.withWeb(file, asked.publish(), asked.ports()),
+                config.withWeb(wanted), () -> context.sink().accept(webSettings(wanted)));
+    }
+
+    private static LampEvent.WebSettings webSettings(LampConfig.Web web) {
+        return new LampEvent.WebSettings(web.publish(), web.ports().mapTo(Lamp.Web.ListedPort.class,
+                port -> new Lamp.Web.ListedPort(port.name(), port.port())));
     }
 
     /// `oillamp history <dir> autosave [<moment> on|off]...`: when the lamp's file says oillamp

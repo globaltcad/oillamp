@@ -96,6 +96,14 @@ without `[web]` publishes `opencode = 4096`, opencode's web interface.
   file needs no tool in the image and no cooperation from the agent, and the uid column tells the
   agent's sockets from the infra user's bridges without a list of exceptions. It is read every two
   seconds with the watcher's other checks, so a new server is offered within a few seconds.
+- **The program on a port is looked up once, as the agent, with `ss -p`.** A port number alone
+  does not tell the person what they would open. Only a process's owner may see which sockets it
+  holds, so the lookup runs as uid 1000, once per new port rather than on every look. The command
+  line is the agent's text, so it is shown on one line, without control characters, at most 120
+  long. A listed port has none: nothing need listen as the session starts, and its name says what
+  it is for; refreshing it during the session would mean a second poll for little gain.
+- **`oillamp web` writes `[web]` as `oillamp host-access` writes `[host_access]`**: only its keys,
+  the file read back with the loader's rules before it is written, and never while a session runs.
 - **With `ask`, a no holds for the session.** The server stays there and is found on every look;
   asking again each time would leave yes as the only way to stop the questions. A question that
   could not be asked, because another one was waiting, is not a no.

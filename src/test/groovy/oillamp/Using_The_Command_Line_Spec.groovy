@@ -447,6 +447,8 @@ class Using_The_Command_Line_Spec extends Specification {
             complete(script, 'oillamp', 'shell', '/x', '--w') == ['--window']
             complete(script, 'oillamp', 'follow', '/x', '--w') == ['--window']
             complete(script, 'oillamp', 'update', '/x', '--s') == ['--system']
+            complete(script, 'oillamp', 'web', '/x', '--p') == ['--publish', '--ports']
+            complete(script, 'oillamp', 'web', '/x', '--publish', '') == ['off', 'listed', 'ask', 'any']
             !complete(script, 'oillamp', 'at', '/x', '--').contains('--yes')
             complete(script, 'oillamp', 'completion', '') == ['bash']
             complete(script, 'oillamp', 'list', '').isEmpty()
@@ -487,6 +489,10 @@ class Using_The_Command_Line_Spec extends Specification {
             'schedule LAMP pause --at=in-2h'                       | '--cron, --at and --expires only go with `oillamp schedule <dir> add`'
             'schedule LAMP resume --expires in-3d'                 | '--cron, --at and --expires only go with `oillamp schedule <dir> add`'
             'schedule LAMP resume --expires=in-3d'                 | '--cron, --at and --expires only go with `oillamp schedule <dir> add`'
+            'web LAMP --publish on'                                | '--publish "on": expected off, listed'
+            'web LAMP --publish=on'                                | '--publish "on": expected off, listed'
+            'web LAMP --ports site:8080'                           | '--ports "site:8080": expected a name, "=" and a port'
+            'web LAMP --ports=site:8080'                           | '--ports "site:8080": expected a name, "=" and a port'
     }
 
     def 'An option that comes last, without its value, is refused with an example of the value: oillamp #line'() {
@@ -516,6 +522,8 @@ class Using_The_Command_Line_Spec extends Specification {
             'schedule LAMP add hi --expires' | '--expires needs a value, for example --expires "in 14d"'       | 'oillamp schedule <dir>'
             'at LAMP --model-service'      | '--model-service needs a value, for example --model-service https://api.eu.edenai.run' | 'oillamp at <dir>'
             'at LAMP --model-key-env'      | '--model-key-env needs a value, for example --model-key-env MY_MODEL_KEY' | 'oillamp at <dir>'
+            'web LAMP --publish'           | '--publish needs a value: off, listed'                            | 'oillamp web <dir>'
+            'web LAMP --ports'             | '--ports needs ports separated by commas, for example --ports "opencode=4096,site=8080"' | 'oillamp web <dir>'
             'at LAMP --model'              | '--model needs a value, for example --model azure/gpt-6.1-sol' | 'oillamp at <dir>'
     }
 

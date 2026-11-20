@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Tuple;
 
@@ -387,7 +388,7 @@ final class AgentGuideUtil {
                       + "browser. Only if they say yes do they get a link to it, named `port-<number>`.\n"
                       + "They may say no, and are not asked about that port again this session.\n";
         };
-        if (web.publish() == LampConfig.Web.Publishing.OFF) return out.toString();
+        if (web.publish() == LampWebPublishing.OFF) return out.toString();
         if (ports.isEmpty()) {
             out.append(later.isEmpty()
                     ? "No port of this sandbox is published to the human's browser: the lamp's\n"

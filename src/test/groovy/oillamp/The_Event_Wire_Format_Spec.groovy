@@ -12,7 +12,9 @@ import dev.lamp.LampJob
 import dev.lamp.LampProblem
 import dev.lamp.LampStep
 import dev.lamp.LampSessionStatus
+import dev.lamp.Lamp
 import dev.lamp.LampWebPort
+import dev.lamp.LampWebPublishing
 import dev.lamp.LampRun
 import dev.lamp.LampRunOutcome
 import dev.lamp.LampAgentProgress
@@ -90,7 +92,10 @@ class The_Event_Wire_Format_Spec extends Specification {
                         Optional.of('bash'), true, Optional.of('azure/gpt-6.1-sol'))))
 
     static final LampWebPort WEB_PORT = new LampWebPort('opencode', 4096, 41237,
-            URI.create('http://k3v7x2ab.localhost:41237/'))
+            URI.create('http://k3v7x2ab.localhost:41237/'), '')
+
+    static final LampWebPort AGENTS_WEB_PORT = new LampWebPort('port-8000', 8000, 41238,
+            URI.create('http://k3v7x2ab.localhost:41238/'), 'python3 -m http.server 8000')
 
     static final LampRun RUN = new LampRun('run-12', Optional.of('job-3'), 'Check the build', Optional.empty())
 
@@ -112,8 +117,10 @@ class The_Event_Wire_Format_Spec extends Specification {
             new LampEvent.SessionStateChanged(new LampSessionStatus('starting', 'coming up', Duration.ZERO, 0,
                     Tuple.of(LampWebPort))),
             new LampEvent.WebPublished(WEB_PORT, false),
-            new LampEvent.WebPublished(WEB_PORT, true),
-            new LampEvent.WebPortAsked(5173, 'publish port 5173 from the sandbox to this machine\'s browser'),
+            new LampEvent.WebPublished(AGENTS_WEB_PORT, true),
+            new LampEvent.WebPortAsked(5173, 'publish port 5173 (npm run dev) from the sandbox to this machine\'s browser',
+                                       'npm run dev'),
+            new LampEvent.WebPortAsked(5174, 'publish port 5174 from the sandbox to this machine\'s browser', ''),
             new LampEvent.SessionOpened('20260928-120000', Tuple.of(String, 'ssh', '-T', 'lamp-k3v7x2ab'),
                                         Path.of('/run/user/1000/oillamp/k3v7x2ab/sockets/infra/vnc.sock'), 1920, 1080),
             new LampEvent.LookAtDesktop('the chart you asked for'),
@@ -187,6 +194,9 @@ class The_Event_Wire_Format_Spec extends Specification {
             new LampEvent.HostAccessSettings(LampHostAccess.MAY_READ_CHANGE_RUN, LampHostAccessGuards.ALLOWLISTS_CHECKER_USER,
                     Tuple.of(String, '~', '/srv/data'), Tuple.of(String, '~/Documents'),
                     '{"may_read": ["~/Documents"]}\nAnd nothing private.'),
+            new LampEvent.WebSettings(LampWebPublishing.ASK, Tuple.of(Lamp.Web.ListedPort,
+                    new Lamp.Web.ListedPort('opencode', 4096), new Lamp.Web.ListedPort('site', 8080))),
+            new LampEvent.WebSettings(LampWebPublishing.OFF, Tuple.of(Lamp.Web.ListedPort)),
             new LampEvent.AutosaveSettings(false, true, true, false, 10),
             new LampEvent.HistoryGrowthLimit(0.00003),
             new LampEvent.HistoryGrowthLimit(2),

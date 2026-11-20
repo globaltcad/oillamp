@@ -65,11 +65,6 @@ final class ConsoleRenderer {
     /// back to the start of that second row, and every redraw would leave a row of text behind.
     /// With wrapping off, a line that is too long is cut off at the right edge instead.
     private static final String WRAP_OFF = "\u001B[?7l", WRAP_ON = "\u001B[?7h";
-    /// Colour codes and other terminal escape sequences, and control characters such as tabs.
-    /// Anything that would act on the terminal rather than be read in it: an ANSI sequence, or a
-    /// control character. Used wherever the agent's or a model's text is printed.
-    static final Pattern NOT_PRINTABLE =
-            Pattern.compile("\u001B\\[[0-9;?]*[ -/]*[@-~]|\u001B.|\\p{Cntrl}");
 
     /// What is happening right now, if anything.
     private record Activity(String text, long startedNanos, String latestOutput) {
@@ -216,7 +211,7 @@ final class ConsoleRenderer {
                                                               + String.join(" ", opened.command()))); }
             case LampEvent.WebPublished web -> printLine(area("web") + colour(GREEN, "✓ ")
                     + web.port().name() + ": " + web.port().link() + " → port " + web.port().sandboxPort()
-                    + " in the sandbox");
+                    + " in the sandbox" + (web.port().program().isEmpty() ? "" : ", " + web.port().program()));
             case LampEvent.LookAtDesktop look -> printLine(area("desktop") + colour(GREEN, "◉ ")
                     + "the agent asks you to look at its desktop" + (look.what().isEmpty() ? "" : ": " + look.what()));
             case LampEvent.WindowOpened opened -> {
@@ -313,7 +308,7 @@ final class ConsoleRenderer {
                         + finished.snapshot().map(snapshot -> ", saved as " + snapshot.shortId()).orElse(""));
                 // The agent wrote this, so nothing in it may reach the terminal as a control sequence.
                 for (String answerLine : finished.answer().strip().lines().toList())
-                    printLine("  " + NOT_PRINTABLE.matcher(answerLine).replaceAll(" "));
+                    printLine("  " + UntrustedTextUtil.printable(answerLine));
             }
             case LampEvent.RunAccepted accepted -> printLine(area("run") + colour(GREEN, "✓ ") + "the agent answers this as "
                     + accepted.run().id() + "; `oillamp status` says how far it is");
@@ -348,23 +343,25 @@ final class ConsoleRenderer {
                              .orElse(", bounded by the allowlists alone, with no checker"));
             case LampEvent.HostAccessRequested requested -> printLine(area("host access")
                     + dim("· " + (requested.run().isEmpty() ? "" : requested.run() + " ") + requested.tool() + " "
-                          + shortened(NOT_PRINTABLE.matcher(requested.said()).replaceAll(" "), 90)));
+                          + shortened(requested.said(), 90)));
             case LampEvent.HostAccessDecided decided -> {
                 LampHostVerdict verdict = decided.verdict();
                 printLine(area("host access")
                         + (verdict.allowed() ? colour(GREEN, "✓ allowed ") : colour(YELLOW, "✗ refused "))
                         + decided.tool() + " (" + verdict.risk().name().toLowerCase(Locale.ROOT) + ", "
-                        + seconds(decided.took()) + "): " + shortened(NOT_PRINTABLE.matcher(verdict.reason()).replaceAll(" "), 120));
+                        + seconds(decided.took()) + "): " + shortened(verdict.reason(), 120));
             }
             case LampEvent.HostAccessRefused refused -> printLine(area("host access")
                     + colour(YELLOW, "✗ refused ") + refused.tool() + ": "
-                    + shortened(NOT_PRINTABLE.matcher(refused.why()).replaceAll(" "), 120));
+                    + shortened(refused.why(), 120));
             case LampEvent.HostAccessAsked asked -> printLine(area("host access")
                     + colour(YELLOW, "◉ ") + "the agent asks you to allow " + asked.tool() + ": "
-                    + shortened(NOT_PRINTABLE.matcher(asked.what()).replaceAll(" "), 120));
+                    + shortened(asked.what(), 120));
+            // The question names the agent's program, so it is quoted for a shell, where the
+            // person pastes the answer.
             case LampEvent.WebPortAsked asked -> printLine(area("web")
                     + colour(YELLOW, "◉ ") + "the agent listens on port " + asked.sandboxPort() + ": "
-                    + asked.what() + "? `oillamp answer <dir> yes|no -- \"" + asked.what() + "\"`");
+                    + asked.what() + "? `oillamp answer <dir> yes|no -- " + RuntimeEnvFileUtil.quote(asked.what()) + "`");
             case LampEvent.HostAccessSettings settings -> printLine(area("host access")
                     + "may " + settings.may().configName() + ", guards " + settings.guards().configName()
                     + ", read " + folders(settings.readAllowlist())
@@ -373,6 +370,10 @@ final class ConsoleRenderer {
                        + settings.checkerInstructions().lines().map(line -> "  | " + line)
                                .reduce((a, b) -> a + "\n" + b).orElse("  (nothing)")
                        : ", no checker"));
+            case LampEvent.WebSettings settings -> printLine(area("web")
+                    + "publish " + settings.publish().configName() + ", " + (settings.ports().isEmpty() ? "no ports listed"
+                       : "listed " + String.join(", ", settings.ports().mapTo(String.class,
+                                                                              port -> port.name() + " " + port.sandboxPort()))));
             case LampEvent.AutosaveSettings settings -> printLine(area("autosave")
                     + "startup " + onOff(settings.startup()) + ", shutdown " + onOff(settings.shutdown())
                     + ", before a job's run " + onOff(settings.beforeRun()) + ", after a job's run " + onOff(settings.afterRun())
@@ -413,7 +414,7 @@ final class ConsoleRenderer {
         StringBuilder out = new StringBuilder(printable(conversation.title())).append("  (")
                 .append(conversation.id()).append(")\n");
         for (dev.lamp.LampConversation.Entry entry : conversation.line()) {
-            String text = NOT_PRINTABLE.matcher(entry.text().strip()).replaceAll(" ");
+            String text = UntrustedTextUtil.printable(entry.text().strip());
             switch (entry.kind()) {
                 case MESSAGE_TO_AGENT -> out.append('\n').append(entry.id()).append("  you:   ")
                                    .append(text.replace("\n", "\n" + " ".repeat(18))).append('\n');
@@ -441,13 +442,12 @@ final class ConsoleRenderer {
         return run.job().map(job -> "job " + job).orElse("asked");
     }
 
-    /// One line of text someone wrote, such as a job's prompt, which the agent may have written:
-    /// without control characters, and at most `most` characters long.
     private static String onOff(boolean on) { return on ? "on" : "off"; }
 
+    /// One line of text someone wrote, such as a job's prompt, which the agent may have written:
+    /// without control characters, and at most `most` characters long.
     private static String shortened(String text, int most) {
-        String line = printable(text.replaceAll("\\s+", " "));
-        return line.length() <= most ? line : line.substring(0, most - 1) + "…";
+        return UntrustedTextUtil.oneLine(text, most);
     }
 
     private static String seconds(Duration took) {
@@ -703,9 +703,10 @@ final class ConsoleRenderer {
         activityShown = true;
     }
 
-    /// A line of a program's output, without anything that would move the cursor or change colours.
+    /// A line of a program's output, without anything that would move the cursor or change colours,
+    /// and without spaces around it.
     private static String printable(String line) {
-        return NOT_PRINTABLE.matcher(line).replaceAll(" ").strip();
+        return UntrustedTextUtil.printable(line).strip();
     }
 
     /// Removes the activity line, if one is on the screen. Call with the terminal lock held.

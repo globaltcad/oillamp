@@ -116,8 +116,10 @@ class Verifying_Published_Web_Servers_Spec extends Specification {
             with `podman exec`, opens a relay on this machine, and reports `port-5173`. This checks
             each belief on the way: that `/proc/net/tcp`, read with
             `podman exec --user lamp`, shows the listener with uid 1000, the agent's uid inside the
-            container; that the bridge started that way listens where the host can connect; and that
-            a request reaches the server.
+            container; that `ss -p`, run with `podman exec --user 1000`, names the agent's process
+            that listens there, so that the session can say which program it is; that the bridge
+            started that way listens where the host can connect; and that a request reaches the
+            server.
         """
         given: 'Python\'s `http.server` started as the agent on 127.0.0.1:5173'
             servers << lamp.exec('python3', '-m', 'http.server', '5173', '--bind', '127.0.0.1')
@@ -138,6 +140,9 @@ class Verifying_Published_Web_Servers_Spec extends Specification {
         then: 'it reported `port-5173`, port 5173 in the sandbox'
             published('port-5173') != null
             published('port-5173').sandboxPort() == 5173
+
+        and: 'it names the program that listens there, as the agent started it'
+            published('port-5173').program() == 'python3 -m http.server 5173 --bind 127.0.0.1'
 
         and: 'an HTTP GET to its port on this machine is answered with 200 by the server in the sandbox'
             eventually(Duration.ofSeconds(10)) { get(published('port-5173')).startsWith('HTTP/1.0 200') }

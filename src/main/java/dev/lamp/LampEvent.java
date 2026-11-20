@@ -96,8 +96,12 @@ public sealed interface LampEvent {
     /// session does not ask about that port again.
     ///
     /// @param sandboxPort the port inside the sandbox, such as `5173`
-    /// @param what        the question, in words, and the text to answer it by
-    record WebPortAsked(int sandboxPort, String what)   implements LampEvent {}
+    /// @param what        the question, in words, and the text to answer it by. It names the
+    ///                    program too, when it is known
+    /// @param program     the command line of the program that listens on the port, such as
+    ///                    `python3 -m http.server 5173`, as [LampWebPort#program()] says it; empty
+    ///                    when it is not known
+    record WebPortAsked(int sandboxPort, String what, String program) implements LampEvent {}
 
     /// The agent asks the user to look at its desktop, because it shows them something there.
     /// An application that shows the desktop can open it now.
@@ -313,6 +317,14 @@ public sealed interface LampEvent {
     ///                            model judges every host request against
     record HostAccessSettings(LampHostAccess may, LampHostAccessGuards guards, Tuple<String> readAllowlist,
                               Tuple<String> changeAllowlist, String checkerInstructions) implements LampEvent {}
+
+    /// The values under `[web]` in a lamp's `oillamp.toml`: which web servers inside the sandbox
+    /// the host's browser may open. Reported by `oillamp web`, after reading them or after
+    /// writing them.
+    ///
+    /// @param publish the value of `publish`
+    /// @param ports   the ports `ports` lists, sorted by name
+    record WebSettings(LampWebPublishing publish, Tuple<Lamp.Web.ListedPort> ports) implements LampEvent {}
 
     /// The values under `[autosave]` in a lamp's `oillamp.toml`: when oillamp saves the lamp by
     /// itself. Reported by `oillamp history <dir> autosave`, after reading them or after

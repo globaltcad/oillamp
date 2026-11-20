@@ -17,12 +17,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
 
-import dev.lamp.LampExitStatus;
 import dev.lamp.LampEvent;
-import dev.lamp.LampSaveKind;
+import dev.lamp.LampExitStatus;
 import dev.lamp.LampProblem;
+import dev.lamp.LampSaveKind;
 import dev.lamp.LampSessionStatus;
 import dev.lamp.LampWebPort;
+import dev.lamp.LampWebPublishing;
 import dev.oillamp.Relay.Listening.OnLoopbackPort;
 import dev.oillamp.Relay.Listening.OnUnixSocket;
 
@@ -415,7 +416,7 @@ final class Supervisor {
     private static LampEvent shown(Question question) {
         return switch (question) {
             case Question.HostRequest request -> new LampEvent.HostAccessAsked(request.run(), request.tool(), request.what());
-            case Question.PublishPort publish -> new LampEvent.WebPortAsked(publish.sandboxPort(), publish.text());
+            case Question.PublishPort publish -> new LampEvent.WebPortAsked(publish.sandboxPort(), publish.text(), publish.program());
         };
     }
 
@@ -615,7 +616,9 @@ final class Supervisor {
 
     /// Opens the relay for one published web port. Failing to is a warning: the session runs
     /// without that link.
-    private Result<Published> publish(LampConfig.Web.Port port) {
+    ///
+    /// @param program the command line of the program that listens on the port, or empty
+    private Result<Published> publish(LampConfig.Web.Port port, String program) {
         Result<Relay<OnLoopbackPort>> opened = Relay.openOnLoopback(new Relay.Route<>(
                 new OnLoopbackPort(0), prepared.layout().webSocket(port), new Relay.Admission.AnyNumber(),
                 "the web server '" + port.name() + "' (port " + port.port() + " in the sandbox)"),
@@ -626,7 +629,7 @@ final class Supervisor {
             case Result.Ok<Relay<OnLoopbackPort>> ok -> {
                 int hostPort = ok.value().listening().port();
                 yield Result.ok(new Published(ok.value(),
-                        new LampWebPort(port.name(), port.port(), hostPort, webLink(hostPort))));
+                        new LampWebPort(port.name(), port.port(), hostPort, webLink(hostPort), program)));
             }
         };
     }
@@ -730,7 +733,7 @@ final class Supervisor {
             // The web servers the browser may open. Each that cannot be published is a warning.
             Tuple<Published> published = Tuple.of(Published.class);
             for (LampConfig.Web.Port port : prepared.config().web().published()) {
-                Result<Published> web = publish(port);
+                Result<Published> web = publish(port, "");
                 if (web instanceof Result.Err<Published>(Tuple<LampProblem> problems)) warnings = warnings.addAll(problems);
                 else {
                     Published one = ((Result.Ok<Published>) web).value();
@@ -969,7 +972,7 @@ final class Supervisor {
     private void lookForNewWebServers() {
         java.util.Optional<java.util.function.IntConsumer> offer = switch (prepared.config().web().publish()) {
             case OFF, LISTED -> Optional.empty();
-            case ANY -> Optional.of(this::publishLater);
+            case ANY -> Optional.of(port -> publishLater(port, programListeningOn(port)));
             case ASK -> Optional.of(this::askToPublish);
         };
         if (offer.isEmpty() || !(state instanceof SessionState.Running) || served.isEmpty() || later.full()) return;
@@ -1018,16 +1021,48 @@ final class Supervisor {
                 .withTimeout(Duration.ofSeconds(10)).labelled("podman exec")).output();
     }
 
-    /// Asks the person whether to publish `sandboxPort`. A yes publishes it. A no, or no answer in
-    /// time, is remembered, and the port is not offered again this session. A question declined
-    /// unasked, because another one waits or the session is not running, is no answer: the port
-    /// is offered again on a later look.
+    /// The command line of the program that listens on `sandboxPort` in the sandbox, as
+    /// [UntrustedTextUtil] makes it fit to show, or empty when the session cannot tell. Looked up
+    /// once, when a port is offered, so the poll every two seconds costs nothing more, and within
+    /// [#PROGRAM_LOOKUP].
+    ///
+    /// `ss -p` names the process that holds the listening socket, and `/proc/<pid>/cmdline` its
+    /// command line. Both run as the agent's user, because only the owner of a process may see
+    /// which sockets it holds; the infra user, which reads `/proc/net/tcp`, sees none of them.
+    private String programListeningOn(int sandboxPort) {
+        Machine.Outcome found = machine.run(Machine.Command
+                .of("podman", "exec", "--user", Integer.toString(LampPlanUtil.AGENT_UID), sandbox.container().value(),
+                    "sh", "-c", PROGRAM_ON_PORT, "sh", Integer.toString(sandboxPort))
+                .withTimeout(PROGRAM_LOOKUP).labelled("podman exec"));
+        return found.succeeded() ? UntrustedTextUtil.oneLine(found.output(), PROGRAM_MOST) : "";
+    }
+
+    /// Prints the command line of the process listening on the TCP port `$1`, its arguments
+    /// separated by spaces, and fails when there is none the caller may see.
+    private static final String PROGRAM_ON_PORT =
+            "pid=$(ss -Hltnp \"sport = :$1\" | sed -n 's/.*pid=\\([0-9]*\\).*/\\1/p' | head -n 1); "
+          + "[ -n \"$pid\" ] && tr '\\0' ' ' < \"/proc/$pid/cmdline\"";
+
+    /// How long the lookup of a port's program may take. It runs on the watcher's thread, between
+    /// the checks of the sandbox's sockets, which nothing waits on but the health warnings. A
+    /// `podman exec` takes a fraction of a second; one that hangs costs at most this, once per
+    /// new port, and the port is then offered without its program, which is only a description.
+    private static final Duration PROGRAM_LOOKUP = Duration.ofSeconds(5);
+
+    /// The most characters of a program's command line that are passed on.
+    private static final int PROGRAM_MOST = 120;
+
+    /// Asks the person whether to publish `sandboxPort`, naming the program that listens on it. A
+    /// yes publishes it. A no, or no answer in time, is remembered, and the port is not offered
+    /// again this session. A question declined unasked, because another one waits or the session
+    /// is not running, is no answer: the port is offered again on a later look.
     private void askToPublish(int sandboxPort) {
         changeLater(ports -> ports.asking(sandboxPort));
-        var unused = awaitAnswered(new Question.PublishPort(sandboxPort)).whenComplete((yes, failed) -> {
+        String program = programListeningOn(sandboxPort);
+        var unused = awaitAnswered(new Question.PublishPort(sandboxPort, program)).whenComplete((yes, failed) -> {
             if (Boolean.TRUE.equals(yes))
                 // Not on the thread that answered, which is the control socket's, waiting to reply.
-                Thread.ofVirtual().name("oillamp-publish").start(() -> publishLater(sandboxPort));
+                Thread.ofVirtual().name("oillamp-publish").start(() -> publishLater(sandboxPort, program));
             else if (failed == null || failed instanceof java.util.concurrent.TimeoutException)
                 changeLater(ports -> ports.declined(sandboxPort));
             else
@@ -1040,7 +1075,9 @@ final class Supervisor {
     /// this machine, and reports the link. A port that fails is a warning, and is not offered
     /// again. A port whose server stops again stays published for the session; its link then
     /// opens nothing.
-    private void publishLater(int sandboxPort) {
+    ///
+    /// @param program the command line of the program that listens on the port, or empty
+    private void publishLater(int sandboxPort, String program) {
         // Several yeses may arrive close together; each checks the limit for itself.
         if (atTheLimit()) {
             changeLater(ports -> ports.declined(sandboxPort));
@@ -1052,7 +1089,7 @@ final class Supervisor {
                     "socat", "UNIX-LISTEN:/oillamp/sockets/infra/" + port.socketFileName() + ",fork,unlink-early,mode=666",
                     "TCP:127.0.0.1:" + sandboxPort)
                 .withTimeout(Duration.ofSeconds(15)).labelled("podman exec"));
-        Result<Published> opened = bridge.succeeded() ? publish(port)
+        Result<Published> opened = bridge.succeeded() ? publish(port, program)
                 : Result.err(ProblemCatalogUtil.webPortNotPublished(port, ProblemCatalogUtil.podmanFailed(
                         "podman exec", bridge.exitCode(), bridge.errorOutput().strip())));
         switch (opened) {
@@ -1302,10 +1339,11 @@ final class Supervisor {
     private String describeWeb() {
         Tuple<LampWebPort> ports = webPorts();
         if (ports.isEmpty())
-            return prepared.config().web().publish() == LampConfig.Web.Publishing.OFF
+            return prepared.config().web().publish() == LampWebPublishing.OFF
                     ? "off" : "nothing published";
         Tuple<String> lines = ports.mapTo(String.class, port ->
-                port.name() + ": " + port.link() + " → port " + port.sandboxPort() + " in the sandbox");
+                port.name() + ": " + port.link() + " → port " + port.sandboxPort() + " in the sandbox"
+                + (port.program().isEmpty() ? "" : ", " + port.program()));
         return String.join("\n" + " ".repeat(12), lines);
     }
 
@@ -1356,10 +1394,8 @@ final class Supervisor {
     private Control.Reply answerAboutTheDesktop(Control.Request request) {
         if (!request.op().equals("show"))
             return Control.Reply.failed("unknown request: " + request.op() + ". The one request here is show.");
-        String said = ConsoleRenderer.NOT_PRINTABLE.matcher(request.arguments().get("what").orElse("")).replaceAll(" ").strip();
-        String what = said.codePointCount(0, said.length()) <= LOOK_WORDS_MOST ? said
-                : said.substring(0, said.offsetByCodePoints(0, LOOK_WORDS_MOST - 1)) + "…";
-        context.sink().accept(new LampEvent.LookAtDesktop(what));
+        context.sink().accept(new LampEvent.LookAtDesktop(
+                UntrustedTextUtil.oneLine(request.arguments().get("what").orElse(""), LOOK_WORDS_MOST)));
         return Control.Reply.ok().with("text", "The user was asked to look at your desktop. Whether and when they"
                 + " look is up to them.");
     }

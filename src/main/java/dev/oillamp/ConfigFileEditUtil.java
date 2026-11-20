@@ -13,13 +13,15 @@ import java.util.regex.Pattern;
 
 import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostAccessGuards;
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Tuple;
 
 /// Changes a few keys of one table in the text of a lamp's `oillamp.toml`, and nothing else:
 /// every other line, the user's comments among them, stays as it was. What
-/// `oillamp host-access <dir> --may ...`, `oillamp history <dir> autosave ...` and
-/// `oillamp history <dir> max-growth <gb>` write, for an application's settings page.
+/// `oillamp host-access <dir> --may ...`, `oillamp web <dir> --publish ...`,
+/// `oillamp history <dir> autosave ...` and `oillamp history <dir> max-growth <gb>` write, for an
+/// application's settings page.
 ///
 /// This edits lines, it does not parse TOML. So the caller reads the result back with
 /// [ConfigLoadingUtil] and keeps it only when it says exactly what was asked; see
@@ -30,12 +32,14 @@ final class ConfigFileEditUtil {
 
     /// A table's header, such as `[host_access]` or `[[network.rules]]`, with an optional comment.
     static final Pattern TABLE = Pattern.compile("\\s*\\[\\[?[^\\]\\[]+\\]\\]?\\s*(#.*)?");
-    /// A key set to a bare value, a short string or a one-line list of short strings, such as
-    /// `startup    = false   # as a session starts`, `may = "read"    # what the agent may do`
-    /// or `read_allowlist = ["~"]   # folders it may read`. Only its value is replaced, so the
+    /// A key set to a bare value, a short string, a one-line list of short strings or a one-line
+    /// table of whole numbers, such as `startup    = false   # as a session starts`,
+    /// `may = "read"    # what the agent may do`, `read_allowlist = ["~"]   # folders it may read`
+    /// or `ports   = { opencode = 4096 } # name = port`. Only its value is replaced, so the
     /// alignment and the comment stay. A string with an escape in it is not short.
     static final Pattern BARE = Pattern.compile("(\\s*[A-Za-z0-9_-]+\\s*=\\s*)"
-            + "(true|false|[-+0-9_.]+|\"[^\"\\\\]*\"|\\[(?:\\s*\"[^\"\\\\]*\"\\s*,?)*\\s*\\])(\\s*(#.*)?)");
+            + "(true|false|[-+0-9_.]+|\"[^\"\\\\]*\"|\\[(?:\\s*\"[^\"\\\\]*\"\\s*,?)*\\s*\\]"
+            + "|\\{(?:\\s*[A-Za-z0-9_-]+\\s*=\\s*[0-9]+\\s*,?)*\\s*\\})(\\s*(#.*)?)");
 
     /// `file` with `may`, `guards`, `read_allowlist`, `change_allowlist` and
     /// `checker_instructions` under `[host_access]` set to what is given.
@@ -49,6 +53,16 @@ final class ConfigFileEditUtil {
         changeAllowlist.ifPresent(folders -> values.put("change_allowlist", list(folders)));
         checkerInstructions.ifPresent(text -> values.put("checker_instructions", text(text)));
         return withValues(file, "host_access", values);
+    }
+
+    /// `file` with `publish` and `ports` under `[web]` set to what is given. The names are those
+    /// [LampConfig.Web.Port] allows, so each is a bare key.
+    static String withWeb(String file, Optional<LampWebPublishing> publish, Optional<Tuple<LampConfig.Web.Port>> ports) {
+        SequencedMap<String, String> values = new LinkedHashMap<>();
+        publish.ifPresent(chosen -> values.put("publish", "\"" + chosen.configName() + "\""));
+        ports.ifPresent(listed -> values.put("ports", listed.isEmpty() ? "{}" : "{ " + String.join(", ",
+                listed.mapTo(String.class, port -> port.name() + " = " + port.port())) + " }"));
+        return withValues(file, "web", values);
     }
 
     /// `file` with each key of `values` under `[table]` set to its value, which is already

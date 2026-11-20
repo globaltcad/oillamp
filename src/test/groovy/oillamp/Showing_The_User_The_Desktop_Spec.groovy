@@ -90,8 +90,9 @@ class Showing_The_User_The_Desktop_Spec extends Specification {
             The words the agent gives `lamp show` reach the user through the `LookAtDesktop`
             event, in a program built on oillamp or in a terminal. Escape sequences and other
             control characters could change how a terminal shows everything after them, so the
-            session replaces them with spaces. A few words say what is shown, so the session cuts
-            the text at 200 characters, ending it with `…`. Saying nothing is fine too.
+            session replaces them with spaces, and each run of spaces with one. A few words say
+            what is shown, so the session cuts the text at 200 characters, ending it with `…`.
+            Saying nothing is fine too.
         """
         given: 'a session runs'
             aRunningSession()
@@ -100,9 +101,9 @@ class Showing_The_User_The_Desktop_Spec extends Specification {
             agentAsks(op: 'show', what: 'the \u001B[31mred\u001B[0m chart\u0007 ' + 'x' * 500)
             agentAsks(op: 'show')
 
-        then: 'the first event has spaces for the control characters, and 200 characters ending in `…`; the second has no words'
+        then: 'the first event has one space for each run of control characters and spaces, and 200 characters ending in `…`; the second has no words'
             var looks = waitFor(LampEvent.LookAtDesktop, 2)
-            looks[0].what().startsWith('the  red  chart  xxx')
+            looks[0].what().startsWith('the red chart xxx')
             looks[0].what().length() == 200
             looks[0].what().endsWith('x…')
             looks[1].what() == ''

@@ -333,6 +333,7 @@ oillamp cancel <dir> [<run>]     # stop the agent's run
 oillamp model <dir> <id>         # answer with this model from the next run on, without restarting
 oillamp instructions <dir> --instructions-env <name> # follow new instructions from the next run on
 oillamp conversations <dir> [<id>] # list the agent's conversations, or show one
+oillamp web <dir> [--publish <level>] [--ports <name>=<port>,...]  # which web servers your browser may open
 oillamp recordings <dir>         # list screen recordings (if recording is on)
 oillamp config <dir> check       # validate the lamp's oillamp.toml
 oillamp guide                    # a first session, step by step, in your terminal
@@ -498,7 +499,11 @@ When the session starts, it prints a link for each published port, such as
 `http://k3v7x2ab.localhost:41237/`. Run `opencode serve --port 4096` in the sandbox's shell, and
 the `opencode` link opens opencode's web interface; sign in with the password it prints. A page you open there runs in your browser, so
 it can send requests to your other local web servers and to other lamps' published ports; set
-`publish = "off"` if you do not want that.
+`publish = "off"` if you do not want that. With `"ask"` or `"any"`, a port the agent opens gets a
+link named `port-<number>`, and oillamp names the program that listens there, such as
+`python3 -m http.server 8000`, in the question and beside the link. `oillamp web <dir>` says what
+`[web]` has, and `--publish ask --ports "opencode=4096,site=8080"` writes it there, changing nothing
+else in the file, with the session stopped; applications use `LampDirectory.web`.
 
 The shipped rules block your local network and this machine's loopback, and send Eden AI traffic
 only to its EU endpoint. Your local network is blocked also where its addresses are public, as IPv6

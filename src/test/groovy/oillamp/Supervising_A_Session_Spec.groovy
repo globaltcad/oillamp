@@ -482,8 +482,9 @@ class Supervising_A_Session_Spec extends Specification {
             published.sandboxPort() == 4096
             published.link() == URI.create("http://${agentId}.localhost:${published.hostPort()}/")
 
-        and: 'it says the lamp listed it, rather than the agent opening it'
+        and: 'it says the lamp listed it, rather than the agent opening it, and names no program, since nothing needs to listen there yet'
             !event.openedByTheAgent()
+            published.program() == ''
 
         and: 'the session\'s state lists the same port, for an application that joins later'
             waitUntil { reported.any { it instanceof LampEvent.SessionStateChanged && it.status().webPorts().contains(published) } }
@@ -568,12 +569,17 @@ class Supervising_A_Session_Spec extends Specification {
     /** The lamp id the scenarios about web servers the agent starts give their lamp. */
     static final String AGENT_ID = 'k3v7x2ab'
 
-    /** Starts a session for a lamp with this `[web]`, whose sandbox's `/proc/net/tcp` is `procNetTcp`. */
-    private Map startASessionWhoseAgentListens(String web, String procNetTcp = PROC_NET_TCP) {
+    /**
+     * Starts a session for a lamp with this `[web]`, whose sandbox's `/proc/net/tcp` is `procNetTcp`,
+     * and where looking up the program on a port as the agent's user prints `program`; without
+     * one, it prints nothing.
+     */
+    private Map startASessionWhoseAgentListens(String web, String procNetTcp = PROC_NET_TCP, String program = '') {
         host.machine {
             it.windowsStayOpenFor(Duration.ofSeconds(60))
               .generatedAgentId(AGENT_ID)
               .commandSucceeding("podman exec --user lamp oillamp-${AGENT_ID} cat /proc/net/tcp", procNetTcp)
+              .commandSucceeding("podman exec --user 1000 oillamp-${AGENT_ID} sh -c", program)
         }
         var lamp = host.lampPath()
         host.givenConfig(lamp, 'schema_version = 1\n\n[web]\n' + web)
@@ -650,21 +656,44 @@ class Supervising_A_Session_Spec extends Specification {
             (started?.session as Thread)?.join(20_000)
     }
 
-    def 'With `web.publish = "#publish"`, oillamp never offers port 2828, where `lamp fetch`\'s Firefox listens, but offers the agent\'s other ports'() {
+    def 'oillamp never publishes port 2828, where `lamp fetch` drives its Firefox: a lamp that lists it is refused, and under `publish = "#publish"` the agent\'s listener there is never offered'() {
         reportInfo """
-            `lamp fetch` drives a headless Firefox over Marionette, which listens on 127.0.0.1,
-            port 2828, for the seconds of a fetch. The agent's user owns that listener, so with
-            `publish = "any"` or `"ask"` under `[web]` oillamp would offer it like a web server the
-            agent started: publish it to the person's browser, or ask the person about it, at
-            nearly every fetch. It is no web server, so oillamp never offers port 2828, as it never
-            offers its own proxy and model relay ports, 3128 and 3129.
+            Let's consider what happens on port 2828 inside the sandbox. `lamp fetch` runs entirely
+            in the sandbox: its script, `lamp-fetch`, starts the sandbox's own headless Firefox and
+            drives it over Marionette, Firefox's remote-control protocol, on 127.0.0.1:2828, for
+            the seconds of a fetch. Firefox loads the page through the egress proxy, like
+            everything else in the sandbox, and oillamp on the host plays no part in it.
 
-            Here the sandbox's `/proc/net/tcp` lists two listeners of the agent's on 127.0.0.1: 2828
-            and a development server on 5173. Ports are offered lowest first, so an offer of 2828
-            would come before the one of 5173. With `"any"`, an offer is a `LampEvent.WebPublished`;
-            with `"ask"`, a `LampEvent.WebPortAsked`.
+            Nothing stops anything in the sandbox from listening on 2828; a server the agent
+            started there would only collide with `lamp fetch`'s Firefox. What oillamp refuses is
+            publishing 2828, that is, making it reachable from the person's browser through an
+            oillamp link. While `lamp fetch`'s Firefox listens there, any page in that browser could
+            send it Marionette commands and so remote-control it. Like 3128, the egress proxy, and
+            3129, the way to the model service, 2828 is oillamp's own plumbing in the sandbox, not
+            a web server for a person to open.
+
+            So publishing it is refused both ways it could happen. A lamp whose `oillamp.toml` lists
+            2828 in `web.ports` is refused by `oillamp config <dir> check` with `OIL-CONFIG-004`.
+            And with `publish = "any"` or `"ask"`, the session never offers a listener on 2828,
+            even though it belongs to the agent's user, as every port the session offers does. An
+            offer is a `LampEvent.WebPublished` under `"any"` and a `LampEvent.WebPortAsked` under
+            `"ask"`. Here the agent also listens on 5173, a development server's port, which the
+            session does offer.
         """
-        given: 'a session for a lamp with `publish = "#publish"`, whose agent listens on 2828 and 5173'
+        given: 'a lamp with `publish = "#publish"` that lists `fetch = 2828` in `web.ports`'
+            var listing = host.lampPath('listing-2828')
+            host.givenConfig(listing, "schema_version = 1\n\n[web]\npublish = \"$publish\"\nports = { fetch = 2828 }\n")
+
+        when: '`oillamp config <dir> check` runs for it'
+            var checked = host.oillamp.run('config', listing.toString(), 'check')
+
+        then: 'it reports `OIL-CONFIG-004` for `web.ports.fetch`, and says that `lamp fetch` drives its Firefox there'
+            checked.status() == LampExitStatus.USAGE
+            checked.reported('OIL-CONFIG-004')
+            checked.console().contains('web.ports.fetch')
+            checked.console().contains('`lamp fetch` drives its headless Firefox')
+
+        when: 'a session runs for a lamp with `publish = "#publish"` and no listed ports, whose agent listens on 2828 and 5173'
             var tcp = PROC_NET_TCP.readLines().first() + '\n' +
                     '   0: 0100007F:0B0C 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41011 1 0000000000000000 100 0 0 10 0\n' +
                     '   1: 0100007F:1435 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41012 1 0000000000000000 100 0 0 10 0\n'
@@ -674,7 +703,7 @@ class Supervising_A_Session_Spec extends Specification {
                 reported.findResults { it instanceof LampEvent.WebPublished ? it.port().sandboxPort()
                                      : it instanceof LampEvent.WebPortAsked ? it.sandboxPort() : null } }
 
-        when: 'the session has offered port 5173, and looked into the sandbox for a few seconds more'
+        and: 'the session has offered port 5173, and looked into the sandbox for a few seconds more'
             waitUntil { offered().contains(5173) }
             Thread.sleep(5_000)
 
@@ -754,6 +783,89 @@ class Supervising_A_Session_Spec extends Specification {
             answered.status() == LampExitStatus.SUCCESS
             waitUntil { reported.any { it instanceof LampEvent.WebPublished } }
             reported.find { it instanceof LampEvent.WebPublished }.port().name() == 'port-5173'
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'With `web.publish = "ask"`, the question names the program that listens on the port, and so do the published port and `oillamp status`'() {
+        reportInfo """
+            Let's consider a lamp whose `oillamp.toml` sets `publish = "ask"` under `[web]`, and an
+            agent that starts Python's web server on port 5173. "Publish port 5173?" alone does not
+            tell the person what they would open. So when the session finds a new port, it looks
+            up, once, which program listens there: it runs `ss -p` and reads the process's
+            `/proc/<pid>/cmdline` in the sandbox with `podman exec --user 1000`, as the agent's
+            user. The infra user, which reads `/proc/net/tcp`, may not see which process holds a
+            socket of the agent's.
+
+            The program's command line becomes `LampEvent.WebPortAsked.program()`, and the
+            question, `what()`, names it in brackets. Once the person says yes, the published
+            `LampWebPort` keeps it as `program()`, and `oillamp status` shows it after the link.
+
+            In this scenario the container is simulated: the session's `podman exec --user 1000`
+            prints `python3 -m http.server 5173`, as `tr` turns the NUL bytes between the
+            arguments in `/proc/<pid>/cmdline` into spaces, with one after the last.
+        """
+        given: 'a session for a lamp with `publish = "ask"`, whose agent runs `python3 -m http.server 5173`'
+            var started = startASessionWhoseAgentListens('publish = "ask"\nports = {}\n', PROC_NET_TCP,
+                                                         'python3 -m http.server 5173 ')
+            var reported = started.reported as List<LampEvent>
+
+        when: 'the session asks the person'
+            waitUntil { reported.any { it instanceof LampEvent.WebPortAsked } }
+            var asked = reported.find { it instanceof LampEvent.WebPortAsked }
+
+        then: 'the question names the program, and so does its `program()`'
+            asked.program() == 'python3 -m http.server 5173'
+            asked.what() == 'publish port 5173 (python3 -m http.server 5173) from the sandbox to this machine\'s browser'
+
+        when: 'the person answers yes, naming the question by its text'
+            host.oillamp.run('answer', host.lampPath().toString(), 'yes', '--', asked.what())
+            waitUntil { reported.any { it instanceof LampEvent.WebPublished } }
+
+        then: 'the published `port-5173` names the program too'
+            var published = reported.find { it instanceof LampEvent.WebPublished }.port()
+            published.name() == 'port-5173'
+            published.program() == 'python3 -m http.server 5173'
+
+        and: '`oillamp status` shows it after the port\'s link'
+            host.oillamp.run('status', host.lampPath().toString()).console()
+                    .contains("${published.link()} → port 5173 in the sandbox, python3 -m http.server 5173")
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+    }
+
+    def 'The agent chooses its program\'s command line, so oillamp shows it on one line without control characters, cut at 120 characters'() {
+        reportInfo """
+            The program that listens on a port is the agent's, and so is its command line: the
+            agent can start a program whose arguments hold anything. That text reaches the person
+            in a terminal and in an application's window, as `LampWebPort.program()` and in the
+            question `LampEvent.WebPortAsked.what()`, which they answer by. An escape sequence
+            could recolour or hide what follows it in a terminal, a line break could make one
+            line look like two, and the right-to-left override (U+202E) would show the rest of
+            the text backwards.
+
+            So oillamp turns each of these into a space, and each run of spaces into one, and cuts
+            the text at 120 characters, ending it with `…`. Here the lamp has `publish = "any"`,
+            so the scenario reads the result from the published port, and the program's command
+            line holds NUL bytes, escape sequences that colour `server.js` red, a line break, a
+            right-to-left override, a tab, and 300 more characters.
+        """
+        given: 'a session for a lamp with `publish = "any"`, whose agent listens on 5173 with a hostile command line'
+            var hostile = 'node\u0000\u001B[31mserver.js\u001B[0m\u0000--title\u0000ok\napprove?\u202Eexe.txt\t' + 'x' * 300
+            var started = startASessionWhoseAgentListens('publish = "any"\nports = {}\n', PROC_NET_TCP, hostile)
+            var reported = started.reported as List<LampEvent>
+
+        when: 'the session publishes `port-5173`'
+            waitUntil { reported.any { it instanceof LampEvent.WebPublished } }
+            var program = reported.find { it instanceof LampEvent.WebPublished }.port().program()
+
+        then: 'its program is one line of 120 characters: the words with single spaces between them, cut with `…`'
+            program == ('node server.js --title ok approve? exe.txt ' + 'x' * 300).take(119) + '…'
+            program.length() == 120
 
         cleanup:
             host.oillamp.run('stop', host.lampPath().toString())

@@ -228,6 +228,15 @@ public final class Lamp implements AutoCloseable {
         throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no autosave settings"));
     }
 
+    /// The values the engine reported as a [LampEvent.WebSettings].
+    static Web webOf(Ran ran) throws LampFailedException {
+        ran.orThrow();
+        for (LampEvent event : ran.events())
+            if (event instanceof LampEvent.WebSettings(LampWebPublishing publish, Tuple<Web.ListedPort> ports))
+                return new Web(publish, ports);
+        throw new LampFailedException(ran.status(), InternalLampUtil.internal("the engine reported no web settings"));
+    }
+
     /// The value the engine reported as a [LampEvent.HistoryGrowthLimit].
     static double maxGrowthOf(Ran ran) throws LampFailedException {
         ran.orThrow();
@@ -325,6 +334,37 @@ public final class Lamp implements AutoCloseable {
     ///                  `beforeRun` and `afterRun` say for a job's run instead. 10 unless changed,
     ///                  and at most a day, 1440
     public record Autosave(boolean startup, boolean shutdown, boolean beforeRun, boolean afterRun, int chatQuietMinutes) {}
+
+    /// Which web servers inside a lamp's sandbox the host's browser may open: the `[web]` table
+    /// of its `oillamp.toml`, as [LampDirectory#web()] reads it and [LampDirectory#web(Web)]
+    /// writes it.
+    ///
+    /// A session publishes the listed ports as it opens, unless `publish` is
+    /// [LampWebPublishing#OFF], whether or not anything in the sandbox listens on them yet. With
+    /// [LampWebPublishing#ASK] and [LampWebPublishing#ANY], ports the agent opens during the
+    /// session may follow. Each published port reaches the host as a [LampWebPort], in
+    /// [LampSessionStatus#webPorts()].
+    ///
+    /// @param publish which ports are published
+    /// @param ports   the listed ports, sorted by name, as the file reads back
+    public record Web(LampWebPublishing publish, Tuple<ListedPort> ports) {
+
+        /// One entry of `web.ports`: a name, and the port inside the sandbox it names.
+        ///
+        /// The engine refuses a name other than up to 32 lowercase letters, digits and dashes, a
+        /// port outside 1024–65535 or one of oillamp's own in the sandbox (3128, 3129 and 2828),
+        /// a port of one of the lamp's `[[network.forwards]]`, and a name or port listed twice.
+        ///
+        /// @param name        what the port is for, such as `opencode`; a published port's
+        ///                    [LampWebPort#name()]
+        /// @param sandboxPort the port inside the sandbox, such as `4096`
+        public record ListedPort(String name, int sandboxPort) {
+            public ListedPort {
+                if (name.contains(",") || name.contains("="))
+                    throw new IllegalArgumentException("a listed port's name cannot hold a comma or an equals sign: " + name);
+            }
+        }
+    }
 
     // ─── conversations ─────────────────────────────────────────────────────────────────────
 

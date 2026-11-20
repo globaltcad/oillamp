@@ -8,6 +8,7 @@ import dev.lamp.LampHostAccess;
 import dev.lamp.LampHostAccessGuards;
 import dev.lamp.LampProblem;
 import dev.lamp.LampWallpaper;
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Association;
 import sprouts.Tuple;
@@ -120,6 +121,13 @@ sealed interface Command {
             return may.isEmpty() && guards.isEmpty() && readAllowlist.isEmpty() && changeAllowlist.isEmpty()
                 && checkerInstructionsEnv.isEmpty();
         }
+    }
+    /// The new `publish` and listed ports of `[web]`, the ports sorted by name; with neither, the
+    /// command only says what the lamp's file has.
+    record Web(Path lamp, Optional<LampWebPublishing> publish, Optional<Tuple<LampConfig.Web.Port>> ports,
+               Context.Options options) implements Command {
+        /// Whether the command only reads the lamp's file.
+        boolean onlyReads() { return publish.isEmpty() && ports.isEmpty(); }
     }
     /// The person's answer to a host-access question, named by its text as the event gave it.
     record Answer(Path lamp, boolean yes, String question, Context.Options options) implements Command {}
@@ -238,6 +246,11 @@ sealed interface Command {
             case "--read-allowlist", "--change-allowlist" -> ProblemCatalogUtil.usage(pending.get()
                     + " needs folders separated by colons, for example " + pending.get() + " \"~/Documents:/srv/data\"",
                     usageOf("host-access"));
+            case "--publish" -> ProblemCatalogUtil.usage(
+                    "--publish needs a value: " + PUBLISH_WORDS, usageOf("web"));
+            case "--ports" -> ProblemCatalogUtil.usage(
+                    "--ports needs ports separated by commas, for example --ports \"opencode=4096,site=8080\"",
+                    usageOf("web"));
             default -> ProblemCatalogUtil.usage(
                     "--open needs the session to play, for example --open 20260101-120000",
                     "oillamp recordings <dir> [--open <session>] [--prune]");
@@ -535,6 +548,19 @@ sealed interface Command {
                         guards.flatMap(LampHostAccessGuards::named), read, change,
                         options.hostAccess().map(Context.Options.HostAccessGrant::checkerInstructionsEnv), options));
             }
+            case "web" -> {
+                Optional<String> publish = values.get("--publish");
+                if (publish.isPresent() && LampWebPublishing.named(publish.get()).isEmpty())
+                    yield Result.err(ProblemCatalogUtil.usage("--publish \"" + publish.get() + "\": expected " + PUBLISH_WORDS,
+                            usageOf("web")));
+                Path lamp = Path.of(rest.first());
+                Optional<LampWebPublishing> level = publish.flatMap(LampWebPublishing::named);
+                Optional<String> listed = values.get("--ports");
+                if (listed.isEmpty()) yield Result.ok(new Web(lamp, level, Optional.empty(), options));
+                Result<Tuple<LampConfig.Web.Port>> ports = listedPorts(listed.get());
+                if (ports instanceof Result.Err<Tuple<LampConfig.Web.Port>> failure) yield Result.err(failure.problems());
+                yield Result.ok(new Web(lamp, level, Optional.of(((Result.Ok<Tuple<LampConfig.Web.Port>>) ports).value()), options));
+            }
             case "answer" -> {
                 if (rest.size() < 3 || !(rest.get(1).equals("yes") || rest.get(1).equals("no")))
                     yield Result.err(ProblemCatalogUtil.usage(
@@ -616,6 +642,7 @@ sealed interface Command {
                 .put("instructions", ValueSet.of("--instructions-env", "--embedded"))
                 .put("host-access", ValueSet.of("--may", "--guards", "--read-allowlist", "--change-allowlist",
                                                 "--checker-instructions-env", "--embedded"))
+                .put("web",        ValueSet.of("--publish", "--ports", "--embedded"))
                 .put("answer",     ValueSet.of("--embedded"))
                 .put("conversations", ValueSet.of("--embedded"))
                 .put("shell",      ValueSet.of("--window", "--embedded"))
@@ -633,7 +660,7 @@ sealed interface Command {
     ValueSet<String> VALUE_OPTIONS = ValueSet.of(
             "--open", "--model-service", "--model-key-env", "--model", "--instructions-env", "--message", "--cron", "--at", "--expires",
             "--checker-instructions-env", "--may", "--guards", "--read-allowlist", "--change-allowlist", "--wallpaper", "--background",
-            "--in", "--after", "--instead-of");
+            "--in", "--after", "--instead-of", "--publish", "--ports");
 
     /// What `oillamp history <dir>` does besides listing the snapshots.
     ValueSet<String> HISTORY_ACTIONS = ValueSet.of("list", "save", "restore", "autosave",
@@ -651,7 +678,7 @@ sealed interface Command {
     ValueSet<String> NEEDS_A_LAMP = ValueSet.of(
             "at", "view", "shell", "stop", "status", "follow", "recordings", "config", "remove",
             "history", "schedule", "ask", "conversations", "cancel", "model", "instructions", "update",
-            "host-access", "answer");
+            "host-access", "web", "answer");
 
     /// The commands that work on one lamp. `remove` takes several.
     ValueSet<String> ONE_LAMP_ONLY = ValueSet.of(
@@ -661,7 +688,7 @@ sealed interface Command {
     Association<String, Integer> MOST_ARGUMENTS =
             Association.between(String.class, Integer.class)
                 .put("config", 2).put("completion", 1).put("schedule", 3).put("ask", 2)
-                .put("conversations", 2).put("cancel", 2).put("model", 2).put("instructions", 1).put("host-access", 1).put("answer", 3)
+                .put("conversations", 2).put("cancel", 2).put("model", 2).put("instructions", 1).put("host-access", 1).put("web", 1).put("answer", 3)
                 // The lamp, `autosave`, and each moment and chat-quiet-minutes with its value.
                 .put("history", 2 + 2 * (AUTOSAVE_MOMENTS.size() + 1))
                 .put("list", 0).put("version", 0).put("help", 0).put("about", 0).put("guide", 0);
@@ -676,6 +703,32 @@ sealed interface Command {
     /// The words `--guards` takes, as a usage message lists them.
     String GUARDS_WORDS = "allowlists, allowlists_checker (then the checker model) or allowlists_checker_user "
                         + "(then you too, for every command and for a folder outside the allowlists)";
+
+    /// The words `--publish` takes, as a usage message lists them.
+    String PUBLISH_WORDS = "off, listed (the ports in web.ports), ask (also each port the agent opens, once you allow it) "
+                         + "or any (also every port the agent opens)";
+
+    /// The ports of `--ports`, each `<name>=<port>`, separated by commas, sorted by name, or the
+    /// first that [LampConfig.Web.Port] refuses. An empty value is no port at all. That a port is
+    /// a forward's is for the lamp's file to say, when the changed file is read back.
+    private static Result<Tuple<LampConfig.Web.Port>> listedPorts(String given) {
+        Tuple<LampConfig.Web.Port> ports = Tuple.of(LampConfig.Web.Port.class);
+        for (String entry : given.split(",", -1)) {
+            if (entry.isBlank()) continue;
+            String[] nameAndPort = entry.split("=", -1);
+            String said = "--ports \"" + entry.strip() + "\": ";
+            if (nameAndPort.length != 2 || !nameAndPort[1].strip().matches("[0-9]{1,5}"))
+                return Result.err(ProblemCatalogUtil.usage(said + "expected a name, \"=\" and a port, such as "
+                        + "\"site=8080\"", usageOf("web")));
+            String name = nameAndPort[0].strip();
+            int number = Integer.parseInt(nameAndPort[1].strip());
+            Optional<String> wrong = LampConfig.Web.Port.nameProblem(name).or(() -> LampConfig.Web.Port.portProblem(number));
+            if (wrong.isEmpty()) wrong = LampConfig.Web.Port.clash(new LampConfig.Web.Port(name, number), ports);
+            if (wrong.isPresent()) return Result.err(ProblemCatalogUtil.usage(said + wrong.get(), usageOf("web")));
+            ports = ports.add(new LampConfig.Web.Port(name, number));
+        }
+        return Result.ok(ports.sort(java.util.Comparator.comparing(LampConfig.Web.Port::name)));
+    }
 
     /// The folders of `--read-allowlist` or `--change-allowlist`, separated by colons as in
     /// `PATH`. An empty value is no folder at all.
@@ -880,6 +933,16 @@ sealed interface Command {
                                       it; "" is none
                       --checker-instructions-env
                                       the variable that holds the new checker instructions
+              web <dir> [--publish <level>] [--ports <ports>]
+                    Say which web servers inside the sandbox your browser may open: `publish`
+                    and `ports` under [web] in oillamp.toml. With either, write it there, and
+                    change nothing else in the file. Writing needs the session to be stopped.
+                    `oillamp status` says what a running session published.
+                      --publish       off, listed (the ports in --ports), ask (also each port
+                                      the agent opens, once you allow it) or any (also every
+                                      port the agent opens)
+                      --ports         name=port inside the sandbox, separated by commas:
+                                      "opencode=4096,site=8080"; "" is none
               answer <dir> (yes | no) "<question>"
                     Answer a running session's host-access question, as it asked it.
               recordings <dir> [--open <session>] [--prune]

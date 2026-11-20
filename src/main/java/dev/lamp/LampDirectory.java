@@ -566,6 +566,46 @@ public final class LampDirectory {
                 "--checker-instructions-env", Lamp.CHECKER_INSTRUCTIONS_VARIABLE));
     }
 
+    /// Reads which web servers inside this lamp's sandbox the host's browser may open: `publish`
+    /// and `ports` in the `[web]` table of its `oillamp.toml`, merged over
+    /// `~/.config/oillamp/config.toml` as a session reads them. With `[web]` in neither file,
+    /// that is [LampWebPublishing#LISTED] and one listed port, `opencode` on 4096.
+    ///
+    /// Runs `oillamp web <dir>` as a short-lived engine process. It only reads the file, so it
+    /// works whether or not a session is running. What a running session published, the ports
+    /// the agent opened among them, is in [LampSessionStatus#webPorts()] instead.
+    ///
+    /// @throws LampFailedException when the directory is not a lamp, or its configuration is not
+    ///                     valid; the problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public Lamp.Web web() throws IOException, InterruptedException, LampFailedException {
+        return Lamp.webOf(Lamp.runToEnd(launcher, listeners, "web", directory.toString()));
+    }
+
+    /// Sets which web servers inside this lamp's sandbox the host's browser may open: `publish`
+    /// and `ports` in the `[web]` table of its `oillamp.toml`. Returns them as the file now has
+    /// them.
+    ///
+    /// Runs `oillamp web <dir> --publish <level> --ports <name>=<port>,...` as a short-lived
+    /// engine process. The engine replaces only those two keys and keeps every other line of the
+    /// file, comments included; a file without `[web]` gets the table at its end. It writes the
+    /// file only when the result is a valid configuration.
+    ///
+    /// Refused with [LampExitStatus#LAMP_BUSY] while a session runs this lamp, because a session
+    /// reads the file only when it starts.
+    ///
+    /// @param wanted the values to write; see [Lamp.Web.ListedPort] for the ports the engine refuses
+    /// @return the values as the file now has them
+    /// @throws LampFailedException when the sandbox is running, or a listed port is refused; the
+    ///                     problem says which
+    /// @throws IOException when the engine's process could not be started at all
+    public Lamp.Web web(Lamp.Web wanted) throws IOException, InterruptedException, LampFailedException {
+        return Lamp.webOf(Lamp.runToEnd(launcher, listeners, "web", directory.toString(),
+                "--publish", wanted.publish().configName(),
+                "--ports", String.join(",", wanted.ports().mapTo(String.class,
+                        port -> port.name() + "=" + port.sandboxPort()))));
+    }
+
     /// Reads when oillamp saves this lamp by itself: the values in the `[autosave]` table of
     /// its `oillamp.toml`, merged over `~/.config/oillamp/config.toml` as a session reads them.
     ///

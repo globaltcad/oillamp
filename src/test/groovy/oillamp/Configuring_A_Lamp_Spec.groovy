@@ -3,13 +3,16 @@ package oillamp
 import dev.lamp.Lamp
 import dev.lamp.LampExitStatus
 import dev.lamp.LampEvent
+import dev.lamp.LampFailedException
 import dev.lamp.LampWallpaper
+import dev.lamp.LampWebPublishing
 import dev.oillamp.OilLamp
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.TempDir
 import spock.lang.Title
+import sprouts.Tuple
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -1676,5 +1679,206 @@ class Configuring_A_Lamp_Spec extends Specification {
             value | what                                                     || says
             'any' | 'a server it starts becomes openable by itself'          || 'becomes openable for the human by itself'
             'ask' | 'the person is asked about a server it starts first'     || 'oillamp asks the human whether to publish that port'
+    }
+
+    def 'An application reads `[web]` of a lamp whose `oillamp.toml` has none as `listed` with opencode on 4096, and writing it adds the table'() {
+        reportInfo """
+            Let's consider an application with a settings page for the web servers a lamp publishes,
+            such as the desktop app Genies, and a lamp whose `oillamp.toml` has no `[web]` table, as
+            every lamp made before the table existed. The application reads the settings with
+            `LampDirectory.web()`, which runs `oillamp web <dir>`, and gets what a session of the
+            lamp would publish: `LampWebPublishing.LISTED`, with one listed port, `opencode` on 4096.
+
+            It writes the person's choice with `LampDirectory.web(Lamp.Web)`, which runs
+            `oillamp web <dir> --publish <level> --ports <name>=<port>,...`. A file without the
+            table gets it at its end, with `publish` and `ports`. `web(Lamp.Web)` returns the
+            values as the file now has them, with the listed ports sorted by name, and reading
+            again gives the same.
+        """
+        given: 'a lamp that has run once, whose `oillamp.toml` has no `[web]` table'
+            var lamp = aLampThatHasRun('schema_version = 1\n')
+            var settings = Lamp.at(lamp).launchedBy(host.launcher)
+
+        expect: '`LampDirectory.web()` reads `LISTED`, with `opencode` on 4096 as the only listed port'
+            settings.web() == new Lamp.Web(LampWebPublishing.LISTED,
+                    Tuple.of(Lamp.Web.ListedPort, new Lamp.Web.ListedPort('opencode', 4096)))
+
+        when: 'the application writes `ASK`, with `site` on 8080 and `opencode` on 4096, in that order'
+            var written = settings.web(new Lamp.Web(LampWebPublishing.ASK, Tuple.of(Lamp.Web.ListedPort,
+                    new Lamp.Web.ListedPort('site', 8080), new Lamp.Web.ListedPort('opencode', 4096))))
+
+        then: 'it gets back `ASK` with both ports sorted by name, and reading again gives the same'
+            written == new Lamp.Web(LampWebPublishing.ASK, Tuple.of(Lamp.Web.ListedPort,
+                    new Lamp.Web.ListedPort('opencode', 4096), new Lamp.Web.ListedPort('site', 8080)))
+            settings.web() == written
+
+        and: 'the file ends with a new `[web]` table that holds `publish` and `ports`'
+            Files.readString(lamp.resolve('oillamp.toml')) ==
+                    'schema_version = 1\n\n[web]\npublish = "ask"\nports = { opencode = 4096, site = 8080 }\n'
+    }
+
+    def '`oillamp web` writes only the key it is given: `--publish` keeps the listed ports, and `--ports ""` lists none and keeps `publish`'() {
+        reportInfo """
+            Let's consider a person at a terminal who changes one setting of `[web]` at a time
+            with `oillamp web <dir>`. `--publish <level>` writes `publish` and nothing else, so
+            the listed ports stay. `--ports <name>=<port>,...` writes `ports` and nothing else, and
+            an empty value, `--ports ""`, lists no ports at all. After writing, the command prints
+            both values as the file now has them.
+
+            Here the lamp's file has `publish = "ask"` and lists `opencode` on 4096. The person
+            first switches publishing off, then lists no ports.
+        """
+        given: 'a lamp that has run once, whose `[web]` has `publish = "ask"` and lists `opencode` on 4096'
+            var lamp = aLampThatHasRun('schema_version = 1\n\n[web]\npublish = "ask"\nports = { opencode = 4096 }\n')
+
+        when: '`oillamp web <dir> --publish off` runs'
+            var off = host.oillamp.run('web', lamp.toString(), '--publish', 'off')
+
+        then: 'the file has `publish = "off"` and still lists `opencode` on 4096, and the command prints both'
+            off.succeeded()
+            Files.readString(lamp.resolve('oillamp.toml')) ==
+                    'schema_version = 1\n\n[web]\npublish = "off"\nports = { opencode = 4096 }\n'
+            off.console().contains('publish off, listed opencode 4096')
+
+        when: '`oillamp web <dir> --ports ""` runs'
+            var cleared = host.oillamp.run('web', lamp.toString(), '--ports', '')
+
+        then: 'the file lists no ports and still has `publish = "off"`, and the command prints both'
+            cleared.succeeded()
+            Files.readString(lamp.resolve('oillamp.toml')) ==
+                    'schema_version = 1\n\n[web]\npublish = "off"\nports = {}\n'
+            cleared.console().contains('publish off, no ports listed')
+    }
+
+    def 'Writing `[web]` into the commented `oillamp.toml` of a new lamp changes the values of `publish` and `ports` in their columns, and no other line'() {
+        reportInfo """
+            A new lamp's `oillamp.toml` is a commented file that oillamp writes, and then the
+            person's own. In its `[web]` table, `publish` and `ports` each have a comment beside
+            them, in a column, that explains the value. `LampDirectory.web(Lamp.Web)` replaces the
+            two values and nothing else: each comment stays in its column, and every other line of
+            the file stays as it was.
+
+            Here an application writes `LampWebPublishing.ANY` with no listed ports. `"any"` is
+            three characters shorter than `"listed"`, and `{}` seventeen shorter than
+            `{ opencode = 4096 }`, so each new value is followed by that many more spaces.
+        """
+        given: 'a new lamp that has run once, with the `oillamp.toml` oillamp wrote for it'
+            var lamp = aLampThatHasRun()
+            var file = lamp.resolve('oillamp.toml')
+            var before = Files.readAllLines(file)
+
+        when: 'an application writes `ANY` with no listed ports'
+            var written = Lamp.at(lamp).launchedBy(host.launcher)
+                    .web(new Lamp.Web(LampWebPublishing.ANY, Tuple.of(Lamp.Web.ListedPort)))
+
+        then: 'it gets back `ANY` with no ports'
+            written == new Lamp.Web(LampWebPublishing.ANY, Tuple.of(Lamp.Web.ListedPort))
+
+        and: 'the file differs from before only in the two values, each padded so that its comment stays in its column'
+            before.count { it.startsWith('publish = "listed"') } == 1
+            before.count { it.startsWith('ports   = { opencode = 4096 }') } == 1
+            Files.readAllLines(file) == before.collect {
+                it.startsWith('publish = "listed"') ? 'publish = "any"   ' + it.substring('publish = "listed"'.length())
+                : it.startsWith('ports   = { opencode = 4096 }') ? 'ports   = {}' + ' ' * 17 + it.substring('ports   = { opencode = 4096 }'.length())
+                : it
+            }
+    }
+
+    def '`LampDirectory.web` refuses to change `[web]` while a session runs, and the file stays as it was'() {
+        reportInfo """
+            A session reads `oillamp.toml` only as it starts, and publishes the listed ports then.
+            A change to `[web]` while it runs would not reach it, and the file would no longer say
+            what the session does. So `LampDirectory.web(Lamp.Web)` throws a `LampFailedException`
+            with the status `LAMP_BUSY` while a session runs the lamp, and writes nothing. Reading
+            with `LampDirectory.web()` works all the same.
+        """
+        given: 'a lamp whose `oillamp.toml` has no `[web]` table, and whose session runs'
+            var lamp = aLampThatHasRun('schema_version = 1\n')
+            var file = Files.readString(lamp.resolve('oillamp.toml'))
+            var settings = Lamp.at(lamp).launchedBy(host.launcher)
+            var session = aRunningSession(lamp)
+
+        when: 'an application writes `OFF`'
+            settings.web(new Lamp.Web(LampWebPublishing.OFF, Tuple.of(Lamp.Web.ListedPort)))
+
+        then: 'it throws a `LampFailedException` with `LAMP_BUSY`, and the file is as it was'
+            var busy = thrown(LampFailedException)
+            busy.status() == LampExitStatus.LAMP_BUSY
+            Files.readString(lamp.resolve('oillamp.toml')) == file
+
+        and: 'reading still works, and gives `LISTED`'
+            settings.web().publish() == LampWebPublishing.LISTED
+
+        cleanup:
+            host.oillamp.run('stop', lamp.toString())
+            session?.join(20_000)
+    }
+
+    def '`LampDirectory.web` refuses to list #what, and leaves `oillamp.toml` as it was'() {
+        reportInfo """
+            What `LampDirectory.web(Lamp.Web)` writes must be a `[web]` table that the lamp's next
+            session accepts, so it is checked by the same rules as the file itself: a name is up to
+            32 lowercase letters, digits and dashes; a port is from 1024 to 65535 and none of
+            oillamp's own in the sandbox: 3128, the egress proxy; 3129, the way to the model
+            service; and 2828, where `lamp fetch` drives its headless Firefox; each name and each port is listed
+            once; and no listed port is the port of one of the lamp's `[[network.forwards]]`.
+
+            A listed port that breaks a rule is refused with a `LampFailedException` with the
+            status `USAGE`, whose problem says which rule, and the file is not written. Here the
+            lamp has a forward "llm" on port 8000.
+        """
+        given: 'a lamp that has run once, with a forward "llm" on port 8000'
+            var lamp = aLampThatHasRun('''
+                schema_version = 1
+
+                [[network.forwards]]
+                name   = "llm"
+                port   = 8000
+                target = "llm.corp.example.com:8000"
+            '''.stripIndent())
+            var file = Files.readString(lamp.resolve('oillamp.toml'))
+
+        when: 'an application lists #what'
+            Lamp.at(lamp).launchedBy(host.launcher).web(new Lamp.Web(LampWebPublishing.LISTED,
+                    Tuple.of(Lamp.Web.ListedPort, ports.collect { new Lamp.Web.ListedPort(it.key, it.value) } as Lamp.Web.ListedPort[])))
+
+        then: 'it throws a `LampFailedException` with `USAGE`, whose problem says "#says"'
+            var refused = thrown(LampFailedException)
+            refused.status() == LampExitStatus.USAGE
+            refused.problem().whatHappened().contains(says)
+
+        and: 'the file is as it was'
+            Files.readString(lamp.resolve('oillamp.toml')) == file
+
+        where:
+            what                                              | ports              || says
+            'port 2828, where `lamp fetch` drives Firefox'    | [fetch: 2828]      || '`lamp fetch` drives its headless Firefox'
+            'port 3128, the sandbox\'s egress proxy'          | [proxy: 3128]      || 'egress proxy'
+            'port 80, below 1024'                             | [site: 80]         || 'between 1024 and 65535'
+            'a name with a capital letter and a space'        | ['My Site': 8080]  || 'lowercase letters, digits and dashes'
+            'port 8080 under two names'                       | [a: 8080, b: 8080] || 'port 8080 is already listed as "a"'
+            'port 8000, the forward "llm"'                    | [llm: 8000]        || 'the forward "llm"'
+    }
+
+    /** A lamp that has run one session; its `oillamp.toml` is the one oillamp writes, or `toml`. */
+    private Path aLampThatHasRun(String toml = null) {
+        var lamp = host.lampPath()
+        if (toml != null) host.givenConfig(lamp, toml)
+        assert host.oillamp.run('at', lamp.toString()).succeeded()
+        lamp
+    }
+
+    /** Starts a session of `lamp` whose windows stay open, and returns its thread once it is up. */
+    private Thread aRunningSession(Path lamp) {
+        host.machine { it.windowsStayOpenFor(Duration.ofSeconds(60)) }
+        var reported = new java.util.concurrent.CopyOnWriteArrayList<LampEvent>()
+        var oillamp = host.oillamp.observedBy { reported.add(it) }
+        var session = Thread.start { oillamp.run('at', lamp.toString()) }
+        var deadline = System.currentTimeMillis() + 30_000
+        while (!reported.any { it instanceof LampEvent.Summary && it.title() == 'your session is up' }) {
+            assert System.currentTimeMillis() < deadline : 'the session never came up'
+            Thread.sleep(50)
+        }
+        session
     }
 }

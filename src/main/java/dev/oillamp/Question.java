@@ -35,9 +35,14 @@ sealed interface Question {
 
     /// Whether a port the agent started listening on in the sandbox may be published to this
     /// machine's browser, with `web.publish = "ask"`.
-    record PublishPort(int sandboxPort) implements Question {
+    ///
+    /// @param sandboxPort the port inside the sandbox
+    /// @param program     the command line of the program that listens on it, fit to show on one
+    ///                    line, or empty when it is not known
+    record PublishPort(int sandboxPort, String program) implements Question {
         @Override public String text() {
-            return "publish port " + sandboxPort + " from the sandbox to this machine's browser";
+            return "publish port " + sandboxPort + (program.isEmpty() ? "" : " (" + program + ")")
+                 + " from the sandbox to this machine's browser";
         }
     }
 }

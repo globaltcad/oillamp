@@ -313,7 +313,7 @@ final class GeneratedFileTextUtil {
             # For this shell only:      eval "$(oillamp completion bash)"
             # For every future shell:   echo 'eval "$(oillamp completion bash)"' >> ~/.bashrc
             _oillamp() {
-                local commands='at update view shell stop status follow list remove history schedule ask cancel model instructions host-access answer conversations recordings doctor config completion guide about version help'
+                local commands='at update view shell stop status follow list remove history schedule ask cancel model instructions host-access web answer conversations recordings doctor config completion guide about version help'
                 local current="${COMP_WORDS[COMP_CWORD]}"
                 local before=""
                 [ "$COMP_CWORD" -ge 2 ] && before="${COMP_WORDS[COMP_CWORD-2]}"
@@ -330,6 +330,11 @@ final class GeneratedFileTextUtil {
                 fi
                 if [ "${COMP_WORDS[COMP_CWORD-1]}" = --guards ]; then
                     COMPREPLY=($(compgen -W 'allowlists allowlists_checker allowlists_checker_user' -- "$current"))
+                    return
+                fi
+                # `oillamp web <dir> --publish ask`: the option's value.
+                if [ "${COMP_WORDS[COMP_CWORD-1]}" = --publish ]; then
+                    COMPREPLY=($(compgen -W 'off listed ask any' -- "$current"))
                     return
                 fi
                 # `--background "#15121c"`: a colour, which nothing here can guess.
@@ -375,6 +380,7 @@ final class GeneratedFileTextUtil {
                             ask)           options="$options --in --after --instead-of --no-wait" ;;
                             instructions)  options="$options --instructions-env" ;;
                             host-access)   options="$options --may --guards --read-allowlist --change-allowlist --checker-instructions-env" ;;
+                            web)           options="$options --publish --ports" ;;
                             recordings)    options="$options --open --prune --dry-run" ;;
                             doctor|config) options="$options --dry-run --no-install" ;;
                             update)        options="$options --system --dry-run --no-install" ;;
