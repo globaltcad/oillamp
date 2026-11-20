@@ -657,8 +657,8 @@ public final class GeniesBackend implements Genies {
     /// Not while the genie is awake or waking: its lamp read the file as it woke. Nor rules
     /// with a mistake, which oillamp would refuse; the page says what it is.
     @Override public void saveHostAccess(UUID id) {
-        HostAccess.Rules draft = state.get().find(id).orElseThrow().hostAccess().draft();
-        if (asleep(id) && draft.mistake().isEmpty()) runner(id).hostAccess().save(draft);
+        HostAccess access = state.get().find(id).orElseThrow().hostAccess();
+        if (asleep(id) && access.draft().mistake().isEmpty()) runner(id).hostAccess().save(access.saved(), access.draft());
     }
 
     @Override public void decidePermission(UUID id, String request, boolean allowed) { runner(id).decidePermission(request, allowed); }

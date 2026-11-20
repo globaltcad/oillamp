@@ -3468,6 +3468,238 @@ public enum Lang {
             };
         }
 
+        // ─── which web servers the browser may open ────────────────────────────────────────
+
+        public String WHICH_WEB_SERVERS_IN_ITS_SANDBOX_MAY_YOUR_BROWSER_OPEN() {
+            return switch (lang) {
+                case ENGLISH -> "WHICH WEB SERVERS IN ITS SANDBOX MAY YOUR BROWSER OPEN?";
+                case GERMAN -> "WELCHE WEBSERVER IN SEINER SANDBOX DARF DEIN BROWSER ÖFFNEN?";
+                case SPANISH -> "¿QUÉ SERVIDORES WEB DE SU SANDBOX PUEDE ABRIR TU NAVEGADOR?";
+                case JAPANESE -> "サンドボックス内のどの Web サーバーをブラウザーで開けますか？";
+                case CHINESE -> "你的浏览器可以打开它沙盒里的哪些网页服务器？";
+            };
+        }
+
+        public String NONE() {
+            return switch (lang) {
+                case ENGLISH -> "None";
+                case GERMAN -> "Keine";
+                case SPANISH -> "Ninguno";
+                case JAPANESE -> "なし";
+                case CHINESE -> "无";
+            };
+        }
+
+        public String LISTED() {
+            return switch (lang) {
+                case ENGLISH -> "Listed";
+                case GERMAN -> "Gelistete";
+                case SPANISH -> "Listados";
+                case JAPANESE -> "一覧のもの";
+                case CHINESE -> "列出的";
+            };
+        }
+
+        public String ASK() {
+            return switch (lang) {
+                case ENGLISH -> "Ask";
+                case GERMAN -> "Fragen";
+                case SPANISH -> "Preguntar";
+                case JAPANESE -> "確認して";
+                case CHINESE -> "询问";
+            };
+        }
+
+        public String ANY() {
+            return switch (lang) {
+                case ENGLISH -> "Any";
+                case GERMAN -> "Alle";
+                case SPANISH -> "Cualquiera";
+                case JAPANESE -> "すべて";
+                case CHINESE -> "全部";
+            };
+        }
+
+        public String YOUR_BROWSER_OPENS_NOTHING_IN_ITS_SANDBOX_WHATEVER_IS_LISTED(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Your browser opens nothing in " + genie + "'s sandbox, whatever is listed below.";
+                case GERMAN -> "Dein Browser öffnet nichts in der Sandbox von " + genie + ", egal was unten gelistet ist.";
+                case SPANISH -> "Tu navegador no abre nada del sandbox de " + genie + ", aunque haya puertos listados abajo.";
+                case JAPANESE -> "下の一覧に何があっても、ブラウザーは " + genie + " のサンドボックス内を何も開けません。";
+                case CHINESE -> "无论下面列了什么，你的浏览器都打不开 " + genie + " 沙盒里的任何东西。";
+            };
+        }
+
+        public String THE_PORTS_LISTED_BELOW_EACH_TIME_IT_WAKES_AND_NO_OTHERS(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "The ports listed below, each time " + genie + " wakes, and no others.";
+                case GERMAN -> "Die unten gelisteten Ports, jedes Mal wenn " + genie + " aufwacht, und keine anderen.";
+                case SPANISH -> "Los puertos listados abajo, cada vez que " + genie + " despierta, y ningún otro.";
+                case JAPANESE -> "" + genie + " が起きるたびに、下の一覧のポートだけを開きます。";
+                case CHINESE -> "每次 " + genie + " 醒来时，只开放下面列出的端口，不开放其他端口。";
+            };
+        }
+
+        public String THE_LISTED_PORTS_AND_EACH_WEB_SERVER_IT_STARTS_ONCE_YOU_ALLOW_IT(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "The listed ports, and each web server " + genie + " starts while awake, once you allow it at the top of its pages. No answer within a minute counts as no.";
+                case GERMAN -> "Die gelisteten Ports und jeden Webserver, den " + genie + " im Wachsein startet, sobald du ihn oben auf seinen Seiten erlaubst. Kommt binnen einer Minute keine Antwort, gilt das als Nein.";
+                case SPANISH -> "Los puertos listados y cada servidor web que " + genie + " inicie mientras está despierto, en cuanto lo permitas arriba en sus páginas. Si no respondes en un minuto, cuenta como un no.";
+                case JAPANESE -> "一覧のポートに加え、" + genie + " が起きている間に起動した Web サーバーを、ページ上部であなたが許可したときに開きます。1 分以内に答えがなければ「いいえ」として扱われます。";
+                case CHINESE -> "列出的端口，以及 " + genie + " 醒着时启动的每个网页服务器，在你于它页面顶部允许之后开放。一分钟内没有回答就算作拒绝。";
+            };
+        }
+
+        public String THE_LISTED_PORTS_AND_EVERY_WEB_SERVER_IT_STARTS_UNASKED(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "The listed ports, and every web server " + genie + " starts while awake, unasked. A page it serves runs in your browser, where it can reach your other local web servers.";
+                case GERMAN -> "Die gelisteten Ports und jeden Webserver, den " + genie + " im Wachsein startet, ohne zu fragen. Eine Seite davon läuft in deinem Browser, wo sie deine anderen lokalen Webserver erreichen kann.";
+                case SPANISH -> "Los puertos listados y todo servidor web que " + genie + " inicie mientras está despierto, sin preguntar. Una página suya se ejecuta en tu navegador, desde donde puede alcanzar tus otros servidores web locales.";
+                case JAPANESE -> "一覧のポートに加え、" + genie + " が起きている間に起動したすべての Web サーバーを、確認なしで開きます。そのページはあなたのブラウザーで動き、ほかのローカル Web サーバーにもアクセスできます。";
+                case CHINESE -> "列出的端口，以及 " + genie + " 醒着时启动的所有网页服务器，无需询问。它提供的页面在你的浏览器里运行，能访问你本机的其他网页服务器。";
+            };
+        }
+
+        public String LISTED_IN_ITS_LAMP() {
+            return switch (lang) {
+                case ENGLISH -> "LISTED IN ITS LAMP";
+                case GERMAN -> "IN SEINER LAMPE GELISTET";
+                case SPANISH -> "LISTADOS EN SU LÁMPARA";
+                case JAPANESE -> "ランプの一覧";
+                case CHINESE -> "神灯中列出的";
+            };
+        }
+
+        public String EACH_A_NAME_AND_ITS_PORT_IN_THE_SANDBOX_PUBLISHED_EACH_TIME_IT_WAKES(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Each with a name that says what it is for, and its port in the sandbox. Published each time " + genie + " wakes, unless None is chosen above.";
+                case GERMAN -> "Jeder mit einem Namen, der sagt, wofür er ist, und seinem Port in der Sandbox. Freigegeben jedes Mal, wenn " + genie + " aufwacht, außer oben ist Keine gewählt.";
+                case SPANISH -> "Cada uno con un nombre que dice para qué es, y su puerto en el sandbox. Se publican cada vez que " + genie + " despierta, salvo que arriba esté elegido Ninguno.";
+                case JAPANESE -> "それぞれ用途を表す名前と、サンドボックス内のポートです。上で「なし」を選ばない限り、" + genie + " が起きるたびに公開されます。";
+                case CHINESE -> "每个都有一个说明用途的名字，以及它在沙盒里的端口。除非上面选了“无”，每次 " + genie + " 醒来都会发布。";
+            };
+        }
+
+        public String PUBLISHED_AS_IT_WOKE_EACH_PORT_IN_THE_SANDBOX_AND_THE_LINK_THAT_OPENS_IT(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Published as " + genie + " woke: each port in the sandbox, and the link that opens it in your browser. They close when it sleeps.";
+                case GERMAN -> "Freigegeben, als " + genie + " aufwachte: jeder Port in der Sandbox und der Link, der ihn in deinem Browser öffnet. Sie schließen sich, wenn er schläft.";
+                case SPANISH -> "Publicados cuando " + genie + " despertó: cada puerto del sandbox y el enlace que lo abre en tu navegador. Se cierran cuando se duerme.";
+                case JAPANESE -> "" + genie + " が起きたときに公開されました。サンドボックス内の各ポートと、それをブラウザーで開くリンクです。眠ると閉じます。";
+                case CHINESE -> "" + genie + " 醒来时已发布：沙盒里的每个端口，以及在你的浏览器中打开它的链接。它休眠时会关闭。";
+            };
+        }
+
+        public String NOTHING_IS_LISTED() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing is listed.";
+                case GERMAN -> "Nichts gelistet.";
+                case SPANISH -> "No hay nada listado.";
+                case JAPANESE -> "一覧は空です。";
+                case CHINESE -> "没有列出任何端口。";
+            };
+        }
+
+        public String NOT_PUBLISHED() {
+            return switch (lang) {
+                case ENGLISH -> "not published";
+                case GERMAN -> "nicht freigegeben";
+                case SPANISH -> "sin publicar";
+                case JAPANESE -> "未公開";
+                case CHINESE -> "未发布";
+            };
+        }
+
+        public String NAME() {
+            return switch (lang) {
+                case ENGLISH -> "Name";
+                case GERMAN -> "Name";
+                case SPANISH -> "Nombre";
+                case JAPANESE -> "名前";
+                case CHINESE -> "名称";
+            };
+        }
+
+        public String WHAT_IT_IS_FOR_SUCH_AS_SITE() {
+            return switch (lang) {
+                case ENGLISH -> "What it is for, such as site";
+                case GERMAN -> "Wofür er ist, etwa site";
+                case SPANISH -> "Para qué es, como site";
+                case JAPANESE -> "用途。例：site";
+                case CHINESE -> "用途，例如 site";
+            };
+        }
+
+        public String PORT() {
+            return switch (lang) {
+                case ENGLISH -> "Port";
+                case GERMAN -> "Port";
+                case SPANISH -> "Puerto";
+                case JAPANESE -> "ポート";
+                case CHINESE -> "端口";
+            };
+        }
+
+        public String ITS_PORT_IN_THE_SANDBOX_SUCH_AS_8080() {
+            return switch (lang) {
+                case ENGLISH -> "Its port in the sandbox, such as 8080";
+                case GERMAN -> "Sein Port in der Sandbox, etwa 8080";
+                case SPANISH -> "Su puerto en el sandbox, como 8080";
+                case JAPANESE -> "サンドボックス内のポート。例：8080";
+                case CHINESE -> "它在沙盒里的端口，例如 8080";
+            };
+        }
+
+        public String ADD() {
+            return switch (lang) {
+                case ENGLISH -> "Add";
+                case GERMAN -> "Hinzufügen";
+                case SPANISH -> "Añadir";
+                case JAPANESE -> "追加";
+                case CHINESE -> "添加";
+            };
+        }
+
+        public String REMOVE_IT_FROM_THE_LIST() {
+            return switch (lang) {
+                case ENGLISH -> "Remove it from the list";
+                case GERMAN -> "Von der Liste nehmen";
+                case SPANISH -> "Quitarlo de la lista";
+                case JAPANESE -> "一覧から外します";
+                case CHINESE -> "从列表中移除";
+            };
+        }
+
+        public String OPENED_THIS_SESSION() {
+            return switch (lang) {
+                case ENGLISH -> "OPENED THIS SESSION";
+                case GERMAN -> "IN DIESER SITZUNG GEÖFFNET";
+                case SPANISH -> "ABIERTOS EN ESTA SESIÓN";
+                case JAPANESE -> "このセッションで開いたもの";
+                case CHINESE -> "本次会话中打开的";
+            };
+        }
+
+        public String WEB_SERVERS_IT_STARTED_SINCE_IT_WOKE_WITH_THE_PROGRAM_SERVING_EACH(String genie) {
+            return switch (lang) {
+                case ENGLISH -> "Web servers " + genie + " started since it woke, as the choice above allows, with the program serving each. They close when it sleeps.";
+                case GERMAN -> "Webserver, die " + genie + " seit dem Aufwachen gestartet hat, soweit die Wahl oben es erlaubt, jeweils mit dem Programm dahinter. Sie schließen sich, wenn er schläft.";
+                case SPANISH -> "Servidores web que " + genie + " ha iniciado desde que despertó, según lo permita la opción de arriba, cada uno con el programa que lo sirve. Se cierran cuando se duerme.";
+                case JAPANESE -> "" + genie + " が起きてから起動し、上の設定で開かれた Web サーバーです。それぞれを提供しているプログラムも表示します。眠ると閉じます。";
+                case CHINESE -> "" + genie + " 醒来后启动、且上面的设置允许开放的网页服务器，并附上提供它的程序。它休眠时会关闭。";
+            };
+        }
+
+        public String NOTHING_WAS_OPENED_YET() {
+            return switch (lang) {
+                case ENGLISH -> "Nothing was opened yet.";
+                case GERMAN -> "Noch nichts geöffnet.";
+                case SPANISH -> "Todavía no se ha abierto nada.";
+                case JAPANESE -> "まだ何も開かれていません。";
+                case CHINESE -> "还没有打开任何端口。";
+            };
+        }
+
         // ─── what keeps them from being saved ──────────────────────────────────────────────
 
         public String IS_NOT_A_FOLDER_WRITE_ONE_STARTING_WITH_A_TILDE_OR_A_SLASH(String line) {
@@ -3497,6 +3729,16 @@ public enum Lang {
                 case SPANISH -> "El revisor necesita instrucciones para juzgar. Escríbelas, o elige solo las listas de carpetas.";
                 case JAPANESE -> "チェッカーには判断の基準となる指示が必要です。指示を書くか、許可リストだけを選んでください。";
                 case CHINESE -> "审核模型需要指示才能做判断。请写下指示，或者只选允许列表。";
+            };
+        }
+
+        public String CANNOT_NAME_A_PORT_USE_LOWERCASE_LETTERS_DIGITS_AND_DASHES(String name) {
+            return switch (lang) {
+                case ENGLISH -> "\"" + name + "\" cannot name a port. Use up to 32 lowercase letters, digits and dashes.";
+                case GERMAN -> "„" + name + "“ taugt nicht als Name eines Ports. Nimm bis zu 32 Kleinbuchstaben, Ziffern und Bindestriche.";
+                case SPANISH -> "«" + name + "» no sirve como nombre de puerto. Usa hasta 32 letras minúsculas, dígitos y guiones.";
+                case JAPANESE -> "「" + name + "」はポート名に使えません。小文字の英字・数字・ハイフンを 32 文字までで書いてください。";
+                case CHINESE -> "“" + name + "”不能作为端口名称。请使用最多 32 个小写字母、数字和连字符。";
             };
         }
 

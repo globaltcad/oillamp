@@ -20,10 +20,13 @@ import dev.lamp.LampDirectory;
 import dev.lamp.LampFailedException;
 import dev.lamp.LampHostVerdict;
 
+import sprouts.Tuple;
+
 /// Reads a genie's host access from its lamp, and writes the rules its page shows into it, with
-/// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(Lamp.HostAccess)]. Writing needs
-/// the genie asleep; the page only offers it then. Also hears the requests the genie's lamp asks
-/// the user while it is awake, and the web servers it published.
+/// [LampDirectory#hostAccess()] and [LampDirectory#hostAccess(Lamp.HostAccess)] for
+/// `[host_access]`, and [LampDirectory#web()] and [LampDirectory#web(Lamp.Web)] for `[web]`.
+/// Writing needs the genie asleep; the page only offers it then. Also hears the requests the
+/// genie's lamp asks the user while it is awake, and the web servers it published.
 ///
 /// Each call starts an engine process that ends by itself, which takes a moment, so the work is
 /// done one piece after the other on a thread of its own, and the calls return at once.
@@ -41,9 +44,9 @@ public final class HostAccessKeeper {
         this.changes = changes;
     }
 
-    /// Reads the rules from the lamp's file: what the genie may do, its guards, its allowlists
-    /// and the checker instructions. A genie that never woke has no lamp yet, and so no file:
-    /// its host access is off, as oillamp's defaults have it.
+    /// Reads the rules from the lamp's file: what the genie may do, its guards, its allowlists,
+    /// the checker instructions, and which web servers the browser may open. A genie that never
+    /// woke has no lamp yet, and so no file: its host access is off, as oillamp's defaults have it.
     public void read() {
         work.execute(() -> {
             if (Lamp.agentHome(directory).isEmpty()) {
@@ -51,7 +54,7 @@ public final class HostAccessKeeper {
                 return;
             }
             try {
-                HostAccess.Rules read = LampApiConversionUtil.rules(lamp.hostAccess());
+                HostAccess.Rules read = LampApiConversionUtil.rules(lamp.hostAccess(), LampApiConversionUtil.web(lamp.web()));
                 change(it -> it.readAs(true, read));
             } catch (IOException | LampFailedException failed) {
                 change(it -> it.withProblem(new HostAccess.Problem.CouldNotRead(reason(failed))));
@@ -61,16 +64,31 @@ public final class HostAccessKeeper {
         });
     }
 
-    /// Writes `rules`, the ones the page shows, into the lamp's file. The page then shows what
-    /// the file has, or says why it could not be written.
-    public void save(HostAccess.Rules rules) {
+    /// Writes `wanted`, the rules the page shows, into the lamp's file: each of its two tables
+    /// that differs from `saved`, the rules the file has. A table left as it was is not written,
+    /// so that a value the file takes from `~/.config/oillamp/config.toml`, for want of one of
+    /// its own, keeps following that.
+    ///
+    /// `[web]` goes first: oillamp may refuse a port the user typed, and then nothing is written.
+    /// Should oillamp then refuse `[host_access]`, the file keeps the `[web]` table it was given,
+    /// and the page shows that table as saved, beside why the rest could not be. The page then
+    /// shows what the file has, or says why it could not be written.
+    public void save(HostAccess.Rules saved, HostAccess.Rules wanted) {
+        boolean webChanged = !wanted.web().equals(saved.web());
+        boolean hostAccessChanged = !wanted.withWeb(saved.web()).equals(saved);
         change(it -> it.withBusy(true).noProblem());
         work.execute(() -> {
+            HostAccess.Rules written = saved;
             try {
-                HostAccess.Rules written = LampApiConversionUtil.rules(lamp.hostAccess(LampApiConversionUtil.hostAccess(rules)));
-                change(it -> it.readAs(true, written));
+                if (webChanged)
+                    written = written.withWeb(LampApiConversionUtil.web(lamp.web(LampApiConversionUtil.web(wanted.web()))));
+                if (hostAccessChanged)
+                    written = LampApiConversionUtil.rules(lamp.hostAccess(LampApiConversionUtil.hostAccess(wanted)), written.web());
+                HostAccess.Rules all = written;
+                change(it -> it.readAs(true, all));
             } catch (IOException | LampFailedException failed) {
-                change(it -> it.withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));
+                HostAccess.Rules part = written;
+                change(it -> it.withSaved(part).withBusy(false).withProblem(new HostAccess.Problem.CouldNotSave(reason(failed))));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -86,9 +104,11 @@ public final class HostAccessKeeper {
     /// While the genie is awake: its lamp asks the user to allow a request, a host tool's or
     /// publishing a web server, or tells them it published one, what the checker model decided
     /// about a request, that one was refused, or that something went wrong. Each is kept in the
-    /// genie's [Notifications].
+    /// genie's [Notifications]. Its session says which web servers are open whenever that
+    /// changes; the host access page lists them as it said last.
     void onLampEvent(LampEvent event, Instant now) {
         switch (event) {
+            case LampEvent.SessionStateChanged changed -> change(it -> it.withWebPorts(LampApiConversionUtil.webPorts(changed.status().webPorts())));
             case LampEvent.HostAccessRequested asked -> requested.put(asked.run() + " " + asked.tool(), asked.said());
             case LampEvent.HostAccessDecided decided -> {
                 String said = Optional.ofNullable(requested.remove(decided.run() + " " + decided.tool())).orElse("");
@@ -110,6 +130,7 @@ public final class HostAccessKeeper {
     void wentOut() {
         requested.clear();
         changeNotifications(Notifications::wentOut);
+        change(it -> it.withWebPorts(Tuple.of(HostAccess.WebPort.class)));
     }
 
     private void change(UnaryOperator<HostAccess> change) {

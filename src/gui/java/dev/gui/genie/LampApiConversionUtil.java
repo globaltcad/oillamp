@@ -28,6 +28,8 @@ import dev.lamp.LampRunOutcome;
 import dev.lamp.LampSave;
 import dev.lamp.LampSaveKind;
 import dev.lamp.LampSaveOnBranches;
+import dev.lamp.LampWebPort;
+import dev.lamp.LampWebPublishing;
 
 import sprouts.Tuple;
 
@@ -184,17 +186,52 @@ final class LampApiConversionUtil {
         return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
     }
 
-    /// A lamp's host access as its page shows it: the same five values, each allowlist one
-    /// folder per line.
-    static HostAccess.Rules rules(Lamp.HostAccess access) {
+    /// A lamp's host access as its page shows it, with `web`: the same values, each allowlist
+    /// one folder per line.
+    static HostAccess.Rules rules(Lamp.HostAccess access, HostAccess.Web web) {
         return HostAccess.Rules.of(may(access.may()), guards(access.guards()), access.readAllowlist(), access.changeAllowlist(),
-                                   access.checkerInstructions());
+                                   access.checkerInstructions(), web);
     }
 
-    /// The rules the page shows, as the lamp's file keeps them.
+    /// The rules the page shows, as the lamp's file keeps them under `[host_access]`.
     static Lamp.HostAccess hostAccess(HostAccess.Rules rules) {
         return new Lamp.HostAccess(may(rules.may()), guards(rules.guards()), rules.readFolders(), rules.changeFolders(),
                                    rules.checkerInstructions());
+    }
+
+    /// Which web servers the lamp's file lets this computer's browser open, as the page shows it.
+    static HostAccess.Web web(Lamp.Web web) {
+        return new HostAccess.Web(publish(web.publish()),
+                web.ports().mapTo(HostAccess.ListedPort.class, port -> new HostAccess.ListedPort(port.name(), port.sandboxPort())));
+    }
+
+    /// The web servers the page shows, as the lamp's file keeps them under `[web]`.
+    static Lamp.Web web(HostAccess.Web web) {
+        return new Lamp.Web(publish(web.publish()),
+                web.ports().mapTo(Lamp.Web.ListedPort.class, port -> new Lamp.Web.ListedPort(port.name(), port.sandboxPort())));
+    }
+
+    /// The web servers a lamp's session published, as the page lists them.
+    static Tuple<HostAccess.WebPort> webPorts(Tuple<LampWebPort> published) {
+        return published.mapTo(HostAccess.WebPort.class, port -> new HostAccess.WebPort(port.name(), port.sandboxPort(), port.link(), port.program()));
+    }
+
+    private static HostAccess.Publish publish(LampWebPublishing publish) {
+        return switch (publish) {
+            case OFF -> HostAccess.Publish.OFF;
+            case LISTED -> HostAccess.Publish.LISTED;
+            case ASK -> HostAccess.Publish.ASK;
+            case ANY -> HostAccess.Publish.ANY;
+        };
+    }
+
+    private static LampWebPublishing publish(HostAccess.Publish publish) {
+        return switch (publish) {
+            case OFF -> LampWebPublishing.OFF;
+            case LISTED -> LampWebPublishing.LISTED;
+            case ASK -> LampWebPublishing.ASK;
+            case ANY -> LampWebPublishing.ANY;
+        };
     }
 
     private static HostAccess.May may(LampHostAccess may) {

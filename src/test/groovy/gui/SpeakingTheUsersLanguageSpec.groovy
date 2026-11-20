@@ -276,7 +276,7 @@ class SpeakingTheUsersLanguageSpec extends Specification {
             def access = new HostAccess.Problem.CouldNotSave('permission denied')
 
         and: 'host access rules whose read allowlist has the line "Dokumente", which is not a folder'
-            def rules = new HostAccess.Rules(HostAccess.May.READ, HostAccess.Guards.ALLOWLISTS_CHECKER, 'Dokumente', '~', 'Nur lesen.')
+            def rules = new HostAccess.Rules(HostAccess.May.READ, HostAccess.Guards.ALLOWLISTS_CHECKER, 'Dokumente', '~', 'Nur lesen.', HostAccess.Web.DEFAULTS)
 
         expect: 'each failure is said in each language, and why as oillamp said it'
             job.words(Lang.ENGLISH) == 'The job could not be switched off: the lamp is busy'

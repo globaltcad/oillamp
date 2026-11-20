@@ -201,7 +201,7 @@ public final class GeniesView extends JPanel {
         );
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
-        hostAccessPage = new HostAccessPage(state, app);
+        hostAccessPage = new HostAccessPage(state, app, look);
         actionsPage = new ActionsPage(state, app, () -> historyPage.save(this), this::confirmDelete);
         notificationsPage = new NotificationsPage(state, app, look);
         // A genie's notifications count as seen when the user opens them, and once more as they
