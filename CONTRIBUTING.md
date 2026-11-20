@@ -134,6 +134,7 @@ Scenarios need no podman, no network and no display, and together they run in ab
 | `Using_The_Command_Line_Spec` | usage errors, version, crash handling |
 | `The_Lamp_Command_Spec` | the `lamp` script, with stub tools on `PATH` |
 | `The_Pointer_Spec` | what `lamp click`, `move`, `drag` and `scroll` send, against a stand-in VNC server |
+| `Reading_A_Web_Page_Spec` | `lamp fetch`: a page as Markdown, against a stand-in Firefox that speaks Marionette |
 | `The_Launcher_Spec` | the single-file launcher script |
 | `The_Sandbox_Image_Spec` | static checks of the image files |
 | `Updating_The_Agent_Tools_Spec` | `update` and `update --system`: a new image for one lamp, kept only when its build succeeds; the warnings about old images |

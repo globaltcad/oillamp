@@ -228,7 +228,7 @@ final class AgentGuideUtil {
            .append("Report that message verbatim rather than retrying — it tells the human exactly\n")
            .append("which rule to change.\n\n");
         out.append("""
-            ### Searching the web
+            ### Searching and reading the web
 
             `lamp search "what to search for"` searches the web and prints the top five results,
             each with its title, its link and a line or two from the page; `-n 10` prints ten.
@@ -240,6 +240,13 @@ final class AgentGuideUtil {
             while. When that leaves no results, `lamp search` fails and names the engines that
             failed, rather than reporting that nothing was found. Wait a few minutes, then search
             again.
+
+            `lamp fetch <url>` prints what a page says, as Markdown under its title and URL: its
+            article, or all its visible text when it has none. A PDF prints as its text, and plain
+            text, JSON and XML as they are. It loads the page in a Firefox of its own, without a
+            window, so pages that need JavaScript work too. It prints at most 20000 characters;
+            when it cuts a page, it says how to print the next part. Read pages with it rather
+            than with `curl`, which gives you raw HTML.
 
             """);
 

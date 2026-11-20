@@ -999,10 +999,10 @@ final class Supervisor {
         return true;
     }
 
-    /// oillamp's own ports in the sandbox, the forwards', and every port already published or
-    /// decided about.
+    /// oillamp's own ports in the sandbox (with `lamp fetch`'s Marionette port), the forwards',
+    /// and every port already published or decided about.
     private Tuple<Integer> notToOffer() {
-        return Tuple.of(Integer.class, Forward.PROXY_PORT, Forward.MODEL_PORT)
+        return Tuple.of(Integer.class, Forward.PROXY_PORT, Forward.MODEL_PORT, Forward.MARIONETTE_PORT)
                 .addAll(prepared.config().forwards().mapTo(Integer.class, Forward::port))
                 .addAll(served.map(Served::webPorts).orElse(Tuple.of(LampWebPort.class))
                         .mapTo(Integer.class, LampWebPort::sandboxPort))

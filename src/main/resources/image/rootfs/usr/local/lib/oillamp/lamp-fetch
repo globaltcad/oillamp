@@ -1,0 +1,521 @@
+#!/usr/bin/env python3
+"""lamp fetch URL: what a web page says, as Markdown, with its title and URL on top.
+
+`lamp fetch` runs this. It starts a headless Firefox, the image's own, with a profile of its own
+in a temporary directory, so that it never touches the Firefox on the desktop. Firefox loads the
+page and runs its scripts. Then Reader View's extraction, Readability.js, which Firefox carries in
+its omni.ja, cuts the page down to its article, and a few lines of JavaScript below turn that into
+Markdown. A page that is no article, such as a list of search results, is printed as its visible
+text instead. Anything that is not an HTML page (a PDF, plain text, JSON, XML, or a file Firefox
+would download) is fetched again with curl: a PDF is printed by pdftotext, text as it is.
+
+Firefox is driven over Marionette, its own remote protocol: length-prefixed JSON over TCP, which
+the standard library speaks in a few lines. Marionette listens on a fixed port of the loopback
+(MARIONETTE_PORT), so one fetch runs at a time, under a lock; a second one waits.
+
+Firefox is started for each fetch and stopped after it, and its profile deleted, also on errors and
+on Ctrl-C. Its start costs about half a second of the 2 to 5 seconds a fetch takes, and nothing is
+left running, or remembered, between fetches.
+
+Firefox's remote settings ignore their preference unless MOZ_REMOTE_SETTINGS_DEVTOOLS is set, so it
+is set; without it, Firefox asked firefox.settings.services.mozilla.com at every start.
+
+Its requests go through the sandbox's proxy, set in the profile, and the profile turns off what
+Firefox would otherwise fetch on its own (updates, telemetry, safe browsing and the like), so that
+the page's requests are the only ones. See docs/WEB-SEARCH.md.
+"""
+
+import fcntl, json, os, re, shutil, signal, socket, subprocess, sys, tempfile, time, urllib.parse, zipfile
+
+FIREFOX = os.environ.get("LAMP_FIREFOX", "firefox-esr")
+OMNI_JA = os.environ.get("LAMP_FIREFOX_OMNI", "/usr/lib/firefox-esr/omni.ja")
+READABILITY = "moz-src/toolkit/components/reader/readability/Readability.js"
+PREFS = os.environ.get("LAMP_FETCH_PREFS", "/usr/local/lib/oillamp/lamp-fetch-prefs.js")
+RUNTIME = os.environ.get("LAMP_FETCH_DIR") or os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/agent", "lamp-fetch")
+# oillamp never offers this port to the person ([web] publish); it must stay Forward.MARIONETTE_PORT.
+MARIONETTE_PORT = int(os.environ.get("LAMP_MARIONETTE_PORT", "2828"))
+START_SECONDS = int(os.environ.get("LAMP_FETCH_START_SECONDS", "30"))
+LOAD_SECONDS = int(os.environ.get("LAMP_FETCH_LOAD_SECONDS", "30"))
+DEFAULT_MAX = 20000
+USAGE = "usage: lamp fetch [--max CHARACTERS] [--start CHARACTER] URL"
+
+
+class Failure(Exception):
+    """A fetch that cannot go on; its message is what the agent reads."""
+
+
+def fail(message):
+    sys.exit("lamp: " + message)
+
+
+# ─── the proxy ─────────────────────────────────────────────────────────────────────────────
+
+def proxy_address():
+    """Host and port of the sandbox's proxy, from HTTP_PROXY, as every other tool here reads it."""
+    parsed = urllib.parse.urlsplit(os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy") or "http://127.0.0.1:3128")
+    return parsed.hostname or "127.0.0.1", parsed.port or 3128
+
+
+def proxy_answer(host, port):
+    """What the proxy says when it does not connect to host:port, as (status, text), or None.
+    oillamp's proxy says why in the body: a rule of the lamp's network policy (403), or a name
+    that does not resolve (502). Firefox shows only an error page, so the proxy is asked once
+    more, directly, the way Firefox asked it."""
+    try:
+        with socket.create_connection(proxy_address(), timeout=10) as connection:
+            connection.sendall(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
+            answer = b""
+            while len(answer) < 65536:
+                chunk = connection.recv(4096)
+                if not chunk:
+                    break
+                answer += chunk
+                if answer.startswith(b"HTTP/1.1 200") and b"\r\n\r\n" in answer:
+                    return None
+    except OSError:
+        return None
+    head, _, body = answer.partition(b"\r\n\r\n")
+    status = head.split(b" ", 2)[1:2]
+    text = body.decode("utf-8", "replace").strip()
+    if not status or not status[0].isdigit() or status[0] == b"200" or not text:
+        return None
+    return int(status[0]), text
+
+
+# ─── Marionette ────────────────────────────────────────────────────────────────────────────
+
+class Marionette:
+    """Firefox's remote protocol: each message is its length in decimal, a colon, then JSON.
+    A command is [0, id, name, parameters]; its answer [1, id, error, result]."""
+
+    def __init__(self, firefox, log):
+        deadline = time.monotonic() + START_SECONDS
+        while True:
+            try:
+                self.connection = socket.create_connection(("127.0.0.1", MARIONETTE_PORT), timeout=5)
+                break
+            except OSError:
+                if firefox.poll() is not None:
+                    raise Failure(f"Firefox ended while starting (exit code {firefox.returncode}): {tail(log)}")
+                if time.monotonic() > deadline:
+                    raise Failure(f"Firefox did not start within {START_SECONDS} seconds: {tail(log)}")
+                time.sleep(0.1)
+        self.connection.settimeout(LOAD_SECONDS + 30)
+        self.buffer = b""
+        self.last_id = 0
+        self.receive()  # Marionette greets first, with its protocol level
+
+    def receive(self):
+        # The buffer is only changed once a whole message is in it, so that a timeout while
+        # reading (see command) loses nothing.
+        while True:
+            length, colon, rest = self.buffer.partition(b":")
+            if colon and len(rest) >= int(length):
+                self.buffer = rest[int(length):]
+                return json.loads(rest[:int(length)])
+            self.read_more()
+
+    def read_more(self):
+        chunk = self.connection.recv(65536)
+        if not chunk:
+            raise Failure("Firefox closed its connection")
+        self.buffer += chunk
+
+    def command(self, name, parameters=None, waiting=None):
+        """Sends a command and returns its result. With waiting, calls it every quarter second
+        until the answer comes; waiting ends the wait by raising."""
+        self.last_id += 1
+        message = json.dumps([0, self.last_id, name, parameters or {}]).encode()
+        self.connection.sendall(str(len(message)).encode() + b":" + message)
+        self.connection.settimeout(0.25 if waiting else LOAD_SECONDS + 30)
+        while True:
+            try:
+                _, reply_id, error, result = self.receive()
+            except socket.timeout:
+                if not waiting:
+                    raise
+                waiting()
+                continue
+            if reply_id == self.last_id:
+                break
+        if error:
+            raise MarionetteError(error.get("error", ""), error.get("message", ""))
+        return result.get("value") if isinstance(result, dict) and "value" in result else result
+
+
+def tail(log):
+    """The last lines Firefox wrote, which say why it did not start, as one line."""
+    log.flush()
+    with open(log.name, encoding="utf-8", errors="replace") as written:
+        lines = [line.strip() for line in written.read().splitlines() if line.strip()]
+    return " / ".join(lines[-3:]) or "it wrote nothing"
+
+
+class MarionetteError(Exception):
+    def __init__(self, kind, message):
+        super().__init__(f"{kind}: {message}")
+        self.kind, self.message = kind, message
+
+
+# ─── the page ──────────────────────────────────────────────────────────────────────────────
+
+# Runs in the page, after Readability.js. Returns what the page says, as Markdown, or its visible
+# text when Readability finds no article in it.
+EXTRACT = r"""
+const page = { title: document.title, url: location.href, type: document.contentType,
+               status: (performance.getEntriesByType("navigation")[0] || {}).responseStatus || 0 };
+if (page.type !== "text/html" && page.type !== "application/xhtml+xml") return page;
+let article = null;
+try { article = new Readability(document.cloneNode(true)).parse(); } catch (e) { article = null; }
+if (article && article.textContent.trim().length >= 200) {
+  page.title = article.title || page.title;
+  page.markdown = markdown(new DOMParser().parseFromString(article.content, "text/html").body);
+} else {
+  page.text = document.body ? document.body.innerText : "";
+}
+return page;
+
+function markdown(root) {
+  const blocks = [];
+  walk(root);
+  return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  function walk(node) {
+    for (const child of node.childNodes) {
+      if (child.nodeType !== 1) {
+        const text = squash(child.textContent);
+        if (text.trim()) blocks.push(text.trim());
+        continue;
+      }
+      const tag = child.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) blocks.push("#".repeat(+tag[1]) + " " + inline(child).trim());
+      else if (tag === "p") { const text = inline(child).trim(); if (text) blocks.push(text); }
+      else if (tag === "pre") blocks.push("```\n" + child.textContent.replace(/\n+$/, "") + "\n```");
+      else if (tag === "ul" || tag === "ol") blocks.push(list(child, tag === "ol", ""));
+      else if (tag === "blockquote") blocks.push(inline(child).trim().split("\n").map(l => "> " + l).join("\n"));
+      else if (tag === "table") blocks.push(table(child));
+      else if (tag === "hr") blocks.push("---");
+      else if (["img", "figure", "picture", "svg", "video", "audio", "script", "style"].includes(tag)) {
+        const caption = child.querySelector && child.querySelector("figcaption");
+        if (caption) blocks.push(inline(caption).trim());
+      }
+      else walk(child);
+    }
+  }
+
+  function list(element, ordered, indent) {
+    const lines = [];
+    let number = 1;
+    for (const item of element.children) {
+      if (item.tagName.toLowerCase() !== "li") continue;
+      const nested = [];
+      const own = item.cloneNode(true);
+      for (const sub of own.querySelectorAll(":scope > ul, :scope > ol")) { nested.push(sub); sub.remove(); }
+      lines.push(indent + (ordered ? (number++) + ". " : "- ") + inline(own).trim().replace(/\n+/g, " "));
+      for (const sub of nested) lines.push(list(sub, sub.tagName.toLowerCase() === "ol", indent + "  "));
+    }
+    return lines.join("\n");
+  }
+
+  function table(element) {
+    return [...element.querySelectorAll("tr")]
+      .map(row => "| " + [...row.children].map(cell => inline(cell).trim().replace(/\n+/g, " ")).join(" | ") + " |")
+      .join("\n");
+  }
+
+  function inline(node) {
+    let out = "";
+    for (const child of node.childNodes) {
+      if (child.nodeType !== 1) { out += squash(child.textContent); continue; }
+      const tag = child.tagName.toLowerCase();
+      const text = inline(child);
+      if (tag === "a" && child.href && text.trim() && !child.href.startsWith("javascript:")) out += "[" + text.trim() + "](" + child.href + ")";
+      else if (tag === "code") out += "`" + child.textContent + "`";
+      else if (tag === "strong" || tag === "b") out += text.trim() ? "**" + text.trim() + "** " : "";
+      else if (tag === "em" || tag === "i") out += text.trim() ? "*" + text.trim() + "* " : "";
+      else if (tag === "br") out += "\n";
+      else if (["img", "svg", "script", "style"].includes(tag)) continue;
+      else if (["p", "div", "ul", "ol", "pre", "table", "blockquote"].includes(tag)) out += "\n" + text + "\n";
+      else out += text;
+    }
+    return out;
+  }
+
+  function squash(text) { return text.replace(/\s+/g, " "); }
+}
+"""
+
+
+def readability_source():
+    with zipfile.ZipFile(OMNI_JA) as omni:
+        return omni.read(READABILITY).decode("utf-8")
+
+
+class Downloaded(Exception):
+    """Firefox began to download the URL rather than show it."""
+
+
+def read_page(url, profile, log):
+    """Loads url in a new headless Firefox and returns what EXTRACT found, as a dict, or
+    {"download": True} when Firefox began to download it instead."""
+    downloads = os.path.join(profile, "downloads")
+    os.makedirs(downloads)
+    deadline = time.monotonic() + LOAD_SECONDS + 5
+
+    def waiting():
+        # A download is no page load: Marionette would wait for one until it timed out.
+        if os.listdir(downloads):
+            raise Downloaded()
+        if time.monotonic() > deadline:
+            raise Failure(f"{url} did not load within {LOAD_SECONDS} seconds")
+
+    firefox = None
+    try:
+        firefox = subprocess.Popen(
+            [FIREFOX, "--headless", "--marionette", "--no-remote", "--profile", profile, "about:blank"],
+            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+            env=dict(os.environ, MOZ_CRASHREPORTER_DISABLE="1", MOZ_REMOTE_SETTINGS_DEVTOOLS="1"))
+        marionette = Marionette(firefox, log)
+        marionette.command("WebDriver:NewSession", {"capabilities": {"alwaysMatch": {
+            "pageLoadStrategy": "normal", "timeouts": {"pageLoad": LOAD_SECONDS * 1000, "script": 30000}}}})
+        try:
+            marionette.command("WebDriver:Navigate", {"url": url}, waiting)
+        except Downloaded:
+            return {"download": True}
+        except MarionetteError as error:
+            if error.kind == "timeout":
+                raise Failure(f"{url} did not load within {LOAD_SECONDS} seconds")
+            raise Failure(why_not_loaded(url, error.message))
+        page = marionette.command("WebDriver:ExecuteScript",
+                                  {"script": readability_source() + "\n" + EXTRACT, "args": []})
+        try:
+            marionette.command("Marionette:Quit", {"flags": ["eForceQuit"]})
+        except (Failure, MarionetteError, OSError):
+            pass
+        return page
+    finally:
+        if firefox is not None:
+            stop(firefox)
+
+
+def why_not_loaded(url, message):
+    """A sentence for Firefox's error page, which Marionette reports as `about:neterror?e=…`."""
+    parts = urllib.parse.urlsplit(url)
+    answer = proxy_answer(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80))
+    if answer:
+        status, text = answer
+        return f"the proxy refused {url}: {text}" if status == 403 else f"{url} could not be loaded: {text}"
+    code = re.search(r"about:neterror\?e=([A-Za-z]+)", message)
+    reasons = {"dnsNotFound": "the server was not found", "connectionFailure": "the server refused the connection",
+               "netTimeout": "the server did not answer", "proxyConnectFailure": "the proxy refused the connection",
+               "nssFailure2": "a secure connection could not be made", "netReset": "the connection was reset",
+               "unknownProtocolFound": "the protocol is unknown"}
+    if code:
+        return f"{url} could not be loaded: {reasons.get(code.group(1), code.group(1))}"
+    return f"{url} could not be loaded: {message}"
+
+
+def stop(firefox):
+    """Ends Firefox and every process it started; they share its process group."""
+    for sig, wait in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
+        try:
+            os.killpg(firefox.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            firefox.wait(wait)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def clear_leftovers():
+    """Stops the Firefox of an earlier fetch that was killed before it could stop it, and
+    deletes earlier profiles. Called under the lock, so no other fetch is running. A leftover
+    Firefox would still hold Marionette's port, and the next fetch would talk to it."""
+    profiles = os.path.join(RUNTIME, "profile-")
+    for pid in os.listdir("/proc"):
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as file:
+                arguments = file.read().decode("utf-8", "replace").split("\0")
+        except (OSError, ValueError):
+            continue
+        if "--marionette" in arguments and "--profile" in arguments[:-1] \
+                and arguments[arguments.index("--profile") + 1].startswith(profiles):
+            end_process(int(pid))
+    for name in os.listdir(RUNTIME):
+        if name.startswith("profile-"):
+            shutil.rmtree(os.path.join(RUNTIME, name), ignore_errors=True)
+    try:
+        socket.create_connection(("127.0.0.1", MARIONETTE_PORT), timeout=2).close()
+    except OSError:
+        return
+    raise Failure(f"another program listens on 127.0.0.1:{MARIONETTE_PORT}, the port of Marionette, which "
+                  f"lamp fetch's Firefox needs. lamp fetch does not stop a program it did not start; "
+                  f"`ss -ltnp 'sport = :{MARIONETTE_PORT}'` shows which one it is.")
+
+
+def end_process(pid):
+    """Ends a process this program did not start, and its process group when it leads one."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            if os.getpgid(pid) == pid:
+                os.killpg(pid, sig)
+            else:
+                os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+        for _ in range(50):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.1)
+
+
+TEXT_TYPES = ("application/json", "application/xml")
+# The most curl downloads for lamp fetch, in bytes: a file that may be read, not a whole archive.
+MAX_FILE = 50_000_000
+
+
+def read_file(url, directory):
+    """What curl downloads from url, through the proxy: a PDF's text, read by pdftotext, or text
+    as it is. For everything but an HTML page, curl gives the exact bytes, without Firefox's
+    viewers for PDF, JSON or XML in between, and it reads a URL Firefox would only download."""
+    data_file = os.path.join(directory, "download")
+    curl = subprocess.run(["curl", "-sSL", "--max-time", str(LOAD_SECONDS), "--max-filesize", str(MAX_FILE),
+                           "-o", data_file, "-w", "%{http_code} %{content_type}", url], capture_output=True, text=True)
+    if curl.returncode == 63:  # curl's "maximum file size exceeded"
+        raise Failure(f"{url} is larger than {MAX_FILE // 1000000} MB, more than lamp fetch reads. "
+                      f"curl downloads it: curl -LO {url}")
+    if curl.returncode != 0:
+        raise Failure(f"{url} could not be downloaded: {curl.stderr.strip()}")
+    code, _, content_type = curl.stdout.partition(" ")
+    if int(code or 0) >= 400:
+        raise Failure(f"{url} answered HTTP {code}")
+    with open(data_file, "rb") as file:
+        data = file.read()
+    mime = content_type.split(";")[0].strip().lower()
+    if data.startswith(b"%PDF-"):  # also a PDF served as application/octet-stream
+        if not shutil.which("pdftotext"):
+            raise Failure(f"{url} is a PDF, and pdftotext, which reads PDFs, is not installed in this image")
+        text = subprocess.run(["pdftotext", "-enc", "UTF-8", data_file, "-"], capture_output=True, text=True)
+        if text.returncode != 0:
+            raise Failure(f"{url} could not be read as a PDF: {text.stderr.strip()}")
+        return re.sub(r"\n{3,}", "\n\n", text.stdout.strip())
+    if mime.startswith("text/") or mime in TEXT_TYPES or mime.endswith(("+json", "+xml")):
+        charset = re.search(r"charset=\"?([\w-]+)", content_type)
+        try:
+            return data.decode(charset.group(1) if charset else "utf-8", "replace").removesuffix("\n")
+        except LookupError:
+            return data.decode("utf-8", "replace").removesuffix("\n")
+    raise Failure(f"{url} is {mime or 'of no stated type'}, {len(data)} bytes, which lamp fetch does not "
+                  f"read. curl downloads it: curl -LO {url}")
+
+
+# ─── the command ───────────────────────────────────────────────────────────────────────────
+
+def arguments(argv):
+    maximum, start, url = DEFAULT_MAX, 0, None
+    while argv:
+        option = argv.pop(0)
+        if option in ("--max", "--start"):
+            if not argv or not argv[0].isdigit() or (option == "--max" and int(argv[0]) == 0):
+                fail(f"{option} takes a whole number of characters{' from 1' if option == '--max' else ''}. {USAGE}")
+            value = int(argv.pop(0))
+            maximum, start = (value, start) if option == "--max" else (maximum, value)
+        elif option.startswith("-"):
+            fail(f"unknown option for fetch: {option}. {USAGE}")
+        elif url is None:
+            url = option
+        else:
+            fail(USAGE)
+    if url is None:
+        fail(f"fetch takes the URL of a page. {USAGE}")
+    parts = urllib.parse.urlsplit(url)
+    # Only the web: file:, about:, javascript: and the like would let a page, or a mistake, read
+    # this machine's files through Firefox.
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        fail(f"fetch reads only http:// and https:// pages, not {url}")
+    return url, maximum, start
+
+
+HTML_TYPES = ("text/html", "application/xhtml+xml")
+
+
+def fetch(url, profile):
+    """Title, final URL, text and an optional note on what the text is, for the page at url."""
+    if not shutil.which(FIREFOX):
+        raise Failure(f"fetch needs Firefox ({FIREFOX}), which is not installed in this image")
+    shutil.copy(PREFS, os.path.join(profile, "user.js"))
+    host, port = proxy_address()
+    with open(os.path.join(profile, "user.js"), "a") as prefs:
+        prefs.write(f'user_pref("network.proxy.http", "{host}");\n'
+                    f'user_pref("network.proxy.http_port", {port});\n'
+                    f'user_pref("network.proxy.ssl", "{host}");\n'
+                    f'user_pref("network.proxy.ssl_port", {port});\n'
+                    f'user_pref("browser.download.dir", {json.dumps(os.path.join(profile, "downloads"))});\n'
+                    f'user_pref("marionette.port", {MARIONETTE_PORT});\n')
+    with open(os.path.join(profile, "firefox.log"), "wb") as log:
+        try:
+            page = read_page(url, profile, log)
+        except (MarionetteError, OSError) as error:
+            raise Failure(f"Firefox failed while reading {url}: {error}")
+    status = page.get("status") or 0
+    if status >= 400:
+        parts = urllib.parse.urlsplit(url)
+        # A plain-HTTP page refused by the proxy arrives as a page with status 403; the proxy's
+        # words for it are fetched as for an https page.
+        answer = proxy_answer(parts.hostname, parts.port or 80) if status == 403 else None
+        reason = answer[1] if answer else page.get("title")
+        raise Failure(f"{url} answered HTTP {status}" + (f": {reason}" if reason else ""))
+    if page.get("download") or page.get("type") not in HTML_TYPES:
+        final_url = url if page.get("download") else page.get("url") or url
+        name = urllib.parse.unquote(urllib.parse.urlsplit(final_url).path.rstrip("/").rpartition("/")[2])
+        return page.get("title") or name or final_url, final_url, read_file(final_url, profile), None
+    if "markdown" in page:
+        return page.get("title"), page.get("url") or url, page["markdown"], None
+    return (page.get("title"), page.get("url") or url, re.sub(r"\n{3,}", "\n\n", page.get("text", "").strip()),
+            "no article found on this page, so this is all its visible text")
+
+
+def main():
+    url, maximum, start = arguments(sys.argv[1:])
+    os.makedirs(RUNTIME, mode=0o700, exist_ok=True)
+    with open(os.path.join(RUNTIME, "lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # Marionette's port is one for every fetch
+        try:
+            clear_leftovers()
+        except Failure as failure:
+            fail(str(failure))
+        profile = tempfile.mkdtemp(prefix="profile-", dir=RUNTIME)
+        try:
+            title, final_url, body, note = fetch(url, profile)
+        except Failure as failure:
+            fail(str(failure))
+        finally:
+            shutil.rmtree(profile, ignore_errors=True)
+    if start and start >= len(body):
+        fail(f"--start {start} is past the end: the page has {len(body)} characters")
+    if note:
+        print(f"lamp: {note}", file=sys.stderr)
+    part = body[start:start + maximum]
+    print(f"# {title or '(no title)'}\n{final_url}\n\n{part}")
+    if start + len(part) < len(body):
+        print(f"lamp: cut at {maximum} characters: this is characters {start} to {start + len(part)} of "
+              f"{len(body)}. `lamp fetch --start {start + len(part)} {url}` prints the next part.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    # Ended by a signal, or by its terminal closing, it still stops Firefox and deletes the
+    # profile: sys.exit unwinds through the finally blocks. SIGKILL cannot be caught; the next
+    # fetch cleans up after it (clear_leftovers).
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    signal.signal(signal.SIGHUP, lambda *_: sys.exit(129))
+    # `lamp fetch URL | head` closes the pipe early; end quietly then, as other commands do, rather
+    # than with a Python error. Printing comes last, after Firefox and the profile are gone.
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)

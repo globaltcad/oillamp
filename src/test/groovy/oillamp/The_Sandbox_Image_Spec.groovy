@@ -765,6 +765,86 @@ class The_Sandbox_Image_Spec extends Specification {
             !settings.server.containsKey('secret_key')
     }
 
+    def 'The Firefox of `lamp fetch` sends every request through the proxy, none of its own, and keeps downloads in its profile'() {
+        reportInfo """
+            `lamp fetch` starts a Firefox with a temporary profile, whose `user.js` begins with the
+            preferences in `/usr/local/lib/oillamp/lamp-fetch-prefs.js`. There is no DNS in the
+            sandbox, so the proxy must be set by hand (`network.proxy.type` 1; `lamp fetch` adds
+            its address). And left to itself, Firefox asks servers of its own for updates,
+            telemetry, safe-browsing lists and the like: requests the agent never made, which would
+            go through the proxy under the lamp's network policy and look like the agent's. In a
+            real session, the network log showed only the pages' own hosts. This scenario checks
+            that the preferences which stop those requests are there, each with the value that
+            stops it, and that images are not loaded, which saves time and requests. It also
+            checks two preferences `lamp fetch` relies on: JSON is shown as its text, not in
+            Firefox's JSON viewer, and a URL Firefox downloads goes, without a question, into the
+            directory `lamp fetch` names in `browser.download.dir`, inside the profile, never into
+            the agent's `~/Downloads`.
+        """
+        when: 'the preferences are read, as `name: value`'
+            var prefs = Files.readAllLines(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-fetch-prefs.js'))
+                    .findResults { (it =~ /^user_pref\("([^"]+)", (.+)\);$/).with { it.matches() ? [it.group(1), it.group(2)] : null } }
+                    .collectEntries()
+
+        then: 'the proxy is set by hand'
+            prefs['network.proxy.type'] == '1'
+
+        and: 'updates, telemetry, safe browsing, captive-portal checks and prefetching are off'
+            prefs['app.update.disabledForTesting'] == 'true'
+            prefs['toolkit.telemetry.enabled'] == 'false'
+            prefs['datareporting.healthreport.uploadEnabled'] == 'false'
+            prefs['browser.safebrowsing.malware.enabled'] == 'false'
+            prefs['browser.safebrowsing.phishing.enabled'] == 'false'
+            prefs['network.captive-portal-service.enabled'] == 'false'
+            prefs['network.prefetch-next'] == 'false'
+
+        and: 'images are not loaded'
+            prefs['permissions.default.image'] == '2'
+
+        and: 'JSON is shown as text, and downloads go into the directory in `browser.download.dir`, unasked'
+            prefs['devtools.jsonview.enabled'] == 'false'
+            prefs['browser.download.folderList'] == '2'
+            prefs['browser.download.useDownloadDir'] == 'true'
+            prefs['browser.download.always_ask_before_handling_new_types'] == 'false'
+    }
+
+    def '`lamp fetch`\'s Firefox listens for Marionette on port 2828 unless told otherwise, the port oillamp never offers'() {
+        reportInfo """
+            oillamp offers each port the agent listens on to the person (`[web] publish = "any"` or
+            `"ask"`), except its own ports and port 2828, where `lamp fetch`'s headless Firefox
+            listens for Marionette during a fetch (see `Supervising_A_Session_Spec`). The two
+            numbers live in two places: oillamp's code, and lamp-fetch's default, which
+            `LAMP_MARIONETTE_PORT` overrides only in tests. This scenario pins lamp-fetch's
+            default, so that a change on one side cannot leave the other offering Firefox's port.
+        """
+        when: 'lamp-fetch\'s line that sets the Marionette port is read'
+            var line = Files.readAllLines(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-fetch'))
+                    .find { it.startsWith('MARIONETTE_PORT = ') }
+
+        then: 'its default is 2828'
+            line == 'MARIONETTE_PORT = int(os.environ.get("LAMP_MARIONETTE_PORT", "2828"))'
+    }
+
+    def 'The image has what `lamp fetch` needs: Firefox and pdftotext with the toolchain, and its program'() {
+        reportInfo """
+            `lamp fetch` reads pages with the image's Firefox, `firefox-esr`, and PDFs with
+            `pdftotext`, from the Debian package `poppler-utils`. Both are installed with the
+            developer toolchain, in the same `apt-get install` as Firefox, so an image built with
+            `WITH_TOOLCHAIN=false` has neither. The program itself,
+            `/usr/local/lib/oillamp/lamp-fetch`, comes from `rootfs/` and is made executable with
+            the other helpers.
+        """
+        when: 'the Containerfile is read'
+            var containerfile = Files.readString(IMAGE.resolve('Containerfile'))
+
+        then: 'Firefox and poppler-utils are installed together, with the toolchain'
+            containerfile.contains('        firefox-esr libatk-wrapper-java poppler-utils \\')
+
+        and: '`lamp-fetch` is made executable'
+            containerfile.contains('/usr/local/lib/oillamp/lamp-fetch /usr/local/bin/lamp')
+            Files.isExecutable(IMAGE.resolve('rootfs/usr/local/lib/oillamp/lamp-fetch'))
+    }
+
     private static List<Path> getAllImageFiles() {
         Files.walk(IMAGE).filter { Files.isRegularFile(it) }.toList()
     }

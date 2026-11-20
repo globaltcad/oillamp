@@ -210,6 +210,25 @@ same image with a container run as the sandbox is and a stand-in `CONNECT` proxy
 | a TCP port the agent listens on | none: SearXNG is on `/run/agent/searxng/searxng.sock` |
 | the size of SearXNG's layer | 153 MB (its virtualenv 132 MB, of which curl_cffi 41 MB and babel 33 MB; its source 27 MB) |
 
+`lamp fetch` the same way, in a real session whose network policy refused `example.com`
+(2026-11-20; Firefox 153.6.0esr):
+
+| Fetch | Result |
+|---|---|
+| `https://sqlite.org/wal.html`, an article | Markdown with headings, numbered lists and links; cut at 20000 of 34480 characters, with the command for the rest; 4.5 s |
+| `https://react.dev/learn`, built with JavaScript | the article as Markdown, 13.7 kB; 3.3 s |
+| `https://arxiv.org/pdf/1706.03762`, a PDF | its text through `pdftotext`, cut at 20000 of 39916 characters; 3.4 s |
+| `https://example.com/` and `http://example.com/`, refused by the rule | exit 1 with the proxy's message, `… denied by rule "no example.com in this trial" in oillamp.toml`; 2 s |
+| a missing page on sqlite.org | `answered HTTP 404: Not Found`, exit 1 |
+| a host that does not resolve | `could not be loaded: oillamp: cannot resolve …`, exit 1 |
+| Ctrl-C during a fetch; two fetches at once | exit 130, no Firefox left, profile deleted; the second waited for the first, both done in 8 s |
+| hosts in the session's network log | the fetched sites and what their pages load (react.dev: Google Analytics, a sandbox bundler); none of Mozilla's |
+| `poppler-utils`, for PDFs | about 11 MB with its libraries |
+| files, in a second session: `robots.txt`, a JSON API answer, an Atom feed (XML) | printed as served, under `# robots.txt`, `# license`, `# master.atom`; 2.5 to 3.7 s |
+| a `.zip` that Firefox downloads | noticed in the profile's `downloads`, fetched with curl, `is application/zip, 7307768 bytes, which lamp fetch does not read`, exit 1 in 3.3 s; no `~/Downloads` |
+| a PDF served as `application/octet-stream` | its text through `pdftotext`; 4.5 s |
+| a fetch killed with SIGKILL while loading | its Firefox and profile stayed; the next fetch stopped that Firefox, deleted the profile and printed the page, exit 0 in 4.5 s |
+
 ### Published web servers
 
 `Verifying_Published_Web_Servers_Spec`, with podman 5.7.0 and the real image, a lamp with
@@ -490,6 +509,9 @@ suggests. Each is a decision for the team: implement it, or remove the option.
 
 ### Not yet tested
 
+- `lamp fetch` in a real session with `[web] publish = "ask"` or `"any"`: that oillamp never
+  offers Marionette's port 2828 is covered by a scenario with a simulated container
+  (`Supervising_A_Session_Spec`), not yet seen in a real session.
 - Published web servers with a real browser, and `opencode serve` behind a link. The data path
   itself is verified on real hardware (see "Published web servers" above), with Python's
   `http.server` and a plain HTTP request.

@@ -254,7 +254,7 @@ class Setting_Up_A_Lamp_Spec extends Specification {
             any page through the proxy, but a search engine's own page answers a program with
             captchas, and an agent that does not know better tries that first. The image has a
             search of its own, `lamp search`, so the guide `~/AGENTS.md`, which `oillamp at`
-            writes into the agent's home, has a section `### Searching the web`. It names the
+            writes into the agent's home, has a section `### Searching and reading the web`. It names the
             command, says what it prints for each result (title, link, a line or two from the
             page) and how to ask for more (`-n 10`), says to use it rather than `curl` or Firefox
             on a search engine, and warns that engines refuse searches for a while after a burst.
@@ -265,11 +265,11 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         when: '`oillamp at <dir>` sets up a new lamp'
             host.oillamp.run('at', lamp.toString())
 
-        then: '`~/AGENTS.md` has the section `### Searching the web`, which names `lamp search` and what it prints'
+        then: '`~/AGENTS.md` has the section `### Searching and reading the web`, which names `lamp search` and what it prints'
             var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
                                             .findFirst().orElseThrow()
             var guide = Files.readString(agentHome.resolve('AGENTS.md'))
-            var section = guide.substring(guide.indexOf('### Searching the web'))
+            var section = guide.substring(guide.indexOf('### Searching and reading the web'))
             section.contains('`lamp search "what to search for"`')
             section.contains('the top five results,\neach with its title, its link and a line or two from the page; `-n 10` prints ten.')
 
@@ -279,6 +279,39 @@ class Setting_Up_A_Lamp_Spec extends Specification {
         and: 'it warns that the engines refuse a burst of searches, and that `lamp search` then fails and names them'
             section.contains('Search in bursts, dozens of times a minute, and the engines refuse to answer')
             section.contains('`lamp search` fails and names the engines that\nfailed')
+    }
+
+    def '`~/AGENTS.md` tells the agent to read a page with `lamp fetch`, what it prints, and that it cuts long pages'() {
+        reportInfo """
+            Let's consider an agent that found a page with `lamp search` and wants to read it.
+            `curl` gives it raw HTML, full of menus and scripts, and nothing at all from a page
+            that builds its text with JavaScript. The image has `lamp fetch` for that, so the
+            section `### Searching and reading the web` of `~/AGENTS.md` names the command, says
+            what it prints (the article as Markdown under its title and URL, or the page's
+            visible text; a PDF's text; plain text, JSON and XML as they are), that it loads the
+            page in a Firefox of its own, so that JavaScript runs, that it cuts at 20000
+            characters and says how to print the next part, and to use it rather than `curl`.
+        """
+        given: 'a lamp path where no directory exists yet'
+            var lamp = host.lampPath()
+
+        when: '`oillamp at <dir>` sets up a new lamp'
+            host.oillamp.run('at', lamp.toString())
+
+        then: 'the section `### Searching and reading the web` names `lamp fetch <url>` and what it prints, for pages and for files'
+            var agentHome = Files.list(lamp).filter { it.fileName.toString().startsWith('agent-lamp-') }
+                                            .findFirst().orElseThrow()
+            var guide = Files.readString(agentHome.resolve('AGENTS.md'))
+            var section = guide.substring(guide.indexOf('### Searching and reading the web'))
+            section.contains('`lamp fetch <url>` prints what a page says, as Markdown under its title and URL')
+            section.contains('or all its visible text when it has none. A PDF prints as its text, and plain\ntext, JSON and XML as they are.')
+
+        and: 'it says that a Firefox of its own loads the page, so JavaScript works'
+            section.contains('in a Firefox of its own, without a\nwindow, so pages that need JavaScript work too.')
+
+        and: 'it says that output stops at 20000 characters, and to use it rather than `curl`'
+            section.contains('It prints at most 20000 characters;\nwhen it cuts a page, it says how to print the next part.')
+            section.contains('Read pages with it rather\nthan with `curl`, which gives you raw HTML.')
     }
 
     def '`oillamp at` does not follow a link the agent put in place of `~/.genie`, and warns with `OIL-LAMP-012` instead'() {

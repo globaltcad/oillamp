@@ -12,6 +12,9 @@ record Forward(String name, int port, HostAndPort target) {
     public static final int PROXY_PORT = 3128;
     /// The port inside the sandbox where the harnesses reach the model service, through oillamp.
     public static final int MODEL_PORT = 3129;
+    /// Where `lamp fetch`'s headless Firefox listens for Marionette, for the seconds of a fetch;
+    /// never offered to the person. lamp-fetch's default (`MARIONETTE_PORT`) must be this port.
+    public static final int MARIONETTE_PORT = 2828;
 
     public Forward {
         if (!name.matches("[a-z0-9-]+"))

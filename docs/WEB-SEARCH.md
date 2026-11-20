@@ -11,9 +11,8 @@ captchas, and what comes back is raw HTML full of menus and scripts.
 So a sandbox gets two commands:
 
 - `lamp search "query"`: which pages are about this? A list of titles, links and a line or two
-  from each. **Built.**
-- `lamp fetch <url>`: what does this page say? Its text, cleaned up, as Markdown. **Planned, not
-  built yet.**
+  from each.
+- `lamp fetch <url>`: what does this page say? Its text, cleaned up, as Markdown.
 
 Both run entirely inside the sandbox. The oillamp engine gains no logic: it ships them in the
 image and mentions them in `AGENTS.md`, as it does for `lamp screenshot`. Their requests leave
@@ -51,7 +50,7 @@ $ lamp search "sqlite write ahead log"
 - SearXNG missing from the image, ending while it starts, or not answering is exit status 1, with
   a message that names its log.
 
-`AGENTS.md` has a short section, `### Searching the web`, under "Network".
+`AGENTS.md` has a short section, `### Searching and reading the web`, under "Network".
 
 ### How it is put together
 
@@ -129,19 +128,119 @@ adding the key outside the sandbox as it does for Eden AI.
 - `Setting_Up_A_Lamp_Spec` checks the section in `AGENTS.md`.
 - Real searches, in a real session: see [STATUS.md](STATUS.md#web-search).
 
-## Fetch: Firefox, without a window (planned)
+## Fetch: Firefox, without a window
 
 `curl` gets HTML; many pages build their text with JavaScript, and even those that do not bury
-it under navigation. Firefox already solves both: it runs the page's scripts, and its Reader View
-(Readability.js, part of Firefox) cuts an article down to its text.
+it under navigation. Firefox solves both: it runs the page's scripts, and Reader View's
+extraction, Readability.js, which Firefox carries, cuts an article down to its text.
 
-- `lamp fetch <url>` starts a headless Firefox with a profile of its own, so it never touches the
-  Firefox on the desktop, loads the page, lets Reader View extract it, and prints it as Markdown,
-  with the page's title and URL on top.
-- PDFs are turned into text too.
-- The output is capped, saying so when it was cut, so a huge page cannot flood a model's context.
+### What the agent sees
 
-Open: how exactly to drive Firefox. Firefox ESR in trixie speaks WebDriver BiDi, so a small client
-can load the page; whether Reader View's code can be reached from there, or must be bundled, a
-prototype will tell. If Firefox proves awkward, a Python extractor such as trafilatura is the
-fallback, at the cost of pages that need JavaScript.
+```
+$ lamp fetch https://sqlite.org/wal.html
+# Write-Ahead Logging
+https://sqlite.org/wal.html
+
+Write-Ahead Logging
+
+Table Of Contents
+
+## 1. Overview
+
+The default method by which SQLite implements [atomic commit and rollback](https://sqlite.org/atomiccommit.html) is …
+lamp: cut at 20000 characters: this is characters 0 to 20000 of 34480. `lamp fetch --start 20000 https://sqlite.org/wal.html` prints the next part.
+```
+
+- The title as a heading, the URL Firefox ended on, then the article as Markdown: headings,
+  paragraphs, lists, links, code blocks, tables as `|` rows. Images are left out.
+- A page with no article (search results, an application) prints its visible text instead, and
+  stderr says so.
+- Anything that is not an HTML page is downloaded again with curl (at most 50 MB) and printed
+  from there: a PDF (a file beginning `%PDF-`, whatever its content type) as the text
+  `pdftotext` reads; `text/…`, `application/json`, `application/xml` and `…+json`/`…+xml` as
+  they are, character for character, under the last part of the URL's path as title. Firefox's
+  own viewers would change them (XML laid out as a tree, JSON in a viewer application). Any
+  other type, such as a `.zip`, fails with its type, size and the `curl -LO` that downloads it.
+- At most 20000 characters, or `--max N`. When the text was cut, stderr names the characters
+  printed, of how many, and the command for the next part, `--start N`. Each call loads the page
+  again, which keeps `lamp fetch` without state.
+- Exit status 1, with one line on stderr, for: a URL that is not `http://` or `https://` (so
+  `file:`, `about:` and `javascript:` cannot read this machine through Firefox); an HTTP status of
+  400 or more; a page that does not load within 30 seconds (`LAMP_FETCH_LOAD_SECONDS`); a Firefox
+  that does not start, with its last words; and a connection that fails. For a failed
+  connection, `lamp fetch` asks the proxy directly what it says about that host, so the agent
+  gets the proxy's own words: the rule that refused it, or `cannot resolve <host>`.
+
+### How it works
+
+`lamp fetch` runs `/usr/local/lib/oillamp/lamp-fetch`, a Python program (standard library only):
+
+1. It makes a profile in `/run/agent/lamp-fetch/profile-…`: `user.js` from
+   `/usr/local/lib/oillamp/lamp-fetch-prefs.js`, then the proxy from `HTTP_PROXY` and the
+   Marionette port.
+2. It starts `firefox-esr --headless --marionette --no-remote --profile …`. Firefox is ready in
+   about half a second.
+3. Over **Marionette**, Firefox's own remote protocol (length-prefixed JSON over TCP; a few lines
+   of Python, where WebDriver BiDi would need a WebSocket client), it opens a session with a
+   page-load timeout, loads the URL, and runs one script in the page: Firefox's own
+   `Readability.js`, read out of `/usr/lib/firefox-esr/omni.ja`, so nothing is bundled and it
+   always matches the Firefox, then about 80 lines that turn the article into Markdown, or
+   return `document.body.innerText`, and the page's content type and HTTP status.
+4. While the page loads, it watches the profile's `downloads` directory, which the profile
+   names in `browser.download.dir`: a URL Firefox downloads rather than shows (an archive, an
+   attachment) puts a file there, and no page ever finishes loading. It then stops waiting.
+5. Anything that is not HTML, or that Firefox downloaded, is fetched again with curl, through
+   the proxy, as above.
+6. Firefox and the processes it started are stopped (their process group), and the profile is
+   deleted, also on an error, Ctrl-C, SIGTERM or SIGHUP. `lamp` runs lamp-fetch with `exec`, so
+   a signal sent to `lamp` reaches it.
+
+SIGKILL cannot be caught, and leaves a Firefox running on Marionette's port. So each fetch,
+holding the lock, first stops any Firefox started with `--marionette` and a profile in
+`/run/agent/lamp-fetch/profile-…`, which can only be left over from a killed fetch, and deletes
+old profiles. If something else still listens on the port, such as the agent's own
+`firefox --marionette`, it fails and names the port, and stops nothing it did not start.
+
+**Firefox per fetch, not kept running.** A whole fetch takes 2 to 4.5 seconds in a real
+session, of which Firefox's start is about half a second. Keeping it running would save little
+and bring back state: a profile with history and cookies, a process to watch, a port that stays
+open.
+
+**One fetch at a time.** Marionette listens on a fixed port, 2828, on the loopback. A lock,
+`/run/agent/lamp-fetch/lock`, makes a second fetch wait for the first; two at once take about the
+sum of their times. The port exists only while a fetch runs. Firefox's remote protocols have no
+Unix socket, unlike SearXNG, so the agent listens on a TCP port; oillamp never offers 2828 to the
+person under `[web] publish = "ask"` or `"any"`, as it never offers its own ports 3128 and 3129
+(`Forward.MARIONETTE_PORT`, which lamp-fetch's default must match; `The_Sandbox_Image_Spec` pins
+lamp-fetch's side).
+
+**What goes out.** The page's own requests only, through the proxy. The profile turns off what
+Firefox fetches on its own (updates, telemetry, safe-browsing lists, remote settings, captive
+portal checks, prefetching), and images, web fonts and media, which only cost time. Remote
+settings ignore their preference unless `MOZ_REMOTE_SETTINGS_DEVTOOLS=1` is set, so lamp-fetch
+sets it; without it, Firefox asked `firefox.settings.services.mozilla.com` at every start. In a
+real session the network log showed only the fetched sites and what their pages load (on
+react.dev: Google Analytics and a sandbox bundler).
+
+**Firefox, then curl, for files.** Firefox learns a URL's type only by loading it, so a file is
+requested twice. The alternative, asking curl first for every URL, would double every page
+instead, and files are the rarer case. curl gives the exact bytes; Firefox's DOM for plain text is
+the same text, but for XML it is a tree view, and one rule for every file is simpler than one per
+viewer.
+
+**PDFs** need `poppler-utils`, installed with Firefox in the toolchain layer: about 11 MB with
+its libraries (libpoppler 4.9 MB, libnss3 4.5 MB, poppler-utils 0.7 MB, gpgme 1.3 MB).
+
+### How it is tested
+
+- `Reading_A_Web_Page_Spec` runs the real `lamp fetch` against a stand-in Firefox that speaks
+  Marionette and returns what a scenario gives as the page script's result: an article, a page
+  with no article, a cut page, refused URL schemes, a page-load timeout (Firefox and its profile
+  gone afterwards), a Firefox that ends while starting, an HTTP error, a site refused by a rule, a
+  name the proxy cannot resolve, a PDF, plain text, JSON and XML, a download, a Firefox left over
+  by a killed fetch, another program on Marionette's port, SIGTERM and SIGHUP, and `lamp help`.
+- `The_Sandbox_Image_Spec` checks the profile's preferences and that the image installs
+  `poppler-utils` and `lamp-fetch`.
+- `Setting_Up_A_Lamp_Spec` checks the paragraph in `AGENTS.md`.
+- The page script itself, Readability on real pages and the Markdown it makes, only runs in a
+  real Firefox: see [STATUS.md](STATUS.md#web-search).

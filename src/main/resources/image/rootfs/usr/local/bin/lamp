@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lamp: drive the sandbox desktop from a shell, and search the web.
+# lamp: drive the sandbox desktop from a shell, and search and read the web.
 #
 # This is deliberately a shell script and deliberately thin. An agent that needs something this
 # does not do can call the underlying tools directly (grim, wtype, and the pointer helper
@@ -39,6 +39,8 @@ SEARCH_DIR="${LAMP_SEARCH_DIR:-${XDG_RUNTIME_DIR:-/run/agent}/searxng}"
 SEARCH_START_SECONDS="${LAMP_SEARCH_START_SECONDS:-30}"
 # How many results `lamp search` prints unless asked for more or fewer.
 SEARCH_COUNT=5
+# `lamp fetch` is a Python program of its own, being longer than the rest; see its header.
+FETCH="${LAMP_FETCH:-/usr/local/lib/oillamp/lamp-fetch}"
 
 die() { printf 'lamp: %s\n' "$*" >&2; exit 1; }
 
@@ -404,6 +406,9 @@ if failed:
 PY
 }
 
+# exec, so that a signal sent to `lamp` reaches lamp-fetch, which then stops its Firefox.
+cmd_fetch() { need python3; exec python3 "$FETCH" "$@"; }
+
 cmd_info() {
     # The size now, from the desktop itself: the user's viewer may have given the desktop the size
     # of the panel they watch it in. It goes back to its own size when they close that panel.
@@ -423,7 +428,7 @@ cmd_info() {
 
 usage() {
     cat <<'EOF'
-lamp — drive this sandbox's desktop, and search the web.
+lamp — drive this sandbox's desktop, and search and read the web.
 
   lamp screenshot [--region X,Y,W,H] [--out FILE]   capture the screen; prints the path
   lamp click X Y [left|right|middle] [double]       click at screen coordinates
@@ -439,6 +444,7 @@ lamp — drive this sandbox's desktop, and search the web.
   lamp dock add [LABEL] COMMAND [--icon ICON]       add a button; omit LABEL for an icon-only button
   lamp dock remove LABEL_OR_COMMAND                 remove a button by label, or command if unlabelled
   lamp search [-n COUNT] "what to search for"       search the web; prints titles, links, snippets
+  lamp fetch [--max N] [--start N] URL              what a page says, as Markdown; a PDF as text
 
 The dock is the bar at the bottom of the desktop. A click on a button runs its command as you, in
 a login shell; hovering over it shows the command. ICON is an icon name, such as firefox-esr, or
@@ -448,7 +454,9 @@ If a label and an icon-only command have the same text, removal takes the labell
 
 `lamp search` asks a few search engines through SearXNG and prints the top 5 results, or COUNT.
 It fails when there are no results because engines refused to answer: they do that for a while
-after a burst of searches.
+after a burst of searches. `lamp fetch` loads the page in a Firefox of its own, without a window,
+and prints its article, or all its text when it has none. It prints at most 20000 characters
+(--max N), from the beginning or from character --start N, and says when it cut the page.
 
 Coordinates are screen pixels, as in a screenshot; 0,0 is the top-left corner. This works for
 Wayland and X11 applications (including Java Swing) alike. A click reports no result: take a
@@ -487,6 +495,7 @@ case "$subcommand" in
     show)         cmd_show "$@" ;;
     dock)         cmd_dock "$@" ;;
     search)       cmd_search "$@" ;;
+    fetch)        cmd_fetch "$@" ;;
     -h|--help|help) usage ;;
     *)            die "unknown command '$subcommand'. Run 'lamp help'." ;;
 esac

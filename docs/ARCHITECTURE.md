@@ -93,8 +93,9 @@ table lists every part that runs, what it is written in, where it runs and as wh
 | `socat` + `sshd -i` | third-party | container, agent user | The SSH listener; one `sshd` per connection. |
 | `dbus-daemon` | third-party | container, agent user | The session bus GUI applications expect. |
 | `/etc/profile.d/oillamp.sh` | bash | container, agent user | The environment of every shell: proxy, display, library paths, SDKMAN, prompt, banner. |
-| `lamp` (`rootfs/usr/local/bin/`) | bash | container, agent user | The desktop helper: screenshot, click, type, key, wait-stable, show, dock; and `lamp search`. |
+| `lamp` (`rootfs/usr/local/bin/`) | bash | container, agent user | The desktop helper: screenshot, click, type, key, wait-stable, show, dock; and `lamp search`, `lamp fetch`. |
 | SearXNG (`/opt/searxng`) | third-party, Python | container, agent user | The meta search engine behind `lamp search`, started by the first search, on a Unix socket. See [WEB-SEARCH.md](WEB-SEARCH.md). |
+| `lamp-fetch` (`rootfs/usr/local/lib/oillamp/`) | Python 3, standard library | container, agent user | `lamp fetch`: starts a headless Firefox with a temporary profile for one page, drives it over Marionette, prints the page as Markdown. See [WEB-SEARCH.md](WEB-SEARCH.md). |
 | `lamp-pointer` (`rootfs/usr/local/lib/oillamp/`) | Python 3, standard library | container, agent user | Sends mouse events through the VNC socket for `lamp click` and friends, and reads the desktop's size for `lamp info`. |
 | `lamp-dock` (`rootfs/usr/local/lib/oillamp/`) | Python 3, GTK 3, gtk-layer-shell | container, agent user | The dock at the bottom of the desktop: a terminal, Firefox where installed, and the agent's buttons from `~/.config/lamp/dock.json`. |
 | `keep-windows-on-screen` (`rootfs/usr/local/lib/oillamp/`) | Python 3, standard library | container, infra user | With floating windows, moves windows back onto the desktop when it gets smaller, and back where they were when it grows. |
@@ -718,6 +719,8 @@ Everything that goes into the image is under `src/main/resources/image/`:
 | `rootfs/etc/xdg/foot/foot.ini` | config | The in-sandbox terminal's font and colours. |
 | `rootfs/etc/ssh/ssh_config.d/50-oillamp-proxy.conf` | config | Sends outbound SSH (`git@github.com:…`) through the egress proxy. |
 | `rootfs/etc/searxng/settings.yml` | config | SearXNG for one local user: a Unix socket, JSON output, no limiter, no plugins, a short list of engines, every request through the egress proxy. |
+| `rootfs/usr/local/lib/oillamp/lamp-fetch` | Python | `lamp fetch`: a page as Markdown, through a headless Firefox. |
+| `rootfs/usr/local/lib/oillamp/lamp-fetch-prefs.js` | config | The `user.js` of `lamp fetch`'s Firefox: the proxy by hand, none of Firefox's own background requests, no images. |
 | `rootfs/usr/share/oillamp/wallpaper.svg`, `.png` | image | The desktop background, `display.wallpaper = "lamp"`. After editing the SVG, render it with `inkscape wallpaper.svg --export-type=png --export-filename=wallpaper.png`. |
 | `rootfs/usr/share/oillamp/wallpaper-waves.svg`, `.png` | image | The "waves" wallpaper, for `waves`, `waves-light` and `waves-dark` alike: light and shadow only, partly transparent, so it takes on the background colour. Rendered the same way; its lettering is Noto Serif Display Bold, which must be installed where it is rendered. Give inkscape absolute paths: the snap resolves relative ones from your home, and cannot write to `/tmp`. |
 
@@ -1454,7 +1457,8 @@ container's `/proc/net/tcp` and `/proc/net/tcp6` with `podman exec --user lamp �
 (state `0A`), on the loopback or every address, and owned by the agent's uid inside the container
 (1000, `LampPlanUtil.AGENT_UID`). The uid alone leaves out the infra user's bridges (3128, 3129,
 the forwards, the web bridges). `ListeningPortsUtil.newPorts` then drops ports below 1024, 3128,
-3129, the forwards' ports and every port already published or decided about.
+3129, 2828 (the agent's own, but `lamp fetch`'s Firefox listening for Marionette, not a web
+server), the forwards' ports and every port already published or decided about.
 
 A new port is published as `port-<n>`: `podman exec --detach --user lamp … socat` starts the same
 bridge the entrypoint starts for a listed port, on `web-port-<n>.sock`; then the relay opens as for
@@ -1584,6 +1588,7 @@ The agent's environment points at the display with `WAYLAND_DISPLAY=/run/lamp/wa
 | `lamp show "text"` | asks the user to look at the desktop, through the session (see Desktop, above) |
 | `lamp dock [list]`, `lamp dock add [LABEL] COMMAND [--icon ICON]`, `lamp dock remove LABEL_OR_COMMAND` | reads and writes `~/.config/lamp/dock.json` (see The dock, below); says when the dock is not running |
 | `lamp search [-n COUNT] "query"` | asks SearXNG on `/run/agent/searxng/searxng.sock`, starting it first if it does not answer; prints the top 5 results (or COUNT) as title, link and snippet; fails when there are none and engines failed ([WEB-SEARCH.md](WEB-SEARCH.md)) |
+| `lamp fetch [--max N] [--start N] URL` | `lamp-fetch`: a headless Firefox with a profile in `/run/agent/lamp-fetch/`, over Marionette on 127.0.0.1:2828 (a port oillamp never offers under `web.publish`), one fetch at a time; prints the title, URL and the article as Markdown (or the visible text; a PDF through curl and `pdftotext`), at most 20000 characters ([WEB-SEARCH.md](WEB-SEARCH.md)) |
 
 There is no window list: that would need sway's control socket, which the agent must not reach.
 
@@ -1698,6 +1703,7 @@ line** by the entrypoint or the supervisor.
 | opencode | `/usr/local/share/oillamp/opencode/opencode.json` via `OPENCODE_CONFIG` | written during the image build |
 | SDKMAN | `~/.sdkman/etc/config` (questions off) | installed in the image, copied into the home by the entrypoint once |
 | SearXNG | `/etc/searxng/settings.yml`; socket and secret key from `lamp search` | in the image; started by the first `lamp search` of a session |
+| `lamp fetch`'s Firefox | `/usr/local/lib/oillamp/lamp-fetch-prefs.js`, plus proxy and Marionette port, as `user.js` of a temporary profile | in the image; a new profile for each fetch, deleted afterwards |
 | the agent | `~/AGENTS.md` | every start, `AgentGuideUtil`, from the live configuration |
 | ssh on the host | `.oillamp/ssh_config`, `.oillamp/known_hosts` | every start, `LampPlanUtil` |
 | the terminal emulator | its argument template in `TerminalEmulatorUtil` | chosen each session from `terminal.*` |

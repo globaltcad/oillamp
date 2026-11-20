@@ -650,6 +650,45 @@ class Supervising_A_Session_Spec extends Specification {
             (started?.session as Thread)?.join(20_000)
     }
 
+    def 'With `web.publish = "#publish"`, oillamp never offers port 2828, where `lamp fetch`\'s Firefox listens, but offers the agent\'s other ports'() {
+        reportInfo """
+            `lamp fetch` drives a headless Firefox over Marionette, which listens on 127.0.0.1,
+            port 2828, for the seconds of a fetch. The agent's user owns that listener, so with
+            `publish = "any"` or `"ask"` under `[web]` oillamp would offer it like a web server the
+            agent started: publish it to the person's browser, or ask the person about it, at
+            nearly every fetch. It is no web server, so oillamp never offers port 2828, as it never
+            offers its own proxy and model relay ports, 3128 and 3129.
+
+            Here the sandbox's `/proc/net/tcp` lists two listeners of the agent's on 127.0.0.1: 2828
+            and a development server on 5173. Ports are offered lowest first, so an offer of 2828
+            would come before the one of 5173. With `"any"`, an offer is a `LampEvent.WebPublished`;
+            with `"ask"`, a `LampEvent.WebPortAsked`.
+        """
+        given: 'a session for a lamp with `publish = "#publish"`, whose agent listens on 2828 and 5173'
+            var tcp = PROC_NET_TCP.readLines().first() + '\n' +
+                    '   0: 0100007F:0B0C 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41011 1 0000000000000000 100 0 0 10 0\n' +
+                    '   1: 0100007F:1435 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 41012 1 0000000000000000 100 0 0 10 0\n'
+            var started = startASessionWhoseAgentListens("publish = \"$publish\"\nports = {}\n", tcp)
+            var reported = started.reported as List<LampEvent>
+            var offered = {
+                reported.findResults { it instanceof LampEvent.WebPublished ? it.port().sandboxPort()
+                                     : it instanceof LampEvent.WebPortAsked ? it.sandboxPort() : null } }
+
+        when: 'the session has offered port 5173, and looked into the sandbox for a few seconds more'
+            waitUntil { offered().contains(5173) }
+            Thread.sleep(5_000)
+
+        then: 'port 5173 was offered, and port 2828 never'
+            offered().unique() == [5173]
+
+        cleanup:
+            host.oillamp.run('stop', host.lampPath().toString())
+            (started?.session as Thread)?.join(20_000)
+
+        where:
+            publish << ['any', 'ask']
+    }
+
     def 'With `web.publish = "any"`, oillamp publishes at most 16 ports the agent opens, and says so once when there are more'() {
         reportInfo """
             Let's consider a lamp whose `oillamp.toml` sets `publish = "any"` under `[web]`, and an

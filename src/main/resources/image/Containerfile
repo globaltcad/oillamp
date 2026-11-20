@@ -61,11 +61,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # ── developer tooling, the part a user is most likely to want changed ────────────────────────
+# Firefox and poppler-utils (pdftotext) are also what `lamp fetch` reads pages and PDFs with.
 RUN if [ "${WITH_TOOLCHAIN}" = "true" ]; then \
       apt-get update && apt-get install -y --no-install-recommends \
         git git-lfs wget unzip zip jq ripgrep fd-find build-essential cmake pkg-config gdb strace \
         python3 python3-venv python3-pip \
-        firefox-esr libatk-wrapper-java \
+        firefox-esr libatk-wrapper-java poppler-utils \
         ${JDK_PACKAGE} ${EXTRA_APT_PACKAGES} \
       && rm -rf /var/lib/apt/lists/* ; \
     else \
@@ -123,7 +124,7 @@ RUN groupadd -g 1000 agent && useradd -u 1000 -g 1000 -d /home/agent -M -s /bin/
 COPY rootfs/ /
 RUN chmod 0755 /usr/local/lib/oillamp/entrypoint /usr/local/lib/oillamp/lamp-pointer \
               /usr/local/lib/oillamp/keep-windows-on-screen /usr/local/lib/oillamp/lamp-dock \
-              /usr/local/bin/lamp
+              /usr/local/lib/oillamp/lamp-fetch /usr/local/bin/lamp
 
 # Nothing in this image should be setuid: the sandbox's guarantees come from the user namespace,
 # and a setuid binary inside it is a way for the agent to become `lamp`. Host keys are removed
