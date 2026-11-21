@@ -243,7 +243,7 @@ final class HostAccessPage {
         openedRows = hostAccess.viewAs(Tuple.classTyped(PortRow.class), it ->
             it.openedThisSession().mapTo(PortRow.class, port -> new PortRow("", port.sandboxPort(), port.program(), Optional.of(port.link()), true))
         );
-        portInOneLine = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(PORT_IN_ONE_LINE_FROM));
+        portInOneLine = state.viewAs(Boolean.class, it -> it.area().width() >= PORT_IN_ONE_LINE_FROM);
     }
 
     UIForAnySwing<?, ?> view(Val<Boolean> visible) {
@@ -252,7 +252,9 @@ final class HostAccessPage {
             .isVisibleIf(visible)
             .withHorizontalScrollBarPolicy(UI.Active.NEVER)
             .withVerticalScrollIncrement(24)
-            .onResize(it -> state.update(From.VIEW, s -> s.withArea(it.getWidth(), it.getHeight())))
+            .onResize(it ->
+                state.update(From.VIEW, s -> s.withArea(it.getWidth(), it.getHeight()))
+            )
             .add(
                 panel().withFlowLayout(UI.HorizontalAlignment.LEFT, 18, 18)
                 .withMinSize(0, 0).withPrefSize(REFERENCE, 0)
@@ -263,7 +265,9 @@ final class HostAccessPage {
                 .add(WHOLE, top())
                 .add(WHOLE,
                     box().withLayout(state.viewAs(Layout.class, it ->
-                        it.area().width() >= UI.scale(TIERS_SIDE_BY_SIDE_FROM) ? TIERS_SIDE_BY_SIDE : TIERS_ONE_UNDER_THE_OTHER
+                        it.area().width() >= TIERS_SIDE_BY_SIDE_FROM
+                                ? TIERS_SIDE_BY_SIDE
+                                : TIERS_ONE_UNDER_THE_OTHER
                     ))
                     .add(whatItMayDo())
                     .add(whatGuardsIt())
@@ -340,11 +344,24 @@ final class HostAccessPage {
             .add("growx, wmin 0",
                 panel("fill, ins 10 14 10 14, gap 10", "[][grow]")
                 .isVisibleIf(lockedBecause.viewAs(Boolean.class, it -> !it.isEmpty()))
-                .withStyle(palette, (p, it) -> it.backgroundColor(p.YOURS()).borderRadius(12).borderAt(UI.Edge.LEFT, 3, p.BRASS()))
-                .add("top, gaptop 2", label("").withStyle(palette, (p, it) -> it.icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, p.BRASS()))))
-                .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true)))
+                .withStyle(palette, (p, it) -> it
+                    .backgroundColor(p.YOURS())
+                    .borderRadius(12)
+                    .borderAt(UI.Edge.LEFT, 3, p.BRASS())
+                )
+                .add("top, gaptop 2",
+                    label("")
+                    .withStyle(palette, (p, it) -> it
+                        .icon(SignSvgUtil.sign(SignSvgUtil.SLEEP, p.BRASS()))
+                    )
+                )
+                .add("growx, wmin 0",
+                    ViewPartsUtil.wrapped(theme, lockedBecause, Palette::TEXT, Val.of(true))
+                )
             )
-            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty())));
+            .add("growx, wmin 0",
+                ViewPartsUtil.wrapped(theme, problem, Palette::TROUBLE, problem.viewAs(Boolean.class, it -> !it.isEmpty()))
+            );
     }
 
     private UIForAnySwing<?, ?> experimental() {
@@ -571,7 +588,7 @@ final class HostAccessPage {
     /// under the other. The parts stand in a row on a page at least `inARowFrom` wide, and one
     /// under the other, as wide as the page, on a narrower one.
     private <T> UIForBox<JBox> choice(Val<String> heading, List<ViewPartsUtil.Choice<T>> choices, Var<T> chosen, int inARowFrom, Val<String> meaning) {
-        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= UI.scale(inARowFrom));
+        Val<Boolean> inARow = state.viewAs(Boolean.class, it -> it.area().width() >= inARowFrom);
         return
             box().withLayout(inARow.viewAs(Layout.class, it -> it ? PARTS_IN_A_ROW : PARTS_ONE_UNDER_THE_OTHER))
             .add(section(heading, Val.of(true)))
@@ -765,8 +782,17 @@ final class HostAccessPage {
         Val<Boolean> typed = Viewable.of(Boolean.class, newName, newPort, (name, port) -> HostAccess.ListedPort.typed(name, port).isPresent());
         Val<Boolean> canAdd = Viewable.of(Boolean.class, changeable, typed, (a, b) -> a && b);
         return
-            box().withLayout(state.viewAs(Layout.class, it -> it.area().width() >= UI.scale(ADDING_IN_ONE_LINE_FROM) ? ADDING_IN_ONE_LINE : ADDING_ONE_UNDER_THE_OTHER))
-            .withStyle(palette, (p, it) -> it.padding(6, 8, 4, 12).borderAt(UI.Edge.TOP, 1, ViewPartsUtil.withAlpha(p.BORDER(), 140)))
+            box().withLayout(
+                state.viewAs(Layout.class, it ->
+                        it.area().width() >= ADDING_IN_ONE_LINE_FROM
+                                ? ADDING_IN_ONE_LINE
+                                : ADDING_ONE_UNDER_THE_OTHER
+                )
+            )
+            .withStyle(palette, (p, it) -> it
+                .padding(6, 8, 4, 12)
+                .borderAt(UI.Edge.TOP, 1, ViewPartsUtil.withAlpha(p.BORDER(), 140))
+            )
             .add(label(pageWords.viewAsString(Lang.HostAccessPage::NAME)).group(Skin.META))
             .add(
                 textField(newName).group(Skin.INPUT)
@@ -802,8 +828,8 @@ final class HostAccessPage {
         Val<Boolean> busy = hostAccess.viewAs(Boolean.class, HostAccess::busy);
         Val<Layout> layout = state.viewAs(Layout.class, it -> {
             int width = it.area().width();
-            if (width >= UI.scale(SAVING_IN_ONE_ROW_FROM)) return SAVING_IN_ONE_ROW;
-            if (width >= UI.scale(BUTTONS_SIDE_BY_SIDE_FROM)) return SAVING_UNDER_THE_MISTAKE;
+            if (width >= SAVING_IN_ONE_ROW_FROM) return SAVING_IN_ONE_ROW;
+            if (width >= BUTTONS_SIDE_BY_SIDE_FROM) return SAVING_UNDER_THE_MISTAKE;
             return SAVING_ONE_UNDER_THE_OTHER;
         });
         return

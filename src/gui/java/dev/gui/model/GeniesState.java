@@ -60,7 +60,7 @@ public record GeniesState(
     Lang lang
 ) {
 
-    /// A width and a height, in the window's own units.
+    /// A width and a height, in developer units and NOT the window's own units.
     public record Area(int width, int height) {}
 
     /// What asking a model service for its models found.
@@ -179,7 +179,7 @@ public record GeniesState(
         return new GeniesState(genies, selected, settings, page, environmentKey, genieList, sidebar, narrow, lookUp, zoom, split, area, now, troubles.removeAll(seen), ollama, advanced, palette, fonts, lang);
     }
 
-    /// Below this width, in the window's own units, the list of genies and a conversation do not
+    /// Below this width, in developer units and NOT the window's own units, the list of genies and a conversation do not
     /// both fit.
     static final int NARROW = 820;
 

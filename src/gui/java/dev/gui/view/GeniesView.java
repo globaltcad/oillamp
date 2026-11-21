@@ -1208,7 +1208,7 @@ public final class GeniesView extends JPanel {
         Val<Banner> banner = Viewable.of(Banner.class, genie, state, (it, s) -> banner(it.notifications(), s.now()));
         Val<Boolean> shown = Viewable.of(Boolean.class, visible, banner, (on, what) -> on && !(what instanceof Banner.Nothing));
         Val<Boolean> link = banner.viewAs(Boolean.class, it -> it instanceof Banner.Link);
-        Val<Layout> layout = state.viewAs(Layout.class, it -> it.area().width() >= UI.scale(BANNER_IN_ONE_ROW_FROM) ? BANNER_IN_ONE_ROW : BUTTONS_UNDER_THE_WORDS);
+        Val<Layout> layout = state.viewAs(Layout.class, it -> it.area().width() >= BANNER_IN_ONE_ROW_FROM ? BANNER_IN_ONE_ROW : BUTTONS_UNDER_THE_WORDS);
         return
             panel().withLayout(layout)
             .isVisibleIf(shown)
