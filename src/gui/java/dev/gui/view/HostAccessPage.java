@@ -107,7 +107,8 @@ final class HostAccessPage {
      */
     private static final int REFERENCE = 1100;
     private static final FlowCell WHOLE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12));
-    private static final FlowCell ALLOWLIST = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(6).veryLarge(6).oversize(6));
+    private static final FlowCell ALLOWLIST = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(6).large(4).veryLarge(4).oversize(4));
+    private static final FlowCell INSTRUCTIONS = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(4).veryLarge(4).oversize(4));
     /// How tall each allowlist is, so that the two line up side by side, and the checker
     /// instructions, which may say a lot more.
     private static final int ALLOWLIST_HEIGHT = 92;
@@ -290,7 +291,7 @@ final class HostAccessPage {
                         ALLOWLIST_HEIGHT
                     )
                 )
-                .add(WHOLE,
+                .add(INSTRUCTIONS,
                     text(
                         pageWords.viewAsString(Lang.HostAccessPage::INSTRUCTIONS_FOR_THE_CHECKER),
                         checkerInstructions,
