@@ -59,7 +59,7 @@ final class ViewPartsUtil {
             // Some padding, on purpose: text painted by the style engine sets its component's
             // height when it is painted, and a component of no height is never painted.
             .withStyle(Themed.of(text, theme), (words, it) ->
-                it.padding(2, 0, 2, 0)
+                it.padding(2, 4, 2, 4)
                 .text(t ->
                     t.content(StyledString.of(f -> f.family(words.fonts().FONT()).size(11).color(words.palette().SUBTEXT()), words.item()))
                     .placement(UI.Placement.TOP_LEFT)

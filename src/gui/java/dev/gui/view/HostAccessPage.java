@@ -100,8 +100,12 @@ final class HostAccessPage {
      *  While the genie sleeps, a listed port has no link, and a × at the end of its line removes
      *  it from the list.
      *
-     *  Under the ports the lamp's file lists, while the genie sleeps, a row adds one, its fields
-     *  side by side from ADDING_IN_ONE_LINE_FROM, and one under the other on a narrower page.
+     *  Under the ports the lamp's file lists, while the genie sleeps, a row adds one. Its two
+     *  fields stand side by side while the row is at least 3/5 of ADDING_FULL_WIDTH wide, and
+     *  one under the other on a narrower row; Add stands under them, to the right. The ports,
+     *  their list and this row are flow layouts, one in the other, because only a flow layout
+     *  asks a flow layout in it how tall it is at the width it gets: in a MigLayout box, the row
+     *  would be measured before it has a width, as one line, and what wraps would be cut off.
      *
      *  The widths are the page's, as the state has them: [GeniesState#area].
      */
@@ -109,10 +113,12 @@ final class HostAccessPage {
     private static final FlowCell WHOLE = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(12).veryLarge(12).oversize(12));
     private static final FlowCell ALLOWLIST = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(6).large(4).veryLarge(4).oversize(4));
     private static final FlowCell INSTRUCTIONS = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(4).veryLarge(4).oversize(4));
-    /// How tall each allowlist is, so that the two line up side by side, and the checker
-    /// instructions, which may say a lot more.
+    /// The name and the port of a port to add: side by side on a wide row, one under the other on a narrow one.
+    private static final FlowCell FIELD = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(6).veryLarge(6).oversize(6));
+    private static final FlowCell LAY_WEBSERVER = AUTO_SPAN(it -> it.align(UI.VerticalAlignment.TOP).verySmall(12).small(12).medium(12).large(6).veryLarge(5).oversize(4));
+    /// How tall each allowlist is, so that the two line up side by side, and the checker instructions
     private static final int ALLOWLIST_HEIGHT = 92;
-    private static final int INSTRUCTIONS_HEIGHT = 150;
+    private static final int INSTRUCTIONS_HEIGHT = ALLOWLIST_HEIGHT;
     /// From these widths of the page, the parts of a switch stand in a row. With its longest
     /// part chosen, so in bold, the row of what it may do is 469 units wide in German, the
     /// widest of the languages for it, and the row of what guards it 454 in Japanese; the page
@@ -143,25 +149,13 @@ final class HostAccessPage {
     /// languages for it; the page adds 40 of padding around it, and the scroll bar 12 at most.
     private static final int PUBLISH_IN_A_ROW_FROM = 380;
     private static final int PORT_IN_ONE_LINE_FROM = 640;
-    private static final int ADDING_IN_ONE_LINE_FROM = 520;
+    /// How wide the row that adds a port is when it is full, which its flow layout measures its
+    /// width against.
+    private static final int ADDING_FULL_WIDTH = 400;
     /// A port's name and its port in the sandbox, its link, the button that removes it, and the
     /// program serving it, in this order, which stand as the picture above shows.
     private static final Layout PORT_IN_ONE_LINE = portLayout("cell 1 0, growx, wmin 0", "cell 0 1, span 3, growx, wmin 0");
     private static final Layout PORT_IN_TWO_LINES = portLayout("cell 0 1, span 2, growx, wmin 0", "cell 0 2, span 3, growx, wmin 0");
-    /// Name, its field, Port, its field and Add, in this order: in one line, or each label over
-    /// its field, and Add under them, to the right.
-    private static final Layout ADDING_IN_ONE_LINE = Layout.mig(
-        LayoutConstraint.of("fillx, ins 0, gap 8"), LayoutConstraint.of("[][220!][][90!][]push"), LayoutConstraint.of("")
-    ).withChildConstraints(
-        MigAddConstraint.of("cell 0 0"), MigAddConstraint.of("cell 1 0, growx"), MigAddConstraint.of("cell 2 0"),
-        MigAddConstraint.of("cell 3 0, growx"), MigAddConstraint.of("cell 4 0")
-    );
-    private static final Layout ADDING_ONE_UNDER_THE_OTHER = Layout.mig(
-        LayoutConstraint.of("fillx, wrap 1, ins 0, gap 4"), LayoutConstraint.of("[grow, fill]"), LayoutConstraint.of("")
-    ).withChildConstraints(
-        MigAddConstraint.of("wmin 0"), MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("wmin 0, gaptop 4"),
-        MigAddConstraint.of("growx, wmin 0"), MigAddConstraint.of("right, growx 0, gaptop 4")
-    );
 
     private static Layout portLayout(String link, String program) {
         return
@@ -616,8 +610,9 @@ final class HostAccessPage {
         Val<Boolean> listedNone = listedRows.viewAs(Boolean.class, Tuple::isEmpty);
         Val<Boolean> openedNone = openedRows.viewAs(Boolean.class, Tuple::isEmpty);
         return
-            box("fillx, wrap 1, ins 0, gap 8, hidemode 3", "[grow]")
-            .add("growx, wmin 0",
+            box().withFlowLayout(HorizontalAlignment.LEFT, 0, 0)
+            .withPrefSize(REFERENCE, 0)
+            .add(LAY_WEBSERVER,
                 choice(
                     pageWords.viewAsString(Lang.HostAccessPage::WHICH_WEB_SERVERS_IN_ITS_SANDBOX_MAY_YOUR_BROWSER_OPEN),
                     Arrays.stream(HostAccess.Publish.values())
@@ -632,29 +627,44 @@ final class HostAccessPage {
                     Viewable.of(String.class, genie, pageWords, (it, page) -> meaning(it.hostAccess().draft().web().publish(), page, it.name()))
                 )
             )
-            .add("growx, wmin 0, gaptop 10", section(pageWords.viewAsString(Lang.HostAccessPage::LISTED_IN_ITS_LAMP), Val.of(true)))
-            .add("growx, wmin 0",
-                ports(listedRows, pageWords.viewAsString(Lang.HostAccessPage::NOTHING_IS_LISTED), listedNone)
-                .add("growx, wmin 0", adding().isVisibleIf(awake.viewAs(Boolean.class, it -> !it)))
-            )
-            .add("growx, wmin 0",
-                ViewPartsUtil.note(
-                    theme,
-                    Viewable.of(String.class, genie, pageWords, (it, page) -> asleep(it)
-                        ? page.EACH_A_NAME_AND_ITS_PORT_IN_THE_SANDBOX_PUBLISHED_EACH_TIME_IT_WAKES(it.name())
-                        : page.PUBLISHED_AS_IT_WOKE_EACH_PORT_IN_THE_SANDBOX_AND_THE_LINK_THAT_OPENS_IT(it.name())
-                    ),
-                    Val.of(true)
+            .add(LAY_WEBSERVER,
+                box(INS(0, 18, 0, 0)).withFlowLayout(HorizontalAlignment.LEFT, 0, 8)
+                .add(WHOLE,
+                    box("ins 2 0 0 0, fillx")
+                    .add("growx, wmin 0", section(pageWords.viewAsString(Lang.HostAccessPage::LISTED_IN_ITS_LAMP), Val.of(true)))
                 )
-            )
-            // What the agent opened is not a setting, and is not greyed with them.
-            .add("growx, wmin 0, gaptop 10", heading(pageWords.viewAsString(Lang.HostAccessPage::OPENED_THIS_SESSION), Val.of(true)).isVisibleIf(awake))
-            .add("growx, wmin 0", ports(openedRows, pageWords.viewAsString(Lang.HostAccessPage::NOTHING_WAS_OPENED_YET), openedNone).isVisibleIf(awake))
-            .add("growx, wmin 0",
-                ViewPartsUtil.note(
-                    theme,
-                    Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::WEB_SERVERS_IT_STARTED_SINCE_IT_WOKE_WITH_THE_PROGRAM_SERVING_EACH),
-                    awake
+                .add(WHOLE,
+                    ports(listedRows, pageWords.viewAsString(Lang.HostAccessPage::NOTHING_IS_LISTED), listedNone)
+                    .add(WHOLE,
+                        adding().isVisibleIf(awake.viewAs(Boolean.class, it -> !it))
+                    )
+                )
+                .add(WHOLE,
+                    ViewPartsUtil.note(
+                        theme,
+                        Viewable.of(String.class, genie, pageWords, (it, page) -> asleep(it)
+                            ? page.EACH_A_NAME_AND_ITS_PORT_IN_THE_SANDBOX_PUBLISHED_EACH_TIME_IT_WAKES(it.name())
+                            : page.PUBLISHED_AS_IT_WOKE_EACH_PORT_IN_THE_SANDBOX_AND_THE_LINK_THAT_OPENS_IT(it.name())
+                        ),
+                        Val.of(true)
+                    )
+                )
+                // What the agent opened is not a setting, and is not greyed with them.
+                .add(WHOLE,
+                    box("ins 2 0 0 0, fillx")
+                    .isVisibleIf(awake)
+                    .add("growx, wmin 0", heading(pageWords.viewAsString(Lang.HostAccessPage::OPENED_THIS_SESSION), Val.of(true)))
+                )
+                .add(WHOLE,
+                    ports(openedRows, pageWords.viewAsString(Lang.HostAccessPage::NOTHING_WAS_OPENED_YET), openedNone)
+                    .isVisibleIf(awake)
+                )
+                .add(WHOLE,
+                    ViewPartsUtil.note(
+                        theme,
+                        Viewable.of(String.class, pageWords, genieName, Lang.HostAccessPage::WEB_SERVERS_IT_STARTED_SINCE_IT_WOKE_WITH_THE_PROGRAM_SERVING_EACH),
+                        awake
+                    )
                 )
             );
     }
@@ -706,16 +716,21 @@ final class HostAccessPage {
     private UIForPanel<JPanel> ports(Val<Tuple<PortRow>> rows, Val<String> empty, Val<Boolean> none) {
         Val<Boolean> raised = Viewable.of(Boolean.class, changeable, awake, (can, lit) -> can && !lit);
         return
-            panel("fillx, wrap 1, ins 4 0 4 0, gap 0, hidemode 3", "[grow]")
+            panel().withFlowLayout(HorizontalAlignment.LEFT, 0, 0)
             .withStyle(Themed.of(raised, theme), (themed, it) -> {
                 Palette p = themed.palette();
                 return it
+                    .padding(4, 0, 4, 0)
                     .backgroundColor(themed.item() ? p.RAISED() : p.SMOKE())
                     .border(1, themed.item() ? p.BORDER() : p.SMOKE())
                     .borderRadius(12);
             })
-            .add("growx, wmin 0, gapleft 12, gapright 12, gaptop 4, gapbottom 4", ViewPartsUtil.note(theme, empty, none))
-            .add("growx, wmin 0",
+            .add(WHOLE,
+                box("ins 4 12 4 12, fillx")
+                .isVisibleIf(none)
+                .add("growx, wmin 0", ViewPartsUtil.note(theme, empty, Val.of(true)))
+            )
+            .add(WHOLE,
                 panel("fillx, wrap 1, ins 0, gap 0", "[grow]")
                 .withMinSize(0, 0)
                 .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -783,39 +798,44 @@ final class HostAccessPage {
         Val<Boolean> typed = Viewable.of(Boolean.class, newName, newPort, (name, port) -> HostAccess.ListedPort.typed(name, port).isPresent());
         Val<Boolean> canAdd = Viewable.of(Boolean.class, changeable, typed, (a, b) -> a && b);
         return
-            box().withLayout(
-                state.viewAs(Layout.class, it ->
-                        it.area().width() >= ADDING_IN_ONE_LINE_FROM
-                                ? ADDING_IN_ONE_LINE
-                                : ADDING_ONE_UNDER_THE_OTHER
-                )
-            )
+            box().withFlowLayout(HorizontalAlignment.LEFT, 8, 4)
+            .withPrefWidth(ADDING_FULL_WIDTH)
             .withStyle(palette, (p, it) -> it
-                .padding(6, 8, 4, 12)
+                // With the flow layout's gaps around its cells: 6 above, 8 right, 4 below and 12 left.
+                .padding(2, 0, 0, 4)
                 .borderAt(UI.Edge.TOP, 1, ViewPartsUtil.withAlpha(p.BORDER(), 140))
             )
-            .add(label(pageWords.viewAsString(Lang.HostAccessPage::NAME)).group(Skin.META))
-            .add(
-                textField(newName).group(Skin.INPUT)
-                .isEnabledIf(changeable)
-                .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::WHAT_IT_IS_FOR_SUCH_AS_SITE))
-                .withStyle(it -> it.padding(4, 8, 4, 8))
+            .add(FIELD,
+                box("ins 0, fillx, wrap 1")
+                .add(label(pageWords.viewAsString(Lang.HostAccessPage::NAME)).group(Skin.META))
+                .add("growx, wmin 0",
+                    textField(newName).group(Skin.INPUT)
+                    .isEnabledIf(changeable)
+                    .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::WHAT_IT_IS_FOR_SUCH_AS_SITE))
+                    .withStyle(it -> it.padding(4, 8, 4, 8))
+                )
             )
-            .add(label(pageWords.viewAsString(Lang.HostAccessPage::PORT)).group(Skin.META))
-            .add(
-                textField(newPort).group(Skin.INPUT)
-                .isEnabledIf(changeable)
-                .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::ITS_PORT_IN_THE_SANDBOX_SUCH_AS_8080))
-                .withStyle(it -> it.padding(4, 8, 4, 8))
+            .add(FIELD,
+                box("ins 0, fillx, wrap 1")
+                .add(label(pageWords.viewAsString(Lang.HostAccessPage::PORT)).group(Skin.META))
+                .add("growx, wmin 0",
+                    textField(newPort).group(Skin.INPUT)
+                    .isEnabledIf(changeable)
+                    .withTooltip(pageWords.viewAsString(Lang.HostAccessPage::ITS_PORT_IN_THE_SANDBOX_SUCH_AS_8080))
+                    .withStyle(it -> it.padding(4, 8, 4, 8))
+                )
             )
-            .add(
-                button(pageWords.viewAsString(Lang.HostAccessPage::ADD)).group(Skin.QUIET_BUTTON)
-                .isEnabledIf(canAdd)
-                .onClick(_ -> HostAccess.ListedPort.typed(newName.get(), newPort.get()).ifPresent(port -> {
-                    web.update(From.VIEW, it -> it.with(port));
-                    newName.set(From.VIEW, "");
-                    newPort.set(From.VIEW, "");
-                }))
+            .add(WHOLE,
+                box("ins 0, fillx")
+                .add("right",
+                    button(pageWords.viewAsString(Lang.HostAccessPage::ADD)).group(Skin.QUIET_BUTTON)
+                    .isEnabledIf(canAdd)
+                    .onClick(_ -> HostAccess.ListedPort.typed(newName.get(), newPort.get()).ifPresent(port -> {
+                        web.update(From.VIEW, it -> it.with(port));
+                        newName.set(From.VIEW, "");
+                        newPort.set(From.VIEW, "");
+                    }))
+                )
             );
     }
 
@@ -873,7 +893,7 @@ final class HostAccessPage {
     private UIForBox<JBox> heading(Val<String> heading, Val<Boolean> lit) {
         Val<Heading> shown = Viewable.of(Heading.class, heading, lit, Heading::new);
         return
-            box().withMinSize(0, 0)
+            box().withMinSize(0, 30)
             .withStyle(Themed.of(shown, theme), (themed, it) -> {
                 Heading now = themed.item();
                 Palette p = themed.palette();
@@ -882,7 +902,7 @@ final class HostAccessPage {
                     .padding(1, 0, 1, 0)
                     .text(t ->
                         t.content(StyledString.of(f -> f.family(themed.fonts().FONT()).size(11).weight(2f).spacing(0.14f).color(colour), now.text()))
-                        .placement(UI.Placement.TOP_LEFT)
+                        .placement(UI.Placement.BOTTOM_LEFT)
                         .wrapLines(true)
                         .autoPreferredHeight(true)
                     );
