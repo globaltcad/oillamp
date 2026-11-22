@@ -39,9 +39,11 @@ import swingtree.UI;
 import swingtree.UIForAnySwing;
 import swingtree.UIForPanel;
 import swingtree.animation.LifeTime;
+import swingtree.api.Configurator;
 import swingtree.components.JBox;
 import swingtree.style.ComponentBackend;
 import swingtree.style.ComponentStyleDelegate;
+import swingtree.style.FontConf;
 import swingtree.style.StyledString;
 
 import static swingtree.UI.*;
@@ -80,6 +82,7 @@ final class ChatRows {
     private final Consumer<Entry> askInstead;
     private final Val<Boolean> waits;
     private final Consumer<String> showLeaf;
+    private final SearchOverlay search;
 
     /// @param theme       the colours and the fonts of the state
     /// @param lang        the words of the state
@@ -90,6 +93,7 @@ final class ChatRows {
     /// @param waits       whether the genie waits for the user, the only time a question can be
     ///                    asked differently
     /// @param showLeaf    shows the conversation in the chat up to the entry of that id
+    /// @param search      the search in the chat, whose matches the rows mark in their text
     ChatRows(
         final Look look,
         final Val<Theme> theme,
@@ -99,7 +103,8 @@ final class ChatRows {
         final Val<Double> pulse,
         final Consumer<Entry> askInstead,
         final Val<Boolean> waits,
-        final Consumer<String> showLeaf
+        final Consumer<String> showLeaf,
+        final SearchOverlay search
     ) {
         this.look = look;
         this.theme = theme;
@@ -112,6 +117,7 @@ final class ChatRows {
         this.askInstead = askInstead;
         this.waits = waits;
         this.showLeaf = showLeaf;
+        this.search = search;
     }
 
     /// Built later than the window, whenever the conversation changes, so it enters the style
@@ -136,6 +142,30 @@ final class ChatRows {
         };
     }
 
+    /// The text the row of `entry` shows, character for character, in `lang`, as the search in
+    /// the chat looks through it: what the user wrote and what the genie answered without their
+    /// Markdown signs, a thought or what a tool printed only while the user unfolded it, and what
+    /// the app says. Empty for what the search leaves out: a folded thought or tool, a tool's
+    /// command, and a file.
+    static String searchedText(Entry entry, Lang lang) {
+        return switch (entry.kind()) {
+            case YOU, GENIE -> {
+                StringBuilder shown = new StringBuilder();
+                for (MarkdownParsingUtil.Run run : MarkdownParsingUtil.parse(entry.text())) shown.append(run.text());
+                yield shown.toString();
+            }
+            case THINKING -> entry.expanded() ? entry.text() : "";
+            case TOOL -> entry.expanded() ? entry.detail() : "";
+            case NOTICE -> entry.words(lang);
+            case FILE -> "";
+        };
+    }
+
+    /// Lets the search find `text` as the one that shows the text of the entry `id`.
+    private static void showsEntry(JComponent text, UUID id) {
+        text.putClientProperty(SearchOverlay.SHOWS_ENTRY, id);
+    }
+
     // ─── what the user wrote ───────────────────────────────────────────────────────────────
 
     /// A bubble on the right, as wide as its longest line, up to a limit, then wrapped. Below it,
@@ -144,27 +174,30 @@ final class ChatRows {
     /// button switch between its conversation versions.
     private UIForAnySwing<?, ?> yours(Var<Entry> entry) {
         String text = entry.get().text();
+        UUID id = entry.get().id();
         Val<Boolean> editable = Viewable.of(Boolean.class, waits, entry, (waiting, it) -> waiting && !it.ref().isEmpty());
         var runs = MarkdownParsingUtil.parse(text);
         return
             panel("fill, wrap 1, ins 8 60 8 0, gap 2, hidemode 3", "[grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("align right, wmin 0, wmax " + YOURS_WIDTH,
-                box().withMinSize(0, 0)
+                box().withMinSize(0, 0).peek(it -> showsEntry(it, id))
                 // On paper, the bubble is hardly darker than the chat around it, so it gets a rim,
                 // as strong as it lacks. No shadow: it would fall outside the bubble, where its
                 // style does not paint.
-                .withStyle(theme, (now, it) -> it
-                    .backgroundColor(now.palette().YOURS())
-                    .border(1, ContrastUtil.rim(now.palette().YOURS(), now.palette().NIGHT(), 64))
-                    .borderRadius(16)
-                    .padding(9, 14, 9, 14)
-                    .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
-                    .text(t -> t
-                        .content(MarkdownStylingUtil.of(now, runs, 1))
-                        .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
-                    )
-                )
+                .withStyle(Themed.of(search.marksOf(id), theme), (themed, it) -> {
+                    Theme now = new Theme(themed.palette(), themed.fonts());
+                    return it
+                        .backgroundColor(now.palette().YOURS())
+                        .border(1, ContrastUtil.rim(now.palette().YOURS(), now.palette().NIGHT(), 64))
+                        .borderRadius(16)
+                        .padding(9, 14, 9, 14)
+                        .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
+                        .text(t -> t
+                            .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, runs, 1), themed.item(), now.palette()))
+                            .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
+                        );
+                })
             )
             .add("align right",
                 box("ins 0, gap 0, hidemode 3")
@@ -228,6 +261,7 @@ final class ChatRows {
         var entryMarkdown =
             entry.viewAsString(Entry::text)
             .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
+        Val<SearchOverlay.Marks> marks = search.marksOf(id);
         return
             panel("fill, ins 10 0 10 0, gap 12, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -240,16 +274,17 @@ final class ChatRows {
             .add("growx, wmin 0",
                 box("fill, wrap 1, ins 0, gap 4, hidemode 3", "[grow]")
                 .add("growx, wmin 0",
-                    box().withMinSize(0, 0)
+                    box().withMinSize(0, 0).peek(it -> showsEntry(it, id))
                     // Restarts on every change: each new piece fades in from its arrival. The theme
-                    // is read as the style is gathered, which it is anew when the theme changes,
-                    // rather than followed, so that a new theme does not fade the answer in again.
+                    // and the search's marks are read as the style is gathered, which it is anew
+                    // when either changes, rather than followed, so that neither fades the answer in
+                    // again.
                     .withStyle(entryMarkdown, FADE, (it, animation, style) -> {
                         Theme now = theme.get();
                         Palette p = now.palette();
                         return sheet(p, style)
                             .text(t -> t
-                                .content(MarkdownStylingUtil.of(now, it, animation.progress()))
+                                .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, it, animation.progress()), marks.get(), p))
                                 .placement(UI.Placement.TOP_LEFT)
                                 .wrapLines(true)
                                 .autoPreferredHeight(true)
@@ -264,6 +299,8 @@ final class ChatRows {
                                 )
                             );
                     })
+                    // Changes nothing itself: has the style above gathered anew, with the new marks.
+                    .withStyle(marks, (_, style) -> style)
                     // The user drags across the answer to select part of it, and copies it with Ctrl+C.
                     .withTextSelection()
                     .withTooltip(writtenBy)
@@ -282,6 +319,8 @@ final class ChatRows {
     /// The genie's thoughts, when its model shares them: a bar like a tool's, moving while it
     /// thinks. Click it to watch the thoughts as they come, or to read them afterwards.
     private UIForAnySwing<?, ?> thought(Var<Entry> entry) {
+        UUID id = entry.get().id();
+        Val<SearchOverlay.Marks> marks = search.marksOf(id);
         Val<Boolean> writing = entry.viewAs(Boolean.class, Entry::isWriting);
         Val<Boolean> expanded = entry.viewAs(Boolean.class, Entry::expanded);
         return
@@ -298,15 +337,15 @@ final class ChatRows {
                     .withStyle(palette, (p, it) -> it.componentFont(f -> f.size(12).color(p.SUBTEXT())))
                 ),
                 6,
-                box().withMinSize(0, 0).isVisibleIf(expanded)
-                .withStyle(Themed.of(entry.viewAsString(Entry::text), theme), (themed, it) -> {
+                box().withMinSize(0, 0).isVisibleIf(expanded).peek(it -> showsEntry(it, id))
+                .withStyle(Themed.of(Viewable.of(Marked.class, entry.viewAsString(Entry::text), marks, Marked::new), theme), (themed, it) -> {
                     var thoughts = themed.item();
                     Palette p = themed.palette();
                     return it
                         .padding(6, 2, 2, 2)
                         .borderAt(UI.Edge.TOP, 1, p.BORDER())
                         .text(t -> t
-                            .content(StyledString.of(f -> f.family(themed.fonts().FONT()).size(12).posture(0.14f).color(p.SUBTEXT()), thoughts))
+                            .content(thoughts.styled(f -> f.family(themed.fonts().FONT()).size(12).posture(0.14f).color(p.SUBTEXT()), p))
                             .placement(UI.Placement.TOP_LEFT)
                             .wrapLines(true)
                             .autoPreferredHeight(true)
@@ -439,6 +478,15 @@ final class ChatRows {
     /// Whether a progress bar moves, and where its glow is along it, from 0 to 1.
     private record Glow(boolean moving, double at) {}
 
+    /// A plain text a row shows in one look, with the places the search found in it.
+    private record Marked(String text, SearchOverlay.Marks marks) {
+
+        /// The text in `look`, the places found marked in the colours of `p`.
+        Tuple<StyledString> styled(Configurator<FontConf> look, Palette p) {
+            return SearchOverlay.marked(Tuple.of(new StyledPiece(look, text)), marks, p);
+        }
+    }
+
     /// The shape of a tool's or a thought's row: a line of its own, on smoke, with an optional
     /// part below that shows when it is expanded, `gap` below the line. Left of it, under the
     /// genies beside the answers, stands `beside`: the genie, or nothing.
@@ -463,6 +511,8 @@ final class ChatRows {
     /// to read all of what the tool does, such as a command too long for its line, and click it
     /// again to cut it short.
     private UIForAnySwing<?, ?> tool(Var<Entry> entry) {
+        UUID id = entry.get().id();
+        Val<SearchOverlay.Marks> marks = search.marksOf(id);
         Val<Boolean> expanded = entry.viewAs(Boolean.class, it -> it.expanded() && !it.detail().isBlank());
         Val<Boolean> hasDetail = entry.viewAs(Boolean.class, it -> !it.detail().isBlank());
         Var<Boolean> wholeChosen = Var.of(false);
@@ -539,14 +589,14 @@ final class ChatRows {
                     .onMouseClick(_ -> wholeChosen.update(From.VIEW, it -> !it))
                 )
                 .add("growx, wmin 0",
-                    box().withMinSize(0, 0)
-                    .withStyle(Themed.of(entry.viewAsString(Entry::detail), theme), (themed, it) -> {
+                    box().withMinSize(0, 0).peek(it -> showsEntry(it, id))
+                    .withStyle(Themed.of(Viewable.of(Marked.class, entry.viewAsString(Entry::detail), marks, Marked::new), theme), (themed, it) -> {
                         var detail = themed.item();
                         Palette p = themed.palette();
                         return it
                             .padding(0, 2, 2, 2)
                             .text(t -> t
-                                .content(StyledString.of(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), detail))
+                                .content(detail.styled(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), p))
                                 .placement(UI.Placement.TOP_LEFT)
                                 .wrapLines(true)
                                 .autoPreferredHeight(true)
@@ -592,22 +642,23 @@ final class ChatRows {
     /// What the app says, in grey; or a problem, in red, beside the dizzy genie.
     private UIForAnySwing<?, ?> notice(Var<Entry> entry) {
         boolean failed = entry.get().isFailed();
-        Val<String> text = lang.viewAsString(it -> entry.get().words(it));
+        UUID id = entry.get().id();
+        Val<Marked> text = Viewable.of(Marked.class, lang.viewAsString(it -> entry.get().words(it)), search.marksOf(id), Marked::new);
         return
             panel("fill, ins 6 0 6 0, gap 8", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
             .add("top", failed ? picture(_ -> GenieSvgUtil.Pose.DIZZY, _ -> false) : box())
             .add("growx, wmin 0",
-                box().withMinSize(0, 0)
+                box().withMinSize(0, 0).peek(it -> showsEntry(it, id))
                 .withStyle(Themed.of(text, theme), (now, it) -> it
                     .backgroundColor(failed ? now.palette().TROUBLE_WASH() : now.palette().TRANSPARENT())
                     .border(failed ? 1 : 0, now.palette().TROUBLE())
                     .borderRadius(8)
                     .padding(6, 10, 6, 10)
                     .text(t -> t
-                        .content(StyledString.of(
+                        .content(now.item().styled(
                             f -> f.family(now.fonts().FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? now.palette().TROUBLE() : now.palette().SUBTEXT()),
-                            now.item()
+                            now.palette()
                         ))
                         .placement(UI.Placement.TOP_LEFT)
                         .wrapLines(true)

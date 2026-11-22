@@ -2176,6 +2176,56 @@ public enum Lang {
                 case CHINESE -> "由 " + model + " 撰写";
             };
         }
+
+        public String FIND_IN_THE_CONVERSATION_CTRL_F() {
+            return switch (lang) {
+                case ENGLISH -> "Find in the conversation (Ctrl+F)";
+                case GERMAN -> "Im Gespräch suchen (Strg+F)";
+                case SPANISH -> "Buscar en la conversación (Ctrl+F)";
+                case JAPANESE -> "会話内を検索（Ctrl＋F）";
+                case CHINESE -> "在对话中查找（Ctrl+F）";
+            };
+        }
+
+        public String CLOSE_THE_SEARCH_ESCAPE() {
+            return switch (lang) {
+                case ENGLISH -> "Close the search (Escape)";
+                case GERMAN -> "Suche schließen (Esc)";
+                case SPANISH -> "Cerrar la búsqueda (Esc)";
+                case JAPANESE -> "検索を閉じる（Esc）";
+                case CHINESE -> "关闭查找（Esc）";
+            };
+        }
+
+        public String WHAT_TO_FIND_IN_THE_CONVERSATION() {
+            return switch (lang) {
+                case ENGLISH -> "What to find in the conversation";
+                case GERMAN -> "Was im Gespräch gesucht wird";
+                case SPANISH -> "Qué buscar en la conversación";
+                case JAPANESE -> "会話内で探す言葉";
+                case CHINESE -> "要在对话中查找的内容";
+            };
+        }
+
+        public String PREVIOUS_MATCH_SHIFT_AND_RETURN() {
+            return switch (lang) {
+                case ENGLISH -> "Previous match (Shift and Return)";
+                case GERMAN -> "Vorheriger Treffer (Umschalt+Eingabe)";
+                case SPANISH -> "Coincidencia anterior (Mayús+Intro)";
+                case JAPANESE -> "前の一致（Shift ＋ Enter）";
+                case CHINESE -> "上一个匹配（Shift + Enter）";
+            };
+        }
+
+        public String NEXT_MATCH_RETURN() {
+            return switch (lang) {
+                case ENGLISH -> "Next match (Return)";
+                case GERMAN -> "Nächster Treffer (Eingabe)";
+                case SPANISH -> "Coincidencia siguiente (Intro)";
+                case JAPANESE -> "次の一致（Enter）";
+                case CHINESE -> "下一个匹配（Enter）";
+            };
+        }
     }
 
     /// The words of the dialogs the window asks and tells the user things in.

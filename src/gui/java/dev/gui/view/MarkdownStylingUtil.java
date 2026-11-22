@@ -7,9 +7,8 @@ import dev.gui.model.Palette;
 import sprouts.Tuple;
 import swingtree.api.Configurator;
 import swingtree.style.FontConf;
-import swingtree.style.StyledString;
 
-/// Markdown runs, set in the lamp's colours, as the styled text SwingTree paints.
+/// Markdown runs, set in the lamp's colours, as the pieces of styled text SwingTree paints.
 ///
 /// While an answer streams in, its newest characters materialise: the last [#TAIL] characters
 /// are drawn from nearly transparent at the very end to opaque, and `settled` lifts them all
@@ -29,10 +28,10 @@ final class MarkdownStylingUtil {
 
     /// @param theme   the colours and the fonts to set the runs in
     /// @param settled 0 when the newest characters just arrived, 1 once they are fully there
-    static Tuple<StyledString> of(Theme theme, Tuple<MarkdownParsingUtil.Run> runs, double settled) {
+    static Tuple<StyledPiece> of(Theme theme, Tuple<MarkdownParsingUtil.Run> runs, double settled) {
         int total = 0;
         for (MarkdownParsingUtil.Run run : runs) total += run.text().length();
-        Tuple<StyledString> out = Tuple.of(StyledString.class);
+        Tuple<StyledPiece> out = Tuple.of(StyledPiece.class);
         int position = 0;
         for (MarkdownParsingUtil.Run run : runs) {
             String text = run.text();
@@ -42,7 +41,7 @@ final class MarkdownStylingUtil {
                 int end = start + 1;
                 while (end < text.length() && step(total - (position + end), settled) == step) end++;
                 double alpha = (double) step / STEPS;
-                out = out.add(StyledString.of(look(theme, run, alpha), text.substring(start, end)));
+                out = out.add(new StyledPiece(look(theme, run, alpha), text.substring(start, end)));
                 start = end;
             }
             position += text.length();

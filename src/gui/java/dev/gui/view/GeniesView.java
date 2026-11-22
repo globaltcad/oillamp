@@ -13,6 +13,7 @@ import swingtree.animation.Animation;
 import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
 import swingtree.components.JBox;
+import swingtree.components.JScrollPanels;
 import swingtree.api.Layout;
 import swingtree.api.Painter;
 import swingtree.dialogs.ConfirmAnswer;
@@ -117,6 +118,8 @@ public final class GeniesView extends JPanel {
     /// Whether the pulse loops, so that only one loop ever sets it.
     private boolean breathing = false;
     private final ChatRows rows;
+    /// Ctrl+F in the chat: the magnifying glass over it, and the marks in its rows.
+    private final SearchOverlay search;
     private final SchedulePage schedulePage;
     private final HistoryPage historyPage;
     private final HostAccessPage hostAccessPage;
@@ -188,6 +191,7 @@ public final class GeniesView extends JPanel {
         Viewable.cast(genies).onChange(From.ALL, _ -> {
             if (anyWorksOrWakes()) breathe();
         });
+        search = new SearchOverlay(theme, lang, entries);
         rows = new ChatRows(
             look,
             theme,
@@ -197,7 +201,8 @@ public final class GeniesView extends JPanel {
             pulse,
             this::askInstead,
             phase.viewAs(Boolean.class, it -> it == Genie.Phase.READY),
-            this::showLeaf
+            this::showLeaf,
+            search
         );
         schedulePage = new SchedulePage(state, app, look);
         historyPage = new HistoryPage(state, app, look);
@@ -1410,6 +1415,16 @@ public final class GeniesView extends JPanel {
             );
     }
 
+    /// The sea around the chat, in the window's units: above it, and around it where no desktop is
+    /// beside or below it. The chat's parts reach into it, so that they stay where they are.
+    private Val<java.awt.Insets> chatSea() {
+        return state.viewAs(java.awt.Insets.class, it -> new java.awt.Insets(
+            Look.SEA_ABOVE, 0,
+            it.desktopOnScreen() && !it.sideBySide() ? 0 : Look.SEA_BELOW,
+            it.desktopOnScreen() && it.sideBySide() ? 0 : Look.CANAL
+        ));
+    }
+
     /// The chat, and with it the genie's desktop when the user watches.
     private UIForAnySwing<?, ?> conversation(Val<Boolean> visible) {
         Val<Boolean> shown = state.viewAs(Boolean.class, GeniesState::desktopOnScreen);
@@ -1429,11 +1444,7 @@ public final class GeniesView extends JPanel {
                     // The chat keeps its sea in its parts' own room at its edges, so they stay
                     // where they are, rather than giving it up from a scroll bar as a page does.
                     // Toward the desktop, the grip between them is the canal.
-                    .withStyle(state.viewAs(java.awt.Insets.class, it -> new java.awt.Insets(
-                        Look.SEA_ABOVE, 0,
-                        it.desktopOnScreen() && !it.sideBySide() ? 0 : Look.SEA_BELOW,
-                        it.desktopOnScreen() && it.sideBySide() ? 0 : Look.CANAL
-                    )), (sea, it) -> it.margin(sea.top, sea.right, sea.bottom, sea.left).padding(-sea.top, -sea.right, -sea.bottom, -sea.left))
+                    .withStyle(chatSea(), (sea, it) -> it.margin(sea.top, sea.right, sea.bottom, sea.left).padding(-sea.top, -sea.right, -sea.bottom, -sea.left))
                     // Files dragged from a file manager are given to the genie where they are
                     // let go of, anywhere in the chat; while they are over it, it says so.
                     .withDropSite(fileDrop::on)
@@ -1696,17 +1707,21 @@ public final class GeniesView extends JPanel {
         );
         // Read anew with each beat of the pulse, which moves while the bar is shown.
         Val<Genie.Waiting> waitingOn = Viewable.of(Genie.Waiting.class, genie, pulse, (it, _) -> it.waitingOn(Instant.now(), lang.get()));
+        JScrollPanels chat =
+            scrollPanels().group(Skin.PAGE_SCROLL).withMinSize(0, 0).withPrefSize(560, 500).withEmptyBorder(0)
+            .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(12, 18, 12, 18))
+            .addAll(entries, rows::row)
+            .onView(Viewable.cast(selected), _ -> follow.ifPresent(FollowTheEnd::toEnd))
+            .get(JScrollPanels.class);
+        // Follows the conversation while the user is at its end, and leaves them be while they
+        // scroll back to read. Another genie's conversation starts at its end.
+        FollowTheEnd following = FollowTheEnd.on(chat);
+        follow = Optional.of(following);
         return
             box("fill, wrap 1, ins 0, gap 0, hidemode 3", "[grow]", "[grow][]")
             .add("grow, push, wmin 0",
-                scrollPanels().group(Skin.PAGE_SCROLL).withMinSize(0, 0).withPrefSize(560, 500).withEmptyBorder(0)
+                search.around(chat, following, chatSea()).withMinSize(0, 0)
                 .isVisibleIf(pictureShown.viewAs(Boolean.class, it -> !it))
-                .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()).padding(12, 18, 12, 18))
-                .addAll(entries, rows::row)
-                // Follows the conversation while the user is at its end, and leaves them be
-                // while they scroll back to read. Another genie's conversation starts at its end.
-                .peek(pane -> follow = Optional.of(FollowTheEnd.on(pane)))
-                .onView(Viewable.cast(selected), _ -> follow.ifPresent(FollowTheEnd::toEnd))
             )
             .add("growx, wmin 0", rows.waiting(waitingOn, waiting))
             .add("grow, push, wmin 0, align center",

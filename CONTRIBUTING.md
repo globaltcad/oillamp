@@ -165,8 +165,8 @@ and its `GenieRunner` without a window: `KeepingManyGeniesSpec`, `KeepingGeniesB
 `KeepingAGenieAliveSpec`, `KeepingAGeniesHistorySpec`, `DrawingAGeniesBranchesSpec`, `KeepingAGeniesScheduleSpec`,
 `PlanningAGeniesWeekSpec`, `FollowingAConversationSpec`, `BranchingAConversationSpec`,
 `SettingUpAModelSpec`, `FindingOllamaSpec`, `NoticingWhatWentWrongSpec`,
-`WatchingAGeniesDesktopSpec`, `ZoomingIntoAGeniesDesktopSpec`, `DrawingAGenieSpec` and
-`ReadingAGeniesMarkdownSpec`.
+`WatchingAGeniesDesktopSpec`, `ZoomingIntoAGeniesDesktopSpec`, `Searching_A_Conversation_Spec`,
+`DrawingAGenieSpec` and `ReadingAGeniesMarkdownSpec`.
 
 ### Spikes
 
