@@ -177,6 +177,7 @@ final class ChatRows {
         UUID id = entry.get().id();
         Val<Boolean> editable = Viewable.of(Boolean.class, waits, entry, (waiting, it) -> waiting && !it.ref().isEmpty());
         var runs = MarkdownParsingUtil.parse(text);
+        Remembered<Themed<SearchOverlay.Marks>, Bubble> bubble = new Remembered<>();
         return
             panel("fill, wrap 1, ins 8 60 8 0, gap 2, hidemode 3", "[grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -186,15 +187,22 @@ final class ChatRows {
                 // as strong as it lacks. No shadow: it would fall outside the bubble, where its
                 // style does not paint.
                 .withStyle(Themed.of(search.marksOf(id), theme), (themed, it) -> {
+                    Bubble made = bubble.of(themed, from -> {
+                        Theme now = new Theme(from.palette(), from.fonts());
+                        return new Bubble(
+                            Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36),
+                            SearchOverlay.marked(MarkdownStylingUtil.of(now, now.palette().YOURS(), runs, 1), from.item(), now.palette())
+                        );
+                    });
                     Theme now = new Theme(themed.palette(), themed.fonts());
                     return it
                         .backgroundColor(now.palette().YOURS())
                         .border(1, ContrastUtil.rim(now.palette().YOURS(), now.palette().NIGHT(), 64))
                         .borderRadius(16)
                         .padding(9, 14, 9, 14)
-                        .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
+                        .prefWidth(made.width())
                         .text(t -> t
-                            .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, now.palette().YOURS(), runs, 1), themed.item(), now.palette()))
+                            .content(made.content())
                             .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
                         );
                 })
@@ -262,6 +270,7 @@ final class ChatRows {
             entry.viewAsString(Entry::text)
             .viewAs(Tuple.classTyped(MarkdownParsingUtil.Run.class), MarkdownParsingUtil::parse);
         Val<SearchOverlay.Marks> marks = search.marksOf(id);
+        Remembered<Shown, Tuple<StyledString>> shown = new Remembered<>();
         return
             panel("fill, ins 10 0 10 0, gap 12, hidemode 3", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -284,7 +293,11 @@ final class ChatRows {
                         Palette p = now.palette();
                         return sheet(p, style)
                             .text(t -> t
-                                .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, p.isDark() ? p.NIGHT() : p.CARD(), it, animation.progress()), marks.get(), p))
+                                .content(shown.of(new Shown(it, now, marks.get(), animation.progress()), from -> {
+                                    Palette fp = from.theme().palette();
+                                    var pieces = MarkdownStylingUtil.of(from.theme(), fp.isDark() ? fp.NIGHT() : fp.CARD(), from.runs(), from.settled());
+                                    return SearchOverlay.marked(pieces, from.marks(), fp);
+                                }))
                                 .placement(UI.Placement.TOP_LEFT)
                                 .wrapLines(true)
                                 .autoPreferredHeight(true)
@@ -323,6 +336,7 @@ final class ChatRows {
         Val<SearchOverlay.Marks> marks = search.marksOf(id);
         Val<Boolean> writing = entry.viewAs(Boolean.class, Entry::isWriting);
         Val<Boolean> expanded = entry.viewAs(Boolean.class, Entry::expanded);
+        Remembered<Themed<Marked>, Tuple<StyledString>> thoughtsShown = new Remembered<>();
         return
             strip(
                 picture(_ -> GenieSvgUtil.Pose.THINKING, _ -> entry.get().isWriting()),
@@ -339,13 +353,14 @@ final class ChatRows {
                 6,
                 box().withMinSize(0, 0).isVisibleIf(expanded).peek(it -> showsEntry(it, id))
                 .withStyle(Themed.of(Viewable.of(Marked.class, entry.viewAsString(Entry::text), marks, Marked::new), theme), (themed, it) -> {
-                    var thoughts = themed.item();
                     Palette p = themed.palette();
                     return it
                         .padding(6, 2, 2, 2)
                         .borderAt(UI.Edge.TOP, 1, p.BORDER())
                         .text(t -> t
-                            .content(thoughts.styled(f -> f.family(themed.fonts().FONT()).size(12).posture(0.14f).color(p.SUBTEXT()), p))
+                            .content(thoughtsShown.of(themed, from ->
+                                from.item().styled(f -> f.family(from.fonts().FONT()).size(12).posture(0.14f).color(from.palette().SUBTEXT()), from.palette())
+                            ))
                             .placement(UI.Placement.TOP_LEFT)
                             .wrapLines(true)
                             .autoPreferredHeight(true)
@@ -487,6 +502,14 @@ final class ChatRows {
         }
     }
 
+    /// Your message as its bubble shows it: how wide the bubble would like to be, and the text in it.
+    private record Bubble(double width, Tuple<StyledString> content) {}
+
+    /// What an answer's text is shown from: its pieces, in which colours and fonts, with which
+    /// places found, and how far its newest characters have faded in. The pieces are the same
+    /// tuple for as long as the answer's text does not change, so comparing them is cheap.
+    private record Shown(Tuple<MarkdownParsingUtil.Run> runs, Theme theme, SearchOverlay.Marks marks, double settled) {}
+
     /// The shape of a tool's or a thought's row: a line of its own, on smoke, with an optional
     /// part below that shows when it is expanded, `gap` below the line. Left of it, under the
     /// genies beside the answers, stands `beside`: the genie, or nothing.
@@ -518,6 +541,7 @@ final class ChatRows {
         Var<Boolean> wholeChosen = Var.of(false);
         Val<Boolean> whole = Viewable.of(Boolean.class, wholeChosen, expanded, (chosen, open) -> chosen && open);
         Var<Boolean> lineHovered = Var.of(false);
+        Remembered<Themed<Marked>, Tuple<StyledString>> detailShown = new Remembered<>();
         return
             strip(
                 box(),
@@ -591,12 +615,12 @@ final class ChatRows {
                 .add("growx, wmin 0",
                     box().withMinSize(0, 0).peek(it -> showsEntry(it, id))
                     .withStyle(Themed.of(Viewable.of(Marked.class, entry.viewAsString(Entry::detail), marks, Marked::new), theme), (themed, it) -> {
-                        var detail = themed.item();
-                        Palette p = themed.palette();
                         return it
                             .padding(0, 2, 2, 2)
                             .text(t -> t
-                                .content(detail.styled(f -> f.family(themed.fonts().MONO()).size(12).color(p.SUBTEXT()), p))
+                                .content(detailShown.of(themed, from ->
+                                    from.item().styled(f -> f.family(from.fonts().MONO()).size(12).color(from.palette().SUBTEXT()), from.palette())
+                                ))
                                 .placement(UI.Placement.TOP_LEFT)
                                 .wrapLines(true)
                                 .autoPreferredHeight(true)
@@ -644,6 +668,7 @@ final class ChatRows {
         boolean failed = entry.get().isFailed();
         UUID id = entry.get().id();
         Val<Marked> text = Viewable.of(Marked.class, lang.viewAsString(it -> entry.get().words(it)), search.marksOf(id), Marked::new);
+        Remembered<Themed<Marked>, Tuple<StyledString>> shown = new Remembered<>();
         return
             panel("fill, ins 6 0 6 0, gap 8", "[" + GENIE_SIZE + "!][grow]")
             .withStyle(palette, (p, it) -> it.backgroundColor(p.TRANSPARENT()))
@@ -656,10 +681,10 @@ final class ChatRows {
                     .borderRadius(8)
                     .padding(6, 10, 6, 10)
                     .text(t -> t
-                        .content(now.item().styled(
-                            f -> f.family(now.fonts().FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? now.palette().TROUBLE() : now.palette().SUBTEXT()),
-                            now.palette()
-                        ))
+                        .content(shown.of(now, from -> from.item().styled(
+                            f -> f.family(from.fonts().FONT()).size(12).posture(failed ? 0f : 0.14f).color(failed ? from.palette().TROUBLE() : from.palette().SUBTEXT()),
+                            from.palette()
+                        )))
                         .placement(UI.Placement.TOP_LEFT)
                         .wrapLines(true)
                         .autoPreferredHeight(true)
