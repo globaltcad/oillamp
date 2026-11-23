@@ -194,7 +194,7 @@ final class ChatRows {
                         .padding(9, 14, 9, 14)
                         .prefWidth(Math.min(YOURS_WIDTH, widthOf(now.fonts(), text) * 1.08 + 36))
                         .text(t -> t
-                            .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, runs, 1), themed.item(), now.palette()))
+                            .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, now.palette().YOURS(), runs, 1), themed.item(), now.palette()))
                             .placement(UI.Placement.TOP_LEFT).wrapLines(true).autoPreferredHeight(true)
                         );
                 })
@@ -284,7 +284,7 @@ final class ChatRows {
                         Palette p = now.palette();
                         return sheet(p, style)
                             .text(t -> t
-                                .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, it, animation.progress()), marks.get(), p))
+                                .content(SearchOverlay.marked(MarkdownStylingUtil.of(now, p.isDark() ? p.NIGHT() : p.CARD(), it, animation.progress()), marks.get(), p))
                                 .placement(UI.Placement.TOP_LEFT)
                                 .wrapLines(true)
                                 .autoPreferredHeight(true)

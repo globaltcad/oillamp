@@ -122,8 +122,43 @@ class ReadingAGeniesMarkdownSpec extends Specification {
             MarkdownStylingUtil.step(1, 1) == 8
 
         and: 'a settled answer is one styled run per Markdown run'
-            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), MarkdownParsingUtil.parse('plain **bold**'), 1).size() == 2
-            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), MarkdownParsingUtil.parse('x' * 100), 0).size() == 8
+            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), Palette.DARK.NIGHT(), MarkdownParsingUtil.parse('plain **bold**'), 1).size() == 2
+            MarkdownStylingUtil.of(new Theme(Palette.DARK, Fonts.DEFAULT), Palette.DARK.NIGHT(), MarkdownParsingUtil.parse('x' * 100), 0).size() == 8
+    }
+
+    def 'Code is marked with a tint the user\'s selection shows through'() {
+        reportInfo """
+            Code in an answer, such as `myVarName`, lies on a background of its own, so it stands
+            out from the text around it. The selection of the text the user marks is painted
+            under that background, so an opaque one would hide it: the user would not see what
+            they selected. So code's background covers only a part of what lies behind it,
+            `MarkdownStylingUtil.CODE_COVER`, and is made of a stronger colour, so that on the
+            ground of the answer it looks as the palette's colour for code would.
+
+            Let's consider inline code, whose colour is the palette's `RAISED`, in an answer on
+            the night of the dark palette, on the card of the light one, and in a user's bubble
+            of the light one. `MarkdownStylingUtil.veil` gives the translucent colour, and
+            painted on the ground, it looks like `RAISED`, within a step of rounding.
+        """
+        expect:
+            var veil = MarkdownStylingUtil.veil(palette.RAISED(), ground, MarkdownStylingUtil.CODE_COVER)
+            var seen = painted(veil, ground)
+            veil.alpha < 128
+            Math.abs(seen.red - palette.RAISED().red) <= 3
+            Math.abs(seen.green - palette.RAISED().green) <= 3
+            Math.abs(seen.blue - palette.RAISED().blue) <= 3
+        where:
+            palette       | ground
+            Palette.DARK  | Palette.DARK.NIGHT()
+            Palette.LIGHT | Palette.LIGHT.CARD()
+            Palette.LIGHT | Palette.LIGHT.YOURS()
+    }
+
+    /// What `veil` looks like, painted on `ground`.
+    private static java.awt.Color painted(java.awt.Color veil, java.awt.Color ground) {
+        double a = veil.alpha / 255d
+        def blend = { int v, int g -> (int) Math.round(v * a + g * (1 - a)) }
+        new java.awt.Color(blend(veil.red, ground.red), blend(veil.green, ground.green), blend(veil.blue, ground.blue))
     }
 
     private static String text(String markdown) {

@@ -26,9 +26,16 @@ final class MarkdownStylingUtil {
 
     static final int BODY = 14;
 
+    /// How much of what lies behind code its background covers: as little as keeps it a
+    /// readable tint, so that the user's selection, painted under the text's background,
+    /// still shows through it.
+    static final double CODE_COVER = 0.35;
+
     /// @param theme   the colours and the fonts to set the runs in
+    /// @param ground  what the text lies on, so that code's translucent background looks on it
+    ///                as the palette's colour for code would
     /// @param settled 0 when the newest characters just arrived, 1 once they are fully there
-    static Tuple<StyledPiece> of(Theme theme, Tuple<MarkdownParsingUtil.Run> runs, double settled) {
+    static Tuple<StyledPiece> of(Theme theme, Color ground, Tuple<MarkdownParsingUtil.Run> runs, double settled) {
         int total = 0;
         for (MarkdownParsingUtil.Run run : runs) total += run.text().length();
         Tuple<StyledPiece> out = Tuple.of(StyledPiece.class);
@@ -41,7 +48,7 @@ final class MarkdownStylingUtil {
                 int end = start + 1;
                 while (end < text.length() && step(total - (position + end), settled) == step) end++;
                 double alpha = (double) step / STEPS;
-                out = out.add(new StyledPiece(look(theme, run, alpha), text.substring(start, end)));
+                out = out.add(new StyledPiece(look(theme, ground, run, alpha), text.substring(start, end)));
                 start = end;
             }
             position += text.length();
@@ -55,7 +62,7 @@ final class MarkdownStylingUtil {
         return Math.max(1, (int) Math.ceil(alpha * STEPS));
     }
 
-    private static Configurator<FontConf> look(Theme theme, MarkdownParsingUtil.Run run, double alpha) {
+    private static Configurator<FontConf> look(Theme theme, Color ground, MarkdownParsingUtil.Run run, double alpha) {
         Palette p = theme.palette();
         Color colour = switch (run.inline()) {
             case CODE -> run.block() == MarkdownParsingUtil.Block.CODE ? p.TEXT() : p.CODE_TEXT();
@@ -80,6 +87,7 @@ final class MarkdownStylingUtil {
         boolean code = run.inline() == MarkdownParsingUtil.Inline.CODE;
         boolean even = code || run.block() == MarkdownParsingUtil.Block.TABLE;
         Color shown = faded(colour, alpha);
+        Color behind = faded(veil(run.block() == MarkdownParsingUtil.Block.CODE ? p.SMOKE() : p.RAISED(), ground, CODE_COVER), alpha);
         return f -> {
             FontConf set =
                 f.family(even ? theme.fonts().MONO() : theme.fonts().FONT())
@@ -87,11 +95,28 @@ final class MarkdownStylingUtil {
                 .color(shown)
                 .weight(bold ? 2 : 1)
                 .posture(italic ? 0.2f : 0f);
-            if (code) set = set.backgroundColor(faded(run.block() == MarkdownParsingUtil.Block.CODE ? p.SMOKE() : p.RAISED(), alpha));
+            if (code) set = set.backgroundColor(behind);
             if (run.inline() == MarkdownParsingUtil.Inline.STRIKE) set = set.strikeThrough(true);
             if (run.inline() == MarkdownParsingUtil.Inline.LINK) set = set.underlined(true);
             return set;
         };
+    }
+
+    /// A colour as opaque as `cover` that, painted on `ground`, looks like `wanted`: the
+    /// difference between the two, made stronger by as much as it is thinned. Where a channel
+    /// would need more than there is, it gives what there is, and comes out a little nearer
+    /// the ground.
+    static Color veil(Color wanted, Color ground, double cover) {
+        return new Color(
+            through(wanted.getRed(), ground.getRed(), cover),
+            through(wanted.getGreen(), ground.getGreen(), cover),
+            through(wanted.getBlue(), ground.getBlue(), cover),
+            (int) Math.round(255 * cover)
+        );
+    }
+
+    private static int through(int wanted, int ground, double cover) {
+        return Math.clamp(Math.round(ground + (wanted - ground) / cover), 0, 255);
     }
 
     private static Color faded(Color colour, double alpha) {
