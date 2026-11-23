@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -17,6 +18,8 @@ import org.jspecify.annotations.Nullable;
 
 import dev.gui.Genies;
 import dev.gui.model.GeniesState;
+import dev.gui.model.Hardware;
+import dev.gui.model.ModelFacts;
 import dev.gui.model.Lang;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
@@ -33,6 +36,7 @@ import swingtree.animation.Animation;
 import swingtree.animation.AnimationStatus;
 import swingtree.animation.LifeTime;
 import swingtree.api.Layout;
+import swingtree.dialogs.ConfirmAnswer;
 import swingtree.layout.FlowCell;
 import swingtree.layout.LayoutConstraint;
 import swingtree.layout.MigAddConstraint;
@@ -344,7 +348,23 @@ final class SettingsPage {
                             )
                         )
                         .add(LABEL, label(words.viewAsString(Lang.SettingsPage::OLLAMA)))
-                        .add(FIELD, ViewPartsUtil.wrapped(theme, state.viewAsString(it -> it.ollama().words(it.lang())), Palette::TEXT, Val.of(true)))
+                        .add(FIELD,
+                            box("fill, wrap 1, ins 0, gap 6, hidemode 3")
+                            .add("growx, wmin 0", ViewPartsUtil.wrapped(theme, state.viewAsString(it -> it.ollama().words(it.lang())), Palette::TEXT, Val.of(true)))
+                            // A newer Ollama: Genies updates the one it installed, and says so of any other.
+                            .add(
+                                button(Viewable.of(String.class, ollama, words, (it, page) -> page.UPDATE_OLLAMA_TO(it.library().newest()))).group(Skin.QUIET_BUTTON)
+                                .isVisibleIf(ollama.viewAs(Boolean.class, OllamaSetup::canUpdate))
+                                .onClick(_ -> updateOllama(state, app))
+                            )
+                            .add("growx, wmin 0",
+                                ViewPartsUtil.note(
+                                    theme,
+                                    Viewable.of(String.class, ollama, words, (it, page) -> page.OLLAMA_IS_OUT_UPDATE_IT_THE_WAY_YOU_INSTALLED_IT(it.library().newest())),
+                                    ollama.viewAs(Boolean.class, it -> it.newerOllama().isPresent() && !it.found().ours())
+                                )
+                            )
+                        )
                     )
                     .add(HALF,
                         box().withFlowLayout(UI.HorizontalAlignment.LEFT, 0, 12)
@@ -353,13 +373,39 @@ final class SettingsPage {
                         .add(FIELD,
                             box("fill, wrap 1, ins 0, gap 4, hidemode 3")
                             .add("growx, wmin 0",
-                                comboBox(wanted, ollama.viewAs(Tuple.classTyped(String.class), OllamaSetup::offered))
-                                .isEditableIf(true).isEnabledIf(busy.viewAs(Boolean.class, it -> !it))
+                                box("fill, ins 0, gap 8", "[grow][]")
+                                .add("growx, wmin 0",
+                                    ModelPicker.of(
+                                        theme,
+                                        wanted,
+                                        ollama.viewAs(Tuple.classTyped(String.class), OllamaSetup::offered),
+                                        ollama.viewAs(Tuple.classTyped(String.class), it -> it.variantsOf(it.wanted())),
+                                        ollama,
+                                        name -> ollamaRow(state.get(), name),
+                                        typed -> { if (typed.contains(":")) app.lookUpVariants(typed); },
+                                        shown -> shown.forEach(app::learnAbout),
+                                        words.viewAsString(Lang.SettingsPage::TYPE_A_COLON_AFTER_A_MODEL_FOR_ALL_OF_ITS_QUANTISATIONS),
+                                        words.viewAsString(Lang.SettingsPage::NO_MODEL_MATCHES_GENIES_TAKES_WHAT_YOU_TYPED),
+                                        words.viewAs(Tuple.classTyped(ModelPicker.Column.class), page -> Tuple.of(ModelPicker.Column.class,
+                                            new ModelPicker.Column(page.MODEL(), 0),
+                                            new ModelPicker.Column(page.PARAMETERS(), 60),
+                                            new ModelPicker.Column(page.DOWNLOAD(), 50),
+                                            new ModelPicker.Column(page.RUNS_HERE(), 58)
+                                        )),
+                                        busy.viewAs(Boolean.class, it -> !it)
+                                    )
+                                )
+                                .add(
+                                    button(words.viewAsString(Lang.SettingsPage::LOOK_FOR_NEW_MODELS)).group(Skin.QUIET_BUTTON)
+                                    .withTooltip(words.viewAsString(Lang.SettingsPage::ASK_OLLAMA_COM_FOR_ITS_NEWEST_MODELS_AND_WHETHER_A_NEWER_OLLAMA_IS_OUT))
+                                    .isEnabledIf(ollama.viewAs(Boolean.class, it -> !it.library().asking()))
+                                    .onClick(_ -> app.lookForNewModels())
+                                )
                             )
                             .add("growx, wmin 0",
                                 ViewPartsUtil.wrapped(
                                     theme,
-                                    state.viewAsString(it -> it.ollama().found().hardware().words(it.ollama().wanted(), it.lang())),
+                                    state.viewAsString(it -> it.ollama().found().hardware().words(it.ollama().facts(it.ollama().wanted()), it.lang())),
                                     Palette::TEXT,
                                     ollama.viewAs(Boolean.class, it -> it.step() != OllamaSetup.Step.LOOKING && !it.wanted().isBlank())
                                 )
@@ -533,7 +579,13 @@ final class SettingsPage {
                             box("fill, wrap 1, ins 0, gap 4, hidemode 3")
                             .add("growx, wmin 0",
                                 box("fill, ins 0, gap 8", "[grow][]")
-                                .add("growx, wmin 0", comboBox(model, offered).isEditableIf(true))
+                                .add("growx, wmin 0",
+                                    ModelPicker.of(
+                                        theme, model, offered, Val.of(Tuple.of(String.class)), offered, ModelPicker.Row::of, _ -> {}, _ -> {},
+                                        Val.of(""), words.viewAsString(Lang.SettingsPage::NO_MODEL_MATCHES_GENIES_TAKES_WHAT_YOU_TYPED),
+                                        Val.of(Tuple.of(ModelPicker.Column.class)), Val.of(true)
+                                    )
+                                )
                                 .add(
                                     button(words.viewAsString(Lang.SettingsPage::LOOK_UP)).group(Skin.QUIET_BUTTON)
                                     .withTooltip(words.viewAsString(Lang.SettingsPage::ASK_THE_SERVICE_WHICH_MODELS_IT_OFFERS))
@@ -611,6 +663,65 @@ final class SettingsPage {
                     )
                 )
             );
+    }
+
+    /// Updates Ollama, once the user confirmed it, if genies that are awake use it: updating
+    /// stops it, which breaks off what they are writing.
+    private static void updateOllama(Var<GeniesState> state, Genies app) {
+        if (state.get().updatingOllamaInterrupts()) {
+            Lang.SettingsPage page = state.get().lang().SETTINGS_PAGE();
+            ConfirmAnswer answer =
+                UI.confirmation(page.GENIES_THAT_ARE_AWAKE_USE_OLLAMA_UPDATING_STOPS_IT())
+                .titled(page.UPDATE_OLLAMA())
+                .yesOption(page.UPDATE()).noOption(page.NOT_NOW()).cancelOption("")
+                .show();
+            if (answer != ConfirmAnswer.YES) return;
+        }
+        app.updateOllama();
+    }
+
+    /// What the suggestion of the Ollama model `model` says: whether it is downloaded, and, in
+    /// its columns, how many parameters it has and how many of them are active, what it
+    /// downloads, and how well it runs here, in the colour of how well.
+    private static ModelPicker.Row ollamaRow(GeniesState state, String model) {
+        OllamaSetup ollama = state.ollama();
+        Lang.SettingsPage words = state.lang().SETTINGS_PAGE();
+        ModelFacts facts = ollama.facts(model);
+        Hardware.Fit fit = ollama.found().hardware().fit(facts);
+        String parameters = facts.billions() <= 0 ? ""
+            : facts.active() > 0 && facts.active() < facts.billions() * 0.6 ? billions(facts.billions()) + " / " + billions(facts.active())
+            : billions(facts.billions());
+        ModelPicker.Tone tone = switch (fit.runs()) {
+            case UNKNOWN -> ModelPicker.Tone.PLAIN;
+            case TOO_LARGE -> ModelPicker.Tone.TROUBLE;
+            case ON_GRAPHICS -> ModelPicker.Tone.GOOD;
+            case PARTLY_ON_GRAPHICS, ON_PROCESSOR -> fit.pace() ? ModelPicker.Tone.PLAIN : ModelPicker.Tone.SLOW;
+        };
+        String runs = switch (fit.runs()) {
+            case UNKNOWN -> "?";
+            case TOO_LARGE -> words.TOO_LARGE();
+            case ON_GRAPHICS -> words.QUICK();
+            case PARTLY_ON_GRAPHICS, ON_PROCESSOR -> fit.pace() ? words.FAIR_PACE() : words.SLOW();
+        };
+        return new ModelPicker.Row(
+            model,
+            ollama.found().has(model) ? words.DOWNLOADED() : "",
+            Tuple.of(ModelPicker.Cell.class,
+                new ModelPicker.Cell(parameters, ModelPicker.Tone.PLAIN),
+                new ModelPicker.Cell(fit.size() > 0 ? gigabytes(fit.size()) : "", ModelPicker.Tone.PLAIN),
+                new ModelPicker.Cell(runs, tone)
+            )
+        );
+    }
+
+    /// "8.2B", or "30B" from ten on.
+    private static String billions(double amount) {
+        return (amount < 10 ? String.format(Locale.ROOT, "%.1f", amount) : String.valueOf(Math.round(amount))) + "B";
+    }
+
+    /// "5.2 GB", or "19 GB" from ten on.
+    private static String gigabytes(double amount) {
+        return (amount < 10 ? String.format(Locale.ROOT, "%.1f", amount) : String.valueOf(Math.round(amount))) + " GB";
     }
 
     /// Whether the `controls` of the `card`, side by side with the gap of [#CONTROLS_IN_A_ROW]

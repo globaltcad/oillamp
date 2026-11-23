@@ -1,5 +1,7 @@
 package dev.gui.model;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -18,7 +20,8 @@ import sprouts.Tuple;
 /// @param progress how far the step is, from 0 to 1
 /// @param says     what happens, such as how far a download is, or why a step failed; empty when
 ///                 there is nothing to say
-public record OllamaSetup(Found found, String wanted, Step step, double progress, Optional<Says> says) {
+/// @param library  what Genies learned from ollama.com: the models it offers, and the newest Ollama
+public record OllamaSetup(Found found, String wanted, Step step, double progress, Optional<Says> says, OllamaLibrary library) {
 
     /// What Genies found on this computer.
     ///
@@ -26,8 +29,10 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
     /// @param version   the version of the Ollama answering on this computer, or empty when none answers
     /// @param models    the models that Ollama has, by name
     /// @param hardware  what the computer has for running a model
-    public record Found(String installed, String version, Tuple<String> models, Hardware hardware) {
-        public static final Found NOTHING = new Found("", "", Tuple.of(String.class), Hardware.UNKNOWN);
+    /// @param ours      whether the `ollama` program is the one Genies installed, which Genies can
+    ///                  update; one installed otherwise is updated the way it was installed
+    public record Found(String installed, String version, Tuple<String> models, Hardware hardware, boolean ours) {
+        public static final Found NOTHING = new Found("", "", Tuple.of(String.class), Hardware.UNKNOWN, false);
 
         public boolean isInstalled() { return !installed.isEmpty(); }
 
@@ -46,6 +51,8 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         /// Nothing happens.
         IDLE,
         INSTALLING, STARTING, DOWNLOADING, PREPARING, TRYING,
+        /// Genies stops the Ollama it installed, installs the newest, and starts that.
+        UPDATING,
         /// The last step failed, and [#says] why.
         FAILED;
 
@@ -64,6 +71,8 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         record DownloadingAmdSupport(long done, long total) implements Says {}
         /// Starting Ollama.
         record StartingOllama() implements Says {}
+        /// Stopping Ollama, to update it.
+        record StoppingOllama() implements Says {}
         /// Downloading the model `model`, as [DownloadingOllama].
         record DownloadingModel(String model, long done, long total) implements Says {}
         /// Making Genies' version of the model `model`.
@@ -84,6 +93,7 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
                     : words.DOWNLOADING_OLLAMA_SO_FAR(amount(it.done(), it.total(), words));
                 case DownloadingAmdSupport it -> words.DOWNLOADING_WHAT_OLLAMA_NEEDS_FOR_AMD_GRAPHICS_CARDS(amount(it.done(), it.total(), words));
                 case StartingOllama _ -> words.STARTING_OLLAMA();
+                case StoppingOllama _ -> words.STOPPING_OLLAMA_TO_UPDATE_IT();
                 case DownloadingModel it -> it.done() == 0 && it.total() == 0 ? words.DOWNLOADING(it.model())
                     : words.DOWNLOADING_SO_FAR(it.model(), amount(it.done(), it.total(), words));
                 case Preparing it -> words.PREPARING_FOR_GENIES(it.model());
@@ -134,6 +144,11 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         record Said(String said) implements Failure {}
         /// Nothing answers at Ollama's address on this computer.
         record NotAnswering() implements Failure {}
+        /// An Ollama still answers after Genies stopped its own, to update it: another Ollama,
+        /// which Genies did not install, serves this computer.
+        record AnotherOllamaAnswers() implements Failure {}
+        /// After updating, Ollama still says it is the version `version`.
+        record NotUpdated(String version) implements Failure {}
         /// Anything else, as the computer `said` it.
         record Other(String said) implements Failure {}
 
@@ -154,6 +169,8 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
                 case Answered it -> words.OLLAMA_ANSWERED(it.status());
                 case Said it -> it.said();
                 case NotAnswering _ -> words.OLLAMA_DOES_NOT_ANSWER_ON_THIS_COMPUTER();
+                case AnotherOllamaAnswers _ -> words.ANOTHER_OLLAMA_ANSWERS_ON_THIS_COMPUTER_UPDATE_IT_THE_WAY_IT_WAS_INSTALLED();
+                case NotUpdated it -> words.OLLAMA_STILL_SAYS_IT_IS_VERSION(it.version());
                 case Other it -> it.said();
             };
         }
@@ -163,15 +180,21 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
     /// for a genie, which Genies makes from it.
     public static final String PREFIX = "genies/";
 
-    public static final OllamaSetup NOT_YET = new OllamaSetup(Found.NOTHING, "", Step.LOOKING, 0, Optional.empty());
+    /// The tokens of context Genies gives the models it prepares: Ollama's own is a few thousand,
+    /// which a genie's instructions and the output of its tools overflow.
+    public static final int CONTEXT = 32_768;
 
-    public OllamaSetup withWanted(String wanted) { return new OllamaSetup(found, wanted, step, progress, says); }
+    public static final OllamaSetup NOT_YET = new OllamaSetup(Found.NOTHING, "", Step.LOOKING, 0, Optional.empty(), OllamaLibrary.BUILT_IN);
+
+    public OllamaSetup withWanted(String wanted) { return new OllamaSetup(found, wanted, step, progress, says, library); }
+
+    public OllamaSetup withLibrary(OllamaLibrary library) { return new OllamaSetup(found, wanted, step, progress, says, library); }
 
     /// At `step`, `progress` of the way through it, saying `says`.
-    public OllamaSetup at(Step step, double progress, Says says) { return new OllamaSetup(found, wanted, step, progress, Optional.of(says)); }
+    public OllamaSetup at(Step step, double progress, Says says) { return new OllamaSetup(found, wanted, step, progress, Optional.of(says), library); }
 
     /// At `step`, `progress` of the way through it, saying nothing.
-    public OllamaSetup at(Step step, double progress) { return new OllamaSetup(found, wanted, step, progress, Optional.empty()); }
+    public OllamaSetup at(Step step, double progress) { return new OllamaSetup(found, wanted, step, progress, Optional.empty(), library); }
 
     /// What Genies `found`. Unless the user chose a model already, the one the genies use is
     /// wanted, if they use Ollama; otherwise the one Genies suggests.
@@ -180,14 +203,84 @@ public record OllamaSetup(Found found, String wanted, Step step, double progress
         String chosen = !wanted.isBlank() ? wanted
                       : !inUse.isEmpty() ? inUse.substring(inUse.startsWith(PREFIX) ? PREFIX.length() : 0)
                       : found.hardware().suggested();
-        return new OllamaSetup(found, chosen, step == Step.LOOKING ? Step.IDLE : step, progress, says);
+        return new OllamaSetup(found, chosen, step == Step.LOOKING ? Step.IDLE : step, progress, says, library);
     }
 
-    /// The models to choose from: those Ollama has, then those Genies suggests. Genies' own
-    /// versions of them are not among them, but the models they are made from are.
+    /// The models to choose from, each once: those Ollama has; the one Genies suggests for this
+    /// computer; then those ollama.com offers and those Genies knows, the ones that run well here
+    /// first, in Ollama's usual quantisation. Genies' own versions of the models Ollama has are
+    /// not among them, but the models they are made from are.
     public Tuple<String> offered() {
         Tuple<String> had = found.models().removeIf(model -> model.startsWith(PREFIX));
-        return had.addAll(Hardware.suggestions().removeIf(had::contains));
+        Tuple<String> others = library.models().addAll(ModelFacts.known());
+        Tuple<String> well = others.retainIf(this::runsWell);
+        Tuple<String> all = had.add(found.hardware().suggested()).addAll(well).addAll(others.removeIf(this::runsWell));
+        List<String> once = new ArrayList<>();
+        for (String model : all) if (once.stream().noneMatch(model::equalsIgnoreCase)) once.add(model);
+        return Tuple.of(String.class, once);
+    }
+
+    /// Every variant ollama.com listed of `model`, such as its other quantisations, once asked for.
+    public Tuple<String> variantsOf(String model) {
+        return library.variantsOf(model);
+    }
+
+    /// What Genies knows `model` is made of.
+    public ModelFacts facts(String model) {
+        return library.factsOf(model);
+    }
+
+    /// How `model` would run on this computer.
+    public Hardware.Fit fit(String model) {
+        return found.hardware().fit(facts(model));
+    }
+
+    /// Whether `model` answers quickly or at a fair pace on this computer.
+    public boolean runsWell(String model) {
+        Hardware.Fit fit = fit(model);
+        return fit.runs() != Hardware.Runs.TOO_LARGE && fit.runs() != Hardware.Runs.UNKNOWN && fit.pace();
+    }
+
+    /// The newest Ollama's version, while it is newer than the one that runs here.
+    public Optional<String> newerOllama() {
+        return found.isRunning() && isNewer(library.newest(), found.version()) ? Optional.of(library.newest()) : Optional.empty();
+    }
+
+    /// Whether Genies can update Ollama to [#newerOllama]: it installed that Ollama itself, and
+    /// sets nothing up just now.
+    public boolean canUpdate() {
+        return newerOllama().isPresent() && found.ours() && !step.isBusy();
+    }
+
+    /// Whether the version `candidate`, such as `0.40.17` or `v0.40.17`, is newer than `than`. A
+    /// candidate that is not numbers between dots, such as a prerelease, is never newer. The
+    /// version installed may be a prerelease, such as `0.41.0-rc1`, which is older than the
+    /// release of its numbers, `0.41.0`.
+    public static boolean isNewer(String candidate, String than) {
+        Optional<int[]> a = numbers(candidate);
+        String installed = than.strip();
+        int dash = installed.indexOf('-');
+        Optional<int[]> b = numbers(dash < 0 ? installed : installed.substring(0, dash));
+        if (a.isEmpty() || b.isEmpty()) return false;
+        for (int i = 0; i < Math.max(a.get().length, b.get().length); i++) {
+            int x = i < a.get().length ? a.get()[i] : 0;
+            int y = i < b.get().length ? b.get()[i] : 0;
+            if (x != y) return x > y;
+        }
+        return dash >= 0;
+    }
+
+    private static Optional<int[]> numbers(String version) {
+        String it = version.strip();
+        if (it.startsWith("v")) it = it.substring(1);
+        if (!it.matches("\\d+(\\.\\d+)*")) return Optional.empty();
+        return Optional.of(java.util.Arrays.stream(it.split("\\.")).mapToInt(part -> {
+            try {
+                return Integer.parseInt(part);
+            } catch (NumberFormatException tooLong) {
+                return Integer.MAX_VALUE;
+            }
+        }).toArray());
     }
 
     /// Whether the genies use [#wanted], as Genies set it up.

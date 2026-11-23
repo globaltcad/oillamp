@@ -20,11 +20,20 @@ class SettingUpAModelSpec extends Specification {
 
     def 'How large a model is, read from its name, and how it would run here'() {
         reportInfo """
-            Ollama names a model by its size, such as qwen3:8b for eight billion parameters, and
-            adds q8_0 or fp16 when each takes more bits than its usual four. From that, Genies
-            tells about how much the model weighs, and whether it runs on the graphics card, on
-            the processor, or not well at all. A model made of experts, such as qwen3:30b-a3b,
-            works only a few of its parameters for each word, so it answers faster than its size.
+            Let's consider two computers: one with 16 GB of memory and no graphics card a model
+            can run on, and one with 32 GB of memory and an NVIDIA GeForce RTX 4070 with 12 GB
+            of its own. Without asking anyone, `Hardware.fit` judges a model by what Genies' own
+            list knows of it, or else by its name: Ollama names a model by its size, such as
+            qwen3:8b for eight billion parameters, and adds q8_0 or fp16 when each takes more bits
+            than the five of its usual quantisation.
+
+            A model runs where it fits with the context of a genie: all on the graphics card;
+            partly on the card and partly on the processor, when card and memory together hold
+            it; on the processor alone; or nowhere well, when it is too large. How quickly it
+            answers follows from the gigabytes it reads for each token it writes. A mixture of
+            experts, such as qwen3:30b-a3b, reads only the 3 billion parameters of the experts it
+            picks, so it keeps a fair pace on the processor that a model of 14 billion
+            parameters, which reads all of them, does not.
         """
         given:
             def gigabyte = 1L << 30
@@ -36,16 +45,16 @@ class SettingUpAModelSpec extends Specification {
             laptop.fit(model).pace() == fairPace
             Math.round(laptop.fit(model).size()) == gigabytes
         where:
-            model                     | onTheLaptop                  | onTheGamingComputer          | fairPace | gigabytes
-            'qwen3:4b'                | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS    | true     | 2
-            'qwen3:8b'                | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS    | true     | 5
-            'qwen3:8b-q8_0'           | Hardware.Runs.TOO_LARGE      | Hardware.Runs.ON_PROCESSOR   | true     | 9
-            'qwen3:14b'               | Hardware.Runs.TOO_LARGE      | Hardware.Runs.ON_PROCESSOR   | false    | 9
-            'qwen3:30b-a3b'           | Hardware.Runs.TOO_LARGE      | Hardware.Runs.TOO_LARGE      | true     | 19
-            'gpt-oss:20b'             | Hardware.Runs.TOO_LARGE      | Hardware.Runs.ON_PROCESSOR   | true     | 12
-            'gemma3:270m'             | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS    | true     | 0
-            'mixtral:8x7b'            | Hardware.Runs.TOO_LARGE      | Hardware.Runs.TOO_LARGE      | false    | 35
-            'llama3.2'                | Hardware.Runs.UNKNOWN        | Hardware.Runs.UNKNOWN        | false    | 0
+            model                     | onTheLaptop                  | onTheGamingComputer                  | fairPace | gigabytes
+            'qwen3:4b'                | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS            | true     | 2
+            'qwen3:8b'                | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS            | true     | 5
+            'qwen3:8b-q8_0'           | Hardware.Runs.TOO_LARGE      | Hardware.Runs.PARTLY_ON_GRAPHICS     | false    | 8
+            'qwen3:14b'               | Hardware.Runs.TOO_LARGE      | Hardware.Runs.PARTLY_ON_GRAPHICS     | false    | 8
+            'qwen3:30b-a3b'           | Hardware.Runs.TOO_LARGE      | Hardware.Runs.PARTLY_ON_GRAPHICS     | true     | 17
+            'gpt-oss:20b'             | Hardware.Runs.TOO_LARGE      | Hardware.Runs.PARTLY_ON_GRAPHICS     | true     | 12
+            'gemma3:270m'             | Hardware.Runs.ON_PROCESSOR   | Hardware.Runs.ON_GRAPHICS            | true     | 0
+            'mixtral:8x7b'            | Hardware.Runs.TOO_LARGE      | Hardware.Runs.TOO_LARGE              | false    | 33
+            'llama3.2'                | Hardware.Runs.UNKNOWN        | Hardware.Runs.UNKNOWN                | false    | 0
     }
 
     def 'Genies suggests the best model the computer runs well'() {
@@ -86,8 +95,8 @@ class SettingUpAModelSpec extends Specification {
             laptop.words(Lang.ENGLISH) == '16 GB of memory, and no graphics card a model can run on.'
             new Hardware(64 * gigabyte, Optional.of(new Hardware.Graphics('NVIDIA GeForce RTX 4090', 24 * gigabyte))).words(Lang.ENGLISH) ==
                     '64 GB of memory, and the graphics card NVIDIA GeForce RTX 4090 with 24 GB.'
-            laptop.words('qwen3:8b', Lang.ENGLISH) == 'About 5.0 GB to download. It runs on the processor, at a fair pace.'
-            laptop.words('qwen3:14b', Lang.ENGLISH).startsWith('About 8.7 GB to download. Running, it needs about 14 GB of memory')
+            laptop.words('qwen3:8b', Lang.ENGLISH) == 'About 4.7 GB to download. It runs on the processor, at a fair pace.'
+            laptop.words('qwen3:14b', Lang.ENGLISH).startsWith('About 8.1 GB to download. Running, it needs about 13 GB of memory')
             laptop.words('llama3.2', Lang.ENGLISH) == 'Its name does not say how large it is, so Genies cannot tell how well it runs here.'
     }
 
@@ -118,13 +127,17 @@ class SettingUpAModelSpec extends Specification {
         reportInfo """
             Once Genies looked at the computer, the model wanted is the one the genies use, if
             they use Ollama; otherwise the one Genies suggests. A model the user chose meanwhile
-            stays chosen. Genies' own versions of the models, named genies/..., are not offered;
-            the models they were made from are, before those Genies suggests.
+            stays chosen. `OllamaSetup.offered` lists the models Ollama has first; Genies' own
+            versions of them, named genies/..., are not among them, but the models they were made
+            from are. The model Genies suggests for the computer comes next, then the other models
+            it knows of, those that answer at a fair pace on this computer before those that would
+            be slow: on 64 GB of memory without a graphics card, qwen3:32b and qwen3:14b read too
+            many gigabytes for each token.
         """
         given:
             def gigabyte = 1L << 30
             def found = new OllamaSetup.Found('/usr/local/bin/ollama', '0.24.0',
-                    Tuple.of(String, 'qwen3:8b', 'genies/qwen3:8b', 'llava:7b'), new Hardware(64 * gigabyte, Optional.empty()))
+                    Tuple.of(String, 'qwen3:8b', 'genies/qwen3:8b', 'llava:7b'), new Hardware(64 * gigabyte, Optional.empty()), false)
             def eden = Settings.defaults()
             def ollama = Settings.defaults().withPlace(Settings.Place.THIS_MACHINE).withModel('genies/qwen3:8b')
         expect:
@@ -133,7 +146,7 @@ class SettingUpAModelSpec extends Specification {
             OllamaSetup.NOT_YET.withWanted('llava:7b').found(found, ollama).wanted() == 'llava:7b'
             OllamaSetup.NOT_YET.found(found, eden).step() == OllamaSetup.Step.IDLE
             OllamaSetup.NOT_YET.found(found, eden).offered().toList() ==
-                    ['qwen3:8b', 'llava:7b', 'qwen3:32b', 'qwen3:30b-a3b', 'gpt-oss:20b', 'qwen3:14b', 'qwen3:4b', 'qwen3:1.7b']
+                    ['qwen3:8b', 'llava:7b', 'qwen3:30b-a3b', 'gpt-oss:20b', 'qwen3:4b', 'qwen3:1.7b', 'qwen3:32b', 'qwen3:14b']
     }
 
     def 'Setting up does only what is left to do'() {
@@ -146,7 +159,7 @@ class SettingUpAModelSpec extends Specification {
             def computer = new Hardware(16L << 30, Optional.empty())
             def setup = { String installed, String version, List<String> models ->
                 OllamaSetup.NOT_YET.withWanted('qwen3:8b').found(
-                        new OllamaSetup.Found(installed, version, Tuple.of(String, *models), computer), Settings.defaults())
+                        new OllamaSetup.Found(installed, version, Tuple.of(String, *models), computer, false), Settings.defaults())
             }
         expect:
             setup('', '', []).todo(Lang.ENGLISH) == 'Install Ollama and get qwen3:8b'

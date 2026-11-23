@@ -364,6 +364,12 @@ public record GeniesState(
         return Optional.of(lang.SETTINGS_PAGE().GENIES_THAT_ARE_AWAKE_ANSWER_WITH_A_NEW_MODEL_FROM_THEIR_NEXT_MESSAGE_ON());
     }
 
+    /// Whether updating Ollama would break off genies: some are awake or waking, and use Ollama.
+    /// Only then does the user confirm the update.
+    public boolean updatingOllamaInterrupts() {
+        return settings.usesOllama() && genies.any(genie -> genie.phase().isAwake() || genie.phase() == Genie.Phase.WAKING);
+    }
+
     /// The settings are asking the service they name for its models.
     public GeniesState askingForModels() {
         Tuple<String> known = lookUp.isFor(settings) ? lookUp.models() : Tuple.of(String.class);

@@ -38,6 +38,10 @@ import sprouts.Tuple;
 ///   desktop ([SystemLook]);
 /// - `lamps/<id>/`: each genie's lamp, with its home and its conversation in it;
 /// - `ollama/`: Ollama, when Genies installed it, and what Ollama says when Genies starts it;
+/// - `ollama-library.json`: the models ollama.com offered when Genies last asked it, for when it
+///   cannot reach ollama.com;
+/// - `ollama-headers.json`: what Genies read from the headers of models' files, so as to read
+///   each only once;
 /// - `genies.lock` and `genies.socket`: the [ShelfClaim] of the Genies open on the shelf.
 ///
 /// The directory is `$XDG_DATA_HOME/genies`, which is usually `~/.local/share/genies`.
@@ -65,6 +69,12 @@ public final class Shelf {
 
     /// Where Genies installs Ollama.
     public Path ollama() { return root.resolve("ollama"); }
+
+    /// Where Genies keeps the models ollama.com offered when it last asked.
+    public Path ollamaLibrary() { return root.resolve("ollama-library.json"); }
+
+    /// Where Genies keeps what it read from the headers of models' files.
+    public Path ollamaHeaders() { return root.resolve("ollama-headers.json"); }
 
     /// The file whose lock is the [ShelfClaim] on this shelf.
     public Path claimLock() { return root.resolve("genies.lock"); }

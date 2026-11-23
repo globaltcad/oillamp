@@ -10,6 +10,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,6 +27,7 @@ import dev.gui.desktop.Desktop;
 import dev.gui.genie.GenieHomeUtil;
 import dev.gui.genie.GenieRunner;
 import dev.gui.genie.LampLighter;
+import dev.gui.genie.OllamaCatalogue;
 import dev.gui.genie.OllamaKeeper;
 import dev.gui.genie.Shelf;
 import dev.gui.genie.SystemLook;
@@ -38,6 +41,7 @@ import dev.gui.model.Home;
 import dev.gui.model.HostAccess;
 import dev.gui.model.LampWindow;
 import dev.gui.model.Lang;
+import dev.gui.model.OllamaLibrary;
 import dev.gui.model.OllamaSetup;
 import dev.gui.model.Palette;
 import dev.gui.model.Settings;
@@ -75,6 +79,21 @@ public final class GeniesBackend implements Genies {
     private final Shelf shelf;
     private final LampLighter lighter;
     private final OllamaKeeper ollama;
+    /// Asks ollama.com, Ollama's registry and GitHub about Ollama's models and Ollama itself.
+    private final OllamaCatalogue catalogue;
+    /// Whether ollama.com was asked for its models since Genies started.
+    private boolean askedOllamaCom = false;
+    /// The models Genies asked Ollama's registry about, and those it asked ollama.com for the
+    /// variants of: each once. Only touched on Swing's event thread.
+    private final Set<String> learnedAbout = new HashSet<>();
+    private final Set<String> variantsAsked = new HashSet<>();
+    /// How many models Ollama's registry is asked about at once.
+    private final java.util.concurrent.Semaphore askingTheRegistry = new java.util.concurrent.Semaphore(3);
+    /// The model the simple settings on show want, or nothing while they are not on show. Kept
+    /// as a field for the same reason as the page: a model wanted is asked about, a moment after
+    /// the user stopped typing its name.
+    private final Val<String> wantedShown;
+    private final javax.swing.Timer learning;
     private final Map<UUID, GenieRunner> runners = new ConcurrentHashMap<>();
     /// The thread setting up Ollama, while one does; only touched on Swing's event thread.
     private Optional<Thread> settingUp = Optional.empty();
@@ -127,6 +146,7 @@ public final class GeniesBackend implements Genies {
         this.shelf = shelf;
         this.lighter = lighter;
         this.ollama = ollama;
+        this.catalogue = new OllamaCatalogue(shelf.ollamaLibrary(), shelf.ollamaHeaders());
         this.documents = documents;
         this.removedLamps = shelf.removedLamps();
         this.names = state.viewAs(Tuple.classTyped(String.class),
@@ -149,8 +169,20 @@ public final class GeniesBackend implements Genies {
                 keepSettings();
                 useTheSettingsModel();
             }
-            else lookForOllama();
+            else {
+                lookForOllama();
+                if (!askedOllamaCom) lookForNewModels();
+            }
         });
+        this.wantedShown = state.viewAsString(it -> it.page() == GeniesState.Page.SETTINGS && !it.advanced() ? it.ollama().wanted().strip() : "");
+        // Not every beginning of a name the user pauses on, such as "qw": only a model offered,
+        // or one named with its tag.
+        this.learning = new javax.swing.Timer(600, _ -> {
+            String wanted = wantedShown.get();
+            if (wanted.contains(":") || state.get().ollama().offered().any(wanted::equalsIgnoreCase)) learnAbout(wanted);
+        });
+        learning.setRepeats(false);
+        Viewable.cast(wantedShown).onChange(From.ALL, _ -> learning.restart());
         this.placeShown = state.viewAsString(it -> it.page() == GeniesState.Page.SETTINGS ? it.settings().place().name() : "");
         Viewable.cast(placeShown).onChange(From.ALL, it -> {
             if (!it.currentValue().orElse("").isEmpty()) lookUpModels();
@@ -220,6 +252,15 @@ public final class GeniesBackend implements Genies {
             app.rejoin(genie.id());
         });
         app.lookForOllama();
+        // Without genies, Genies opens on the settings, which then ask ollama.com at once, as
+        // they do whenever they come on show.
+        if (app.state.get().page() == GeniesState.Page.SETTINGS) SwingUtilities.invokeLater(app::lookForNewModels);
+        // What ollama.com offered when it was last asked, until it is asked again.
+        Thread.ofVirtual().name("read the models kept").start(() -> {
+            OllamaLibrary kept = app.catalogue.kept(OllamaLibrary.BUILT_IN);
+            SwingUtilities.invokeLater(() -> app.state.update(it -> it.ollama().library().source() != OllamaLibrary.Source.BUILT_IN ? it
+                : it.withOllama(it.ollama().withLibrary(it.ollama().library().withOffers(kept.offers(), kept.source(), kept.fetched())))));
+        });
         // Lamps someone lit elsewhere, now and then, from the first moment on.
         app.lookingForLamps = Optional.of(Thread.ofVirtual().name("look for lamps now and then").start(() -> {
             try {
@@ -736,6 +777,113 @@ public final class GeniesBackend implements Genies {
                         : new OllamaSetup.Failure.Other(Optional.ofNullable(failed.getMessage()).orElse(failed.toString()))));
             } catch (InterruptedException stopped) {
                 step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
+            } catch (RuntimeException unexpected) {
+                // Whatever it was, the settings must not stay busy for good.
+                LOG.warn("Setting up Ollama failed unexpectedly", unexpected);
+                step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(
+                    new OllamaSetup.Failure.Other(Optional.ofNullable(unexpected.getMessage()).orElse(unexpected.toString()))));
+            }
+            SwingUtilities.invokeLater(() -> {
+                settingUp = Optional.empty();
+                lookForOllama();
+            });
+        }));
+    }
+
+    @Override public void lookForNewModels() {
+        if (state.get().ollama().library().asking()) return;
+        askedOllamaCom = true;
+        learnedAbout.clear();
+        variantsAsked.clear();
+        state.update(From.VIEW, it -> it.withOllama(it.ollama().withLibrary(it.ollama().library().asking(true))));
+        Thread.ofVirtual().name("look for new models").start(() -> {
+            try {
+                OllamaLibrary found = catalogue.offers(OllamaLibrary.BUILT_IN);
+                String newest = catalogue.newestOllama();
+                SwingUtilities.invokeLater(() -> {
+                    state.update(it -> {
+                        OllamaLibrary had = it.ollama().library();
+                        OllamaLibrary now = had.withOffers(found.offers(), found.source(), found.fetched())
+                                               .withNewest(newest.isEmpty() ? had.newest() : newest).asking(false);
+                        return it.withOllama(it.ollama().withLibrary(now));
+                    });
+                    learning.restart();
+                });
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException unexpected) {
+                LOG.warn("Looking for new models failed", unexpected);
+            } finally {
+                SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().withLibrary(it.ollama().library().asking(false)))));
+            }
+        });
+    }
+
+    @Override public void lookUpVariants(String model) {
+        String name = OllamaLibrary.nameOf(model);
+        if (name.isBlank() || !variantsAsked.add(name)) return;
+        Thread.ofVirtual().name("look up variants").start(() -> {
+            try {
+                Tuple<OllamaLibrary.Variant> found = catalogue.variants(name);
+                if (!found.isEmpty())
+                    SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().withLibrary(it.ollama().library().withVariants(name, found)))));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException unexpected) {
+                LOG.warn("Looking up the variants of {} failed", name, unexpected);
+            }
+        });
+    }
+
+    /// Asks Ollama's registry what `model` is made of, once, so that the settings can tell how
+    /// well it runs here by what it is, rather than by its name. A few at a time.
+    @Override public void learnAbout(String model) {
+        String name = model.strip();
+        if (name.isEmpty() || name.startsWith(OllamaSetup.PREFIX) || !learnedAbout.add(name.toLowerCase(java.util.Locale.ROOT))) return;
+        Thread.ofVirtual().name("learn about a model").start(() -> {
+            try {
+                askingTheRegistry.acquire();
+            } catch (InterruptedException interrupted) {
+                return;
+            }
+            try {
+                catalogue.facts(name).ifPresent(facts ->
+                    SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().withLibrary(it.ollama().library().withFacts(facts)))))
+                );
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException unexpected) {
+                LOG.warn("Learning what {} is made of failed", name, unexpected);
+            } finally {
+                askingTheRegistry.release();
+            }
+        });
+    }
+
+    /// Updates the Ollama Genies installed, off Swing's event thread, as setting it up goes:
+    /// one step at a time, which the user can stop.
+    @Override public void updateOllama() {
+        if (!state.get().ollama().canUpdate()) return;
+        stopping = false;
+        // At once, not later on Swing's event thread: until then, a second click would update twice.
+        state.update(From.VIEW, it -> it.withOllama(it.ollama().at(OllamaSetup.Step.UPDATING, 0, new OllamaSetup.Says.DownloadingOllama(0, 0))));
+        settingUp = Optional.of(Thread.ofVirtual().name("update ollama").start(() -> {
+            try {
+                ollama.update(() -> step(OllamaSetup.Step.UPDATING, 0, new OllamaSetup.Says.StoppingOllama()),
+                              (done, all) -> step(OllamaSetup.Step.UPDATING, part(done, all), new OllamaSetup.Says.DownloadingOllama(done, all)),
+                              (done, all) -> step(OllamaSetup.Step.UPDATING, part(done, all), new OllamaSetup.Says.DownloadingAmdSupport(done, all)));
+                SwingUtilities.invokeLater(() -> state.update(it -> it.withOllama(it.ollama().at(OllamaSetup.Step.IDLE, 0))));
+            } catch (IOException failed) {
+                if (stopping) step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
+                else step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(failed instanceof OllamaKeeper.Failed known ? known.failure()
+                        : new OllamaSetup.Failure.Other(Optional.ofNullable(failed.getMessage()).orElse(failed.toString()))));
+            } catch (InterruptedException stopped) {
+                step(OllamaSetup.Step.IDLE, 0, new OllamaSetup.Says.Stopped());
+            } catch (RuntimeException unexpected) {
+                // Whatever it was, the settings must not stay busy for good.
+                LOG.warn("Setting up Ollama failed unexpectedly", unexpected);
+                step(OllamaSetup.Step.FAILED, 0, new OllamaSetup.Says.Failed(
+                    new OllamaSetup.Failure.Other(Optional.ofNullable(unexpected.getMessage()).orElse(unexpected.toString()))));
             }
             SwingUtilities.invokeLater(() -> {
                 settingUp = Optional.empty();

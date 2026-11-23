@@ -238,6 +238,22 @@ public interface Genies {
     /// Stops setting up Ollama.
     void stopSettingUp();
 
+    /// Asks ollama.com for the models it offers now, and whether a newer Ollama is out. What it
+    /// cannot learn, it does without: the settings offer what Genies knew before.
+    void lookForNewModels();
+
+    /// Asks ollama.com for every variant of the model `model`, such as its other quantisations,
+    /// for the settings to offer them too. Once for each model.
+    void lookUpVariants(String model);
+
+    /// Asks Ollama's registry what the model `model` is made of, for the settings to tell how well
+    /// it runs on this computer. Once for each model.
+    void learnAbout(String model);
+
+    /// Updates the Ollama Genies installed to the newest, which stops it for a while. The user
+    /// confirmed, if genies that are awake use it.
+    void updateOllama();
+
     /// The settings page closes. Leaving it, however, keeps the settings.
     void settingsDone();
 

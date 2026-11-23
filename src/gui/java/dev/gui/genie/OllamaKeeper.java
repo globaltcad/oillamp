@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -67,7 +68,10 @@ public final class OllamaKeeper {
     /// The context of Genies' versions of the models, in tokens. Ollama's own is a few thousand,
     /// which a genie's instructions and the output of its tools overflow: the model then forgets
     /// the start of the conversation, and its task with it.
-    static final int CONTEXT = 32_768;
+    static final int CONTEXT = OllamaSetup.CONTEXT;
+
+    /// How long the Ollama Genies stops to update it has to end, before it is ended forcibly.
+    private static final Duration STOPPING = Duration.ofSeconds(10);
 
     /// How long Ollama has to answer a question about itself.
     private static final Duration ASKING = Duration.ofSeconds(5);
@@ -83,6 +87,9 @@ public final class OllamaKeeper {
     private static final String AMD = "0x1002";
 
     private final Path home;
+    /// Held while Genies replaces the Ollama it installed, and while it starts Ollama, so that
+    /// a genie that wakes meanwhile does not start the Ollama being replaced.
+    private final ReentrantLock swapping = new ReentrantLock();
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(10)).build();
 
@@ -126,13 +133,20 @@ public final class OllamaKeeper {
         } catch (IOException notRunning) {
             // Then there is no version and there are no models.
         }
-        return new OllamaSetup.Found(program().map(Path::toString).orElse(""), version, models, hardware());
+        Optional<Path> program = program();
+        return new OllamaSetup.Found(program.map(Path::toString).orElse(""), version, models, hardware(), program.equals(own()));
     }
 
     /// Installs Ollama into [#home], replacing what was there only once the new one is whole. A
     /// computer with an AMD graphics card gets a second archive, with what Ollama needs for it,
     /// whose download `forAmd` follows.
     public void install(Progress progress, Progress forAmd) throws IOException, InterruptedException {
+        swapIn(download(progress, forAmd));
+    }
+
+    /// Downloads the newest Ollama, and unpacks it beside [#home], where it waits to replace it.
+    /// What was unpacked of a download that fails, or is stopped, is deleted.
+    private Path download(Progress progress, Progress forAmd) throws IOException, InterruptedException {
         String processor = System.getProperty("os.arch").equals("aarch64") ? "arm64" : "amd64";
         Path partial = Path.of(home + ".part");
         deleteAll(partial);
@@ -150,15 +164,119 @@ public final class OllamaKeeper {
             }
             throw failed;
         }
-        // What Ollama said when it last ran stays.
+        return partial;
+    }
+
+    /// Replaces [#home] with the Ollama unpacked in `partial`, keeping what Ollama said when it last ran.
+    private void swapIn(Path partial) throws IOException {
         Path log = home.resolve("serve.log");
-        if (Files.exists(log)) Files.move(log, partial.resolve("serve.log"));
+        if (Files.exists(log)) Files.move(log, partial.resolve("serve.log"), StandardCopyOption.REPLACE_EXISTING);
         deleteAll(home);
         Files.move(partial, home, StandardCopyOption.ATOMIC_MOVE);
     }
 
+    /// Updates the Ollama Genies installed to the newest. It downloads the newest first, while the
+    /// Ollama there goes on answering; only then does it stop that one, put the newest in its
+    /// place, and start it. Whatever fails, and if the user stops it, Genies starts Ollama again,
+    /// the new one or the old. Any other Ollama is left as it is: one that still answers once
+    /// Genies stopped its own fails the update.
+    ///
+    /// Meanwhile, Ollama is not started for a genie that wakes ([#start]): that waits until the
+    /// new one is in place.
+    ///
+    /// @param stopping told once Ollama is being stopped
+    public void update(Runnable stopping, Progress progress, Progress forAmd) throws IOException, InterruptedException {
+        Optional<Path> own = own();
+        if (own.isEmpty() || !program().equals(own)) throw new Failed(new OllamaSetup.Failure.NotInstalled());
+        String before = version().orElse("");
+        Path partial = download(progress, forAmd);
+        swapping.lockInterruptibly();
+        Exception failure = null;
+        try {
+            try {
+                stopping.run();
+                stop(own.get());
+                if (isRunning()) throw new Failed(new OllamaSetup.Failure.AnotherOllamaAnswers());
+                swapIn(partial);
+            } catch (IOException | InterruptedException | RuntimeException failed) {
+                failure = failed;
+            }
+            try {
+                deleteAll(partial);
+            } catch (IOException stillThere) {
+                if (failure != null) failure.addSuppressed(stillThere);
+            }
+            // Ollama answers again, whatever happened: the genies need it. Stopped by the user,
+            // the thread is interrupted, which waiting for Ollama to start would not survive.
+            boolean interrupted = Thread.interrupted();
+            try {
+                serve();
+            } catch (IOException | InterruptedException notStarted) {
+                if (failure != null) failure.addSuppressed(notStarted);
+                else failure = notStarted;
+            }
+            if (interrupted) Thread.currentThread().interrupt();
+        } finally {
+            swapping.unlock();
+        }
+        switch (failure) {
+            case null -> {}
+            case IOException it -> throw it;
+            case InterruptedException it -> throw it;
+            case RuntimeException it -> throw it;
+            default -> throw new IllegalStateException(failure);
+        }
+        String after = version().orElse("");
+        if (!before.isEmpty() && !OllamaSetup.isNewer(after, before)) throw new Failed(new OllamaSetup.Failure.NotUpdated(after));
+    }
+
+    /// Ends every `ollama serve` that runs the program `program`, gently first. A process is
+    /// taken to run it when its program is the same file, however either path reaches it.
+    private static void stop(Path program) throws InterruptedException {
+        List<ProcessHandle> serving = ProcessHandle.allProcesses()
+            .filter(it -> it.info().command().map(command -> sameFile(command, program)).orElse(false))
+            .filter(it -> it.info().arguments().map(arguments -> List.of(arguments).contains("serve")).orElse(false))
+            .toList();
+        for (ProcessHandle process : serving) process.destroy();
+        Instant until = Instant.now().plus(STOPPING);
+        for (ProcessHandle process : serving) {
+            while (process.isAlive() && Instant.now().isBefore(until)) Thread.sleep(100);
+            if (process.isAlive()) process.destroyForcibly();
+        }
+        // Once ended, Ollama lets go of its port a moment later.
+        Instant free = Instant.now().plus(STOPPING);
+        while (!serving.isEmpty() && Instant.now().isBefore(free) && serving.stream().anyMatch(ProcessHandle::isAlive)) Thread.sleep(100);
+    }
+
+    private static boolean sameFile(String command, Path program) {
+        try {
+            return Files.isSameFile(Path.of(command), program);
+        } catch (IOException | RuntimeException unreadable) {
+            return false;
+        }
+    }
+
+    /// The version of the Ollama answering on this computer, if one answers.
+    private Optional<String> version() throws InterruptedException {
+        try {
+            String version = get("version").path("version").asText("");
+            return version.isEmpty() ? Optional.empty() : Optional.of(version);
+        } catch (IOException notRunning) {
+            return Optional.empty();
+        }
+    }
+
     /// Starts Ollama, unless it runs already, and waits until it answers.
     public void start() throws IOException, InterruptedException {
+        swapping.lockInterruptibly();
+        try {
+            serve();
+        } finally {
+            swapping.unlock();
+        }
+    }
+
+    private void serve() throws IOException, InterruptedException {
         if (isRunning()) return;
         Path program = program().orElseThrow(() -> new Failed(new OllamaSetup.Failure.NotInstalled()));
         Files.createDirectories(home);
@@ -286,6 +404,12 @@ public final class OllamaKeeper {
     }
 
     // ─── the rest ──────────────────────────────────────────────────────────────────────────
+
+    /// The `ollama` program Genies installed, if it did.
+    private Optional<Path> own() {
+        Path own = home.resolve("bin").resolve("ollama");
+        return Files.isExecutable(own) ? Optional.of(own) : Optional.empty();
+    }
 
     /// The `ollama` program: one installed on the `PATH`, or else Genies' own.
     public Optional<Path> program() {

@@ -5333,6 +5333,256 @@ public enum Lang {
             };
         }
 
+        public String IT_RUNS_PARTLY_ON_THE_GRAPHICS_CARD_AT_A_FAIR_PACE() {
+            return switch (lang) {
+                case ENGLISH -> "It runs partly on the graphics card and partly on the processor, at a fair pace.";
+                case GERMAN -> "Es läuft teils auf der Grafikkarte, teils auf dem Prozessor, in ordentlichem Tempo.";
+                case SPANISH -> "Funciona en parte en la tarjeta gráfica y en parte en el procesador, a buen ritmo.";
+                case JAPANESE -> "一部はグラフィックカード、残りはプロセッサーで動き、ほどよい速さで答えます。";
+                case CHINESE -> "它一部分在显卡上、一部分在处理器上运行，速度尚可。";
+            };
+        }
+
+        public String IT_RUNS_PARTLY_ON_THE_GRAPHICS_CARD_SO_IT_ANSWERS_SLOWLY() {
+            return switch (lang) {
+                case ENGLISH -> "It runs partly on the graphics card and partly on the processor, so it answers slowly.";
+                case GERMAN -> "Es läuft teils auf der Grafikkarte, teils auf dem Prozessor und antwortet daher langsam.";
+                case SPANISH -> "Funciona en parte en la tarjeta gráfica y en parte en el procesador, así que responde despacio.";
+                case JAPANESE -> "一部はグラフィックカード、残りはプロセッサーで動くため、答えるのに時間がかかります。";
+                case CHINESE -> "它一部分在显卡上、一部分在处理器上运行，所以回答较慢。";
+            };
+        }
+
+        public String ITS_N_GRAM_TABLES_STAY_ON_THE_DISK() {
+            return switch (lang) {
+                case ENGLISH -> "Its n-gram tables do not fit in memory, so they stay on the disk, which slows it only a little.";
+                case GERMAN -> "Seine N-Gramm-Tabellen passen nicht in den Arbeitsspeicher und bleiben auf der Festplatte, was es nur wenig bremst.";
+                case SPANISH -> "Sus tablas de n-gramas no caben en la memoria, así que se quedan en el disco, lo que apenas lo frena.";
+                case JAPANESE -> "n-gram テーブルはメモリーに収まらないためディスクに置かれますが、速度への影響はわずかです。";
+                case CHINESE -> "它的 n-gram 表放不进内存，因此留在磁盘上，对速度影响很小。";
+            };
+        }
+
+        public String GUESSED_FROM_ITS_NAME() {
+            return switch (lang) {
+                case ENGLISH -> "Genies guessed this from its name.";
+                case GERMAN -> "Das schätzt Genies anhand seines Namens.";
+                case SPANISH -> "Genies lo estima a partir de su nombre.";
+                case JAPANESE -> "これは名前からの推測です。";
+                case CHINESE -> "这是 Genies 根据名称作出的估计。";
+            };
+        }
+
+        public String LOOK_FOR_NEW_MODELS() {
+            return switch (lang) {
+                case ENGLISH -> "Look for new models";
+                case GERMAN -> "Nach neuen Modellen sehen";
+                case SPANISH -> "Buscar modelos nuevos";
+                case JAPANESE -> "新しいモデルを探す";
+                case CHINESE -> "查找新模型";
+            };
+        }
+
+        public String ASK_OLLAMA_COM_FOR_ITS_NEWEST_MODELS_AND_WHETHER_A_NEWER_OLLAMA_IS_OUT() {
+            return switch (lang) {
+                case ENGLISH -> "Asks ollama.com for its newest models, and whether a newer Ollama is out.";
+                case GERMAN -> "Fragt ollama.com nach den neuesten Modellen und danach, ob es ein neueres Ollama gibt.";
+                case SPANISH -> "Pregunta a ollama.com por sus modelos más nuevos y si hay un Ollama más reciente.";
+                case JAPANESE -> "ollama.com に最新のモデルと、新しい Ollama が出ているかを問い合わせます。";
+                case CHINESE -> "向 ollama.com 查询最新的模型，以及是否有更新的 Ollama。";
+            };
+        }
+
+        public String UPDATE_OLLAMA_TO(String version) {
+            return switch (lang) {
+                case ENGLISH -> "Update Ollama to " + version;
+                case GERMAN -> "Ollama auf " + version + " aktualisieren";
+                case SPANISH -> "Actualizar Ollama a la " + version;
+                case JAPANESE -> "Ollama を " + version + " に更新";
+                case CHINESE -> "将 Ollama 更新到 " + version;
+            };
+        }
+
+        public String OLLAMA_IS_OUT_UPDATE_IT_THE_WAY_YOU_INSTALLED_IT(String version) {
+            return switch (lang) {
+                case ENGLISH -> "Ollama " + version + " is out. Update it the way you installed it.";
+                case GERMAN -> "Ollama " + version + " ist erschienen. Aktualisiere es so, wie du es installiert hast.";
+                case SPANISH -> "Ya está disponible Ollama " + version + ". Actualízalo del mismo modo en que lo instalaste.";
+                case JAPANESE -> "Ollama " + version + " が公開されています。インストールしたときと同じ方法で更新してください。";
+                case CHINESE -> "Ollama " + version + " 已发布。请用安装它时的方式更新。";
+            };
+        }
+
+        public String ANOTHER_OLLAMA_ANSWERS_ON_THIS_COMPUTER_UPDATE_IT_THE_WAY_IT_WAS_INSTALLED() {
+            return switch (lang) {
+                case ENGLISH -> "Another Ollama, which Genies did not install, answers on this computer. Update that one the way it was installed.";
+                case GERMAN -> "Ein anderes Ollama, das Genies nicht installiert hat, antwortet auf diesem Computer. Aktualisiere es so, wie es installiert wurde.";
+                case SPANISH -> "Responde otro Ollama en este equipo que Genies no instaló. Actualízalo del mismo modo en que se instaló.";
+                case JAPANESE -> "Genies がインストールしていない別の Ollama がこのコンピューターで応答しています。インストールしたときと同じ方法で更新してください。";
+                case CHINESE -> "这台电脑上有另一个不是 Genies 安装的 Ollama 在响应。请用安装它时的方式更新它。";
+            };
+        }
+
+        public String OLLAMA_STILL_SAYS_IT_IS_VERSION(String version) {
+            return switch (lang) {
+                case ENGLISH -> "After updating, Ollama still says it is version " + version + ".";
+                case GERMAN -> "Nach dem Aktualisieren meldet Ollama noch immer die Version " + version + ".";
+                case SPANISH -> "Tras actualizarlo, Ollama sigue diciendo que es la versión " + version + ".";
+                case JAPANESE -> "更新後も Ollama はバージョン " + version + " のままです。";
+                case CHINESE -> "更新后 Ollama 仍显示版本为 " + version + "。";
+            };
+        }
+
+        public String STOPPING_OLLAMA_TO_UPDATE_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Stopping Ollama, to update it.";
+                case GERMAN -> "Halte Ollama an, um es zu aktualisieren.";
+                case SPANISH -> "Deteniendo Ollama para actualizarlo.";
+                case JAPANESE -> "更新のため Ollama を停止しています。";
+                case CHINESE -> "正在停止 Ollama 以便更新。";
+            };
+        }
+
+        public String UPDATE_OLLAMA() {
+            return switch (lang) {
+                case ENGLISH -> "Update Ollama";
+                case GERMAN -> "Ollama aktualisieren";
+                case SPANISH -> "Actualizar Ollama";
+                case JAPANESE -> "Ollama を更新";
+                case CHINESE -> "更新 Ollama";
+            };
+        }
+
+        public String GENIES_THAT_ARE_AWAKE_USE_OLLAMA_UPDATING_STOPS_IT() {
+            return switch (lang) {
+                case ENGLISH -> "Genies that are awake use Ollama. Once the new Ollama is downloaded, updating stops the old one for a moment, which breaks off what they are writing just then.";
+                case GERMAN -> "Wache Genies nutzen Ollama. Sobald das neue Ollama heruntergeladen ist, hält das Aktualisieren das alte kurz an und bricht ab, was sie gerade schreiben.";
+                case SPANISH -> "Hay genios despiertos que usan Ollama. Cuando el nuevo Ollama esté descargado, actualizar detiene el antiguo un momento e interrumpe lo que estén escribiendo.";
+                case JAPANESE -> "起きているジーニーが Ollama を使っています。新しい Ollama のダウンロード後、更新のため古い Ollama を一時停止するので、その時に書いている内容は中断されます。";
+                case CHINESE -> "有醒着的精灵正在使用 Ollama。新的 Ollama 下载完成后，更新会让旧的短暂停止，并打断它们当时正在写的内容。";
+            };
+        }
+
+        public String UPDATE() {
+            return switch (lang) {
+                case ENGLISH -> "Update";
+                case GERMAN -> "Aktualisieren";
+                case SPANISH -> "Actualizar";
+                case JAPANESE -> "更新";
+                case CHINESE -> "更新";
+            };
+        }
+
+        public String NOT_NOW() {
+            return switch (lang) {
+                case ENGLISH -> "Not now";
+                case GERMAN -> "Jetzt nicht";
+                case SPANISH -> "Ahora no";
+                case JAPANESE -> "今はしない";
+                case CHINESE -> "暂不";
+            };
+        }
+
+        public String QUICK() {
+            return switch (lang) {
+                case ENGLISH -> "quick";
+                case GERMAN -> "schnell";
+                case SPANISH -> "rápido";
+                case JAPANESE -> "速い";
+                case CHINESE -> "快";
+            };
+        }
+
+        public String FAIR_PACE() {
+            return switch (lang) {
+                case ENGLISH -> "fair pace";
+                case GERMAN -> "ordentlich";
+                case SPANISH -> "buen ritmo";
+                case JAPANESE -> "ほどよい";
+                case CHINESE -> "尚可";
+            };
+        }
+
+        public String SLOW() {
+            return switch (lang) {
+                case ENGLISH -> "slow";
+                case GERMAN -> "langsam";
+                case SPANISH -> "lento";
+                case JAPANESE -> "遅い";
+                case CHINESE -> "慢";
+            };
+        }
+
+        public String TOO_LARGE() {
+            return switch (lang) {
+                case ENGLISH -> "too large";
+                case GERMAN -> "zu groß";
+                case SPANISH -> "demasiado grande";
+                case JAPANESE -> "大きすぎる";
+                case CHINESE -> "太大";
+            };
+        }
+
+        public String PARAMETERS() {
+            return switch (lang) {
+                case ENGLISH -> "Parameters";
+                case GERMAN -> "Parameter";
+                case SPANISH -> "Parámetros";
+                case JAPANESE -> "パラメーター";
+                case CHINESE -> "参数";
+            };
+        }
+
+        public String DOWNLOAD() {
+            return switch (lang) {
+                case ENGLISH -> "Download";
+                case GERMAN -> "Download";
+                case SPANISH -> "Descarga";
+                case JAPANESE -> "ダウンロード";
+                case CHINESE -> "下载";
+            };
+        }
+
+        public String RUNS_HERE() {
+            return switch (lang) {
+                case ENGLISH -> "Runs here";
+                case GERMAN -> "Läuft hier";
+                case SPANISH -> "Aquí";
+                case JAPANESE -> "この PC で";
+                case CHINESE -> "本机运行";
+            };
+        }
+
+        public String DOWNLOADED() {
+            return switch (lang) {
+                case ENGLISH -> "downloaded";
+                case GERMAN -> "heruntergeladen";
+                case SPANISH -> "descargado";
+                case JAPANESE -> "ダウンロード済み";
+                case CHINESE -> "已下载";
+            };
+        }
+
+        public String NO_MODEL_MATCHES_GENIES_TAKES_WHAT_YOU_TYPED() {
+            return switch (lang) {
+                case ENGLISH -> "No model matches. Genies takes the name as you typed it.";
+                case GERMAN -> "Kein Modell passt. Genies nimmt den Namen so, wie du ihn eingegeben hast.";
+                case SPANISH -> "Ningún modelo coincide. Genies usa el nombre tal como lo escribiste.";
+                case JAPANESE -> "一致するモデルはありません。入力した名前をそのまま使います。";
+                case CHINESE -> "没有匹配的模型。Genies 将按你输入的名称使用。";
+            };
+        }
+
+        public String TYPE_A_COLON_AFTER_A_MODEL_FOR_ALL_OF_ITS_QUANTISATIONS() {
+            return switch (lang) {
+                case ENGLISH -> "Add a colon, as in qwen3:, for every quantisation.";
+                case GERMAN -> "Ein Doppelpunkt, etwa qwen3:, zeigt alle Quantisierungen.";
+                case SPANISH -> "Con dos puntos, como qwen3:, ves todas las cuantizaciones.";
+                case JAPANESE -> "qwen3: のようにコロンを付けると全量子化版を表示します。";
+                case CHINESE -> "输入冒号（如 qwen3:）可查看全部量化版本。";
+            };
+        }
+
         public String RUNNING_IT_NEEDS_MORE_MEMORY_THAN_THIS_COMPUTER_CAN_SPARE(String need) {
             return switch (lang) {
                 case ENGLISH -> "Running, it needs about " + need + " of memory, more than this computer can spare: it may not load, or be very slow.";

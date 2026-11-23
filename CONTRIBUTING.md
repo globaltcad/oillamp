@@ -164,7 +164,7 @@ Genies' scenarios, in `src/test/groovy/gui/` and `src/test/groovy/dev/gui/view/`
 and its `GenieRunner` without a window: `KeepingManyGeniesSpec`, `KeepingGeniesBetweenRunsSpec`,
 `KeepingAGenieAliveSpec`, `KeepingAGeniesHistorySpec`, `DrawingAGeniesBranchesSpec`, `KeepingAGeniesScheduleSpec`,
 `PlanningAGeniesWeekSpec`, `FollowingAConversationSpec`, `BranchingAConversationSpec`,
-`SettingUpAModelSpec`, `FindingOllamaSpec`, `NoticingWhatWentWrongSpec`,
+`SettingUpAModelSpec`, `Judging_A_Model_Spec`, `Learning_About_Ollamas_Models_Spec`, `FindingOllamaSpec`, `NoticingWhatWentWrongSpec`,
 `WatchingAGeniesDesktopSpec`, `ZoomingIntoAGeniesDesktopSpec`, `Searching_A_Conversation_Spec`,
 `DrawingAGenieSpec` and `ReadingAGeniesMarkdownSpec`.
 
