@@ -5,8 +5,12 @@ import dev.gui.model.Notifications
 import spock.lang.Narrative
 import spock.lang.Specification
 import spock.lang.Subject
+import spock.lang.TempDir
 import spock.lang.Title
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.time.Instant
 
 @Title('Telling the user what happened')
@@ -22,6 +26,8 @@ to peek into.
 class Telling_The_User_What_Happened_Spec extends Specification {
 
     static final Instant AT = Instant.parse('2026-11-05T12:00:00Z')
+
+    @TempDir Path tmp
 
     def 'What the lamp only tells needs nothing of the user, but a refusal is worth a look until they looked'() {
         reportInfo """
@@ -104,5 +110,47 @@ class Telling_The_User_What_Happened_Spec extends Specification {
             log.lines().size() == AppLog.MOST
             log.lines().last().text() == "line ${AppLog.MOST + 4}"
             log.added() == AppLog.MOST + 6
+    }
+
+    def 'The app log also writes information and worse to a file, which outlives Genies, for its owner alone'() {
+        reportInfo """
+            The log in memory is gone once Genies closes, and with it why a genie's runs failed.
+            So Genies names a file in its data folder, `genies.log`, and every line of
+            information and worse goes there too, whole, as one line. Finer lines stay in memory
+            only: they are many and say little afterwards. The lines are written on a thread of
+            their own, so a slow disk never holds up the window. The file may hold what the genies
+            were asked, so only its owner may read it, and past `AppLog.MOST_BYTES` it is moved to
+            `genies.log.1` and begun again.
+        """
+        given: 'a log that writes to a file in a folder not made yet'
+            var log = new AppLog()
+            var file = tmp.resolve('genies').resolve('genies.log')
+            log.writeTo(file)
+            log.keep(AppLog.Level.DEBUG)
+
+        when: 'a lamp warns, over several lines, and SwingTree says something fine'
+            log.add(AppLog.Level.WARN, 'lamp leeho', 'pi could not switch to the model x\nModel not found')
+            log.add(AppLog.Level.DEBUG, 'swingtree', 'laid out a panel')
+            log.awaitWritten(10)
+
+        then: 'the warning is in the file, on one line, and the detail is not'
+            var lines = Files.readAllLines(file)
+            lines.size() == 1
+            lines[0].contains('WARN  lamp leeho: pi could not switch to the model x ⏎ Model not found')
+
+        and: 'only its owner may read it'
+            Files.getPosixFilePermissions(file) == [PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE] as Set
+
+        when: 'Genies starts again on a file already past its limit, and a line comes'
+            Files.writeString(file, 'x' * (AppLog.MOST_BYTES + 1))
+            var again = new AppLog()
+            again.writeTo(file)
+            again.add(AppLog.Level.INFO, 'lamp leeho', 'started')
+            again.awaitWritten(10)
+
+        then: 'the full file was moved aside, and a new one begun with the line'
+            Files.size(tmp.resolve('genies').resolve('genies.log.1')) == AppLog.MOST_BYTES + 1
+            Files.readAllLines(file).size() == 1
+            Files.getPosixFilePermissions(file) == [PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE] as Set
     }
 }

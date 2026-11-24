@@ -103,6 +103,7 @@ with at most 8 billion parameters working on each word; otherwise `qwen3:1.7b`.
 | the model settings: which place the model runs; Eden AI's key source, entered key and model; the server elsewhere's address, key and model; the model server on this computer's address and model | `~/.local/share/genies/settings.json`, readable by the user only | Genies |
 | each genie's lamp: its home, its settings, its state | `~/.local/share/genies/lamps/<genie id>/` | oillamp |
 | what went wrong that Genies did not expect, with stack traces; past 1 MB it becomes `errors.log.1` | `~/.local/share/genies/errors.log` | Genies |
+| what Genies logged at information and worse, among it each genie's lamp reports, such as why a run failed; past 2 MB it becomes `genies.log.1` | `~/.local/share/genies/genies.log` | Genies |
 | Ollama, when Genies installed it, and what Ollama printed when Genies started it | `~/.local/share/genies/ollama/`, with `bin/ollama` and `serve.log` | Genies |
 | Ollama's models, and Genies' `genies/<model>` versions of them | `~/.ollama/models` | Ollama |
 | each genie's conversations, one file each, with every branch | in its home, `.pi/agent/sessions/<folder>/*.jsonl`, inside its lamp | pi, run by the lamp's session |

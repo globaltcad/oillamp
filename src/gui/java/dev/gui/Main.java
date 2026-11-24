@@ -59,6 +59,8 @@ final class Main {
         try {
             claim = ShelfClaim.claimOrShowTheOther(shelf, window::askedToShow, answer -> sayWhyNoWindow(shelf, environment, answer));
             if (claim.isEmpty()) System.exit(0);
+            // Only the Genies that holds the shelf writes its log, so that two never write one file.
+            AppLog.shared().writeTo(shelf.appLog());
         } catch (IOException failed) {
             // Without the claim, Genies opens all the same, as it did before it took one.
             LoggerFactory.getLogger(Main.class).warn("Could not claim the shelf {}, so a second Genies would open on it too",

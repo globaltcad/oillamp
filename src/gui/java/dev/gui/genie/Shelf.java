@@ -67,6 +67,10 @@ public final class Shelf {
     /// Where Genies writes what went wrong that it did not expect.
     public Path errorLog() { return root.resolve("errors.log"); }
 
+    /// Where Genies writes what it logged, among it what each genie's lamp reported, such as why
+    /// a run failed. See [dev.gui.AppLog].
+    public Path appLog() { return root.resolve("genies.log"); }
+
     /// Where Genies installs Ollama.
     public Path ollama() { return root.resolve("ollama"); }
 
