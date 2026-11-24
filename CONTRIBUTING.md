@@ -162,11 +162,11 @@ Scenarios need no podman, no network and no display, and together they run in ab
 
 Genies' scenarios, in `src/test/groovy/gui/` and `src/test/groovy/dev/gui/view/`, run its model
 and its `GenieRunner` without a window: `KeepingManyGeniesSpec`, `KeepingGeniesBetweenRunsSpec`,
-`KeepingAGenieAliveSpec`, `KeepingAGeniesHistorySpec`, `KeepingAGeniesScheduleSpec`,
+`KeepingAGenieAliveSpec`, `KeepingAGeniesHistorySpec`, `DrawingAGeniesBranchesSpec`, `KeepingAGeniesScheduleSpec`,
 `PlanningAGeniesWeekSpec`, `FollowingAConversationSpec`, `BranchingAConversationSpec`,
-`SettingUpAModelSpec`, `FindingOllamaSpec`, `NoticingWhatWentWrongSpec`,
-`WatchingAGeniesDesktopSpec`, `ZoomingIntoAGeniesDesktopSpec`, `DrawingAGenieSpec` and
-`ReadingAGeniesMarkdownSpec`.
+`SettingUpAModelSpec`, `Judging_A_Model_Spec`, `Learning_About_Ollamas_Models_Spec`, `FindingOllamaSpec`, `NoticingWhatWentWrongSpec`,
+`WatchingAGeniesDesktopSpec`, `ZoomingIntoAGeniesDesktopSpec`, `Searching_A_Conversation_Spec`,
+`DrawingAGenieSpec` and `ReadingAGeniesMarkdownSpec`.
 
 ### Spikes
 

@@ -1,0 +1,270 @@
+package dev.gui.genie;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
+import dev.gui.model.Conversation;
+import dev.gui.model.History;
+import dev.gui.model.HostAccess;
+import dev.gui.model.Recurrence;
+import dev.gui.model.Schedule;
+import dev.gui.pi.PiEvent;
+import dev.lamp.Lamp;
+import dev.lamp.LampEvent;
+import dev.lamp.LampAgentProgress;
+import dev.lamp.LampBranch;
+import dev.lamp.LampConversation;
+import dev.lamp.LampHostAccess;
+import dev.lamp.LampHostAccessGuards;
+import dev.lamp.LampJob;
+import dev.lamp.LampJobAuthor;
+import dev.lamp.LampRunOutcome;
+import dev.lamp.LampSave;
+import dev.lamp.LampSaveKind;
+import dev.lamp.LampSaveOnBranches;
+import dev.lamp.LampWebPort;
+import dev.lamp.LampWebPublishing;
+
+import sprouts.Tuple;
+
+/// Turns what the Lamp API reports into the values the chat and the tree are drawn from.
+final class LampApiConversionUtil {
+
+    private LampApiConversionUtil() {}
+
+    /// A conversation as the tree of conversations shows it: only which entries are questions.
+    static Conversation conversation(LampConversation conversation) {
+        Tuple<Conversation.Step> steps = Tuple.of(Conversation.Step.class);
+        for (LampConversation.Entry entry : conversation.entries()) {
+            boolean asked = entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT;
+            steps = steps.add(new Conversation.Step(entry.id(), entry.parent().orElse(""), asked, asked ? entry.text() : ""));
+        }
+        return new Conversation(conversation.id(), conversation.file(), conversation.name(),
+                conversation.modified().toString(), steps, conversation.job().orElse(""));
+    }
+
+    /// The questions and answers from the start of `conversation` to `leaf`, as the chat shows them.
+    /// A failed answer becomes two lines: what the genie said before it failed, if anything, and
+    /// the error.
+    static PiEvent.History history(LampConversation conversation, String leaf) {
+        Tuple<PiEvent.History.Line> lines = Tuple.of(PiEvent.History.Line.class);
+        for (LampConversation.Entry entry : conversation.lineTo(leaf)) {
+            if (entry.kind() == LampConversation.Kind.MESSAGE_TO_AGENT && !entry.text().isBlank())
+                lines = lines.add(new PiEvent.History.Line(true, entry.text(), entry.id(), false, false, ""));
+            if (entry.kind() != LampConversation.Kind.MESSAGE_FROM_AGENT) continue;
+            String said = entry.text();
+            String error = "";
+            if (entry.failed()) {
+                // oillamp keeps a failed answer's text and its error in one, as two paragraphs.
+                int split = said.lastIndexOf("\n\n");
+                error = split < 0 ? said : said.substring(split + 2);
+                said = split < 0 ? "" : said.substring(0, split);
+            }
+            String model = entry.model().orElse("");
+            if (!said.isBlank())
+                lines = lines.add(new PiEvent.History.Line(false, said, entry.id(), !entry.calls().isEmpty(), false, model));
+            if (!error.isBlank())
+                lines = lines.add(new PiEvent.History.Line(false, error, entry.id(), false, true, model));
+        }
+        return new PiEvent.History(lines, leaf);
+    }
+
+    /// Empty for [LampAgentProgress.Opened], which the runner handles itself.
+    static Optional<PiEvent> chatEventFor(LampAgentProgress progress) {
+        return switch (progress) {
+            case LampAgentProgress.Opened _ -> Optional.empty();
+            case LampAgentProgress.Said said -> Optional.of(new PiEvent.Said(said.text()));
+            case LampAgentProgress.Thought thought -> Optional.of(new PiEvent.Thinking(thought.text()));
+            case LampAgentProgress.Answered answered -> Optional.of(new PiEvent.Answered(
+                    answered.failed() ? "" : answered.text(), answered.failed() ? answered.text() : "", 0,
+                    answered.model().orElse("")));
+            case LampAgentProgress.ToolStarted tool -> Optional.of(new PiEvent.ToolStarted(tool.call(), tool.tool(), tool.summary(), tool.input()));
+            case LampAgentProgress.ToolFinished tool -> Optional.of(new PiEvent.ToolFinished(tool.call(), tool.failed(), tool.output()));
+            case LampAgentProgress.Retrying retrying -> Optional.of(new PiEvent.Retrying(retrying.attempt(), retrying.most(), retrying.why()));
+        };
+    }
+
+    // ─── the schedule ──────────────────────────────────────────────────────────────────────
+
+    /// How oillamp writes the time of a job that runs once, after `once at `, on the clock of
+    /// the schedule's zone.
+    private static final DateTimeFormatter ONCE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT);
+
+    static Schedule.Job job(LampJob job, ZoneId zone) {
+        boolean once = job.when().startsWith("once at ");
+        Optional<Instant> at = Optional.empty();
+        if (once) {
+            try {
+                at = Optional.of(LocalDateTime.parse(job.when().substring("once at ".length()), ONCE).atZone(zone).toInstant());
+            } catch (DateTimeParseException unreadable) {
+                at = job.next();
+            }
+        }
+        return new Schedule.Job(job.id(), once ? Optional.empty() : Optional.of(Recurrence.of(job.when())), at,
+                job.next(), job.upcoming(), job.prompt(), job.author() == LampJobAuthor.AGENT,
+                job.expires(), job.enabled());
+    }
+
+    static Tuple<Schedule.Job> jobs(LampEvent.Schedule schedule) {
+        ZoneId zone = ZoneId.of(schedule.zone());
+        return schedule.jobs().mapTo(Schedule.Job.class, job -> job(job, zone));
+    }
+
+    /// The runs jobs had, from the lamp's snapshots, the most recent last. A run's last snapshot
+    /// says which job it was, how it ended, and holds what the genie said last below its first line.
+    static Tuple<Schedule.Run> runs(List<LampSave> snapshots) {
+        Tuple<Schedule.Run> runs = Tuple.of(Schedule.Run.class);
+        for (LampSave snapshot : snapshots.reversed()) {
+            if (snapshot.kind() != LampSaveKind.RUN || snapshot.job().isEmpty() || snapshot.run().isEmpty()) continue;
+            int body = snapshot.message().indexOf("\n\n");
+            String said = body < 0 ? "" : snapshot.message().substring(body + 2).strip();
+            runs = runs.add(new Schedule.Run(snapshot.run().get(), snapshot.job().get(), snapshot.at(),
+                    snapshot.outcome().map(LampApiConversionUtil::outcome).orElse(Schedule.Outcome.FAILED), said, snapshot.conversation()));
+        }
+        return runs;
+    }
+
+    static Schedule.Outcome outcome(LampRunOutcome outcome) {
+        return switch (outcome) {
+            case FINISHED -> Schedule.Outcome.FINISHED;
+            case FAILED -> Schedule.Outcome.FAILED;
+            case TIMED_OUT -> Schedule.Outcome.TIMED_OUT;
+            case INTERRUPTED, CANCELLED -> Schedule.Outcome.STOPPED;
+        };
+    }
+
+    // ─── the history ───────────────────────────────────────────────────────────────────────
+
+    /// The lamp's snapshots on every branch as the history page shows them, newest first, as
+    /// oillamp lists them, each with the branches it is on.
+    static Tuple<History.Moment> moments(List<LampSaveOnBranches> snapshots) {
+        Tuple<History.Moment> moments = Tuple.of(History.Moment.class);
+        for (LampSaveOnBranches listed : snapshots) {
+            LampSave snapshot = listed.snapshot();
+            History.Kind kind = switch (snapshot.kind()) {
+                case STARTUP -> History.Kind.WOKE;
+                case SHUTDOWN -> History.Kind.SLEPT;
+                case RUNNING, IDLE -> History.Kind.SAVED;
+                case BEFORE_RUN -> History.Kind.BEFORE_RUN;
+                case RUN -> History.Kind.RAN;
+                case CHAT -> History.Kind.CHATTED;
+                case BEFORE_RESTORE -> History.Kind.BEFORE_GOING_BACK;
+                case BEFORE_SWITCH -> History.Kind.BEFORE_SWITCHING;
+                case RESTORE -> History.Kind.WENT_BACK;
+            };
+            moments = moments.add(new History.Moment(snapshot.id(), snapshot.at(), kind, snapshot.message(),
+                    snapshot.run().orElse(""), snapshot.job().orElse(""),
+                    snapshot.outcome().map(LampApiConversionUtil::outcome), snapshot.conversation().orElse(""),
+                    listed.branches()));
+        }
+        return moments;
+    }
+
+    /// The lamp's branches as the history page shows them.
+    static Tuple<History.Branch> branches(List<LampBranch> branches) {
+        Tuple<History.Branch> shown = Tuple.of(History.Branch.class);
+        for (LampBranch branch : branches)
+            shown = shown.add(new History.Branch(branch.name(), branch.current(), branch.newest().map(LampSave::id).orElse("")));
+        return shown;
+    }
+
+    /// What oillamp deleted to keep a history within its size, as the history page tells it.
+    static History.Pruned pruned(LampEvent.HistoryPruned pruned) {
+        return new History.Pruned(pruned.removed().size(), pruned.bytesFreed(), pruned.remainingBytes(), pruned.limitBytes());
+    }
+
+    /// What deleting the snapshots saved longest ago would delete, as the history page asks the user.
+    static History.Plan.Prune pruning(LampEvent.HistoryPrunePlanned planned) {
+        Tuple<String> branches = Tuple.of(String.class);
+        for (LampSaveOnBranches removed : planned.removed()) branches = branches.addAll(removed.branches());
+        return new History.Plan.Prune(planned.removed().size(), branches.makeDistinct().sort(String::compareTo), planned.bytesFreed());
+    }
+
+    /// A lamp's host access as its page shows it, with `web`: the same values, each allowlist
+    /// one folder per line.
+    static HostAccess.Rules rules(Lamp.HostAccess access, HostAccess.Web web) {
+        return HostAccess.Rules.of(may(access.may()), guards(access.guards()), access.readAllowlist(), access.changeAllowlist(),
+                                   access.checkerInstructions(), web);
+    }
+
+    /// The rules the page shows, as the lamp's file keeps them under `[host_access]`.
+    static Lamp.HostAccess hostAccess(HostAccess.Rules rules) {
+        return new Lamp.HostAccess(may(rules.may()), guards(rules.guards()), rules.readFolders(), rules.changeFolders(),
+                                   rules.checkerInstructions());
+    }
+
+    /// Which web servers the lamp's file lets this computer's browser open, as the page shows it.
+    static HostAccess.Web web(Lamp.Web web) {
+        return new HostAccess.Web(publish(web.publish()),
+                web.ports().mapTo(HostAccess.ListedPort.class, port -> new HostAccess.ListedPort(port.name(), port.sandboxPort())));
+    }
+
+    /// The web servers the page shows, as the lamp's file keeps them under `[web]`.
+    static Lamp.Web web(HostAccess.Web web) {
+        return new Lamp.Web(publish(web.publish()),
+                web.ports().mapTo(Lamp.Web.ListedPort.class, port -> new Lamp.Web.ListedPort(port.name(), port.sandboxPort())));
+    }
+
+    /// The web servers a lamp's session published, as the page lists them.
+    static Tuple<HostAccess.WebPort> webPorts(Tuple<LampWebPort> published) {
+        return published.mapTo(HostAccess.WebPort.class, port -> new HostAccess.WebPort(port.name(), port.sandboxPort(), port.link(), port.program()));
+    }
+
+    private static HostAccess.Publish publish(LampWebPublishing publish) {
+        return switch (publish) {
+            case OFF -> HostAccess.Publish.OFF;
+            case LISTED -> HostAccess.Publish.LISTED;
+            case ASK -> HostAccess.Publish.ASK;
+            case ANY -> HostAccess.Publish.ANY;
+        };
+    }
+
+    private static LampWebPublishing publish(HostAccess.Publish publish) {
+        return switch (publish) {
+            case OFF -> LampWebPublishing.OFF;
+            case LISTED -> LampWebPublishing.LISTED;
+            case ASK -> LampWebPublishing.ASK;
+            case ANY -> LampWebPublishing.ANY;
+        };
+    }
+
+    private static HostAccess.May may(LampHostAccess may) {
+        return switch (may) {
+            case NOTHING -> HostAccess.May.NOTHING;
+            case MAY_READ -> HostAccess.May.READ;
+            case MAY_READ_CHANGE -> HostAccess.May.READ_CHANGE;
+            case MAY_READ_CHANGE_RUN -> HostAccess.May.READ_CHANGE_RUN;
+        };
+    }
+
+    private static LampHostAccess may(HostAccess.May may) {
+        return switch (may) {
+            case NOTHING -> LampHostAccess.NOTHING;
+            case READ -> LampHostAccess.MAY_READ;
+            case READ_CHANGE -> LampHostAccess.MAY_READ_CHANGE;
+            case READ_CHANGE_RUN -> LampHostAccess.MAY_READ_CHANGE_RUN;
+        };
+    }
+
+    private static HostAccess.Guards guards(LampHostAccessGuards guards) {
+        return switch (guards) {
+            case ALLOWLISTS -> HostAccess.Guards.ALLOWLISTS;
+            case ALLOWLISTS_CHECKER -> HostAccess.Guards.ALLOWLISTS_CHECKER;
+            case ALLOWLISTS_CHECKER_USER -> HostAccess.Guards.ALLOWLISTS_CHECKER_USER;
+        };
+    }
+
+    private static LampHostAccessGuards guards(HostAccess.Guards guards) {
+        return switch (guards) {
+            case ALLOWLISTS -> LampHostAccessGuards.ALLOWLISTS;
+            case ALLOWLISTS_CHECKER -> LampHostAccessGuards.ALLOWLISTS_CHECKER;
+            case ALLOWLISTS_CHECKER_USER -> LampHostAccessGuards.ALLOWLISTS_CHECKER_USER;
+        };
+    }
+}
