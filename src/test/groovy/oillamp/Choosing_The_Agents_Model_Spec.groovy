@@ -473,14 +473,15 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             Files.readString(piSettingsFile()) == settingsBefore
     }
 
-    def 'A model the service does not offer fails the run, and the answer names the model'() {
+    def 'A model the service does not offer fails the run, and the answer names the model and the most alike pi offers'() {
         reportInfo """
             A model can disappear from a service, or be mistyped on a program's settings screen.
             pi passes over a default it cannot find, so a new conversation starts on another
             model, and the session tells pi to switch, which pi refuses. Going on quietly with that
             other model would hide the problem. So the run fails before the question reaches the
-            agent, and its answer says which model could not be used and why. The conversation
-            keeps no trace of the model, and the session goes on.
+            agent, and its answer says which model could not be used and why, how many models pi
+            does offer, and which of them are most like it, so that the name can be put right. The
+            conversation keeps no trace of the model, and the session goes on.
         """
         given: 'a service that offers GPT and DeepSeek, and a session given a model it does not offer'
             aLampWhosePiDefaultsTo(DEEPSEEK)
@@ -494,7 +495,11 @@ class Choosing_The_Agents_Model_Spec extends Specification {
             !asked.succeeded()
             var finished = asked.events().find { it instanceof LampEvent.RunFinished }
             finished.outcome() == LampRunOutcome.FAILED
-            finished.answer() == 'pi could not switch to the model azure/gpt-0-retired: Model not found: edenai/azure/gpt-0-retired'
+            finished.answer() == 'pi could not switch to the model azure/gpt-0-retired: Model not found: edenai/azure/gpt-0-retired. ' +
+                                 'pi offers 2 models from edenai; the most alike: azure/gpt-6.1-sol'
+
+        and: 'nothing claims pi knows it under another name'
+            warnings('OIL-MODEL-001').isEmpty()
 
         and: 'the agent never got the question, and the conversation has no trace of the model'
             prompts.isEmpty()
@@ -503,6 +508,102 @@ class Choosing_The_Agents_Model_Spec extends Specification {
 
         and: 'the session is still up'
             session.alive
+    }
+
+    def 'A model #how is still the one that answers, under the name pi gives it, and the session warns once'() {
+        reportInfo """
+            Eden AI names each model in two ways: by its endpoints, `provider/model`, such as
+            `mistral/mistral-small-latest`, and by the name its routing takes, such as
+            `mistral-small-latest`. pi offers one of the two, depending on the version of its
+            Eden AI extension, and the program that listed the models for the user may have shown
+            the other. If the session gave up on a name pi does not know, every question would
+            fail before it reached the model, although the model is right there.
+
+            So when pi refuses the model, the session asks pi which models it offers and looks for
+            the same model under another name. It uses that name for this run and every later one,
+            and makes it pi's default for new conversations. It warns once (`OIL-MODEL-001`), with
+            the command that chooses the model under pi's name, so the user can put it right.
+        """
+        given: 'a service whose models pi names one way, and a session given the model named the other way'
+            aLampWhosePiDefaultsTo(GPT)
+            host.machine { it.modelsOffered(offered as String[]) }
+            startASession('--model', given)
+
+        when: 'the user asks two questions, each in a new conversation'
+            var first = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
+            var second = host.oillamp.run('ask', lamp.toString(), 'Name a fruit')
+
+        then: 'the model, under pi\'s name, answers both'
+            first.succeeded() && second.succeeded()
+            answeredBy(conversationOf(first)) == [piName]
+            answeredBy(conversationOf(second)) == [piName]
+            prompts == ['Name a colour', 'Name a fruit']
+
+        and: 'the session warned once, and the warning names the model both ways'
+            var warned = warnings('OIL-MODEL-001')
+            warned.size() == 1
+            warned[0].title() == "pi knows the model $given as $piName"
+
+        and: 'pi starts new conversations on it without being told to switch'
+            piSettings().defaultModel == piName
+
+        where:
+        how                                          | given                              | offered                                           || piName
+        'chosen by its endpoint, which pi knows by its model name' | 'tensorx/deepseek/deepseek-v4.1-flash' | ['azure/gpt-6.1-sol', 'deepseek-v4.1-flash']  || 'deepseek-v4.1-flash'
+        'chosen by its model name, which pi knows by its endpoint' | 'mistral-small-latest'             | ['mistral/mistral-small-latest', 'mistral/mistral-large-latest'] || 'mistral/mistral-small-latest'
+        'chosen in other letter case than pi\'s'                | 'Mistral/Mistral-Small-Latest'     | ['mistral/mistral-small-latest']                  || 'mistral/mistral-small-latest'
+    }
+
+    def 'A question for one provider\'s endpoint is never sent to another provider instead'() {
+        reportInfo """
+            Someone who chooses an endpoint, such as `tensorx/deepseek/deepseek-v4.1-flash`, chose
+            that provider, perhaps for where it runs or what it costs. When pi offers the same model
+            only from another provider, sending the question there would quietly break that choice.
+            So the run fails, and names the other provider's endpoint, for the user to choose or not.
+        """
+        given: 'a service that offers the model only from another provider'
+            aLampWhosePiDefaultsTo(GPT)
+            host.machine { it.modelsOffered(GPT, 'scaleway/deepseek-v4.1-flash') }
+            startASession('--model', DEEPSEEK)
+
+        when: 'the user asks a question'
+            var asked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
+
+        then: 'the run failed, and its answer names the other provider\'s endpoint as the most alike'
+            !asked.succeeded()
+            var finished = asked.events().find { it instanceof LampEvent.RunFinished }
+            finished.outcome() == LampRunOutcome.FAILED
+            finished.answer().endsWith('pi offers 2 models from edenai; the most alike: scaleway/deepseek-v4.1-flash')
+
+        and: 'the question reached no model, and nothing claims pi knows the endpoint by another name'
+            prompts.isEmpty()
+            warnings('OIL-MODEL-001').isEmpty()
+    }
+
+    def 'A model whose name only looks like one pi offers is not used, but the answer suggests it'() {
+        reportInfo """
+            Providers spell their endpoints in their own ways: Amazon's endpoint of Claude Haiku 5.5
+            is `amazon/anthropic.claude-haiku-5-5`, while the model's own name is
+            `claude-haiku-5.5`. Such names look alike, but a guess could just as well be another
+            model, and the user would not know who answered. So the session does not use the
+            look-alike. The run fails, and its answer suggests it, so the user can choose it.
+        """
+        given: 'a service whose pi offers the model by its own name, and a session given a provider\'s spelling of it'
+            aLampWhosePiDefaultsTo(GPT)
+            host.machine { it.modelsOffered(GPT, 'claude-haiku-5.5') }
+            startASession('--model', 'amazon/anthropic.claude-haiku-5-5')
+
+        when: 'the user asks a question'
+            var asked = host.oillamp.run('ask', lamp.toString(), 'Name a colour')
+
+        then: 'the run failed, and its answer suggests the model by its own name'
+            !asked.succeeded()
+            var finished = asked.events().find { it instanceof LampEvent.RunFinished }
+            finished.answer().endsWith('pi offers 2 models from edenai; the most alike: claude-haiku-5.5')
+
+        and: 'the question reached no model'
+            prompts.isEmpty()
+            warnings('OIL-MODEL-001').isEmpty()
     }
 
     def '`Lamp.conversation` names the model of each answer, and so does each `Answered` progress event'() {

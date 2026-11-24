@@ -24,6 +24,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// `GET /v3/models` to the service's own path in place of `/v3`, or unchanged to a service without
 /// a path, with the key. For Eden AI the harness keeps only the models served in the EU.
 ///
+/// Eden AI names each model in two ways, and the names listed must be the ones pi in the sandbox
+/// takes. Its plain list has one entry per endpoint, such as `mistral/mistral-small-latest`; its
+/// `?view=models` has one entry per model, by the name provider routing takes, such as
+/// `mistral-small-latest`, with the model's endpoints in it. pi-edenai offers pi the second, so
+/// that is what Eden AI is asked for. Either shape is read, whichever comes back, so a service
+/// that answers the other way still gives its models. Should the two names drift apart again, the
+/// engine still finds the same model under pi's name before each run, and warns (`OIL-MODEL-001`).
+///
 /// The rules for where the list is and which models are kept are the engine's too, in its relay
 /// and its `[model]` settings. They are written out here because this package must not depend on
 /// the engine; `Listing_A_Services_Models_Spec` and `Choosing_The_Model_For_A_Lamp_Spec` show both ask the
@@ -66,26 +74,45 @@ final class InternalModelListUtil {
     }
 
     /// Where the list is: the service's own path, or Eden AI's `/v3` for a service without one.
+    /// Eden AI is asked for its list by model, `?view=models`, the one pi-edenai reads.
     static URI listAt(URI service) {
         String base = Optional.ofNullable(service.getRawPath()).orElse("").replaceAll("/+$", "");
-        return service.resolve((base.isEmpty() ? "/v3" : base) + "/models");
+        return service.resolve((base.isEmpty() ? "/v3" : base) + "/models" + (isEdenAi(service) ? "?view=models" : ""));
     }
 
     /// The model ids in an OpenAI-style list, `{"data":[{"id":…},…]}`, in its order. For Eden AI,
-    /// only those whose `regions` include `eu`. Anything that is not such a list reads as none.
+    /// only those served in the EU. Anything that is not such a list reads as none.
+    ///
+    /// An entry that lists `endpoints` is a model of Eden AI's `?view=models`, as pi-edenai reads
+    /// it: one with an empty list of them is passed over, since nothing serves it, and it is
+    /// served in the EU when one of its endpoints is. Any other entry is served in the EU when its
+    /// own `regions` say so.
     static List<String> parse(String body, boolean euOnly) {
         List<String> ids = new ArrayList<>();
+        int grouped = 0;
         try {
             for (JsonNode model : JSON.readTree(body).path("data")) {
                 String id = model.path("id").asText("").strip();
                 if (id.isEmpty() || !model.path("id").isTextual()) continue;
-                if (euOnly && !servedInTheEu(model)) continue;
+                JsonNode endpoints = model.path("endpoints");
+                if (endpoints.isArray()) {
+                    grouped++;
+                    if (endpoints.isEmpty()) continue;
+                    if (euOnly && !anyServedInTheEu(endpoints)) continue;
+                } else if (euOnly && !servedInTheEu(model)) continue;
                 ids.add(id);
             }
         } catch (JacksonException notAList) {
             LOG.warn("The model service's list of models is not JSON, so it names none", notAList);
         }
+        LOG.info("The model service offers {} model{}, named {}", ids.size(), ids.size() == 1 ? "" : "s",
+                grouped > 0 ? "by model, as Eden AI's ?view=models names them" : "as its list names them");
         return List.copyOf(ids);
+    }
+
+    private static boolean anyServedInTheEu(JsonNode endpoints) {
+        for (JsonNode endpoint : endpoints) if (servedInTheEu(endpoint)) return true;
+        return false;
     }
 
     private static boolean servedInTheEu(JsonNode model) {

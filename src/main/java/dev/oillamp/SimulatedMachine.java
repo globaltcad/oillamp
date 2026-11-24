@@ -625,6 +625,8 @@ final class SimulatedMachine implements Machine {
     /// conversation goes back to the model it was last on: the last `model_change` entry or answer
     /// in its file. `set_model` switches the model and records a `model_change`, even when the
     /// model is the one it was on, and each answer names the model that gave it.
+    /// `get_available_models` lists the models the service offers; when no list was given, and
+    /// `set_model` takes any model, it lists none.
     private static final class SimulatedPi implements Conversation {
 
         private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -704,6 +706,13 @@ final class SimulatedMachine implements Machine {
                     writeTheStartingModel();
                     write(modelChange());
                     say(response(id, type, true).set("data", JSON.createObjectNode().put("provider", provider).put("id", model)));
+                }
+                case "get_available_models" -> {
+                    com.fasterxml.jackson.databind.node.ObjectNode data = JSON.createObjectNode();
+                    var models = data.putArray("models");
+                    for (String offeredModel : offered.orElse(Tuple.of(String.class)))
+                        models.addObject().put("provider", PROVIDER).put("id", offeredModel);
+                    say(response(id, type, true).set("data", data));
                 }
                 case "get_commands" -> {
                     com.fasterxml.jackson.databind.node.ObjectNode data = JSON.createObjectNode();

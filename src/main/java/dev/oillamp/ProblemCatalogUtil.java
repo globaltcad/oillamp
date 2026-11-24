@@ -72,6 +72,7 @@ final class ProblemCatalogUtil {
     public static final Code SCHEDULE_OFF          = new Code("OIL-SCHEDULE-004");
     public static final Code RUN_FAILED            = new Code("OIL-SCHEDULE-005");
     public static final Code AGENT_RUNS_NOT_LISTED = new Code("OIL-SCHEDULE-006");
+    public static final Code MODEL_NAMED_OTHERWISE = new Code("OIL-MODEL-001");
     public static final Code NO_SUCH_CONVERSATION  = new Code("OIL-CONVERSATION-001");
     public static final Code LOCK_BUSY             = new Code("OIL-LOCK-001");
     public static final Code LOCK_RECOVERED        = new Code("OIL-LOCK-002");
@@ -748,6 +749,20 @@ final class ProblemCatalogUtil {
             .withEvidence(new Evidence.File(config, "the lamp's configuration"))
             .withFix(Fix.of("start the session with `oillamp at " + config.getParent() + " --enable-scheduling`, or set "
                           + "`enabled = true` under [schedule] in " + config));
+    }
+
+    /// pi does not offer the model the session was given under that name, but offers the same
+    /// model under another, which the session uses from now on: Eden AI names a model by its
+    /// endpoint, such as `mistral/mistral-small-latest`, and by the name provider routing takes,
+    /// such as `mistral-small-latest`, and pi and the program that chose the model may use either.
+    public static LampProblem modelNamedOtherwise(String wanted, String piName, Path lamp) {
+        return warning(MODEL_NAMED_OTHERWISE, "pi knows the model " + wanted + " as " + piName,
+                "pi does not offer a model named " + wanted + ", but offers the same model as " + piName
+              + "; the model service names each model in more than one way, and pi uses another than the one chosen",
+                "every run of this session is answered by " + piName
+              + (piName.contains("/") ? "" : ", and the service routes that name to any provider that serves the model"))
+            .withFix(Fix.of("choose " + piName + " as the model, such as in Genies' settings, so that this is not needed"))
+            .withFix(Fix.run("or on the command line", "oillamp model " + lamp + " " + piName));
     }
 
     /// The agent could not be woken for a run, or stopped answering in the middle of one.

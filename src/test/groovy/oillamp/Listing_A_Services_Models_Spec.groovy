@@ -172,5 +172,27 @@ class Listing_A_Services_Models_Spec extends Specification {
             models == ['mistral/mistral-small-latest', 'openai/gpt-far-away', 'somewhere/unknown']
     }
 
+    def 'A list by model offers each model by its own name, the name the agent\'s pi takes'() {
+        reportInfo """
+            Eden AI names each model in two ways: its plain list has one entry per endpoint, such
+            as `mistral/mistral-small-latest`, and its list by model, `?view=models`, has one entry
+            per model, such as `mistral-small-latest`, with the endpoints that serve it inside.
+            pi in the sandbox takes the names of the list by model. A settings page that offered
+            the other names would offer only names pi refuses, so `Lamp.models` asks Eden AI for
+            the list by model. It reads either kind of list, whichever comes back, so a service
+            that answers the other way still has its models offered. A model no endpoint serves is
+            not offered, since nothing could answer with it.
+        """
+        when: 'a service answers with models that list their endpoints, one of them with none'
+            answer = '''{"data":[
+                {"id":"mistral-small-latest","endpoints":[{"id":"mistral/mistral-small-latest","regions":[{"code":"eu"}]}]},
+                {"id":"deepseek-v4.1-flash","endpoints":[{"id":"tensorx/deepseek/deepseek-v4.1-flash"},{"id":"scaleway/deepseek-v4.1-flash"}]},
+                {"id":"retired-model","endpoints":[]}]}'''
+            var models = Lamp.models(address('/v1'))
+
+        then: 'the models are offered by their own names, and the one nothing serves is not'
+            models == ['mistral-small-latest', 'deepseek-v4.1-flash']
+    }
+
     private URI address(String path) { URI.create("http://127.0.0.1:${server.address.port}${path}") }
 }

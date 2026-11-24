@@ -1076,8 +1076,24 @@ one. So the commands of a run are:
 new_session [set_session_name] | switch_session [get_commands, prompt /oillamp-goto <entry>]
 get_state
 [set_model]          only when the session has a model and pi is on another one
+[get_available_models, set_model]
+                     only when pi refused the model: the same model under pi's name
 prompt
 ```
+
+Eden AI names each model in two ways: by its endpoints, `provider/model` (its plain `/v3/models`),
+and by the name its provider routing takes (`/v3/models?view=models`), such as
+`mistral/mistral-small-latest` and `mistral-small-latest`. Which of the two pi offers depends on
+the version of pi-edenai in the image, and the program that chose the model may have listed the
+other. So when pi refuses the session's model, the harness asks pi which models it offers, and
+`ModelNameMatchUtil` looks for the same name among them: in other letter case, the model name an
+endpoint ends in, or the first endpoint that ends in a model name. It never picks one provider's
+endpoint in place of another's; a model name lets Eden AI's routing choose among the model's
+providers, which the warning says. Names that only look alike, such as
+`amazon/anthropic.claude-haiku-5-5` and `claude-haiku-5.5`, are only suggested. If it finds one, the session uses that name for every run from then on, writes it
+as pi's default, and warns once (`OIL-MODEL-001`). If not, the run fails, and its answer names how
+many models pi offers and the most alike. `Lamp.models` asks Eden AI for `?view=models`, the
+names pi-edenai gives pi, and reads either shape of list.
 
 `prompt` sends the question, and the harness reads events until `agent_settled`, which means pi
 will not continue by itself (`agent_end` can be followed by retries). Along the way it reports
@@ -2169,6 +2185,7 @@ as `oillamp at` does (`LampPhase.configurationFiles`).
 | `OIL-CONVERSATION-001` | No conversation, or no entry in one, has that name. |
 | `OIL-SCHEDULE-005` | Warning: the agent could not be woken for a run, or pi stopped in the middle of one. |
 | `OIL-SCHEDULE-006` | Warning: the file listing the agent's runs, `.oillamp/agent-runs`, could not be written, so a run without a snapshot after it does not count against `schedule.max_agent_runs_per_day`. |
+| `OIL-MODEL-001` | Warning: pi offers the session's model only under another name, such as `mistral-small-latest` for `mistral/mistral-small-latest`; every run uses pi's name. |
 | `OIL-LOCK-001` | Lamp already running, or busy: a session starting or ending, or another command, holds it. |
 | `OIL-LOCK-002` | Warning: cleaned up after a previous session that crashed. |
 | `OIL-CONFIG-001` | TOML syntax error. |

@@ -5,8 +5,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -37,6 +41,14 @@ import dev.lamp.LampAgentProgress;
 ///   goes back to that model when the conversation is opened again, whatever its default says;
 ///   without the switch an old conversation would stay on its first model. Earlier answers keep
 ///   the model that gave them; only the next answer comes from the session's model.
+///
+/// pi may know the session's model under another name than the one it was given: Eden AI names
+/// a model both by its endpoints, such as `mistral/mistral-small-latest`, and by the name its
+/// routing takes, such as `mistral-small-latest`, and which pi offers depends on the version of
+/// pi-edenai in the sandbox. When pi refuses the model, the harness asks pi which models it
+/// offers. If one is the same model under another name ([ModelNameMatchUtil]), every run of the
+/// session uses that name from then on, and the session warns once (`OIL-MODEL-001`). If none is,
+/// the run fails, and says which of the models pi offers are most like the one given.
 ///
 /// A session given instructions has [#prepare] write them where pi adds them to its system
 /// prompt, and [#useInstructions] writes them again when `oillamp instructions` gives it new
@@ -70,12 +82,20 @@ final class Harness implements AutoCloseable {
     private Optional<Machine.Conversation> pi = Optional.empty();
     private int commands;
     private volatile boolean stopping;
+    /// The models pi knows under another name than the session's, by the session's name: found
+    /// when pi first refused one, and used for every run after.
+    private final Map<String, String> piNames = new ConcurrentHashMap<>();
+    /// Told what the session should hear outside a run's answer, such as a model pi knows by
+    /// another name.
+    private final Consumer<LampEvent> report;
 
-    Harness(Machine machine, LampLayout layout, Optional<String> model, Optional<String> instructions) {
+    Harness(Machine machine, LampLayout layout, Optional<String> model, Optional<String> instructions,
+            Consumer<LampEvent> report) {
         this.machine = machine;
         this.layout = layout;
         this.model = model;
         this.instructions = instructions;
+        this.report = report;
     }
 
     /// The model the next run is answered by; empty when the session leaves it to pi.
@@ -326,7 +346,7 @@ final class Harness implements AutoCloseable {
     private synchronized void writeDefaultModel(Consumer<LampEvent> report) {
         Optional<String> now = model;
         if (now.isEmpty()) return;
-        String id = now.get();
+        String id = piNames.getOrDefault(now.get(), now.get());
         changeInAgentHome(layout.piSettings(),
                 "pi starts a new conversation on its own default model; each run still switches it to "
               + id + " first, which costs an entry in the conversation's file",
@@ -465,15 +485,56 @@ final class Harness implements AutoCloseable {
     ///
     /// @param state pi's answer to `get_state`, which says the model it is on now
     /// @return why pi could not, or empty once it answers with `wanted`
+    ///
+    /// When pi refuses `wanted`, it is asked which models it offers. If it offers the same model
+    /// under another name, it is switched to that, and that name is used for the rest of the
+    /// session, with one warning. Otherwise the reason says which models pi offers that are most
+    /// like `wanted`.
     private Optional<String> switchModel(Machine.Conversation agent, Optional<JsonNode> state, String wanted)
             throws IOException, InterruptedException {
+        String asked = piNames.getOrDefault(wanted, wanted);
         JsonNode current = state.map(s -> s.path("data").path("model")).orElse(JsonUtil.object());
-        if (current.path("provider").asText().equals(PROVIDER) && current.path("id").asText().equals(wanted))
+        if (current.path("provider").asText().equals(PROVIDER) && current.path("id").asText().equals(asked))
             return Optional.empty();
-        Optional<JsonNode> reply = answer(agent, command("set_model").put("provider", PROVIDER).put("modelId", wanted));
+        Optional<JsonNode> reply = answer(agent, command("set_model").put("provider", PROVIDER).put("modelId", asked));
         if (reply.isEmpty()) return Optional.of("pi did not answer");
-        if (!accepted(reply)) return Optional.of(reply.get().path("error").asText("pi refused"));
-        return Optional.empty();
+        if (accepted(reply)) return Optional.empty();
+        String refused = reply.get().path("error").asText("pi refused");
+        Optional<List<String>> offered = offeredModels(agent);
+        if (offered.isEmpty()) return Optional.of(refused);
+        Optional<String> same = ModelNameMatchUtil.sameModel(wanted, offered.get());
+        if (same.isPresent() && same.get().equals(wanted) && !asked.equals(wanted)) {
+            // pi took another name for it earlier, and now takes the session's own again, as after
+            // it fell back on its built-in list once and has the service's list now.
+            piNames.remove(wanted);
+            Optional<JsonNode> again = answer(agent, command("set_model").put("provider", PROVIDER).put("modelId", wanted));
+            if (accepted(again)) {
+                writeDefaultModel(report);
+                return Optional.empty();
+            }
+        } else if (same.isPresent() && !same.get().equals(asked)) {
+            Optional<JsonNode> again = answer(agent, command("set_model").put("provider", PROVIDER).put("modelId", same.get()));
+            if (accepted(again)) {
+                piNames.put(wanted, same.get());
+                report.accept(new LampEvent.Warning(ProblemCatalogUtil.modelNamedOtherwise(wanted, same.get(), layout.root())));
+                // New conversations start on it by themselves from now on, without a switch.
+                writeDefaultModel(report);
+                return Optional.empty();
+            }
+        }
+        return Optional.of(refused.replaceAll("[.\\s]+$", "") + ". " + ModelNameMatchUtil.whatPiOffers(wanted, offered.get(), PROVIDER));
+    }
+
+    /// The models pi offers from [#PROVIDER], in pi's order; empty when pi would not say, as a
+    /// pi too old for `get_available_models` would not.
+    private Optional<List<String>> offeredModels(Machine.Conversation agent) throws IOException, InterruptedException {
+        Optional<JsonNode> reply = answer(agent, command("get_available_models"));
+        if (!accepted(reply)) return Optional.empty();
+        List<String> ids = new ArrayList<>();
+        for (JsonNode model : reply.get().path("data").path("models"))
+            if (model.path("provider").asText().equals(PROVIDER) && !model.path("id").asText("").isBlank())
+                ids.add(model.path("id").asText());
+        return Optional.of(List.copyOf(ids));
     }
 
     /// pi failed, unless the session is ending: then it stopped waiting for pi, and pi did not fail.
